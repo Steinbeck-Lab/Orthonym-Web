@@ -382,3 +382,13 @@ def decompose(name: str) -> Optional[Decomposition]:
     if not parts:
         return None
     return Decomposition(smiles=smiles, atoms=tuple(atoms), parts=tuple(parts))
+
+
+def heavy_atom_indices(result: Decomposition, opsin_ids) -> tuple[int, ...]:
+    """Maps OPSIN atom ids to RDKit heavy-atom indices valid against
+    `result.smiles`. Hydrogens drop out for free: SMILESWriter's output order
+    contains only heavy atoms, so an explicit-H id is simply absent from the
+    lookup rather than needing a separate filter.
+    """
+    by_id = {atom.opsin_id: atom.rdkit_index for atom in result.atoms}
+    return tuple(sorted(by_id[i] for i in opsin_ids if i in by_id))
