@@ -6,6 +6,7 @@ Endpoints (see Orthonym API contract):
   GET  /api/examples
   GET  /api/iupac-to-smiles
   GET  /api/explain
+  GET  /api/explain-name
 """
 
 import logging
@@ -15,9 +16,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from orthonym.validation.opsin_roundtrip import opsin_parse
 from rdkit import Chem
 
-from . import opsin_substituents
+from . import opsin_decompose
 from .depiction import mol_to_svg_data_uri
-from .explain import explain_molecule
+from .explain import explain_molecule, explain_name
 from .orthonym_service import get_primary_namer, translate_many
 from .schemas import (
     ExamplesResponse,
@@ -65,7 +66,7 @@ EXAMPLES = [
 ]
 
 # Nothing else in this app configures logging, so without this, plain
-# logger.info()/logger.exception() calls (e.g. opsin_substituents' startup
+# logger.info()/logger.exception() calls (e.g. opsin_decompose's startup
 # and failure diagnostics) are silently dropped -- Python's logging module
 # only falls back to a stderr "lastResort" handler at WARNING+ when no
 # handler is configured anywhere in the hierarchy. Explicit INFO-level
@@ -85,14 +86,14 @@ app.add_middleware(
 
 @app.on_event("startup")
 def _verify_opsin_internals() -> None:
-    # opsin_substituents reflects into OPSIN's package-private internals to
+    # opsin_decompose reflects into OPSIN's package-private internals to
     # get per-substituent atom highlighting on the Explain page (see that
     # module's docstring). It always degrades safely on its own if the API
     # shape has changed -- this just makes that check happen loudly at boot
     # instead of silently on whichever request first needs it.
-    ok = opsin_substituents.self_check()
+    ok = opsin_decompose.self_check()
     logging.getLogger(__name__).info(
-        "Explain per-substituent decomposition: %s",
+        "Explain name decomposition: %s",
         "available" if ok else "disabled (see preceding log for why)",
     )
 
@@ -144,3 +145,8 @@ def iupac_to_smiles(name: str = Query(..., min_length=1)) -> IupacToSmilesRespon
 def explain(smiles: str = Query(..., min_length=1)) -> ExplainResponse:
     result = explain_molecule(smiles, namer=get_primary_namer())
     return ExplainResponse(**result)
+
+
+@app.get("/api/explain-name", response_model=ExplainResponse)
+def explain_by_name(name: str = Query(..., min_length=1)) -> ExplainResponse:
+    return ExplainResponse(**explain_name(name))
