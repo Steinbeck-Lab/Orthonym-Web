@@ -62,23 +62,35 @@ class IupacToSmilesResponse(BaseModel):
     error: Optional[str] = None
 
 
-SegmentKind = Literal["suffix", "substituent", "rest", "undecomposed"]
+SegmentKind = Literal[
+    "substituent", "parent", "suffix", "modifier", "stereo", "unmapped"
+]
 
 
 class ExplainSegment(BaseModel):
     label: str
     kind: SegmentKind
+    # Owning parts (substituent/parent/suffix) hold a disjoint slice of the
+    # molecule's heavy atoms; together they cover it. Referential parts
+    # (modifier/stereo) own nothing -- "3,7-dihydro-1H-" adds no atoms, it
+    # only records where hydrogens sit on atoms the parent already owns.
+    # Conflating the two breaks the partition invariant, so it is explicit.
+    owns_atoms: bool = True
+    # The single locant this segment corresponds to, for child segments
+    # ("7" -> N7). None for a top-level part.
+    locant: Optional[str] = None
     explanation: str
-    # RDKit atom indices for this segment, valid against `svg`'s atom-N /
-    # bond-N CSS classes (same Mol object used for both). Always non-empty
-    # when present -- a segment with nothing to highlight is not emitted.
-    atom_indices: list[int]
-    # [start, end) character offsets into ExplainResponse.name this segment
-    # corresponds to, for pairing the highlighted structure with the exact
-    # substring of the name that names it. Null when that pairing couldn't
-    # be established as safely as the structural match itself -- the
-    # structure highlight is never withheld just because this is.
+    # Atoms this segment OWNS. Empty when owns_atoms is False.
+    atom_indices: list[int] = []
+    # Atoms to light up on hover. May overlap other segments -- a suffix
+    # owns only its oxygen but highlights the whole C=O so it reads right.
+    highlight_atoms: list[int] = []
+    # [start, end) character offsets into ExplainResponse.name.
     name_range: Optional[list[int]] = None
+    children: list["ExplainSegment"] = []
+
+
+ExplainSegment.model_rebuild()
 
 
 class ExplainResponse(BaseModel):
