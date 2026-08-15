@@ -238,10 +238,16 @@ def _agreed_atoms(indices, matches) -> Optional[frozenset]:
     """
     if not matches:
         return None
-    sets = [
-        frozenset(match[i] for i in indices if i < len(match))
-        for match in matches
-    ]
+    sets = []
+    for match in matches:
+        if any(not 0 <= i < len(match) for i in indices):
+            # An index outside the matched fragment cannot be mapped at all.
+            # The original wrote this as a FILTER (`if i in m`), which here
+            # would silently shrink the segment to its mappable part and ship
+            # a partial highlight that looks confident. Unmap the whole
+            # segment instead -- "some of these atoms" is not an answer.
+            return None
+        sets.append(frozenset(match[i] for i in indices))
     if any(s != sets[0] for s in sets):
         return None
     return sets[0]
@@ -340,7 +346,32 @@ def explain_molecule(smiles: str, namer: OpenSTOUT) -> dict:
     # that re-parse against the user's molecule.
     opsin_mol = Chem.MolFromSmiles(named["smiles"])
     matches: tuple = ()
-    if opsin_mol is not None:
+    if opsin_mol is None:
+        logger.warning(
+            "explain: OPSIN's own SMILES for %r could not be re-read -- "
+            "reporting every part as unmapped",
+            name,
+        )
+    elif opsin_mol.GetNumAtoms() != mol.GetNumAtoms():
+        # A substructure match does NOT prove the two molecules are the same
+        # one. If the generated name re-parses to a PROPER substructure, the
+        # match still succeeds and every segment maps happily -- while the
+        # user's leftover atoms belong to no segment at all, not even an
+        # `unmapped` one, and so vanish from the explanation silently. The
+        # old code's "rest of the structure" bucket always absorbed them;
+        # nothing does now, so the equality is checked explicitly. A name
+        # that does not account for every heavy atom does not describe this
+        # molecule, and rule 3 already says what to do about that.
+        logger.warning(
+            "explain: the name STITCH generated (%r) re-parses to %d heavy "
+            "atoms but this molecule has %d -- the name does not describe "
+            "the whole structure, so no part of it can be mapped honestly; "
+            "reporting every part as unmapped",
+            name,
+            opsin_mol.GetNumAtoms(),
+            mol.GetNumAtoms(),
+        )
+    else:
         matches = mol.GetSubstructMatches(
             opsin_mol, uniquify=False, maxMatches=_MAX_SUBSTRUCT_MATCHES
         )
