@@ -1,4 +1,4 @@
-from app.opsin_decompose import decompose
+from app.opsin_decompose import decompose, heavy_atom_indices
 from tests.conftest import CAFFEINE
 
 
@@ -45,3 +45,21 @@ def test_caffeine_atoms_carry_ring_locants():
 
 def test_unparseable_name_returns_none():
     assert decompose("not a chemical name at all") is None
+
+
+def test_heavy_atom_indices_drops_hydrogens():
+    result = decompose(CAFFEINE)
+    subs = [p for p in result.parts if p.kind == "substituent"]
+    # Each methyl is 4 OPSIN atoms (C + 3H) but only 1 heavy atom.
+    for part in subs:
+        assert len(heavy_atom_indices(result, part.opsin_atom_ids)) == 1
+
+
+def test_owning_parts_partition_all_heavy_atoms():
+    result = decompose(CAFFEINE)
+    covered = set()
+    for part in result.parts:
+        indices = set(heavy_atom_indices(result, part.opsin_atom_ids))
+        assert not (indices & covered), f"{part.text} overlaps an earlier part"
+        covered |= indices
+    assert covered == set(range(14))
