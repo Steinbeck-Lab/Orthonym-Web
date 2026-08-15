@@ -504,3 +504,54 @@
     transition: none;
   }
 }
+
+/* -------------------- segment tree -------------------- */
+
+.explain-segments,
+.explain-segment__children {
+  list-style: none;
+  padding: 0;
+}
+.explain-segment__children {
+  margin: 0.25rem 0 0.5rem 1.25rem;
+  /* Brief specified var(--border, #d0d0d0); this codebase's token set
+     (src/index.css) has no --border, only --line ("hairline structural
+     borders") -- the exact semantic match for this divider. Using the
+     brief's literal fallback would silently render a hardcoded gray never
+     tied to the app's one committed palette. */
+  border-left: 2px solid var(--line);
+  padding-left: 0.5rem;
+}
+.explain-segment__children .explain-segment {
+  font-size: 0.9em;
+}
+.explain-segment--modifier {
+  border-style: dashed;
+}
+.explain-segment--unmapped {
+  opacity: 0.65;
+  font-style: italic;
+}
+
+/* -------------------- input mode toggle -------------------- */
+
+.explain-mode {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  border: none;
+  padding: 0;
+  margin: 0 0 0.5rem;
+}
+.explain-mode__legend {
+  float: left;
+  margin-right: 0.5rem;
+  padding: 0;
+  font-weight: 600;
+}
+.explain-mode__option {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  cursor: pointer;
+}

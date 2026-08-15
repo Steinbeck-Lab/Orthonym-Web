@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
-import { explainMolecule } from '../lib/api'
+import { explainMolecule, explainName } from '../lib/api'
 import './Explain.css'
 
 // The SVG comes from STITCH's own backend (RDKit-generated structure
@@ -39,37 +39,106 @@ function atomRefsOf(classAttr) {
   return [...classAttr.matchAll(ATOM_REF_RE)].map((m) => Number(m[1]))
 }
 
+// Resolves a dotted path like "0.2" to its segment: top-level index 0, then
+// its child index 2. Returns null for a stale path, which happens normally
+// when `data` changes while something is still pinned.
+function segmentAtPath(segments, path) {
+  if (path === null || path === undefined) return null
+  const parts = String(path).split('.').map(Number)
+  let node = segments?.[parts[0]]
+  for (let i = 1; i < parts.length && node; i += 1) {
+    node = node.children?.[parts[i]]
+  }
+  return node || null
+}
+
+function SegmentNode({ segment, path, activePath, setHoveredPath, togglePath }) {
+  const isActive = activePath === path
+  return (
+    <li className="explain-segment__item">
+      <button
+        type="button"
+        className={`explain-segment explain-segment--${segment.kind}${
+          isActive ? ' explain-segment--active' : ''
+        }`}
+        onMouseEnter={() => setHoveredPath(path)}
+        onMouseLeave={() => setHoveredPath(null)}
+        onFocus={() => setHoveredPath(path)}
+        onBlur={() => setHoveredPath(null)}
+        onClick={() => togglePath(path)}
+        aria-pressed={isActive}
+      >
+        <span className="explain-segment__label">{segment.label}</span>
+        <span className="explain-segment__explanation">{segment.explanation}</span>
+      </button>
+      {segment.children?.length > 0 && (
+        <ul className="explain-segment__children">
+          {segment.children.map((child, index) => (
+            <SegmentNode
+              key={`${path}.${index}`}
+              segment={child}
+              path={`${path}.${index}`}
+              activePath={activePath}
+              setHoveredPath={setHoveredPath}
+              togglePath={togglePath}
+            />
+          ))}
+        </ul>
+      )}
+    </li>
+  )
+}
+
 // phase: 'idle' | 'loading' | 'success' | 'error' (mirrors IupacToSmiles.jsx)
 function Explain() {
   const [smilesInput, setSmilesInput] = useState('')
+  const [mode, setMode] = useState('name') // 'name' | 'smiles'
   const [phase, setPhase] = useState('idle')
   const [data, setData] = useState(null)
   const [apiError, setApiError] = useState(null)
   const [fetchError, setFetchError] = useState(null)
   const [validationNote, setValidationNote] = useState(null)
-  const [hoveredIndex, setHoveredIndex] = useState(null)
-  const [pinnedIndex, setPinnedIndex] = useState(null)
+  const [hoveredPath, setHoveredPath] = useState(null)
+  const [pinnedPath, setPinnedPath] = useState(null)
 
   const svgWrapperRef = useRef(null)
   const originalColorsRef = useRef(new Map())
 
-  const activeIndex = pinnedIndex ?? hoveredIndex
+  const activePath = pinnedPath ?? hoveredPath
 
-  function runExplain(smiles) {
+  function togglePath(path) {
+    setPinnedPath((current) => (current === path ? null : path))
+  }
+
+  // requestMode defaults to the current mode state, but callers that need
+  // to force a specific endpoint in the SAME tick (see handleExamplePick)
+  // must pass it explicitly -- setMode() would not be visible to this
+  // function's `mode` closure until the next render.
+  function runExplain(value, requestMode = mode) {
     setFetchError(null)
     setPhase('loading')
-    setPinnedIndex(null)
-    setHoveredIndex(null)
+    setPinnedPath(null)
+    setHoveredPath(null)
 
-    explainMolecule(smiles)
+    const request = requestMode === 'name' ? explainName(value) : explainMolecule(value)
+
+    request
       .then((result) => {
-        if (result.error) {
-          setApiError(result.error)
+        // A PARTIAL result is a real case, not a contradiction: the
+        // structure-in path can name a molecule and render it, yet fail to
+        // decompose the name. Verified live -- OpenSTOUT names TNT's SMILES
+        // "2,4,6-trinitrotoluene", which OPSIN itself rejects ("Multiple
+        // locants without a multiplier"). That response carries `name` and
+        // `svg` alongside `error`. Throwing it away would hide a structure
+        // we successfully drew, so keep the data and show the error beside
+        // it. Only a result with nothing to show is a bare error.
+        const hasSomethingToShow = Boolean(result.svg || result.name)
+        setApiError(result.error || null)
+        if (result.error && !hasSomethingToShow) {
           setData(null)
           setPhase('error')
         } else {
           setData(result)
-          setApiError(null)
           setPhase('success')
         }
       })
@@ -84,7 +153,11 @@ function Explain() {
     if (phase === 'loading') return
     const trimmed = smilesInput.trim()
     if (!trimmed) {
-      setValidationNote('Enter a SMILES string before explaining.')
+      setValidationNote(
+        mode === 'name'
+          ? 'Enter an IUPAC name before explaining.'
+          : 'Enter a SMILES string before explaining.'
+      )
       return
     }
     setValidationNote(null)
@@ -93,13 +166,13 @@ function Explain() {
 
   function handleExamplePick(example) {
     if (phase === 'loading') return
+    // EXAMPLES are curated SMILES (not names). Force smiles mode -- both
+    // the toggle UI and the actual request -- so picking one while in the
+    // default 'name' mode doesn't send a SMILES string to explainName().
+    setMode('smiles')
     setSmilesInput(example.smiles)
     setValidationNote(null)
-    runExplain(example.smiles)
-  }
-
-  function toggleSegment(index) {
-    setPinnedIndex((current) => (current === index ? null : index))
+    runExplain(example.smiles, 'smiles')
   }
 
   // Injects the sanitized SVG directly via the DOM, NOT via React's
@@ -129,8 +202,15 @@ function Explain() {
   useEffect(() => {
     const root = svgWrapperRef.current
     if (!root) return
-    const segment = activeIndex !== null ? data?.segments?.[activeIndex] : null
-    const targetSet = segment ? new Set(segment.atom_indices) : null
+    const segment = segmentAtPath(data?.segments, activePath)
+    // Referential segments (a hydro prefix) own no atoms, so atom_indices is
+    // empty and highlight_atoms is the only thing to light up. Owning
+    // segments usually have both; fall back so neither case goes dark.
+    const highlight =
+      segment && segment.highlight_atoms?.length
+        ? segment.highlight_atoms
+        : segment?.atom_indices
+    const targetSet = highlight?.length ? new Set(highlight) : null
 
     originalColorsRef.current.forEach((original, el) => {
       const refs = atomRefsOf(el.getAttribute('class'))
@@ -144,7 +224,7 @@ function Explain() {
         el.style.fill = original.fill
       }
     })
-  }, [activeIndex, data])
+  }, [activePath, data])
 
   const isLoading = phase === 'loading'
   const name = data?.name
@@ -167,10 +247,30 @@ function Explain() {
 
       <section className="explain-panel" aria-label="Explain a molecule">
         <form onSubmit={handleSubmit} noValidate>
+          <fieldset className="explain-mode">
+            <legend className="explain-mode__legend">Input</legend>
+            {[
+              { value: 'name', label: 'IUPAC name' },
+              { value: 'smiles', label: 'SMILES' },
+            ].map((option) => (
+              <label key={option.value} className="explain-mode__option">
+                <input
+                  type="radio"
+                  name="explain-mode"
+                  value={option.value}
+                  checked={mode === option.value}
+                  onChange={() => { setMode(option.value); setValidationNote(null) }}
+                  disabled={phase === 'loading'}
+                />
+                {option.label}
+              </label>
+            ))}
+          </fieldset>
+
           <div className="explain-panel__grid">
             <div className="explain-panel__field">
               <label htmlFor="explain-smiles-input" className="explain-panel__label">
-                SMILES
+                {mode === 'name' ? 'IUPAC name' : 'SMILES'}
               </label>
               <input
                 id="explain-smiles-input"
@@ -179,7 +279,7 @@ function Explain() {
                 spellCheck={false}
                 autoCorrect="off"
                 autoCapitalize="off"
-                placeholder="e.g. CCO"
+                placeholder={mode === 'name' ? 'e.g. ethanol' : 'e.g. CCO'}
                 value={smilesInput}
                 onChange={(event) => setSmilesInput(event.target.value)}
               />
@@ -279,7 +379,7 @@ function Explain() {
                 <div className="explain-result__name-row">
                   <span className="explain-result__name-label">Name</span>
                   <p className="explain-result__name" aria-live="polite">
-                    {name && renderAnnotatedName(name, segments, activeIndex)}
+                    {name && renderAnnotatedName(name, segments, activePath)}
                   </p>
                 </div>
 
@@ -291,28 +391,18 @@ function Explain() {
                     ref={svgWrapperRef}
                   />
 
-                  <div className="explain-segments" role="group" aria-label="Named parts">
+                  <ul className="explain-segments" aria-label="Named parts">
                     {segments.map((segment, index) => (
-                      <button
+                      <SegmentNode
                         key={`${segment.kind}-${index}`}
-                        type="button"
-                        className={`explain-segment explain-segment--${segment.kind}${
-                          activeIndex === index ? ' explain-segment--active' : ''
-                        }`}
-                        aria-pressed={pinnedIndex === index}
-                        onMouseEnter={() => setHoveredIndex(index)}
-                        onMouseLeave={() => setHoveredIndex(null)}
-                        onFocus={() => setHoveredIndex(index)}
-                        onBlur={() => setHoveredIndex(null)}
-                        onClick={() => toggleSegment(index)}
-                      >
-                        <span className="explain-segment__label">{segment.label}</span>
-                        <span className="explain-segment__explanation">
-                          {segment.explanation}
-                        </span>
-                      </button>
+                        segment={segment}
+                        path={String(index)}
+                        activePath={activePath}
+                        setHoveredPath={setHoveredPath}
+                        togglePath={togglePath}
+                      />
                     ))}
-                  </div>
+                  </ul>
                 </div>
               </div>
             </div>
@@ -327,8 +417,16 @@ function Explain() {
 // (when it has one) is wrapped in a bracket-highlighted span -- e.g.
 // hovering "carboxylic acid" on "2-[4-...]propanoic acid" shows
 // prop[anoic acid] with the bracketed part in the accent color.
-function renderAnnotatedName(name, segments, activeIndex) {
-  const segment = activeIndex !== null ? segments[activeIndex] : null
+//
+// NOTE: not covered by the task-9 brief, which only updated the segment
+// buttons/highlight effect to use path-based lookup. This helper still took
+// the old numeric activeIndex and did segments[activeIndex] -- a bare array
+// index. That silently breaks for any nested child path (e.g. "0.2"), so it
+// is updated here to the same segmentAtPath lookup used everywhere else,
+// for consistency with the activeIndex -> activePath change made throughout
+// the rest of this file.
+function renderAnnotatedName(name, segments, activePath) {
+  const segment = segmentAtPath(segments, activePath)
   const range = segment?.name_range
   if (!range) {
     return name
