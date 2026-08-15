@@ -5,6 +5,7 @@
 //   POST /api/translate        -> { results: ResultItem[] }
 //   GET  /api/iupac-to-smiles  -> { smiles: string|null, depiction_svg: string|null, error: string|null }
 //   GET  /api/explain          -> { smiles, name, svg, total_atoms, segments: ExplainSegment[], error }
+//   GET  /api/explain-name     -> same shape, decomposing a typed IUPAC name directly
 // See PRODUCT.md / DIRECTION brief for exact shapes. No fields are invented
 // or hardcoded here — everything the UI shows comes from these responses.
 
@@ -71,16 +72,18 @@ export async function fetchStructureFromName(name) {
 }
 
 /**
- * Names `smiles` (the same way /api/translate would) and decomposes the
- * name into hoverable segments, each paired with real RDKit atom indices
- * where that correspondence could be established reliably. A molecule
- * Orthonym can't confidently name, or a segment with no confirmed structural
- * match, is not an error here — it comes back as a normal 2xx response
- * with `error` set (no name at all) or a segment honestly labeled
- * "undecomposed" (a name, but no confirmed sub-parts); only a network-level
+ * Names `smiles` (the same way /api/translate would) and decomposes that
+ * name into a TREE of hoverable segments, each paired with real RDKit atom
+ * indices where that correspondence could be established reliably.
+ *
+ * Failure is per part, not per molecule: a part whose atoms could not be
+ * pinned down comes back as an ordinary segment with `kind: "unmapped"`,
+ * empty `atom_indices`/`highlight_atoms` and its siblings intact. A molecule
+ * Orthonym can't confidently name at all is not an error either — it comes
+ * back as a normal 2xx response with `error` set; only a network-level
  * failure or non-2xx status rejects the promise.
  * @param {string} smiles
- * @returns {Promise<{smiles:string, name:string|null, svg:string|null, total_atoms:number, segments:Array<{label:string,kind:string,explanation:string,atom_indices:number[],name_range:[number,number]|null}>, error:string|null}>}
+ * @returns {Promise<{smiles:string, name:string|null, svg:string|null, total_atoms:number, segments:Array<{label:string,kind:string,owns_atoms:boolean,locant:string|null,explanation:string,atom_indices:number[],highlight_atoms:number[],name_range:[number,number]|null,children:object[]}>, error:string|null}>}
  */
 export async function explainMolecule(smiles) {
   const res = await fetch(`/api/explain?smiles=${encodeURIComponent(smiles)}`)

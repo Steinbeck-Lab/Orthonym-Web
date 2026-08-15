@@ -20,10 +20,13 @@ function sanitizeSvg(svg) {
   })
 }
 
-// Curated examples spanning the three real outcomes this page can show:
-// a suffix Orthonym's explainer confirms structurally, a name it can't yet
-// decompose (retained/ring name), and a name with real substituent
-// structure from Orthonym's own tree data.
+// Curated structures spanning what the decomposition really does now that
+// it comes from OPSIN's own parse tree rather than SMARTS rules: a simple
+// parent + suffix (ethanol), a molecule whose internal symmetry makes some
+// parts genuinely unmappable so they report as `unmapped` while their
+// siblings survive (ibuprofen), and a bare ring parent with no principal
+// characteristic group at all (benzene) -- which decomposes perfectly and
+// simply has no suffix.
 const EXAMPLES = [
   { label: 'ethanol', smiles: 'CCO' },
   { label: 'ibuprofen', smiles: 'CC(C)Cc1ccc(cc1)C(C)C(=O)O' },
@@ -229,20 +232,27 @@ function Explain() {
   const isLoading = phase === 'loading'
   const name = data?.name
   const segments = data?.segments || []
-  // Whether a segment was actually SMARTS-confirmed against the real
-  // structure, as opposed to the honest "undecomposed" fallback (a name,
-  // but nothing Orthonym could confidently point to). The outer patch's
-  // border must track this same distinction the segment buttons already
-  // do -- the one accent thread means "confirmed," never "a name exists."
-  const hasConfirmedSuffix = segments.some((segment) => segment.kind === 'suffix')
+  // Whether any part of this name was actually pinned to real atoms. The
+  // outer patch's accent border means "confirmed," never "a name exists,"
+  // so it is earned by at least one MAPPED part -- a part that is not
+  // `unmapped` owns or highlights atoms traced to OPSIN's own output.
+  //
+  // This used to test `kind === 'suffix'`, which silently changed meaning
+  // when the SMARTS design was retired. Back then "no suffix segment" was
+  // the only way a name could fail to decompose. It now means only "this
+  // molecule has no principal characteristic group," which is an ordinary,
+  // fully-decomposed outcome: benzene, TNT and DDT all decompose completely
+  // and have no suffix, yet every one of them rendered with the plain
+  // non-confirmed border.
+  const hasMappedParts = segments.some((segment) => segment.kind !== 'unmapped')
 
   return (
     <section className="explain-page page-shell" aria-label="Explain a name">
       <h1 className="explain-page__title">Explain</h1>
       <p className="explain-page__lead">
-        Orthonym doesn&rsquo;t just produce a name &mdash; on this page it shows its work. Enter a
-        SMILES string and hover (or tap) a highlighted part of the name to see exactly which
-        atoms earned it.
+        Orthonym doesn&rsquo;t just produce a name &mdash; on this page it shows its work. Enter an
+        IUPAC name or a SMILES string, then hover (or tap) any part of the decomposed name to see
+        exactly which atoms it refers to.
       </p>
 
       <section className="explain-panel" aria-label="Explain a molecule">
@@ -297,13 +307,15 @@ function Explain() {
 
             <aside className="explain-aside" aria-label="How this works">
               <p className="explain-aside__lead">
-                Highlights come from real structure matching, never a guess.
+                Every highlight comes from OPSIN&rsquo;s own parse of the name, never a guess.
               </p>
               <p className="explain-aside__body">
-                A suffix (like &ldquo;-ol&rdquo; or &ldquo;-oic acid&rdquo;) is only highlighted
-                once Orthonym confirms the matching group is really there in the structure. When a
-                name doesn&rsquo;t decompose into a part Orthonym recognizes this confidently, it
-                says so instead of guessing which piece means what.
+                The name is broken into the parts OPSIN itself found &mdash; the parent skeleton,
+                each substituent, the ending that names the main group, and prefixes that only
+                move hydrogens around &mdash; and each part carries the atoms OPSIN built it from.
+                Failure is per part: anything Orthonym can&rsquo;t pin to specific atoms is marked
+                &ldquo;could not work out which atoms,&rdquo; and the parts around it are
+                unaffected.
               </p>
             </aside>
           </div>
@@ -340,8 +352,8 @@ function Explain() {
           {phase === 'idle' && (
             <div className="explain-patch explain-patch--idle">
               <p className="explain-patch__empty-note">
-                Nothing to explain yet &mdash; enter a SMILES string above, or try one of the
-                examples.
+                Nothing to explain yet &mdash; enter an IUPAC name or a SMILES string above, or
+                try one of the examples.
               </p>
             </div>
           )}
@@ -372,7 +384,7 @@ function Explain() {
           {phase === 'success' && (
             <div
               className={`explain-patch${
-                hasConfirmedSuffix ? ' explain-patch--success' : ' explain-patch--undecomposed'
+                hasMappedParts ? ' explain-patch--success' : ' explain-patch--unmapped'
               }`}
             >
               <div className="explain-result">
