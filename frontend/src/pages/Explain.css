@@ -1,0 +1,506 @@
+/* ============================================================
+   Orthonym — Needlework Sampler
+   Explain page: Orthonym shows its work. Structurally, this borrows the
+   same page/panel/aside/example-chip/patch grammar as IupacToSmiles.css
+   (page-scoped class names on purpose, same reasoning as that file) —
+   the new pieces are the annotated name display and the segment list
+   that drives real-atom highlighting on the inline structure diagram.
+   No new colors: the single accent thread is reused for both the
+   confirmed-suffix highlight and the active segment button, exactly as
+   it already marks the confirmed-PIN tile and the active nav tab.
+   ============================================================ */
+
+.explain-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  padding-top: 2.75rem;
+  padding-bottom: 3rem;
+}
+
+.explain-page__title {
+  font-family: var(--font-sans);
+  font-size: clamp(1.7rem, 4vw, 2.3rem);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+
+.explain-page__lead {
+  max-width: 62ch;
+  color: var(--ink-soft);
+  font-size: 1.05rem;
+  line-height: 1.55;
+  margin-top: -0.75rem;
+}
+
+/* -------------------- panel + form -------------------- */
+
+.explain-panel form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.35rem;
+}
+
+.explain-panel__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 780px) {
+  .explain-panel__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.explain-panel__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.explain-panel__label {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+.explain-panel__input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: var(--ground);
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.explain-panel__input::placeholder {
+  color: var(--ink-soft);
+  opacity: 0.8;
+}
+
+.explain-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.explain-button {
+  appearance: none;
+  border: 2px solid var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 0.7rem 1.7rem;
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.explain-button:hover:not(:disabled) {
+  background: var(--accent-deep);
+  border-color: var(--accent-deep);
+}
+
+.explain-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.explain-button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.explain-panel__note {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+
+/* -------------------- aside note -------------------- */
+
+.explain-aside {
+  background: var(--ground-well);
+  border: 2px dashed var(--ink);
+  border-radius: 2px;
+  padding: 1rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.explain-aside__lead {
+  font-weight: 700;
+  color: var(--ink);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.explain-aside__body {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+/* -------------------- examples -------------------- */
+
+.explain-examples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.75rem;
+}
+
+.explain-examples__label {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+}
+
+.explain-examples__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.explain-chip {
+  appearance: none;
+  background: var(--ground);
+  border: 1.5px solid var(--ink);
+  color: var(--ink);
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.explain-chip:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--ground);
+}
+
+.explain-chip:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+/* -------------------- fetch error banner -------------------- */
+
+.explain-fetch-error {
+  background: var(--ground-well);
+  border: 1.5px dashed var(--ink);
+  padding: 0.85rem 1.1rem;
+  border-radius: 3px;
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.explain-fetch-error code {
+  background: var(--ground-deep);
+  padding: 0.1rem 0.35rem;
+  border-radius: 2px;
+}
+
+/* -------------------- results -------------------- */
+
+.explain-results {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* -------------------- the patch: shared shell -------------------- */
+/* Same border-style-as-state grammar as every other page: solid =
+   settled, dashed = provisional/empty, dotted = queued (DESIGN.md's
+   Shapes rule) -- state is also always spelled out in text. */
+
+.explain-patch {
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  background: var(--ground);
+  padding: 1rem 1.25rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-height: 9rem;
+}
+
+.explain-patch__state-label {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+/* -------------------- patch: idle -------------------- */
+
+.explain-patch--idle {
+  border-style: dashed;
+  border-color: var(--line);
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+}
+
+.explain-patch__empty-note {
+  color: var(--ink-soft);
+  max-width: 42ch;
+  line-height: 1.55;
+}
+
+/* -------------------- patch: loading -------------------- */
+
+.explain-patch--loading {
+  border-style: dotted;
+  border-color: var(--line);
+}
+
+.explain-patch__pending-cloth {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0.75rem 0;
+}
+
+.explain-patch__pending-dash {
+  width: 22px;
+  height: 3px;
+  background: var(--line);
+  border-radius: 2px;
+  animation: explain-pending-shimmer 1.4s ease-in-out infinite;
+}
+
+.explain-patch__pending-dash:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.explain-patch__pending-dash:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes explain-pending-shimmer {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+/* -------------------- patch: success -------------------- */
+/* Two outcomes share the same markup shell but must NOT share the same
+   border, per DESIGN.md's One Accent Rule: the accent means "confirmed,"
+   never merely "a name exists." A SMARTS-confirmed suffix earns it, same
+   as the confirmed-PIN tile elsewhere; the honest "undecomposed" fallback
+   (a name, but nothing Orthonym could confidently point to) stays on the
+   patch's plain ink border -- collapsing these two into one accent-bordered
+   shell would visually claim the same confidence for a real correspondence
+   and an honest non-answer, which is exactly the distinction this page
+   exists to keep legible. */
+
+.explain-patch--success {
+  border-color: var(--accent);
+}
+
+.explain-patch--undecomposed {
+  border-color: var(--ink);
+}
+
+.explain-result {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.explain-result__name-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.explain-result__name-label {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+/* The rendered name itself keeps the world's one quantized-lettering rule
+   (Silkscreen reserved for a chemical name, per DESIGN.md) -- the same
+   treatment Home's sewn tiles give the name, applied here to plain
+   (non-animated) text since this page's focal interaction is hover, not
+   a reveal animation. */
+.explain-result__name {
+  font-family: var(--font-orthonym);
+  font-size: 1.15rem;
+  line-height: 1.7;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.explain-result__name-highlight {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-radius: 2px;
+  padding: 0.05em 0.15em;
+}
+
+.explain-result__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 780px) {
+  .explain-result__body {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* -------------------- diagram -------------------- */
+
+.explain-result__diagram {
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  background: #ffffff;
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.explain-result__diagram svg {
+  width: 100%;
+  height: auto;
+  max-width: 340px;
+}
+
+/* Bond/atom stroke-width and color transitions are driven by inline
+   styles set in JS (see Explain.jsx) rather than CSS, since RDKit's own
+   inline `style` attributes on each path always outrank an external
+   stylesheet rule -- restoring the exact original value on un-highlight
+   (not just clearing a property) is what this file leaves to JS. This
+   rule only smooths the color change itself. */
+.explain-result__diagram :is(path, ellipse, circle) {
+  transition:
+    stroke 0.15s ease,
+    fill 0.15s ease;
+}
+
+/* -------------------- segments -------------------- */
+
+.explain-segments {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.explain-segment {
+  appearance: none;
+  text-align: left;
+  background: var(--ground-well);
+  border: 1.5px solid var(--line);
+  border-radius: 3px;
+  padding: 0.65rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.explain-segment__label {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--ink);
+  text-transform: capitalize;
+}
+
+.explain-segment__explanation {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+/* Hover/focus preview and the click-pinned state share the same visual
+   language -- the one accent thread, reused (never a second color) --
+   distinguished from the resting state by border weight+color, never by
+   color alone (the label/explanation text is unaffected either way, so
+   the meaning is always readable regardless of state). */
+.explain-segment:hover,
+.explain-segment:focus-visible,
+.explain-segment--active {
+  border-color: var(--accent);
+  border-width: 2px;
+  background: var(--ground);
+}
+
+.explain-segment--undecomposed {
+  border-style: dashed;
+}
+
+/* -------------------- patch: error -------------------- */
+
+.explain-patch--error {
+  border-color: var(--ink);
+}
+
+.explain-patch__snip-wrap {
+  position: relative;
+  width: 100%;
+  height: 2.75rem;
+}
+
+.explain-patch__snip {
+  position: absolute;
+  top: 50%;
+  width: 38%;
+  height: 3px;
+  background: var(--ink);
+  border-radius: 2px;
+}
+
+.explain-patch__snip--a {
+  left: 8%;
+  transform: rotate(-16deg);
+}
+
+.explain-patch__snip--b {
+  right: 8%;
+  transform: rotate(16deg);
+}
+
+/* -------------------- reduced motion -------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .explain-patch__pending-dash {
+    animation: none;
+    opacity: 0.6;
+  }
+
+  .explain-result__diagram :is(path, ellipse, circle) {
+    transition: none;
+  }
+}

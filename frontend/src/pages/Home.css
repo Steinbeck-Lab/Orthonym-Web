@@ -1,0 +1,725 @@
+/* ============================================================
+   Orthonym — Needlework Sampler
+   Home page ("Translate"): the SMILES-to-IUPAC batch translator —
+   header, input panel, disclaimer, examples, and the sampler-grid
+   state language. Extracted from the app-wide App.css so this page
+   owns its styles independently.
+   ============================================================ */
+
+/* -------------------- header -------------------- */
+
+.site-header {
+  padding-top: 3rem;
+  padding-bottom: 1.75rem;
+  border-bottom: 1px dashed var(--line);
+}
+
+.site-header__title {
+  font-size: clamp(2.1rem, 5vw, 2.9rem);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+
+.site-header__tagline {
+  margin-top: 0.65rem;
+  max-width: 62ch;
+  color: var(--ink-soft);
+  font-size: 1.05rem;
+  line-height: 1.55;
+}
+
+.site-header__tagline strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* -------------------- layout -------------------- */
+
+.layout {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2.25rem;
+  padding-top: 2rem;
+  padding-bottom: 1rem;
+}
+
+/* -------------------- input panel -------------------- */
+
+.input-panel form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.35rem;
+}
+
+.input-panel__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 780px) {
+  .input-panel__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.input-panel__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.input-panel__label {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+.input-panel__label-note {
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.input-panel__textarea {
+  width: 100%;
+  min-height: 8.5rem;
+  padding: 0.85rem 1rem;
+  background: var(--ground);
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.input-panel__textarea::placeholder {
+  color: var(--ink-soft);
+  opacity: 0.8;
+}
+
+.input-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.translate-button {
+  appearance: none;
+  border: 2px solid var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 0.7rem 1.7rem;
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.translate-button:hover:not(:disabled) {
+  background: var(--accent-deep);
+  border-color: var(--accent-deep);
+}
+
+.translate-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.translate-button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.input-panel__note {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+
+/* -------------------- disclaimer -------------------- */
+/* Load-bearing copy, not fine print: sits directly beside the input,
+   framed like a marked-up sampler note rather than a muted footnote. */
+
+.disclaimer {
+  background: var(--ground-well);
+  border: 2px dashed var(--ink);
+  border-radius: 2px;
+  padding: 1rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.disclaimer__lead {
+  font-weight: 700;
+  color: var(--ink);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.disclaimer__body {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.disclaimer__body strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* -------------------- example chips -------------------- */
+
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.75rem;
+}
+
+.examples__label {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+}
+
+.examples__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.chip {
+  appearance: none;
+  background: var(--ground);
+  border: 1.5px solid var(--ink);
+  color: var(--ink);
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.chip:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--ground);
+}
+
+.chip:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.examples__error,
+.examples__loading {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+/* -------------------- fetch error banner -------------------- */
+
+.fetch-error {
+  background: var(--ground-well);
+  border: 1.5px dashed var(--ink);
+  padding: 0.85rem 1.1rem;
+  border-radius: 3px;
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.fetch-error code {
+  background: var(--ground-deep);
+  padding: 0.1rem 0.35rem;
+  border-radius: 2px;
+}
+
+/* -------------------- results / sampler grid -------------------- */
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding-bottom: 3rem;
+}
+
+.sampler {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 1.25rem;
+}
+
+@media (max-width: 640px) {
+  .sampler {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sampler--empty {
+  border: 2px dashed var(--line);
+  border-radius: 4px;
+  padding: 2.75rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 8rem;
+}
+
+.sampler__empty-note {
+  color: var(--ink-soft);
+  max-width: 42ch;
+  line-height: 1.55;
+}
+
+/* -------------------- tile: shared shell -------------------- */
+
+.tile {
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  background: var(--ground);
+  padding: 0.85rem 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 9.5rem;
+  position: relative;
+}
+
+.tile__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.tile__smiles {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  background: var(--ground-well);
+  padding: 0.15rem 0.4rem;
+  border-radius: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 72%;
+}
+
+.tile__tier {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  padding: 0.1rem 0.35rem;
+  flex-shrink: 0;
+}
+
+.tile__patch {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-height: 3.4rem;
+}
+
+/* A named result (pin/fallback/best-effort) pairs its name-block with a
+   small supporting depiction thumbnail, side by side. The name-block
+   always takes the lion's share of the row -- the depiction is a modest
+   proof element, never the focal point (that's still the sewn name). */
+.tile__result-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.tile__name-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.tile__depiction {
+  flex-shrink: 0;
+  width: 3.6rem;
+  height: 2.7rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ground);
+  border: 1.5px solid var(--ink);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.tile__depiction img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.tile__foot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: auto;
+}
+
+.tile__state-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  line-height: 1.4;
+}
+
+.tile__formula {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* -------------------- tile: round-trip proof line -------------------- */
+/* Visible, honest proof of the determinism claim: the name is re-parsed
+   independently (OPSIN) and compared back to the input SMILES. Data/
+   measurement text, same font-mono carve-out as the SMILES tag and
+   formula above -- never Silkscreen, that face is reserved for the name
+   itself. A mismatch is never hidden or softened: it gets the same
+   neutral ink tone as a match, distinguished only by its plain-text
+   wording and weight, never by a second accent/status color. */
+.tile__roundtrip {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.tile__roundtrip-smiles {
+  color: var(--ink);
+  font-weight: 700;
+  /* the SMILES string itself has no natural word-break points, but the
+     surrounding label/result text does -- only break mid-token here so
+     "does not match" never fractures across a line */
+  word-break: break-all;
+}
+
+.tile__roundtrip-result--mismatch {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* -------------------- tile: pending (queued for the chase) -------------------- */
+
+.tile--pending {
+  border-style: dotted;
+  border-color: var(--line);
+}
+
+.tile__pending-cloth {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.tile__pending-dash {
+  width: 22px;
+  height: 3px;
+  background: var(--line);
+  border-radius: 2px;
+  animation: pending-shimmer 1.4s ease-in-out infinite;
+}
+
+.tile__pending-dash:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.tile__pending-dash:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes pending-shimmer {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+/* -------------------- tile: active (the batch chase highlight) -------------------- */
+
+.tile--active {
+  border-color: var(--accent);
+  border-style: solid;
+  animation: chase-pulse 900ms ease-in-out infinite;
+}
+
+@keyframes chase-pulse {
+  0%,
+  100% {
+    box-shadow: 0 2px 4px rgba(43, 43, 28, 0.15);
+  }
+  50% {
+    box-shadow: 0 6px 14px 2px rgba(181, 67, 62, 0.35);
+  }
+}
+
+/* -------------------- tile: PIN — a fully solid, completed block -------------------- */
+
+.tile--pin {
+  border-color: var(--accent);
+}
+
+.tile__name-block--pin {
+  background-color: var(--accent);
+  /* the world's own device, landed where it matters most: a completed
+     PIN is genuinely built from small crossed knots, not a flat fill */
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      var(--accent-deep) 0,
+      var(--accent-deep) 2px,
+      transparent 2px,
+      transparent 10px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      var(--accent-deep) 0,
+      var(--accent-deep) 2px,
+      transparent 2px,
+      transparent 10px
+    );
+  border: 2px solid var(--accent-deep);
+  border-radius: 2px;
+  padding: 0.65rem 0.75rem;
+  display: flex;
+  align-items: center;
+}
+
+.tile__name-block--pin .threaded-name {
+  color: var(--on-accent);
+}
+
+/* -------------------- tile: fallback — dashed basting, provisional -------------------- */
+
+.tile--fallback {
+  border-style: dashed;
+}
+
+.tile__name-block--fallback {
+  background: transparent;
+  border: 3px dashed var(--ink);
+  border-radius: 2px;
+  padding: 0.55rem 0.7rem;
+  display: flex;
+  align-items: center;
+}
+
+.tile__name-block--fallback .threaded-name {
+  color: var(--ink);
+}
+
+.tile__name-block--fallback .threaded-name__cell {
+  border-bottom: 1px dashed var(--thread);
+}
+
+/* -------------------- tile: best-effort — a loose, untied tack -------------------- */
+/* A real name shipped, but this one could NOT be round-trip verified --
+   meaningfully less confident than fallback (which IS verified). Dotted is
+   already spent by the pending/queued state (DESIGN.md reserves it for
+   "not yet worked"), so best-effort can't reuse it without colliding with
+   that grammar. Instead: a thin SOLID hairline in the neutral --thread
+   color (never --ink, never --accent, never dashed/dotted) -- thinner and
+   lighter than fallback's 3px dashed ink, with no crossed-thread texture
+   (reserved for pin). Recessed into the ground-well fill so it visually
+   sinks below fallback's flush-transparent block: the faintest of the
+   three named states, distinct by weight+color+fill, not by a style
+   already owned elsewhere. */
+
+.tile--best-effort {
+  border-color: var(--thread);
+  border-style: solid;
+  border-width: 1px;
+}
+
+.tile__name-block--best-effort {
+  background: var(--ground-well);
+  border: 1.5px solid var(--thread);
+  border-radius: 2px;
+  padding: 0.55rem 0.7rem;
+  display: flex;
+  align-items: center;
+}
+
+.tile__name-block--best-effort .threaded-name {
+  color: var(--ink);
+}
+
+/* -------------------- tile: abstain — bare, unworked cloth -------------------- */
+
+.tile--abstain {
+  border-color: var(--line);
+  border-style: solid;
+  border-width: 1px;
+}
+
+.tile__name-block--abstain {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.tile__weave {
+  width: 100%;
+  min-height: 2.6rem;
+  border-radius: 2px;
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      var(--line-soft) 0,
+      var(--line-soft) 1px,
+      transparent 1px,
+      transparent 8px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      var(--line-soft) 0,
+      var(--line-soft) 1px,
+      transparent 1px,
+      transparent 8px
+    );
+}
+
+/* -------------------- tile: error — snipped thread, a torn corner -------------------- */
+
+.tile--error {
+  border-color: var(--ink);
+}
+
+.tile__name-block--error {
+  width: 100%;
+  height: 2.6rem;
+  position: relative;
+}
+
+.tile__snip {
+  position: absolute;
+  top: 50%;
+  width: 42%;
+  height: 3px;
+  background: var(--ink);
+  border-radius: 2px;
+}
+
+.tile__snip--a {
+  left: 6%;
+  transform: rotate(-16deg);
+}
+
+.tile__snip--b {
+  right: 6%;
+  transform: rotate(16deg);
+}
+
+/* -------------------- the sewn name itself -------------------- */
+/* The one place in the whole surface that uses a quantized/monospace
+   letterform — every other label, button, and line of copy stays in the
+   workhorse grotesk. */
+
+.threaded-name {
+  font-family: var(--font-orthonym);
+  font-weight: 400;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+  line-height: 1.6;
+}
+
+.threaded-name__visual {
+  display: inline-flex;
+  flex-wrap: wrap;
+  row-gap: 2px;
+  word-break: break-word;
+}
+
+/* Visually hidden but readable by assistive tech — carries the real
+   accessible name for the sewn name, since a bare <span> (role
+   "generic") cannot take a name from aria-label per the ARIA spec. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.threaded-name__cell {
+  display: inline-block;
+  min-width: 0.66em;
+  text-align: center;
+}
+
+.threaded-name--animate .threaded-name__cell {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.55) rotate(-6deg);
+  animation: orthonym-cell-in 240ms ease-out forwards;
+  animation-delay: calc(var(--cell-index) * 34ms);
+}
+
+@keyframes orthonym-cell-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.55) rotate(-6deg);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(1px) scale(1.12) rotate(2deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(0deg);
+  }
+}
+
+/* -------------------- reduced motion -------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .tile--active {
+    animation: none;
+    box-shadow: 0 0 0 3px rgba(181, 67, 62, 0.3);
+  }
+
+  .tile__pending-dash {
+    animation: none;
+    opacity: 0.6;
+  }
+
+  .threaded-name--animate .threaded-name__cell {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}

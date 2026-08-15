@@ -1,0 +1,29 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: orthonym-backend
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    networks:
+      - orthonym-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: orthonym-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - orthonym-network
+
+networks:
+  orthonym-network:
+    name: orthonym-network
+    driver: bridge

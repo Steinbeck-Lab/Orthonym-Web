@@ -1,0 +1,433 @@
+/* ============================================================
+   Orthonym — Needlework Sampler
+   IUPAC → Structure page: the mirror direction of Home's translator.
+   A visitor types a name, OPSIN (not Orthonym's own naming engine) parses
+   it back into a molecule, and the result renders as a single sampler
+   "patch" with the same border-style-as-state grammar the tile family
+   already uses elsewhere (solid/dashed/dotted = settled/provisional/
+   queued). This file intentionally does NOT reuse the `.tile` /
+   `.sampler` class names from Home.css — this page shows exactly one
+   result, not a grid of many — but it borrows the same visual devices
+   (dashed empty state, dotted pending shimmer, solid accent for the
+   confirmed outcome, crossed snip bars for error) so it reads as the
+   same world. Keyframes are page-scoped (`from-name-*`) on purpose:
+   every page's CSS ships in the same bundle, so reusing a bare
+   `@keyframes` name here would silently let the last-loaded page win
+   for every page's animation.
+   ============================================================ */
+
+.from-name-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  padding-top: 2.75rem;
+  padding-bottom: 3rem;
+}
+
+.from-name-page__title {
+  font-family: var(--font-sans);
+  font-size: clamp(1.7rem, 4vw, 2.3rem);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+
+.from-name-page__lead {
+  max-width: 62ch;
+  color: var(--ink-soft);
+  font-size: 1.05rem;
+  line-height: 1.55;
+  margin-top: -0.75rem;
+}
+
+/* -------------------- panel + form -------------------- */
+
+.from-name-panel form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.35rem;
+}
+
+.from-name-panel__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 780px) {
+  .from-name-panel__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.from-name-panel__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.from-name-panel__label {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+.from-name-panel__input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: var(--ground);
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.from-name-panel__input::placeholder {
+  color: var(--ink-soft);
+  opacity: 0.8;
+}
+
+.from-name-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.from-name-button {
+  appearance: none;
+  border: 2px solid var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 0.7rem 1.7rem;
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.from-name-button:hover:not(:disabled) {
+  background: var(--accent-deep);
+  border-color: var(--accent-deep);
+}
+
+.from-name-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.from-name-button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.from-name-panel__note {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+
+/* -------------------- aside note -------------------- */
+/* Same "load-bearing note beside the input, not footer fine print"
+   treatment as Home's disclaimer / StructureToIupac's aside. */
+
+.from-name-aside {
+  background: var(--ground-well);
+  border: 2px dashed var(--ink);
+  border-radius: 2px;
+  padding: 1rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.from-name-aside__lead {
+  font-weight: 700;
+  color: var(--ink);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.from-name-aside__body {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+/* -------------------- examples -------------------- */
+
+.from-name-examples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.75rem;
+}
+
+.from-name-examples__label {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+}
+
+.from-name-examples__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.from-name-chip {
+  appearance: none;
+  background: var(--ground);
+  border: 1.5px solid var(--ink);
+  color: var(--ink);
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.from-name-chip:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--ground);
+}
+
+.from-name-chip:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+/* -------------------- fetch error banner -------------------- */
+/* A network-level failure (backend unreachable) — distinct from the
+   `.from-name-patch--error` state below, which is a normal 2xx response
+   OPSIN simply couldn't resolve. */
+
+.from-name-fetch-error {
+  background: var(--ground-well);
+  border: 1.5px dashed var(--ink);
+  padding: 0.85rem 1.1rem;
+  border-radius: 3px;
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.from-name-fetch-error code {
+  background: var(--ground-deep);
+  padding: 0.1rem 0.35rem;
+  border-radius: 2px;
+}
+
+/* -------------------- results -------------------- */
+
+.from-name-results {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* -------------------- the patch: shared shell -------------------- */
+/* One patch, not a grid of tiles — this page resolves a single name at
+   a time. Border style still carries the state (per DESIGN.md's Shapes
+   rule: solid = settled, dashed = provisional/empty, dotted = queued),
+   and the state is always spelled out in `.from-name-patch__state-label`
+   text too, never left to border/color alone. */
+
+.from-name-patch {
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  background: var(--ground);
+  padding: 1rem 1.25rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-height: 9rem;
+}
+
+.from-name-patch__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.from-name-patch__state-label {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+/* -------------------- patch: idle — nothing submitted yet -------------------- */
+
+.from-name-patch--idle {
+  border-style: dashed;
+  border-color: var(--line);
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+}
+
+.from-name-patch__empty-note {
+  color: var(--ink-soft);
+  max-width: 42ch;
+  line-height: 1.55;
+}
+
+/* -------------------- patch: loading — queued for OPSIN -------------------- */
+
+.from-name-patch--loading {
+  border-style: dotted;
+  border-color: var(--line);
+}
+
+.from-name-patch__pending-cloth {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0.75rem 0;
+}
+
+.from-name-patch__pending-dash {
+  width: 22px;
+  height: 3px;
+  background: var(--line);
+  border-radius: 2px;
+  animation: from-name-pending-shimmer 1.4s ease-in-out infinite;
+}
+
+.from-name-patch__pending-dash:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.from-name-patch__pending-dash:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes from-name-pending-shimmer {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+/* -------------------- patch: success — OPSIN resolved a structure -------------------- */
+/* The confirmed/most-confident outcome for this page, so it takes the
+   system's one accent thread on its border — the same rule that lets
+   the accent mark the confirmed-PIN tile on Home, extended to this
+   page's own "confirmed" state rather than inventing a second hue. */
+
+.from-name-patch--success {
+  border-color: var(--accent);
+}
+
+.from-name-patch__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.from-name-patch__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.from-name-patch__field-label {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.from-name-patch__smiles {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--ground-well);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 0.5rem 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.from-name-patch__depiction {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 0.4rem;
+  background: var(--ground);
+}
+
+.from-name-patch__depiction img {
+  display: block;
+  width: min(240px, 100%);
+  height: auto;
+  border-radius: 2px;
+}
+
+/* -------------------- patch: error — OPSIN couldn't resolve it -------------------- */
+/* Calm and honest, not alarming: same ink-bordered treatment as every
+   other settled state, no red fill, no siren copy — a crossed pair of
+   bars stands in for a severed thread, and the literal API error string
+   is always shown as the plain-text label above it. */
+
+.from-name-patch--error {
+  border-color: var(--ink);
+}
+
+.from-name-patch__snip-wrap {
+  position: relative;
+  width: 100%;
+  height: 2.75rem;
+}
+
+.from-name-patch__snip {
+  position: absolute;
+  top: 50%;
+  width: 38%;
+  height: 3px;
+  background: var(--ink);
+  border-radius: 2px;
+}
+
+.from-name-patch__snip--a {
+  left: 8%;
+  transform: rotate(-16deg);
+}
+
+.from-name-patch__snip--b {
+  right: 8%;
+  transform: rotate(16deg);
+}
+
+/* -------------------- reduced motion -------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .from-name-patch__pending-dash {
+    animation: none;
+    opacity: 0.6;
+  }
+}
