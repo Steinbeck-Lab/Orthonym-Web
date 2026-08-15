@@ -89,3 +89,18 @@ export async function explainMolecule(smiles) {
   }
   return res.json()
 }
+
+/**
+ * Decomposes an IUPAC name directly, without going through a structure
+ * first. A name OPSIN cannot parse is not a network error - it returns a
+ * normal 2xx response with `error` set.
+ * @param {string} name
+ * @returns {Promise<object>}
+ */
+export async function explainName(name) {
+  const res = await fetch(`/api/explain-name?name=${encodeURIComponent(name)}`)
+  if (!res.ok) {
+    throw new Error(`GET /api/explain-name failed with ${res.status}`)
+  }
+  return res.json()
+}
