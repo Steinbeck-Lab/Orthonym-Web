@@ -25,10 +25,15 @@ _SUBSTITUENTS = {
     "amino": "an -NH2 group",
     "hydroxy": "an -OH group",
     "acetyloxy": "an -O-C(=O)-CH3 group",
+    "methoxy": "an -O-CH3 group",
+    "ethoxy": "an -O-CH2CH3 group",
+    "acetyl": "a CH3-C(=O)- group",
+    "indolyl": "an indole ring system attached by one of its carbons",
+    "oxy": "an -O- linkage joining two parts of the name",
 }
 
 _SUFFIXES = {
-    "one": "a C=O group (a ketone-type carbonyl)",
+    "one": "a C=O group (a carbonyl)",
     "ol": "an -OH group",
     "al": "a -CHO group",
     "amine": "a nitrogen with free hydrogens",
@@ -41,6 +46,7 @@ _SUFFIXES = {
     "carboxylic acid": "a -C(=O)OH group",
     "ic acid": "a -C(=O)OH group",
     "oate": "an ester -C(=O)O- linkage",
+    "ate": "an ester -C(=O)O- linkage",
 }
 
 # Parent skeleton stems, as OPSIN's <group> token spells them. Verified live
@@ -122,6 +128,10 @@ def describe_part(kind: str, text: str, locant: str | None, atom_count: int) -> 
 
 
 def describe_locant(kind: str, locant: str, element: str) -> str:
+    if kind == "modifier":
+        return f"Position {locant} — the {element}{locant} atom carries a hydrogen here."
+    if kind == "suffix":
+        return f"Position {locant} — the group hangs off {element}{locant}."
     return f"Position {locant} — the {element}{locant} atom."
 
 
