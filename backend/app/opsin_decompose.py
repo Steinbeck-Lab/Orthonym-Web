@@ -247,10 +247,16 @@ class DecomposedAtom(NamedTuple):
     locants: tuple[str, ...]
 
 
+class Modifier(NamedTuple):
+    kind: str      # "hydro" or "indicatedHydrogen"
+    locant: str    # resolved locant, e.g. "3"
+
+
 class Decomposition(NamedTuple):
     smiles: str
     atoms: tuple[DecomposedAtom, ...]
     parts: tuple[NamePart, ...]
+    modifiers: tuple[Modifier, ...] = ()
 
 
 def _collect_parts(h: _Handles, parse_el) -> list[NamePart]:
@@ -327,6 +333,37 @@ def _collect_parts(h: _Handles, parse_el) -> list[NamePart]:
     return parts
 
 
+_MODIFIER_ELEMENTS = ("hydro", "indicatedHydrogen")
+
+
+def _collect_modifiers(h: _Handles, parse_el) -> list[Modifier]:
+    """Hydro prefixes and indicated hydrogen -- the "3,7-dihydro-1H-" part
+    of a name. These add no atoms; they record where hydrogens sit, which
+    fixes where the ring double bonds go.
+
+    MUST be called after ComponentProcessor and BEFORE buildFragment.
+    Verified against the pinned jar: after processing these elements carry
+    their resolved locant (caffeine -> hydro@3, hydro@7, indicatedHydrogen@1),
+    and buildFragment consumes them, leaving none in the tree.
+    """
+    found: list[Modifier] = []
+
+    def walk(el) -> None:
+        name = str(h.get_name.invoke(el))
+        if h.TokenEl.class_.isInstance(el):
+            if name in _MODIFIER_ELEMENTS:
+                locant = h.get_attribute_value.invoke(el, "locant")
+                if locant is not None:
+                    found.append(Modifier(kind=name, locant=str(locant)))
+            return
+        children = h.get_children.invoke(el)
+        for i in range(children.size()):
+            walk(children.get(i))
+
+    walk(parse_el)
+    return found
+
+
 def decompose(name: str) -> Optional[Decomposition]:
     """Runs OPSIN's internal pipeline for `name` and reports every name part
     with its own atoms, plus every heavy atom with its locants. Returns None
@@ -351,6 +388,9 @@ def decompose(name: str) -> Optional[Decomposition]:
             h.cg_process.invoke(h.cg_ctor.newInstance(state), parse_el)
             suffix_applier = h.sa_ctor.newInstance(state, h.suffix_rules)
             h.cp_process.invoke(h.cp_ctor.newInstance(state, suffix_applier), parse_el)
+
+            # BEFORE buildFragment -- it consumes these elements.
+            modifiers = _collect_modifiers(h, parse_el)
 
             sb = h.sb_ctor.newInstance(state)
             final_frag = h.build_fragment.invoke(sb, parse_el)
@@ -381,7 +421,12 @@ def decompose(name: str) -> Optional[Decomposition]:
 
     if not parts:
         return None
-    return Decomposition(smiles=smiles, atoms=tuple(atoms), parts=tuple(parts))
+    return Decomposition(
+        smiles=smiles,
+        atoms=tuple(atoms),
+        parts=tuple(parts),
+        modifiers=tuple(modifiers),
+    )
 
 
 def heavy_atom_indices(result: Decomposition, opsin_ids) -> tuple[int, ...]:

@@ -103,6 +103,12 @@ def _parent_label(root) -> str:
     return label or root.text.strip("-")
 
 
+def _locant_sort_key(segment: dict):
+    locant = segment.get("locant") or ""
+    digits = "".join(c for c in locant if c.isdigit())
+    return (int(digits) if digits else 0, locant)
+
+
 def _build_segments(result) -> list[dict]:
     by_index = {atom.rdkit_index: atom for atom in result.atoms}
     segments: list[dict] = []
@@ -113,25 +119,46 @@ def _build_segments(result) -> list[dict]:
         grouped.setdefault(part.text.strip("-"), []).append(part)
 
     for text, parts in grouped.items():
-        children, owned = [], []
+        owned = []
+        by_locant: dict[str, list] = {}
         for part in parts:
             atoms = heavy_atom_indices(result, part.opsin_atom_ids)
             owned.extend(atoms)
             if part.locant and atoms:
-                element = by_index[atoms[0]].element
-                children.append(
-                    _segment(part.locant, "substituent",
-                             describe_locant("substituent", part.locant, element),
-                             atoms, locant=part.locant)
-                )
+                by_locant.setdefault(part.locant, []).extend(atoms)
+        children = []
+        for locant, atoms in by_locant.items():
+            element = by_index[atoms[0]].element
+            children.append(
+                _segment(locant, "substituent",
+                         describe_locant("substituent", locant, element),
+                         atoms, locant=locant)
+            )
+        children.sort(key=_locant_sort_key)
         segments.append(
             _segment(text, "substituent",
                      describe_part("substituent", text, None, len(owned)),
                      owned, children=children)
         )
 
+    # Locant -> atom index, restricted to atoms the PARENT skeleton itself
+    # owns. Modifiers (hydro / indicated hydrogen) only ever describe a
+    # position on the named parent ring system -- never a substituent.
+    # Scanning every atom instead is unsafe: verified live, caffeine's own
+    # "1"-methyl substituent carbon carries the OWN-fragment locant "1"
+    # (its single carbon, numbered within its own tiny fragment) which
+    # collides with the purine ring's N1 also being locant "1" -- the two
+    # later clones get primed locants ("1'", "1''") so only this first one
+    # collides, but a plain atoms-wide scan would pick whichever atom comes
+    # first in SMILES output order, silently mapping "indicatedHydrogen@1"
+    # onto a methyl carbon instead of ring N1.
+    parent_index_by_locant: dict[str, int] = {}
+
     for root in (p for p in result.parts if p.kind == "root"):
         split = split_root(result, root)
+        for index in split.parent_atoms:
+            for locant in by_index[index].locants:
+                parent_index_by_locant.setdefault(locant, index)
         parent_label = _parent_label(root)
         segments.append(
             _segment(parent_label, "parent",
@@ -140,21 +167,25 @@ def _build_segments(result) -> list[dict]:
                      split.parent_atoms)
         )
         if split.suffix_atoms:
-            children = []
+            by_locant: dict[str, list] = {}
             for index in split.suffix_atoms:
                 locant = split.suffix_locants.get(index)
                 if locant is None:
                     continue
-                highlight = [index] + [
+                by_locant.setdefault(locant, []).append(index)
+            children = []
+            for locant, indices in by_locant.items():
+                highlight = list(indices) + [
                     i for i in split.parent_atoms
                     if locant in by_index[i].locants
                 ]
                 children.append(
                     _segment(locant, "suffix",
                              describe_locant("suffix", locant,
-                                             by_index[index].element),
-                             [index], locant=locant, highlight=highlight)
+                                             by_index[indices[0]].element),
+                             indices, locant=locant, highlight=highlight)
                 )
+            children.sort(key=_locant_sort_key)
             # The suffix's NAME comes from the root's own suffix tokens --
             # never a literal. Caffeine gives ("one", "one") -> "dione";
             # an alcohol gives ("ol",) -> "ol". Hardcoding "one" here would
@@ -170,6 +201,27 @@ def _build_segments(result) -> list[dict]:
                          describe_part("suffix", suffix_label, None,
                                        len(split.suffix_atoms)),
                          split.suffix_atoms, children=children)
+            )
+
+    if result.modifiers:
+        children, highlight = [], []
+        for modifier in result.modifiers:
+            index = parent_index_by_locant.get(modifier.locant)
+            if index is None:
+                continue
+            highlight.append(index)
+            children.append(
+                _segment(modifier.locant, "modifier",
+                         describe_locant("modifier", modifier.locant,
+                                         by_index[index].element),
+                         [], owns=False, locant=modifier.locant,
+                         highlight=[index])
+            )
+        if children:
+            segments.append(
+                _segment("added hydrogens", "modifier",
+                         describe_part("modifier", "added hydrogens", None, 0),
+                         [], owns=False, highlight=highlight, children=children)
             )
     return segments
 

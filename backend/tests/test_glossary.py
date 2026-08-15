@@ -37,3 +37,12 @@ def test_unknown_parent_stem_still_gets_a_neutral_line():
 
 def test_locant_description_names_the_atom():
     assert "N7" in describe_locant("substituent", "7", "N")
+
+
+def test_carbonyl_suffix_does_not_claim_it_is_a_ketone():
+    # Caffeine's -dione carbonyls sit between ring nitrogens: amide-like,
+    # not ketones. The glossary cannot tell from the suffix alone, so it
+    # must not claim the stronger fact.
+    text = describe_part("suffix", "dione", None, 2)
+    assert "C=O" in text
+    assert "ketone" not in text.lower()

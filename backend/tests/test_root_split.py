@@ -33,3 +33,38 @@ def test_benzene_has_no_suffix_atoms():
     split = split_root(result, _root(result))
     assert split.suffix_atoms == ()
     assert len(split.parent_atoms) == 6
+
+
+from app.opsin_decompose import DecomposedAtom, Decomposition, NamePart
+
+
+def _fake(atoms, part_ids, smiles="CCO"):
+    return Decomposition(
+        smiles=smiles,
+        atoms=tuple(atoms),
+        parts=(NamePart("root", "x", None, tuple(part_ids), ()),),
+    )
+
+
+def test_degrades_to_all_parent_when_no_atom_has_a_numeric_locant():
+    # Every locant is element-symbol style, so the numeric rule finds no
+    # parent. It must hand back everything as parent, not call it all suffix.
+    result = _fake(
+        [DecomposedAtom(0, 1, "C", ("C",)), DecomposedAtom(1, 2, "O", ("O",))],
+        [1, 2],
+    )
+    split = split_root(result, result.parts[0])
+    assert split.parent_atoms == (0, 1)
+    assert split.suffix_atoms == ()
+    assert split.suffix_locants == {}
+
+
+def test_degrades_to_all_parent_when_smiles_cannot_be_parsed():
+    result = _fake(
+        [DecomposedAtom(0, 1, "C", ("1",)), DecomposedAtom(1, 2, "O", ("O",))],
+        [1, 2],
+        smiles="this is not a smiles",
+    )
+    split = split_root(result, result.parts[0])
+    assert split.parent_atoms == (0, 1)
+    assert split.suffix_atoms == ()
