@@ -1,227 +1,59 @@
-"""Name-to-structure explanation: decompose an Orthonym-generated name into
-segments and map each one to real, RDKit-verified atoms wherever that
-correspondence can be established reliably -- never guessed.
+"""Name-to-structure explanation: decompose an IUPAC name into a two-level
+tree of parts and map each part to the real atoms it names.
 
-Design (the "honest hybrid", per product decision): suffix (principal
-characteristic group) detection here is three-tier, most-authoritative
-source first:
+The design, the evidence behind it and the failure policy live in the spec:
+``docs/superpowers/specs/2026-08-14-explain-iupac-decomposition-design.md``.
+The short version, because it governs everything below:
 
-  1. PRIMARY: OPSIN's own tokenizer (opsin_tokenizer.find_suffix_span) --
-     the same parser that turns a name INTO a structure, asked what it
-     thinks each piece of the name actually IS, not a guess at how the
-     rendered string happens to end. See opsin_tokenizer.py's module
-     docstring for the full mechanism and its two confirmed real
-     constraints (multi-word names, and why bare substituent fragments
-     can't be independently resolved this way).
-  2. SECONDARY: Orthonym's own name_with_tree() `suffix` field, when the
-     tokenizer path above is unavailable (e.g. no JVM) or found nothing --
-     a real, structured signal Orthonym already computed, though direct
-     testing confirmed it collapses to an undecomposed "coarse_fallback"
-     blob for a large class of real molecules (simple retained names like
-     ethanol/acetic acid/acetamide, and ring/heterocycle names like
-     benzene/caffeine's purine ring).
-  3. TERTIARY: how the rendered NAME STRING ends -- IUPAC's own suffix-last
-     composition order (P-14.5) makes this a legitimate last-resort signal,
-     not a guess from nowhere, for whatever the two structured sources
-     above still missed.
+* Every atom mapping is traceable to OPSIN's OWN output -- its internal parse
+  tree plus its per-atom locants (``opsin_decompose``, ``root_split``). There
+  is no SMARTS guessing here. The eight hardcoded SMARTS rules this module
+  used to carry were the cause of the defect in spec §1 (caffeine's carbonyls
+  sit between ring nitrogens, the ketone SMARTS correctly failed, and the
+  whole molecule went blank), not a safety net.
+* Failure is PER PART (spec §6). A part whose atoms cannot be resolved is
+  emitted with ``kind="unmapped"`` and its siblings are unaffected. Nothing
+  here may blank the whole molecule again.
+* Owning parts (``substituent``/``parent``/``suffix``) hold disjoint atom sets
+  that together cover every heavy atom; referential parts
+  (``modifier``/``stereo``) own nothing and carry empty ``atom_indices``
+  (spec §4).
 
-Whichever tier proposes a suffix class, it is NEVER trusted on its own: it
-is only reported as a real segment when the corresponding SMARTS pattern
-actually matches the real molecule via RDKit. "The name ends in -one" (or
-"OPSIN's tokenizer tagged this token as a suffix") does not imply "this is
-a ketone" -- caffeine's name ends in "-dione" but its two carbonyls sit
-between ring nitrogens (amide-like), not between two carbons, and the
-ketone SMARTS correctly fails to match; that molecule falls through to the
-honest "could not decompose this name" case rather than shipping a wrong
-highlight. Every tier proposes, SMARTS disposes -- this can only produce a
-false negative (no segment reported), never a false positive (a wrong one).
+Two entry points, differing only in how atom identity is established
+(spec §3.4):
 
-The "rest of the molecule" (parent chain + any substituents) is never
-sub-decomposed into individual named substituents. OPSIN's tokenizer DOES
-mark real substituent/bracket boundaries in the name text, and Orthonym's
-own substituent-prefix strings exist too, but turning either into further
-real ATOM correspondences was confirmed, by direct testing, to require
-resolving a bare substituent fragment (e.g. "phenyl", "methylpropyl") to
-its own structure independently -- and OPSIN's top-level parser rejects a
-bare substituent name (it expects a full parent+suffix name), so that
-resolution would need OPSIN's non-public, substituent-specific grammar
-entry points. Instead the "rest" segment is exactly the atom-index set
-difference (total atoms minus the confirmed suffix atoms) -- a fact
-derived from RDKit, not a guess, at the cost of not distinguishing "parent
-chain" from "substituent" within it.
+* :func:`explain_name` -- name in. OPSIN's own built structure IS the
+  molecule, so its atom ids map straight through ``SMILESWriter``'s output
+  order to RDKit indices. No substructure match, no symmetry ambiguity.
+* :func:`explain_molecule` -- structure in. The molecule is named first, so
+  OPSIN's indices belong to a re-parse and must be remapped onto the USER's
+  molecule by substructure match, under the all-matches-agree rule ported
+  below from ``opsin_substituents``.
 """
 
-from typing import NamedTuple, Optional
+import logging
+from typing import Optional
 
 from rdkit import Chem
 from rdkit.Chem.Draw import rdMolDraw2D
 
 from orthonym import Orthonym
 
-from . import opsin_substituents, opsin_tokenizer
+from .glossary import describe_locant, describe_part
+from .opsin_decompose import decompose, heavy_atom_indices
+from .root_split import split_root
+
+logger = logging.getLogger(__name__)
 
 _EXPLAIN_WIDTH = 340
 _EXPLAIN_HEIGHT = 260
 
-# Each rule: (tree.suffix values it matches, name-ending fallbacks, SMARTS,
-# display name, plain-language explanation). Order matters only in that the
-# first rule whose SMARTS actually matches wins -- checked in this order.
-_SUFFIX_RULES = [
-    (
-        {"oic acid", "carboxylic acid"},
-        ("oic acid", "carboxylic acid", "acid"),
-        "[CX3](=O)[OX2H1]",
-        "carboxylic acid",
-        "This name ends in a carboxylic acid suffix. The highlighted "
-        "-C(=O)OH group is what earns that ending.",
-    ),
-    (
-        {"carbonitrile", "nitrile"},
-        ("nitrile", "carbonitrile"),
-        "[CX2]#[NX1]",
-        "nitrile",
-        "This name ends in a nitrile suffix. The highlighted -C≡N "
-        "triple bond is what earns that ending.",
-    ),
-    (
-        {"amide"},
-        ("amide",),
-        "[CX3](=O)[NX3]",
-        "amide",
-        "This name ends in an amide suffix. The highlighted "
-        "-C(=O)N- group is what earns that ending.",
-    ),
-    (
-        {"oate"},
-        ("oate", "ate"),
-        "[#6][CX3](=O)[OX2][#6]",
-        "ester",
-        "This name reads as an ester (two words, the second ending in "
-        "-oate/-ate). The highlighted -C(=O)O- linkage is what earns "
-        "that reading.",
-    ),
-    (
-        {"al"},
-        ("al", "aldehyde"),
-        "[CX3H1](=O)[#6,H]",
-        "aldehyde",
-        "This name ends in an aldehyde suffix. The highlighted -CHO "
-        "group is what earns that ending.",
-    ),
-    (
-        {"one"},
-        ("one",),
-        "[#6][CX3](=O)[#6]",
-        "ketone",
-        "This name ends in a ketone suffix. The highlighted C=O, "
-        "flanked by two carbons, is what earns that ending.",
-    ),
-    (
-        {"amine"},
-        ("amine",),
-        "[NX3;!$(N-C=O);!$(N=*)]",
-        "amine",
-        "This name ends in an amine suffix. The highlighted nitrogen "
-        "is what earns that ending.",
-    ),
-    (
-        {"ol"},
-        ("ol",),
-        "[CX4][OX2H1]",
-        "alcohol",
-        "This name ends in an alcohol suffix. The highlighted -OH on "
-        "a saturated carbon is what earns that ending.",
-    ),
-]
-
-
-class SuffixMatch(NamedTuple):
-    group_name: str
-    explanation: str
-    atom_indices: tuple[int, ...]
-    source: str  # "tree" or "name-ending", for the API's transparency, not UI copy
-    # How many trailing characters of `name` this suffix occupies, so the
-    # frontend can visually pair the highlighted structure with the exact
-    # substring of the name that names it (e.g. "prop" + "[anoic acid]").
-    # None when that pairing can't be established as safely as the
-    # structural match itself (kept separate from atom_indices so a
-    # shaky name-range guess never gates a solid structural highlight).
-    name_suffix_length: Optional[int]
-
-
-def _find_suffix(name: str, tree, mol: Chem.Mol) -> Optional[SuffixMatch]:
-    """Try OPSIN's own tokenizer first, then the tree's suffix field, then
-    the name's ending. Returns None unless a SMARTS pattern actually
-    confirms the match on the real molecule -- a suggested class that fails
-    to match structurally is never reported, regardless of which tier
-    proposed it.
-    """
-    span = opsin_tokenizer.find_suffix_span(name)
-    if span is not None:
-        suffix_text, start, end = span
-        lower = suffix_text.lower()
-        for _field_values, endings, smarts, group_name, explanation in _SUFFIX_RULES:
-            if any(lower.endswith(ending) for ending in endings):
-                match = _confirm(mol, smarts)
-                if match is not None:
-                    # The suffix span is, by IUPAC convention (P-14.5) and
-                    # by every case seen in testing, the name's own trailing
-                    # text -- confirm that literally before trusting `end`
-                    # for the name-range pairing, same defensive pattern as
-                    # the tree/name-ending tiers below.
-                    length = len(name) - start if end == len(name) else None
-                    return SuffixMatch(
-                        group_name, explanation, match, "opsin-tokenizer", length
-                    )
-                # OPSIN's tokenizer identified a suffix-shaped token, but it
-                # didn't confirm structurally -- same rule as the tree tier:
-                # don't fall through to a different, coincidentally-matching
-                # class from a lower tier. The tokenizer's signal is more
-                # authoritative than a name-ending guess, so its failure to
-                # confirm is reported as "undecomposed," not overridden.
-                return None
-
-    suffix_field = (tree.suffix if tree is not None else None)
-    if suffix_field:
-        norm = suffix_field.strip().lower()
-        for field_values, _endings, smarts, group_name, explanation in _SUFFIX_RULES:
-            if norm in field_values:
-                match = _confirm(mol, smarts)
-                if match is not None:
-                    # The tree's suffix field should literally be the name's
-                    # own trailing text (that's what Orthonym composed the
-                    # name FROM) -- confirm it before using its length, so a
-                    # mismatch just omits the name-range pairing rather than
-                    # mis-slicing the string.
-                    length = len(suffix_field) if name.lower().endswith(norm) else None
-                    return SuffixMatch(group_name, explanation, match, "tree", length)
-                # The tree said this suffix, but it didn't confirm on the
-                # structure -- do not also try the name-ending fallback for
-                # a DIFFERENT class; the tree's own signal takes priority
-                # and its failure to confirm is reported as "undecomposed",
-                # not silently overridden by a coincidental name-ending hit.
-                return None
-
-    lower_name = name.lower()
-    for _field_values, endings, smarts, group_name, explanation in _SUFFIX_RULES:
-        for ending in endings:
-            if lower_name.endswith(ending):
-                match = _confirm(mol, smarts)
-                if match is not None:
-                    return SuffixMatch(
-                        group_name, explanation, match, "name-ending", len(ending)
-                    )
-    return None
-
-
-def _confirm(mol: Chem.Mol, smarts: str) -> Optional[tuple[int, ...]]:
-    pattern = Chem.MolFromSmarts(smarts)
-    if pattern is None:
-        return None
-    matches = mol.GetSubstructMatches(pattern)
-    if not matches:
-        return None
-    return tuple(sorted({atom for match in matches for atom in match}))
+# Ported from opsin_substituents (deleted in Task 8), unchanged.
+# Generous headroom above what any realistically-drawn small molecule's
+# automorphism count needs, so the cap is essentially never hit by a
+# genuine case -- see the cap-hit check in explain_molecule for why
+# hitting it must mean "inconclusive," never "confirmed."
+_MAX_SUBSTRUCT_MATCHES = 4096
 
 
 def _inline_svg(mol: Chem.Mol) -> str:
@@ -236,14 +68,233 @@ def _inline_svg(mol: Chem.Mol) -> str:
     return drawer.GetDrawingText()
 
 
+def _segment(label, kind, explanation, atoms, *, owns=True,
+             locant=None, highlight=None, children=None) -> dict:
+    return {
+        "label": label,
+        "kind": kind,
+        "owns_atoms": owns,
+        "locant": locant,
+        "explanation": explanation,
+        "atom_indices": sorted(atoms),
+        "highlight_atoms": sorted(highlight if highlight is not None else atoms),
+        "name_range": None,
+        "children": children or [],
+    }
+
+
+def _parent_label(root) -> str:
+    """The parent skeleton's own name, without the suffix stuck to it.
+
+    `root.text` is every token in the root concatenated, so it reads
+    "purinoneone", "hexol", "ethol", "propic acid" -- visibly broken if shown
+    to a user. Stripping the root's own suffix tokens off the end recovers
+    OPSIN's <group> token exactly: verified on every golden name --
+    purinoneone -> purin, hexol -> hex, acetate -> acet,
+    "propic acid" -> prop, benzen -> benzen.
+
+    Strip from the END only, and one occurrence per suffix token, so a stem
+    that happens to contain the suffix letters is not mangled.
+    """
+    label = root.text.strip("-")
+    for suffix in reversed(root.suffix_texts):
+        if suffix and label.endswith(suffix):
+            label = label[: -len(suffix)]
+    return label or root.text.strip("-")
+
+
+def _build_segments(result) -> list[dict]:
+    by_index = {atom.rdkit_index: atom for atom in result.atoms}
+    segments: list[dict] = []
+
+    substituents = [p for p in result.parts if p.kind == "substituent"]
+    grouped: dict[str, list] = {}
+    for part in substituents:
+        grouped.setdefault(part.text.strip("-"), []).append(part)
+
+    for text, parts in grouped.items():
+        children, owned = [], []
+        for part in parts:
+            atoms = heavy_atom_indices(result, part.opsin_atom_ids)
+            owned.extend(atoms)
+            if part.locant and atoms:
+                element = by_index[atoms[0]].element
+                children.append(
+                    _segment(part.locant, "substituent",
+                             describe_locant("substituent", part.locant, element),
+                             atoms, locant=part.locant)
+                )
+        segments.append(
+            _segment(text, "substituent",
+                     describe_part("substituent", text, None, len(owned)),
+                     owned, children=children)
+        )
+
+    for root in (p for p in result.parts if p.kind == "root"):
+        split = split_root(result, root)
+        parent_label = _parent_label(root)
+        segments.append(
+            _segment(parent_label, "parent",
+                     describe_part("parent", parent_label, None,
+                                   len(split.parent_atoms)),
+                     split.parent_atoms)
+        )
+        if split.suffix_atoms:
+            children = []
+            for index in split.suffix_atoms:
+                locant = split.suffix_locants.get(index)
+                if locant is None:
+                    continue
+                highlight = [index] + [
+                    i for i in split.parent_atoms
+                    if locant in by_index[i].locants
+                ]
+                children.append(
+                    _segment(locant, "suffix",
+                             describe_locant("suffix", locant,
+                                             by_index[index].element),
+                             [index], locant=locant, highlight=highlight)
+                )
+            # The suffix's NAME comes from the root's own suffix tokens --
+            # never a literal. Caffeine gives ("one", "one") -> "dione";
+            # an alcohol gives ("ol",) -> "ol". Hardcoding "one" here would
+            # tell an alcohol it has a C=O, which the never-guess rule forbids.
+            texts = root.suffix_texts
+            if texts and len(set(texts)) == 1 and len(texts) > 1:
+                multiplier = {2: "di", 3: "tri", 4: "tetra"}.get(len(texts), "")
+                suffix_label = f"{multiplier}{texts[0]}"
+            else:
+                suffix_label = "".join(dict.fromkeys(texts)) or "suffix"
+            segments.append(
+                _segment(suffix_label, "suffix",
+                         describe_part("suffix", suffix_label, None,
+                                       len(split.suffix_atoms)),
+                         split.suffix_atoms, children=children)
+            )
+    return segments
+
+
+def explain_name(name: str) -> dict:
+    """Decomposes `name` directly. This is the simpler of the two paths:
+    OPSIN's own built structure IS the molecule, so atom ids map straight
+    through SMILESWriter's output order with no substructure match and no
+    symmetry ambiguity.
+    """
+    result = decompose(name)
+    if result is None:
+        return {
+            "smiles": "", "name": name, "svg": None, "total_atoms": 0,
+            "segments": [],
+            "error": "OPSIN could not parse this name.",
+        }
+
+    mol = Chem.MolFromSmiles(result.smiles)
+    if mol is None:
+        return {
+            "smiles": result.smiles, "name": name, "svg": None,
+            "total_atoms": 0, "segments": [],
+            "error": "OPSIN parsed this name but the structure could not be read.",
+        }
+
+    return {
+        "smiles": result.smiles,
+        "name": name,
+        "svg": _inline_svg(mol),
+        "total_atoms": mol.GetNumAtoms(),
+        "segments": _build_segments(result),
+        "error": None,
+    }
+
+
+def _agreed_atoms(indices, matches) -> Optional[frozenset]:
+    """Maps `indices` (RDKit indices into OPSIN's own re-parse) through EVERY
+    substructure match, returning the result only if every match agrees on it.
+
+    Ported from ``opsin_substituents._resolve_confirmed_groups``, which Task 8
+    deletes. Its reason, from that module's own docstring: "A named
+    substituent can be internally SYMMETRIC in the real molecule even though
+    the name's own grammar splits it into more than one substituent token
+    (ibuprofen's '2-methylpropyl' is OPSIN's 'methyl' substituent + 'propyl'
+    substituent, but the actual molecule's isobutyl group has two
+    chemically-equivalent terminal methyls -- there is no real structural
+    difference between 'the methyl' and 'the propyl chain's own terminal
+    carbon'). Confirmed by direct testing: a molecule's substructure match
+    against OPSIN's own reconstruction is sometimes NOT unique, and different
+    valid matches disagree about which specific carbon is which -- but they
+    always agree on the union."
+
+    Returns None when the matches disagree, and also when there are no matches
+    at all -- the caller turns either into ``kind="unmapped"`` for that part
+    ALONE, never a side of a real symmetry and never a fallback to OPSIN's own
+    indices for a molecule they do not describe.
+
+    One deliberate difference from the ported original: it merged adjacent
+    disputed candidates and re-checked the union, because its only other
+    option was to dump their atoms into one undifferentiated "rest" segment.
+    That merge is not carried over. Spec §6 and §8 now say "drop disputed
+    groups to unmapped", and per-part `unmapped` already keeps the siblings
+    intact -- whereas synthesizing a merged label, kind and children for a
+    region the name never spells as one unit would itself be a guess.
+    """
+    if not matches:
+        return None
+    sets = [
+        frozenset(match[i] for i in indices if i < len(match))
+        for match in matches
+    ]
+    if any(s != sets[0] for s in sets):
+        return None
+    return sets[0]
+
+
+def _unmapped(segment: dict) -> dict:
+    """This part could not be pinned to atoms of the user's molecule. Report
+    it honestly -- owning nothing, highlighting nothing -- instead of dropping
+    it or letting it take its siblings down with it (spec §6).
+    """
+    return {
+        "label": segment["label"],
+        "kind": "unmapped",
+        "owns_atoms": False,
+        "locant": segment["locant"],
+        "explanation": describe_part("unmapped", segment["label"], None, 0),
+        "atom_indices": [],
+        "highlight_atoms": [],
+        "name_range": segment["name_range"],
+        "children": [],
+    }
+
+
+def _remap_segment(segment: dict, matches) -> dict:
+    """Rewrites one segment's atom indices from OPSIN's re-parse onto the
+    user's molecule, recursing into its children. A segment whose atoms (or
+    whose highlight) the matches disagree about becomes `unmapped`; its
+    children go with it, since a child's atoms are a subset of its parent's
+    and cannot be more certain than the parent they sit inside.
+    """
+    owned = _agreed_atoms(segment["atom_indices"], matches)
+    highlight = _agreed_atoms(segment["highlight_atoms"], matches)
+    if owned is None or highlight is None:
+        return _unmapped(segment)
+    return {
+        **segment,
+        "atom_indices": sorted(owned),
+        "highlight_atoms": sorted(highlight),
+        "children": [_remap_segment(child, matches) for child in segment["children"]],
+    }
+
+
 def explain_molecule(smiles: str, namer: Orthonym) -> dict:
     """Build an explanation for `smiles`, using `namer` (the SAME primary
     Orthonym instance /api/translate uses, for a consistent name) to name
     it. Returns a dict matching ExplainResponse's shape (see schemas.py).
 
-    All atom indices refer to the SAME RDKit Mol used to render `svg` --
-    parsed exactly once, so indices returned here are valid for `svg`'s
-    atom-N / bond-N classes with no re-indexing.
+    The structure-in path of spec §3.4: name the molecule, decompose that
+    name, then remap the decomposition onto the USER's molecule -- never
+    OPSIN's re-parse, whose atom order is its own. All atom indices returned
+    here refer to the SAME RDKit Mol used to render `svg`, parsed exactly
+    once, so they are valid for `svg`'s atom-N / bond-N classes with no
+    re-indexing.
     """
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
@@ -258,7 +309,6 @@ def explain_molecule(smiles: str, namer: Orthonym) -> dict:
 
     tree_result = namer.name_with_tree(smiles)
     name = tree_result.name
-    tree = tree_result.tree
 
     if not name or "unknown" in name.lower():
         return {
@@ -273,94 +323,49 @@ def explain_molecule(smiles: str, namer: Orthonym) -> dict:
 
     svg = _inline_svg(mol)
     total_atoms = mol.GetNumAtoms()
-    all_atoms = tuple(range(total_atoms))
 
-    suffix_match = _find_suffix(name, tree, mol)
+    named = explain_name(name)
+    if named["error"] is not None:
+        return {
+            "smiles": smiles,
+            "name": name,
+            "svg": svg,
+            "total_atoms": total_atoms,
+            "segments": [],
+            "error": named["error"],
+        }
 
-    segments = []
-    if suffix_match is not None:
-        rest_atoms = tuple(sorted(set(all_atoms) - set(suffix_match.atom_indices)))
-        suffix_name_range = None
-        rest_name_range = None
-        if suffix_match.name_suffix_length is not None:
-            split = len(name) - suffix_match.name_suffix_length
-            suffix_name_range = [split, len(name)]
-            if split > 0:
-                rest_name_range = [0, split]
-        segments.append(
-            {
-                "label": suffix_match.group_name,
-                "kind": "suffix",
-                "explanation": suffix_match.explanation,
-                "atom_indices": list(suffix_match.atom_indices),
-                "name_range": suffix_name_range,
-            }
+    # `named`'s indices are into OPSIN's re-parse of the generated name, which
+    # is a different Mol with its own atom order. Bridge the two by matching
+    # that re-parse against the user's molecule.
+    opsin_mol = Chem.MolFromSmiles(named["smiles"])
+    matches: tuple = ()
+    if opsin_mol is not None:
+        matches = mol.GetSubstructMatches(
+            opsin_mol, uniquify=False, maxMatches=_MAX_SUBSTRUCT_MATCHES
         )
-        if rest_atoms:
-            rest_atom_set = set(rest_atoms)
-            claimed = set()
-            for group in opsin_substituents.resolve_substituents(name, mol):
-                group_atoms = set(group.atom_indices)
-                # A suffix SMARTS pattern can claim a flanking atom that
-                # structurally belongs to a named substituent (e.g. an
-                # ester's "[#6][CX3](=O)[OX2][#6]" claims one carbon from
-                # each side, including the "ethyl" group's own O-CH2 carbon
-                # in "ethyl acetate"). Reporting the REMAINDER as if it were
-                # the whole confirmed group would silently ship a partial,
-                # sometimes-invisible highlight -- same "never a partial or
-                # guessed result" rule this module already applies to
-                # itself: only accept a group that survives intact.
-                if (
-                    not group_atoms
-                    or not group_atoms.issubset(rest_atom_set)
-                    or group_atoms & claimed
-                ):
-                    continue
-                claimed |= group_atoms
-                segments.append(
-                    {
-                        "label": group.label,
-                        "kind": "substituent",
-                        "explanation": f'The highlighted atoms are the "'
-                        f'{group.label}" part of the name.',
-                        "atom_indices": sorted(group_atoms),
-                        "name_range": list(group.name_range)
-                        if group.name_range is not None
-                        else None,
-                    }
-                )
-            unclaimed = sorted(rest_atom_set - claimed)
-            if unclaimed:
-                segments.append(
-                    {
-                        "label": "rest of the structure",
-                        "kind": "rest",
-                        "explanation": "The remaining carbon/ring skeleton "
-                        "the name is built around. Orthonym's explainer "
-                        "highlights it as one piece -- breaking it down "
-                        "further isn't something it can currently do "
-                        "reliably enough to show."
-                        if not claimed
-                        else "The remaining part of the structure not "
-                        "covered by the named substituents above.",
-                        "atom_indices": unclaimed,
-                        "name_range": rest_name_range if not claimed else None,
-                    }
-                )
-    else:
-        segments.append(
-            {
-                "label": "whole structure",
-                "kind": "undecomposed",
-                "explanation": "Orthonym's explainer doesn't yet recognize a "
-                "named part of this molecule it can confidently point to "
-                "-- this can happen for retained/traditional names and for "
-                "fused ring systems. Hovering highlights the whole "
-                "structure instead of a guess at which part means what.",
-                "atom_indices": list(all_atoms),
-                "name_range": [0, len(name)],
-            }
-        )
+        if len(matches) >= _MAX_SUBSTRUCT_MATCHES:
+            # Ported from opsin_substituents, reason unchanged: the
+            # consistency check in _agreed_atoms only proves anything if we've
+            # seen EVERY automorphism -- a molecule symmetric enough to hit
+            # this cap could have an unseen automorphism that disagrees with
+            # the ones we did see, which is exactly the "arbitrary side of a
+            # real symmetry" outcome this check exists to avoid. Treat a
+            # capped enumeration as inconclusive, not confirmed.
+            logger.warning(
+                "explain: substructure match count hit the cap (%d) for %r -- "
+                "too symmetric to prove consistency, reporting every part as "
+                "unmapped for this molecule",
+                _MAX_SUBSTRUCT_MATCHES,
+                name,
+            )
+            matches = ()
+
+    # No matches (none found, or the enumeration was capped and thrown away)
+    # makes _agreed_atoms return None for every part, so every segment comes
+    # back `unmapped` -- never OPSIN's own indices for a molecule they do not
+    # describe.
+    segments = [_remap_segment(segment, matches) for segment in named["segments"]]
 
     return {
         "smiles": smiles,
