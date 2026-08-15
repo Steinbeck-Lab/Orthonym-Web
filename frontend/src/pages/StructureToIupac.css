@@ -1,0 +1,224 @@
+/* ============================================================
+   STITCH — Cross-Stitch Sampler
+   Structure → IUPAC page: a Ketcher structure editor feeding the same
+   Translate contract and sampler-tile rendering as the Home page. This
+   file owns the page's own chrome (heading, editor frame, aside, action
+   button, fetch-error banner) so it never depends on Home.css loading
+   order or content. The `.sampler` / `.tile` / `.stitched-name` family
+   is intentionally NOT redefined here — it is the shared result-tile
+   component treatment (see SamplerGrid.jsx / Tile.jsx) and this page
+   reuses it as-is so future improvements to that treatment apply here
+   automatically.
+   ============================================================ */
+
+.structure-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  padding-top: 2.75rem;
+  padding-bottom: 3rem;
+}
+
+.structure-page__title {
+  font-family: var(--font-sans);
+  font-size: clamp(1.7rem, 4vw, 2.3rem);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+
+.structure-page__tagline {
+  max-width: 62ch;
+  color: var(--ink-soft);
+  font-size: 1.05rem;
+  line-height: 1.55;
+  margin-top: -0.75rem;
+}
+
+.structure-page__tagline strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* -------------------- editor + aside layout -------------------- */
+/* Same two-column composition as Home's input panel: the working
+   surface on the left, an explanatory note beside it rather than
+   buried in footer fine print. */
+
+.structure-page__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 780px) {
+  .structure-page__layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.editor-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.editor-panel__frame-wrap {
+  position: relative;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--ground);
+  height: 32rem;
+}
+
+@media (max-width: 780px) {
+  .editor-panel__frame-wrap {
+    height: 26rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .editor-panel__frame-wrap {
+    height: 22rem;
+  }
+}
+
+.editor-panel__frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.editor-panel__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1.5rem;
+  background: var(--ground-well);
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.editor-panel__overlay p {
+  max-width: 32ch;
+}
+
+.editor-panel__overlay--loading {
+  border-top: 3px dotted var(--line);
+}
+
+.editor-panel__overlay--error {
+  border-top: 3px solid var(--ink);
+  color: var(--ink);
+}
+
+.editor-panel__overlay--error code {
+  background: var(--ground-deep);
+  padding: 0.1rem 0.35rem;
+  border-radius: 2px;
+}
+
+.editor-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.editor-panel__note {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+
+/* -------------------- translate button -------------------- */
+/* The one button style in the system (see DESIGN.md Buttons) — repeated
+   here rather than imported from Home.css so this page owns its own
+   stylesheet independently. */
+
+.translate-button {
+  appearance: none;
+  border: 2px solid var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 0.7rem 1.7rem;
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.translate-button:hover:not(:disabled) {
+  background: var(--accent-deep);
+  border-color: var(--accent-deep);
+}
+
+.translate-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.translate-button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* -------------------- aside note -------------------- */
+
+.structure-page__aside {
+  background: var(--ground-well);
+  border: 2px dashed var(--ink);
+  border-radius: 2px;
+  padding: 1rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.structure-page__aside-lead {
+  font-weight: 700;
+  color: var(--ink);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.structure-page__aside-body {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+/* -------------------- results -------------------- */
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.fetch-error {
+  background: var(--ground-well);
+  border: 1.5px dashed var(--ink);
+  padding: 0.85rem 1.1rem;
+  border-radius: 3px;
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.fetch-error code {
+  background: var(--ground-deep);
+  padding: 0.1rem 0.35rem;
+  border-radius: 2px;
+}

@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Superpowers SDD scratch workspace (git-ignored by design)
+.superpowers/
+
+# OS
+.DS_Store
+
+# NOTE: backend/vendor/ is deliberately TRACKED. The pinned OPSIN 2.9.0 jar
+# is load-bearing (see docs/superpowers/specs/) and cannot be re-fetched by
+# any script in this repo -- vendor-openstout.sh copies it from a local
+# OpenSTOUT checkout that a fresh clone will not have.

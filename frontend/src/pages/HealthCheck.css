@@ -1,0 +1,273 @@
+/* ============================================================
+   STITCH — Cross-Stitch Sampler
+   Health Check page: a live status read on the backend, told in the same
+   border/texture grammar as the Home sampler tiles (queued/dotted, actively
+   resolving/accent-pulse, settled/solid). No new semantic color is added —
+   "healthy" reuses the PIN tile's accent crossed-stitch fill and
+   "unreachable" reuses the error tile's snipped-thread device.
+   ============================================================ */
+
+.health-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding-top: 2.75rem;
+  padding-bottom: 3rem;
+}
+
+.health-page__title {
+  font-family: var(--font-sans);
+  font-size: clamp(1.7rem, 4vw, 2.3rem);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+
+.health-page__lead {
+  max-width: 62ch;
+  color: var(--ink-soft);
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.health-page__lead code {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  background: var(--ground-well);
+  padding: 0.1rem 0.35rem;
+  border-radius: 2px;
+  color: var(--ink);
+}
+
+/* -------------------- the status patch -------------------- */
+
+.health-patch {
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  background: var(--ground);
+  padding: 1.1rem 1.25rem 1.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  max-width: 34rem;
+}
+
+.health-patch__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.health-patch__label {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+
+.health-patch__button {
+  appearance: none;
+  border: 2px solid var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 0.55rem 1.3rem;
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.health-patch__button:hover:not(:disabled) {
+  background: var(--accent-deep);
+  border-color: var(--accent-deep);
+}
+
+.health-patch__button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.health-patch__button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.health-patch__swatch {
+  min-height: 3.4rem;
+  display: flex;
+  align-items: center;
+}
+
+.health-patch__details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.health-patch__row {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.health-patch__row dt {
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.health-patch__row dd {
+  margin: 0;
+  min-width: 0;
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
+.health-patch__row code {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  background: var(--ground-well);
+  padding: 0.1rem 0.4rem;
+  border-radius: 2px;
+  word-break: break-word;
+}
+
+.health-patch__raw {
+  display: inline-block;
+}
+
+/* -------------------- state: checking (actively resolving) -------------------- */
+/* Same signal the Home sampler reserves for the tile currently being
+   resolved: a solid accent border plus the one pulsing shadow the system
+   allows itself, here reused verbatim for "the check is in flight now". */
+
+.health-patch--checking {
+  border-color: var(--accent);
+  animation: health-chase-pulse 900ms ease-in-out infinite;
+}
+
+@keyframes health-chase-pulse {
+  0%,
+  100% {
+    box-shadow: 0 2px 4px rgba(43, 43, 28, 0.15);
+  }
+  50% {
+    box-shadow: 0 6px 14px 2px rgba(181, 67, 62, 0.35);
+  }
+}
+
+.health-patch__pending-cloth {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.health-patch__pending-dash {
+  width: 22px;
+  height: 3px;
+  background: var(--line);
+  border-radius: 2px;
+  animation: health-pending-shimmer 1.4s ease-in-out infinite;
+}
+
+.health-patch__pending-dash:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.health-patch__pending-dash:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes health-pending-shimmer {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+/* -------------------- state: healthy — the completed accent stitch -------------------- */
+/* The exact same two-axis crossed-stitch device the Home PIN tile uses,
+   landed here as "the backend answered" — the one accent color's other
+   sanctioned use, never a new "healthy = green" hue. */
+
+.health-patch--healthy {
+  border-color: var(--accent);
+}
+
+.health-patch__fill {
+  width: 100%;
+  height: 2.6rem;
+  background-color: var(--accent);
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      var(--accent-deep) 0,
+      var(--accent-deep) 2px,
+      transparent 2px,
+      transparent 10px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      var(--accent-deep) 0,
+      var(--accent-deep) 2px,
+      transparent 2px,
+      transparent 10px
+    );
+  border: 2px solid var(--accent-deep);
+  border-radius: 2px;
+}
+
+/* -------------------- state: unreachable — the snipped thread -------------------- */
+
+.health-patch--unreachable {
+  border-color: var(--ink);
+}
+
+.health-patch__snip-wrap {
+  width: 100%;
+  height: 2.6rem;
+  position: relative;
+}
+
+.health-patch__snip {
+  position: absolute;
+  top: 50%;
+  width: 30%;
+  height: 3px;
+  background: var(--ink);
+  border-radius: 2px;
+}
+
+.health-patch__snip--a {
+  left: 8%;
+  transform: rotate(-16deg);
+}
+
+.health-patch__snip--b {
+  right: 8%;
+  transform: rotate(16deg);
+}
+
+/* -------------------- reduced motion -------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .health-patch--checking {
+    animation: none;
+    box-shadow: 0 0 0 3px rgba(181, 67, 62, 0.3);
+  }
+
+  .health-patch__pending-dash {
+    animation: none;
+    opacity: 0.6;
+  }
+}

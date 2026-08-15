@@ -1,0 +1,29 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: stitch-backend
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    networks:
+      - stitch-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: stitch-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - stitch-network
+
+networks:
+  stitch-network:
+    name: stitch-network
+    driver: bridge

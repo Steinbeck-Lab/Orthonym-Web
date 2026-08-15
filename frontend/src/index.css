@@ -1,0 +1,174 @@
+/* ============================================================
+   STITCH — Cross-Stitch Sampler
+   Global tokens, resets, base typography, themed browser chrome.
+   One committed palette: ecru/linen ground, ink-floss neutral text,
+   a single accent thread reserved for the primary action + PIN state.
+   ============================================================ */
+
+/* -- self-hosted type: OWN-WORLD commits to "quantized letterforms for the
+   result name only, workhorse grotesk elsewhere" — a system-font fallback
+   never renders either promise, so both faces are sourced and shipped. -- */
+@font-face {
+  font-family: 'Silkscreen';
+  src: url('/fonts/Silkscreen-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Silkscreen';
+  src: url('/fonts/Silkscreen-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/Inter-Variable.ttf') format('truetype-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* -- palette -- */
+  --ground: #f2ead8; /* ecru / linen ground */
+  --ground-well: #e9dfc6; /* recessed linen — wells, tracks, hairline fills */
+  --ground-deep: #ddd0ac; /* deeper linen — scrollbar track, strong recess */
+  --ink: #2b2b28; /* ink-floss — primary text */
+  --ink-soft: #55534c; /* secondary text — still >=4.5:1 on ground */
+  --thread: #8b8578; /* neutral thread — decorative lines/dashes only, NOT text */
+  --accent: #b5433e; /* the one accent thread — primary action + confirmed PIN */
+  --accent-deep: #963632; /* accent, pressed/hover depth */
+  --on-accent: #fbf5e8; /* text/labels sitting on the accent fill */
+  --line: rgba(43, 43, 28, 0.24); /* hairline structural borders */
+  --line-soft: rgba(43, 43, 28, 0.14); /* fainter hairlines / grid ticks */
+
+  /* -- type --
+     Three faces, each earning its place:
+     --font-sans   self-hosted Inter, the workhorse grotesk OWN-WORLD commits
+                   to for chrome/body/labels — not a system-font guess.
+     --font-mono   a real system monospace for DATA (SMILES strings, tier
+                   codes, molecular formulas) — legitimate per craft-floor's
+                   code/data/measurement carve-out, not a "technical" costume.
+     --font-stitch self-hosted Silkscreen, the one quantized/blocky display
+                   face reserved ONLY for the rendered result name — the
+                   single typographic commitment the direction makes. */
+  --font-sans:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+  --font-mono:
+    ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono',
+    monospace;
+  --font-stitch: 'Silkscreen', var(--font-mono);
+
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scrollbar-color: var(--ink-soft) var(--ground-deep);
+  scrollbar-width: thin;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: var(--ground);
+  /* a fine woven-cloth dot grid — the ground itself is aida cloth */
+  background-image: radial-gradient(
+    rgba(43, 43, 40, 0.09) 1px,
+    transparent 1.3px
+  );
+  background-size: 9px 9px;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+p,
+ul,
+ol,
+figure {
+  margin: 0;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+textarea,
+input {
+  font: inherit;
+}
+
+code {
+  font-family: var(--font-mono);
+}
+
+/* -- themed selection -- */
+::selection {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* -- themed scrollbar (webkit) -- */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--ground-deep);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--ink-soft);
+  border-radius: 8px;
+  border: 3px solid var(--ground-deep);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink);
+}
+
+/* -- themed, always-visible keyboard focus --
+   A dashed ring on the ecru ground reads as a basting stitch marking the
+   active element — it belongs to this world instead of a bare UA outline. */
+:focus-visible {
+  outline: 3px dashed var(--ink);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
