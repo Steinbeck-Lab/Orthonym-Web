@@ -310,19 +310,24 @@
 /* -------------------- patch: success -------------------- */
 /* Two outcomes share the same markup shell but must NOT share the same
    border, per DESIGN.md's One Accent Rule: the accent means "confirmed,"
-   never merely "a name exists." A SMARTS-confirmed suffix earns it, same
-   as the confirmed-PIN tile elsewhere; the honest "undecomposed" fallback
-   (a name, but nothing STITCH could confidently point to) stays on the
-   patch's plain ink border -- collapsing these two into one accent-bordered
-   shell would visually claim the same confidence for a real correspondence
-   and an honest non-answer, which is exactly the distinction this page
-   exists to keep legible. */
+   never merely "a name exists." At least one part pinned to real atoms
+   earns it, same as the confirmed-PIN tile elsewhere; a result where every
+   part came back `unmapped` (a name, but nothing STITCH could confidently
+   point to) stays on the patch's plain ink border -- collapsing these two
+   into one accent-bordered shell would visually claim the same confidence
+   for a real correspondence and an honest non-answer, which is exactly the
+   distinction this page exists to keep legible.
+
+   The condition is deliberately NOT "has a suffix segment." Under the
+   retired SMARTS design those meant the same thing; they no longer do. A
+   molecule with no principal characteristic group -- benzene, TNT, DDT --
+   decomposes perfectly and simply has no suffix. */
 
 .explain-patch--success {
   border-color: var(--accent);
 }
 
-.explain-patch--undecomposed {
+.explain-patch--unmapped {
   border-color: var(--ink);
 }
 
@@ -457,7 +462,12 @@
   background: var(--ground);
 }
 
-.explain-segment--undecomposed {
+/* A part STITCH could not pin to atoms. `kind` is rendered straight into the
+   class name, so this tracks the backend's own SegmentKind -- the old
+   `--undecomposed` rule here matched a kind that was removed from the schema
+   and had quietly stopped selecting anything. Dashed, so an honest non-answer
+   never looks like a confirmed one. */
+.explain-segment--unmapped {
   border-style: dashed;
 }
 
