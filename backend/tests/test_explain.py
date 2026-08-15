@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 
 from app.explain import explain_name
@@ -127,3 +129,71 @@ def test_structure_in_path_never_emits_a_retired_segment_kind():
     result = explain_molecule("CCO", namer=get_primary_namer())
     kinds = {s["kind"] for s in result["segments"]}
     assert not (kinds & {"rest", "undecomposed"}), kinds
+
+
+def test_a_symmetric_molecule_unmaps_only_the_disputed_parts():
+    # CCO above has a UNIQUE substructure match, so it never exercises the
+    # all-matches-agree check at all -- an implementation that ignored
+    # `matches` entirely would pass those two tests. Ibuprofen does exercise
+    # it: its isobutyl group has two chemically-equivalent terminal methyls,
+    # so the match against OPSIN's re-parse is not unique and different
+    # matches disagree about which carbon is which. The disputed parts must
+    # go `unmapped` and their siblings must SURVIVE -- per-part failure is
+    # the entire bug this task removes. Asserted as behaviour, not as exact
+    # atom counts, so Orthonym naming changes cannot make it brittle.
+    from app.explain import explain_molecule
+    from app.orthonym_service import get_primary_namer
+
+    result = explain_molecule(
+        "CC(C)Cc1ccc(cc1)C(C)C(=O)O", namer=get_primary_namer()
+    )
+    assert result["error"] is None, result["error"]
+
+    kinds = [s["kind"] for s in result["segments"]]
+    assert "unmapped" in kinds, f"expected a disputed part, got {kinds}"
+
+    mapped = [s for s in result["segments"] if s["kind"] != "unmapped"]
+    assert mapped, "every part was unmapped -- one symmetry blanked the rest"
+    for segment in mapped:
+        assert segment["atom_indices"], f"{segment['label']} owns no atoms"
+        for index in segment["atom_indices"]:
+            assert 0 <= index < result["total_atoms"]
+
+    for segment in result["segments"]:
+        if segment["kind"] == "unmapped":
+            assert segment["owns_atoms"] is False
+            assert segment["atom_indices"] == []
+            assert segment["highlight_atoms"] == []
+
+
+class _SubstructureNamer:
+    """A namer returning a name that describes only PART of the molecule.
+
+    Not hypothetical plumbing: `explain_molecule` accepts any namer, and this
+    is the cheapest way to reach the branch where OPSIN's re-parse is smaller
+    than the user's own molecule.
+    """
+
+    def __init__(self, name: str):
+        self._name = name
+
+    def name_with_tree(self, smiles: str):
+        return SimpleNamespace(name=self._name, tree=None)
+
+
+def test_a_name_covering_only_part_of_the_molecule_maps_nothing():
+    # "ethanol" substructure-matches into diethyl ether, so the match
+    # SUCCEEDS while accounting for only 3 of the 5 heavy atoms. Without a
+    # size guard every segment maps happily and the two leftover atoms belong
+    # to no segment at all -- not even an `unmapped` one -- so they vanish
+    # from the explanation silently. The old "rest" bucket used to absorb
+    # them; nothing does now.
+    from app.explain import explain_molecule
+
+    result = explain_molecule("CCOCC", namer=_SubstructureNamer("ethanol"))
+    assert result["total_atoms"] == 5
+    assert result["segments"], "parts must still be reported, just unmapped"
+    assert {s["kind"] for s in result["segments"]} == {"unmapped"}
+    for segment in result["segments"]:
+        assert segment["owns_atoms"] is False
+        assert segment["atom_indices"] == []
