@@ -127,12 +127,60 @@ def describe_part(kind: str, text: str, locant: str | None, atom_count: int) -> 
     return f'"{label}" covers {atom_count} {plural} of this structure.{where}'
 
 
-def describe_locant(kind: str, locant: str, element: str) -> str:
+def describe_locant(kind: str, locant: str, element: str | None = None) -> str:
+    """One line for a CHILD segment, which is identified only by its locant.
+
+    `element` names an atom in the sentence, so there is exactly one rule
+    about it and it is not negotiable: **pass it only when the caller has
+    resolved the real atom that carries this locant, in the numbering the
+    locant is written in.** Anything else fabricates an atom label.
+
+    Only the ``modifier`` branch can satisfy that today. `explain.py` resolves
+    a hydro / indicated-hydrogen locant against the parent skeleton's OWN
+    atoms (``parent_index_by_locant``) and passes that atom's element, so
+    caffeine's ``1H`` correctly reads "the N1 atom".
+
+    The other two branches deliberately name no atom, because their callers
+    cannot know one:
+
+    * A ``suffix`` child was handed the element of the atom the suffix OWNS
+      (caffeine's carbonyl OXYGEN), while the sentence is about the parent
+      position the group hangs off (C2). Different atoms -- the old text
+      asserted "the group hangs off O2" when it hangs off C2.
+    * A ``substituent`` child was handed the element of the substituent's own
+      first atom, while its locant is a position in whatever the substituent
+      attaches TO. Verified live: caffeine's methyl at locant 1 rendered
+      "the C1 atom" when position 1 is ring N1, and tryptophan's amino at
+      locant 2 rendered "the N2 atom" when that parent has no N2 at all.
+
+    Resolving a substituent's locant against the parent skeleton would not
+    fix it either -- it is not reliably the parent's numbering. Verified on
+    the golden corpus: DDT's ``4-chloro`` sits on a phenyl ring while the
+    root is ethane, whose numbering has no position 4; and ibuprofen's
+    ``2-methyl`` is position 2 of the propyl chain, which would silently
+    resolve against the propanoic parent's unrelated C2. So these branches
+    state only the position, which IS known, and let the hover highlight show
+    which atoms are meant. Saying less is allowed; saying something false is
+    not.
+    """
     if kind == "modifier":
-        return f"Position {locant} — the {element}{locant} atom carries a hydrogen here."
+        if element:
+            return f"Position {locant} — the {element}{locant} atom carries a hydrogen here."
+        return f"Position {locant} — a hydrogen is fixed here."
     if kind == "suffix":
-        return f"Position {locant} — the group hangs off {element}{locant}."
-    return f"Position {locant} — the {element}{locant} atom."
+        return (
+            f"Position {locant} — this group is attached at position {locant} "
+            f"of the parent skeleton."
+        )
+    if kind == "substituent":
+        return f"Position {locant} — this group is attached at position {locant}."
+    if kind == "unmapped":
+        return (
+            f"Position {locant} — this part of the name refers to position "
+            f"{locant}, but Orthonym could not work out which atom that is "
+            f"here. The other parts are unaffected."
+        )
+    return f"Position {locant}."
 
 
 def describe_multiplier(text: str) -> str | None:

@@ -35,8 +35,29 @@ def test_unknown_parent_stem_still_gets_a_neutral_line():
     assert "4 atoms" in text
 
 
-def test_locant_description_names_the_atom():
-    assert "N7" in describe_locant("substituent", "7", "N")
+def test_modifier_locant_may_name_the_atom_it_was_handed():
+    # The ONE branch allowed to name an atom. explain.py resolves a modifier
+    # locant against the PARENT skeleton's own atoms and hands over that
+    # atom's real element, so caffeine's "1H" reads "the N1 atom".
+    assert "N7" in describe_locant("modifier", "7", "N")
+
+
+def test_substituent_and_suffix_locants_never_name_an_atom():
+    # REPLACES test_locant_description_names_the_atom, which asserted
+    #     assert "N7" in describe_locant("substituent", "7", "N")
+    # That assertion encoded the defect rather than guarding against it. No
+    # caller can supply a correct element for a substituent or suffix child,
+    # and the element they DID supply produced fabricated atom labels,
+    # verified live before this change:
+    #   caffeine  "Position 1 - the C1 atom"          -> position 1 is N1
+    #   caffeine  "Position 2 - hangs off O2"         -> it hangs off C2
+    #   tryptophan "Position 2 - the N2 atom"         -> no N2 exists there
+    # An element is passed in here deliberately: even when a caller hands one
+    # over, these two branches must state the position ONLY and ignore it.
+    for kind in ("substituent", "suffix"):
+        text = describe_locant(kind, "7", "N")
+        assert "7" in text, kind
+        assert "N7" not in text, f"{kind} fabricated an atom label: {text!r}"
 
 
 def test_carbonyl_suffix_does_not_claim_it_is_a_ketone():

@@ -49,8 +49,9 @@ Two real, load-bearing constraints, both confirmed by direct testing:
    releases. ``_Handles.__init__`` resolves every one of these reflectively
    at first use and if ANY lookup fails -- a method renamed, a field
    removed, a class restructured in some future opsin-cli jar -- the whole
-   thing fails loudly (logged) and disables itself, falling back to
-   explain.py's existing undivided "rest" segment. It never half-works.
+   thing fails loudly (logged) and disables itself: `decompose` returns None
+   and explain.py turns that into a plain "could not decompose this name"
+   error rather than any kind of partial answer. It never half-works.
    Because of this, the vendored jar version is pinned exactly
    (``vendor-orthonym.sh`` copies ``opsin-cli-2.9.0-jar-with-dependencies.
    jar`` by exact filename, not a glob) and ``_Handles.__init__`` additionally
@@ -68,8 +69,10 @@ Two real, load-bearing constraints, both confirmed by direct testing:
    valid matches disagree about which specific carbon is which -- but they
    always agree on the union. This module does not attempt that
    reconciliation itself (it has no `mol` to substructure-match against);
-   it reports OPSIN's own name-part/atom decomposition as-is and leaves any
-   downstream symmetry handling to later tasks.
+   it reports OPSIN's own name-part/atom decomposition as-is. The
+   reconciliation lives in `explain.py` (`_agreed_atoms` / `_remap_segment`),
+   on the structure-in path that actually has the user's molecule to match
+   against; a part the matches disagree about becomes `kind="unmapped"`.
 """
 
 from __future__ import annotations
@@ -208,8 +211,9 @@ def _get_handles() -> Optional[_Handles]:
         except Exception:
             logger.exception(
                 "opsin_decompose: OPSIN's internal API shape is unavailable "
-                "or has changed -- disabling name-part decomposition, "
-                "falling back to the undivided 'rest of structure' segment"
+                "or has changed -- disabling name-part decomposition; every "
+                "Explain request will report a plain 'could not decompose' "
+                "error rather than a partial or guessed answer"
             )
             _handles = False
     return _handles or None
@@ -250,6 +254,12 @@ class DecomposedAtom(NamedTuple):
 class Modifier(NamedTuple):
     kind: str      # "hydro" or "indicatedHydrogen"
     locant: str    # resolved locant, e.g. "3"
+    # WHICH name part's numbering `locant` is written in: "root" (the named
+    # parent skeleton) or "substituent". Load-bearing -- see
+    # _collect_modifiers. "unknown" means neither ancestor was found, which
+    # is treated exactly like "substituent": not resolvable against the
+    # parent, so never mapped onto a parent atom.
+    scope: str = "unknown"
 
 
 class Decomposition(NamedTuple):
@@ -335,6 +345,10 @@ def _collect_parts(h: _Handles, parse_el) -> list[NamePart]:
 
 _MODIFIER_ELEMENTS = ("hydro", "indicatedHydrogen")
 
+# The two enclosing part elements whose numbering a modifier's locant can be
+# written in. Whichever of these is nearest above the modifier owns it.
+_MODIFIER_SCOPES = ("root", "substituent")
+
 
 def _collect_modifiers(h: _Handles, parse_el) -> list[Modifier]:
     """Hydro prefixes and indicated hydrogen -- the "3,7-dihydro-1H-" part
@@ -345,22 +359,52 @@ def _collect_modifiers(h: _Handles, parse_el) -> list[Modifier]:
     Verified against the pinned jar: after processing these elements carry
     their resolved locant (caffeine -> hydro@3, hydro@7, indicatedHydrogen@1),
     and buildFragment consumes them, leaving none in the tree.
+
+    **Each modifier carries the SCOPE its locant is written in, and callers
+    must honour it.** A locant means nothing without the numbering it belongs
+    to, and this walk crosses several. Verified live against the pinned jar,
+    printing each modifier's full element path:
+
+        1,3,7-trimethyl-3,7-dihydro-1H-purine-2,6-dione
+            hydro@3             molecule/wordRule/word/root/hydro
+            hydro@7             molecule/wordRule/word/root/hydro
+            indicatedHydrogen@1 molecule/wordRule/word/root/indicatedHydrogen
+        2-amino-3-(1H-indol-3-yl)propanoic acid
+            indicatedHydrogen@1 .../word/bracket/substituent/indicatedHydrogen
+
+    Tryptophan's ``1H`` is INDOLE's, and indole is a substituent -- its "1"
+    is a position on the indole ring system, not on the propanoic parent.
+    Returning it unscoped is what let explain.py resolve it against the
+    parent skeleton and highlight a propanoic carbon: a confident highlight
+    of the wrong fragment entirely. Reproduced identically on
+    2-(4,5-dihydro-1H-imidazol-2-yl)phenol, ethyl 2-(1H-indol-3-yl)acetate
+    and 1-(2,3-dihydro-1H-inden-5-yl)ethan-1-one.
+
+    A substituent-scoped modifier is still RETURNED, never dropped -- spec §6
+    requires an unresolvable part to be visible as ``kind="unmapped"``, not
+    invisible. Scoping is the caller's filter, not a silent discard here.
     """
     found: list[Modifier] = []
 
-    def walk(el) -> None:
+    def walk(el, scope: str) -> None:
         name = str(h.get_name.invoke(el))
+        if name in _MODIFIER_SCOPES:
+            # Nearest enclosing part wins: a <substituent> inside a <bracket>
+            # inside a <word> overrides the word's own <root>.
+            scope = name
         if h.TokenEl.class_.isInstance(el):
             if name in _MODIFIER_ELEMENTS:
                 locant = h.get_attribute_value.invoke(el, "locant")
                 if locant is not None:
-                    found.append(Modifier(kind=name, locant=str(locant)))
+                    found.append(
+                        Modifier(kind=name, locant=str(locant), scope=scope)
+                    )
             return
         children = h.get_children.invoke(el)
         for i in range(children.size()):
-            walk(children.get(i))
+            walk(children.get(i), scope)
 
-    walk(parse_el)
+    walk(parse_el, "unknown")
     return found
 
 
