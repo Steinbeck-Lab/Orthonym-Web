@@ -128,10 +128,15 @@ def _build_segments(result) -> list[dict]:
                 by_locant.setdefault(part.locant, []).extend(atoms)
         children = []
         for locant, atoms in by_locant.items():
-            element = by_index[atoms[0]].element
+            # No element is passed on purpose. This child's locant is a
+            # position in whatever the substituent attaches TO, and the only
+            # element available here is the substituent's OWN first atom --
+            # a different atom. See describe_locant's docstring for the two
+            # reproduced failures and why resolving it against the parent
+            # skeleton is not a fix either.
             children.append(
                 _segment(locant, "substituent",
-                         describe_locant("substituent", locant, element),
+                         describe_locant("substituent", locant),
                          atoms, locant=locant)
             )
         children.sort(key=_locant_sort_key)
@@ -142,8 +147,10 @@ def _build_segments(result) -> list[dict]:
         )
 
     # Locant -> atom index, restricted to atoms the PARENT skeleton itself
-    # owns. Modifiers (hydro / indicated hydrogen) only ever describe a
-    # position on the named parent ring system -- never a substituent.
+    # owns. This map is ONLY valid for a locant that is written in the
+    # parent's numbering, which is why the modifier loop below consults
+    # `Modifier.scope` first and refuses to look a substituent-scoped locant
+    # up in here at all.
     # Scanning every atom instead is unsafe: verified live, caffeine's own
     # "1"-methyl substituent carbon carries the OWN-fragment locant "1"
     # (its single carbon, numbered within its own tiny fragment) which
@@ -160,13 +167,28 @@ def _build_segments(result) -> list[dict]:
             for locant in by_index[index].locants:
                 parent_index_by_locant.setdefault(locant, index)
         parent_label = _parent_label(root)
+
+        # A root can carry suffix ATOMS while naming no suffix at all. The
+        # locant split still separates them (phenol's OH oxygen has only the
+        # element-symbol locant "O"), but `root.suffix_texts` is empty --
+        # "phenol" is one retained <group> token that names the ring AND its
+        # OH together, with no <suffix> child to take a name from. Emitting a
+        # segment there produced a part labelled the literal word "suffix",
+        # which names nothing. There is no honest label to invent, so the
+        # atoms stay with the parent that actually names them: degrade, never
+        # guess (spec §6). Ownership still partitions the molecule exactly.
+        names_its_suffix = bool(root.suffix_texts)
+        parent_atoms = split.parent_atoms
+        if split.suffix_atoms and not names_its_suffix:
+            parent_atoms = tuple(sorted(parent_atoms + split.suffix_atoms))
+
         segments.append(
             _segment(parent_label, "parent",
                      describe_part("parent", parent_label, None,
-                                   len(split.parent_atoms)),
-                     split.parent_atoms)
+                                   len(parent_atoms)),
+                     parent_atoms)
         )
-        if split.suffix_atoms:
+        if split.suffix_atoms and names_its_suffix:
             by_locant: dict[str, list] = {}
             for index in split.suffix_atoms:
                 locant = split.suffix_locants.get(index)
@@ -179,10 +201,14 @@ def _build_segments(result) -> list[dict]:
                     i for i in split.parent_atoms
                     if locant in by_index[i].locants
                 ]
+                # No element is passed on purpose. `indices` are the atoms
+                # the SUFFIX owns (caffeine's carbonyl oxygens), but the
+                # sentence is about the parent position the group hangs off
+                # (C2, C6). Passing the oxygen's element rendered "the group
+                # hangs off O2" -- a fabricated atom label.
                 children.append(
                     _segment(locant, "suffix",
-                             describe_locant("suffix", locant,
-                                             by_index[indices[0]].element),
+                             describe_locant("suffix", locant),
                              indices, locant=locant, highlight=highlight)
                 )
             children.sort(key=_locant_sort_key)
@@ -191,11 +217,14 @@ def _build_segments(result) -> list[dict]:
             # an alcohol gives ("ol",) -> "ol". Hardcoding "one" here would
             # tell an alcohol it has a C=O, which the never-guess rule forbids.
             texts = root.suffix_texts
-            if texts and len(set(texts)) == 1 and len(texts) > 1:
+            if len(set(texts)) == 1 and len(texts) > 1:
                 multiplier = {2: "di", 3: "tri", 4: "tetra"}.get(len(texts), "")
                 suffix_label = f"{multiplier}{texts[0]}"
             else:
-                suffix_label = "".join(dict.fromkeys(texts)) or "suffix"
+                # `texts` is non-empty here -- a root with no suffix tokens
+                # never reaches this branch (see names_its_suffix above), so
+                # the old `or "suffix"` placeholder is unreachable and gone.
+                suffix_label = "".join(dict.fromkeys(texts))
             segments.append(
                 _segment(suffix_label, "suffix",
                          describe_part("suffix", suffix_label, None,
@@ -206,17 +235,44 @@ def _build_segments(result) -> list[dict]:
     if result.modifiers:
         children, highlight = [], []
         for modifier in result.modifiers:
-            index = parent_index_by_locant.get(modifier.locant)
+            # Scope FIRST, lookup second. `parent_index_by_locant` answers
+            # every numeric locant the parent happens to carry, whether or
+            # not the question was about the parent -- so asking it about a
+            # substituent's locant does not fail, it returns a confident
+            # wrong atom. Verified: tryptophan's "1H" belongs to INDOLE, a
+            # substituent, and resolved to atom 2 of the propanoic parent.
+            # The "modifier highlight is a subset of parent atoms" invariant
+            # was satisfied by that wrong answer, which is how it survived.
+            index = (
+                parent_index_by_locant.get(modifier.locant)
+                if modifier.scope == "root"
+                else None
+            )
             if index is None:
+                # Not resolvable against the parent -- either it belongs to a
+                # substituent, or the parent has no such locant. Either way
+                # it stays VISIBLE as `unmapped` (spec §6). Silently skipping
+                # it made 1-(2,3-dihydro-1H-inden-5-yl)ethan-1-one lose parts
+                # of its name with no trace.
+                children.append(
+                    _segment(modifier.locant, "unmapped",
+                             describe_locant("unmapped", modifier.locant),
+                             [], owns=False, locant=modifier.locant,
+                             highlight=[])
+                )
                 continue
             highlight.append(index)
             children.append(
+                # The ONLY branch that may name an atom: `index` is a real
+                # parent-skeleton atom resolved from this locant in the
+                # parent's own numbering. See describe_locant's docstring.
                 _segment(modifier.locant, "modifier",
                          describe_locant("modifier", modifier.locant,
                                          by_index[index].element),
                          [], owns=False, locant=modifier.locant,
                          highlight=[index])
             )
+        children.sort(key=_locant_sort_key)
         if children:
             segments.append(
                 _segment("added hydrogens", "modifier",

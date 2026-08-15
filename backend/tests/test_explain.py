@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+from rdkit import Chem
 
 from app.explain import explain_name
 from tests.conftest import CAFFEINE, GOLDEN_NAMES
@@ -32,6 +33,94 @@ def test_caffeine_suffix_is_labelled_dione_and_described_as_carbonyl():
     suffix = next(s for s in result["segments"] if s["kind"] == "suffix")
     assert suffix["label"] == "dione"
     assert "C=O" in suffix["explanation"]
+
+
+def test_caffeine_child_text_never_fabricates_an_atom_label():
+    # CRITICAL 2, asserted on the ACTUAL RENDERED STRING. describe_locant was
+    # handed the OWNED atom's element while writing a sentence about parent
+    # numbering, so it printed atoms that are not there. Verified before the
+    # fix, both contradicting the spec appendix verbatim:
+    #   substituent child 1 -> "Position 1 - the C1 atom."
+    #                          position 1 is ring N1; C is the methyl
+    #                          carbon's own element
+    #   suffix child 2      -> "Position 2 - the group hangs off O2."
+    #                          it hangs off C2; O is the suffix oxygen's
+    #                          own element
+    result = explain_name(CAFFEINE)
+    substituent = next(s for s in result["segments"] if s["kind"] == "substituent")
+    suffix = next(s for s in result["segments"] if s["kind"] == "suffix")
+
+    sub_text = {c["locant"]: c["explanation"] for c in substituent["children"]}
+    assert "C1" not in sub_text["1"], sub_text["1"]
+    assert "C3" not in sub_text["3"], sub_text["3"]
+    assert "C7" not in sub_text["7"], sub_text["7"]
+    assert "1" in sub_text["1"]
+
+    suf_text = {c["locant"]: c["explanation"] for c in suffix["children"]}
+    assert "O2" not in suf_text["2"], suf_text["2"]
+    assert "O6" not in suf_text["6"], suf_text["6"]
+    assert "2" in suf_text["2"]
+
+
+def test_no_child_anywhere_in_the_corpus_claims_an_atom_it_does_not_own():
+    # Generalises the two caffeine cases above. A child sentence may name an
+    # atom only in the form <Element><locant>. For every child that owns
+    # atoms, assert none of the elements present in the molecule is written
+    # against this child's locant unless a real atom the child highlights
+    # actually is that element at that locant.
+    for name in GOLDEN_NAMES:
+        result = explain_name(name)
+        if result["error"]:
+            continue
+        mol = Chem.MolFromSmiles(result["smiles"])
+        for segment in result["segments"]:
+            for child in segment["children"]:
+                locant = child["locant"]
+                if child["kind"] not in ("substituent", "suffix"):
+                    continue
+                for atom in mol.GetAtoms():
+                    claim = f"{atom.GetSymbol()}{locant}"
+                    assert claim not in child["explanation"], (
+                        f"{name}: {segment['label']} child {locant} claims "
+                        f"{claim!r}: {child['explanation']!r}"
+                    )
+
+
+def test_caffeine_locant_to_atom_association_is_pinned():
+    # The reviewer's finding was that the locant->atom association could be
+    # SCRAMBLED and all 75 tests still passed, because nothing pinned a
+    # concrete index. These are the exact indices, cross-checked against the
+    # returned SMILES with RDKit: each methyl child is one carbon, each
+    # dione child is one oxygen.
+    result = explain_name(CAFFEINE)
+    mol = Chem.MolFromSmiles(result["smiles"])
+    substituent = next(s for s in result["segments"] if s["kind"] == "substituent")
+    suffix = next(s for s in result["segments"] if s["kind"] == "suffix")
+
+    methyls = {c["locant"]: c["atom_indices"] for c in substituent["children"]}
+    assert methyls == {"1": [0], "3": [12], "7": [11]}
+    for indices in methyls.values():
+        assert mol.GetAtomWithIdx(indices[0]).GetSymbol() == "C"
+
+    diones = {c["locant"]: c["atom_indices"] for c in suffix["children"]}
+    assert diones == {"2": [13], "6": [10]}
+    for indices in diones.values():
+        assert mol.GetAtomWithIdx(indices[0]).GetSymbol() == "O"
+
+
+def test_a_root_that_names_no_suffix_is_not_split_into_one_called_suffix():
+    # MINOR 7. "phenol" is a single retained <group> token naming the ring
+    # AND its OH; the locant split still separates the oxygen (it carries
+    # only the element-symbol locant "O"), but there are no <suffix> tokens
+    # to take a name from, so the label fell through to the literal word
+    # "suffix", which names nothing. No honest label exists, so the atoms
+    # stay with the parent that does name them.
+    result = explain_name("phenol")
+    assert result["error"] is None
+    labels = [s["label"] for s in result["segments"]]
+    assert "suffix" not in labels, labels
+    parent = next(s for s in result["segments"] if s["kind"] == "parent")
+    assert len(parent["atom_indices"]) == result["total_atoms"]
 
 
 def test_parent_labels_are_clean_stems_not_stem_plus_suffix():

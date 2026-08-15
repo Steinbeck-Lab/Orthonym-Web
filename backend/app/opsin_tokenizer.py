@@ -1,5 +1,22 @@
 """Real name tokenization via OPSIN's own parser -- not a guess.
 
+CURRENTLY UNUSED, AND DELIBERATELY KEPT. Nothing imports this module: the
+SMARTS-based suffix detection it was built to feed was deleted along with
+`explain.py`'s `_SUFFIX_RULES`, and `opsin_decompose.py` reaches the same
+name parts a different way (OPSIN's internal post-buildFragment parse tree,
+which carries real atom fragments this public tokenizer cannot). Do not
+delete it: the design spec names it by name as the source for the deferred
+`name_range` work -- "Spans come instead from `ParseRules.getParses()`,
+which `opsin_tokenizer.py` already turns into exact character offsets with a
+full-reconstruction check" (spec §4). That character-offset machinery, and
+the two verified constraints documented below, are the part worth keeping;
+re-deriving them would cost the same testing again.
+
+One line below is now historical rather than current: the paragraph about
+`explain.py`'s "rest of the structure" segment describes the retired design.
+There is no `rest` segment any more -- a part that cannot be resolved is
+reported per-part as `kind="unmapped"`.
+
 OPSIN's job is to parse an IUPAC name INTO a structure, and to do that it
 must first tokenize the name into its real grammatical pieces (parent stem,
 unsaturation markers, suffix, locants, brackets, substituent boundaries).
