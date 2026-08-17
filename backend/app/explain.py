@@ -180,6 +180,60 @@ def _apply_name_spans(name: str, segments: list, result) -> None:
     if spans is None:
         return
 
+    # A grouped substituent segment can own atoms that ITS SPAN DOES NOT NAME.
+    # `_build_segments` groups substituent parts by TEXT, so every `chloro` in
+    # a name lands in one segment, while `compute_spans` anchors that segment
+    # on the FIRST occurrence only. Measured live on
+    # "1,1,1-trichloro-2,2-bis(4-chlorophenyl)ethane": the chloro segment's
+    # span is `1,1,1-trichloro-` (name[0:16]) yet it owns five chlorines, two
+    # of which are named by the `4-chloro` at name[24:32] -- text no span
+    # covers and which therefore renders inert. Hovering three characters
+    # would glow atoms belonging to a different numbering scope. Every one of
+    # `compute_spans`' four proofs passes on that answer (the span does
+    # contain "chloro", its locant text is "1", it sits inside its own part,
+    # nothing overlaps), which is precisely the defect class this branch has
+    # already fixed three times: a structurally valid region making a false
+    # letters-to-atoms claim.
+    #
+    # The grouping is pre-existing and spec §2 forbids changing the
+    # decomposition, so the honest move is to WITHHOLD -- for the whole name,
+    # per §4's all-or-nothing rule -- whenever a segment contributes more
+    # parts than its span's own text claims. `spans.claims` reads that claim
+    # off the span's locant list and multiplier word, so a substituent
+    # multiplied by ONE token keeps working: caffeine's `1,3,7-trimethyl`
+    # (3 locants, "tri") and TNT's `1,3,5-trinitro` both claim 3 for 3 parts,
+    # and an unlocanted `diethyl` claims 2 for 2 -- all verified.
+    #
+    # The count MUST be keyed the same way `_build_segments` groups
+    # (`part.text.strip("-")`, which is also the segment's label); a different
+    # key would silently count the wrong parts.
+    #
+    # Substituents only, because they are the only grouped-by-text segments:
+    # `parent` and `suffix` are emitted one per root, and a multiplied suffix
+    # ("dione") is written ONCE in the name, so neither can leave a second
+    # occurrence uncovered. Known over-conservative case, accepted because
+    # falling back is the designed outcome: `bis(4-chlorophenyl)` writes its
+    # substituent once too, but the `bis` sits outside the bracket and so
+    # outside the span, which reads as a claim of 1 against 2 parts.
+    contributors: dict[str, int] = {}
+    for part in result.parts:
+        if part.kind == "substituent":
+            key = part.text.strip("-")
+            contributors[key] = contributors.get(key, 0) + 1
+    for position, segment in enumerate(spanned):
+        if segment["kind"] != "substituent":
+            continue
+        owned_by = contributors.get(segment["label"], 1)
+        if owned_by > spans.claims.get(position, 1):
+            logger.debug(
+                "name_spans: %r withheld -- the %r segment collects %d parts "
+                "but its span %r claims only %d, so some of its atoms are "
+                "named by text no span covers",
+                name, segment["label"], owned_by,
+                name[slice(*spans.parts[position])], spans.claims.get(position, 1),
+            )
+            return
+
     for position, segment in enumerate(spanned):
         span = spans.parts.get(position)
         if span is not None:
