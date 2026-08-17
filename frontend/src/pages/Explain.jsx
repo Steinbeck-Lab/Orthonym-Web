@@ -215,6 +215,53 @@ function Explain() {
         : segment?.atom_indices
     const targetSet = highlight?.length ? new Set(highlight) : null
 
+    // The `.every()` walk below can only ever light an element RDKit gave a
+    // standalone atom-N node -- on caffeine that's just the six heteroatoms
+    // (atom-1,3,5,7,10,13); every carbon appears solely inside bond paths
+    // like "bond-10 atom-7 atom-11", so a carbon-only part (e.g. `methyl`)
+    // has no dead-center element for that rule to ever select. This glow is
+    // additive: it draws a circle straight from the atom's own pixel
+    // coordinates, independent of what RDKit chose to label.
+    const svgEl = root.querySelector('svg')
+    if (svgEl) {
+      let layer = svgEl.querySelector('#glow-layer')
+      if (!layer) {
+        layer = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+        layer.setAttribute('id', 'glow-layer')
+        layer.setAttribute('filter', 'url(#glow-blur)')
+        const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs')
+        defs.innerHTML =
+          '<filter id="glow-blur" x="-50%" y="-50%" width="200%" height="200%">' +
+          '<feGaussianBlur stdDeviation="4" /></filter>'
+        svgEl.insertBefore(defs, svgEl.firstChild)
+        // RDKit always draws an opaque white background <rect> as the very
+        // first element of the molecule drawing. Inserting the glow layer
+        // as the literal first child (right after defs) would paint it
+        // BEHIND that rect, where it is fully hidden -- confirmed live in a
+        // real browser: the three glow circles existed in the DOM with
+        // correct geometry/fill/opacity, yet rendered zero visible pixels.
+        // Insert after that background rect instead: still behind every
+        // bond and atom-label path (so those stay readable on top), but
+        // above the opaque background, which is what "behind the
+        // molecule" actually requires.
+        const background = svgEl.querySelector('rect')
+        svgEl.insertBefore(layer, background ? background.nextSibling : defs.nextSibling)
+      }
+      layer.textContent = ''
+      const points = data?.atom_points || []
+      for (const index of targetSet || []) {
+        const point = points[index]
+        if (!point) continue
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+        circle.setAttribute('cx', point[0])
+        circle.setAttribute('cy', point[1])
+        circle.setAttribute('r', '13')
+        circle.setAttribute('fill', 'var(--glow, #ffd400)')
+        circle.setAttribute('opacity', '0.85')
+        layer.appendChild(circle)
+      }
+    }
+
     originalColorsRef.current.forEach((original, el) => {
       const refs = atomRefsOf(el.getAttribute('class'))
       const shouldHighlight =
