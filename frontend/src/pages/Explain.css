@@ -403,6 +403,19 @@
   outline: none;
 }
 
+/* The reason a successfully drawn structure still has no explanation. Dashed,
+   like every other honest non-answer in this file (--unmapped, --modifier),
+   and deliberately NOT the accent: it qualifies what is on screen rather than
+   replacing it, so it must not read as a blocking error. */
+.explain-result__notice {
+  border: 2px dashed var(--ink);
+  border-radius: 2px;
+  background: var(--ground-well);
+  color: var(--ink-soft);
+  padding: 0.6rem 0.8rem;
+  font-size: 0.9rem;
+}
+
 .explain-result__body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
