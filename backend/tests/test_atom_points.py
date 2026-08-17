@@ -1,0 +1,42 @@
+from app.explain import explain_molecule, explain_name
+from app.openstout_service import get_primary_namer
+from tests.conftest import CAFFEINE
+
+# Must match _EXPLAIN_WIDTH / _EXPLAIN_HEIGHT in explain.py.
+WIDTH, HEIGHT = 340, 260
+
+
+def test_caffeine_has_one_point_per_heavy_atom():
+    result = explain_name(CAFFEINE)
+    assert result["total_atoms"] == 14
+    assert len(result["atom_points"]) == 14
+
+
+def test_every_point_is_inside_the_drawing():
+    result = explain_name(CAFFEINE)
+    for index, (x, y) in enumerate(result["atom_points"]):
+        assert 0 <= x <= WIDTH, f"atom {index} x={x} outside 0..{WIDTH}"
+        assert 0 <= y <= HEIGHT, f"atom {index} y={y} outside 0..{HEIGHT}"
+
+
+def test_methyl_carbons_get_points_even_though_rdkit_draws_no_symbol():
+    # This is the whole point of the task. RDKit emits a standalone atom-N
+    # element only for atoms it draws a symbol for, so caffeine's methyl
+    # carbons have none and cannot be highlighted today.
+    result = explain_name(CAFFEINE)
+    methyl = next(s for s in result["segments"] if s["kind"] == "substituent")
+    for child in methyl["children"]:
+        index = child["atom_indices"][0]
+        x, y = result["atom_points"][index]
+        assert (x, y) != (0.0, 0.0), f"atom {index} has no real coordinate"
+
+
+def test_structure_in_path_also_carries_points():
+    result = explain_molecule("CCO", namer=get_primary_namer())
+    assert len(result["atom_points"]) == result["total_atoms"]
+
+
+def test_error_responses_carry_an_empty_list_not_a_missing_key():
+    result = explain_name("definitely not a chemical name")
+    assert result["error"]
+    assert result["atom_points"] == []
