@@ -513,8 +513,25 @@ function Explain() {
                             onFocus={() => setHoveredPath(piece.path)}
                             onBlur={() => setHoveredPath(null)}
                             onClick={() => togglePath(piece.path)}
+                            // role="button" promises keyboard operation that a
+                            // <span> does not implement on its own: without
+                            // this, Enter and Space did nothing and a keyboard
+                            // user could glow a part by focusing it but never
+                            // PIN one, where the fallback list's real <button>
+                            // elements can (WCAG 2.1.1). preventDefault stops
+                            // Space from scrolling the page.
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault()
+                                togglePath(piece.path)
+                              }
+                            }}
                             tabIndex={0}
                             role="button"
+                            // Mirrors the PINNED state, not activePath: focus
+                            // alone sets hoveredPath, and announcing a merely
+                            // focused part as "pressed" would be false.
+                            aria-pressed={pinnedPath === piece.path}
                           >
                             {piece.text}
                           </span>
@@ -527,6 +544,20 @@ function Explain() {
                     </p>
                   )}
                 </div>
+
+                {/* A partial result is a real case (see runExplain): the
+                    backend can name and draw a molecule and still fail to
+                    decompose that name, and it then carries `error` alongside
+                    `name`/`svg`. `apiError` used to render only in the
+                    phase === 'error' branch, so for TNT the user got a drawn,
+                    named structure with an empty part list and NO reason at
+                    all. Shown here as a notice rather than a blocking error,
+                    so nothing that WAS drawn gets hidden. */}
+                {apiError && (
+                  <p className="explain-result__notice" role="status">
+                    {apiError}
+                  </p>
+                )}
 
                 <div className="explain-result__body">
                   <div
