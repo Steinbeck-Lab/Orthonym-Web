@@ -30,9 +30,22 @@ logger = logging.getLogger(__name__)
 
 # Tokens that decorate the CONTENT token after them and belong to its part:
 # "1,3,7-" and "tri" belong to "meth", not to whatever precedes them.
+#
+# "openBracket" and "stereochemistryBracket" are deliberately NOT here. A
+# bracket is structural -- it groups a DIFFERENT part's substituent, not a
+# decoration of the part that happens to sit just inside it. With brackets
+# in _LEADING, a part's left-growth walked straight through the bracket and
+# swallowed the locant token belonging to whatever the bracket encloses:
+# in "2-[4-(2-methylpropyl)phenyl]propanoic acid" the methyl's left-growth
+# walked all the way back to index 0 and adopted the PARENT propanoic acid's
+# "2" as if it were the methyl's own, producing parts["meth"] == (0, 14) ==
+# "2-[4-(2-methyl" and locants["meth"]["2"] == (0, 1) instead of the
+# methyl's real locant "2" at index 6. Every proof still passed (the text
+# is "2" and it sits inside the part's own span) -- this is a confidently
+# wrong highlight, not a missing one.
 _LEADING = frozenset({
     "locant", "diOrTri", "multiplier", "groupMultiplier",
-    "alkaneStemModifier", "cyclo", "openBracket", "stereochemistryBracket",
+    "alkaneStemModifier", "cyclo",
     "hyphen", "interSubstituentHyphen",
 })
 
