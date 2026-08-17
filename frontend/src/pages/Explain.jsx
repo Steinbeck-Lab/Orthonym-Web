@@ -55,6 +55,44 @@ function segmentAtPath(segments, path) {
   return node || null
 }
 
+// Flattens the segment tree into the spans that exist in the name, innermost
+// first so a locant inside a part wins the hover over the part around it.
+function nameTargets(segments) {
+  const out = []
+  segments.forEach((segment, index) => {
+    if (segment.name_range) {
+      out.push({ path: String(index), range: segment.name_range, depth: 0 })
+    }
+    segment.children.forEach((child, childIndex) => {
+      if (child.name_range) {
+        out.push({
+          path: `${index}.${childIndex}`, range: child.name_range, depth: 1,
+        })
+      }
+    })
+  })
+  return out.sort((a, b) => b.depth - a.depth || a.range[0] - b.range[0])
+}
+
+// Cuts `name` into a flat run of pieces, each either inert text or a target.
+function sliceName(name, targets) {
+  const owner = new Array(name.length).fill(null)
+  for (const target of targets) {
+    for (let i = target.range[0]; i < target.range[1]; i += 1) {
+      if (owner[i] === null) owner[i] = target.path
+    }
+  }
+  const pieces = []
+  let start = 0
+  for (let i = 1; i <= name.length; i += 1) {
+    if (i === name.length || owner[i] !== owner[start]) {
+      pieces.push({ text: name.slice(start, i), path: owner[start] })
+      start = i
+    }
+  }
+  return pieces
+}
+
 function SegmentNode({ segment, path, activePath, setHoveredPath, togglePath }) {
   const isActive = activePath === path
   return (
@@ -305,6 +343,15 @@ function Explain() {
   // and have no suffix, yet every one of them rendered with the plain
   // non-confirmed border.
   const hasMappedParts = segments.some((segment) => segment.kind !== 'unmapped')
+  // All-or-nothing is a SEGMENT-level property only: a top-level part with no
+  // name_range means spans could not be proven for this name at all, so the
+  // whole hoverable name falls back to the plain part list. A CHILD with no
+  // name_range is ordinary and expected (ethanol's suffix locant is never
+  // written, caffeine's modifier locant lives inside "1H-", DDT's `chloro`
+  // groups five atoms behind a span that has no room for its own `4`) -- it
+  // simply renders as inert text, never as a reason to blank the page.
+  const spansAvailable = segments.length > 0 && segments.every((segment) => segment.name_range)
+  const activeSegment = segmentAtPath(segments, activePath)
 
   return (
     <section className="explain-page page-shell" aria-label="Explain a name">
@@ -450,9 +497,35 @@ function Explain() {
               <div className="explain-result">
                 <div className="explain-result__name-row">
                   <span className="explain-result__name-label">Name</span>
-                  <p className="explain-result__name" aria-live="polite">
-                    {name && renderAnnotatedName(name, segments, activePath)}
-                  </p>
+                  {name && spansAvailable ? (
+                    <p className="explain-result__name explain-name" aria-live="polite">
+                      {sliceName(name, nameTargets(segments)).map((piece, index) =>
+                        piece.path === null ? (
+                          <span key={index}>{piece.text}</span>
+                        ) : (
+                          <span
+                            key={index}
+                            className={`explain-name__part${
+                              activePath === piece.path ? ' explain-name__part--active' : ''
+                            }`}
+                            onMouseEnter={() => setHoveredPath(piece.path)}
+                            onMouseLeave={() => setHoveredPath(null)}
+                            onFocus={() => setHoveredPath(piece.path)}
+                            onBlur={() => setHoveredPath(null)}
+                            onClick={() => togglePath(piece.path)}
+                            tabIndex={0}
+                            role="button"
+                          >
+                            {piece.text}
+                          </span>
+                        )
+                      )}
+                    </p>
+                  ) : (
+                    <p className="explain-result__name" aria-live="polite">
+                      {name && renderAnnotatedName(name, segments, activePath)}
+                    </p>
+                  )}
                 </div>
 
                 <div className="explain-result__body">
@@ -463,18 +536,35 @@ function Explain() {
                     ref={svgWrapperRef}
                   />
 
-                  <ul className="explain-segments" aria-label="Named parts">
-                    {segments.map((segment, index) => (
-                      <SegmentNode
-                        key={`${segment.kind}-${index}`}
-                        segment={segment}
-                        path={String(index)}
-                        activePath={activePath}
-                        setHoveredPath={setHoveredPath}
-                        togglePath={togglePath}
-                      />
-                    ))}
-                  </ul>
+                  {spansAvailable ? (
+                    <div className="explain-detail">
+                      {activeSegment ? (
+                        <>
+                          <h3 className="explain-detail__label">{activeSegment.label}</h3>
+                          <p className="explain-detail__explanation">
+                            {activeSegment.explanation}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="explain-detail__hint">
+                          Move your pointer across the name above to see what each part means.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <ul className="explain-segments" aria-label="Named parts">
+                      {segments.map((segment, index) => (
+                        <SegmentNode
+                          key={`${segment.kind}-${index}`}
+                          segment={segment}
+                          path={String(index)}
+                          activePath={activePath}
+                          setHoveredPath={setHoveredPath}
+                          togglePath={togglePath}
+                        />
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </div>
             </div>
