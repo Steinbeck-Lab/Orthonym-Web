@@ -101,6 +101,10 @@ class ExplainResponse(BaseModel):
     # atom-N/bond-N elements on hover. Null when name/svg could not be
     # produced (see `error`).
     svg: Optional[str] = None
+    # Pixel coordinates of every heavy atom within `svg`'s own viewBox,
+    # indexed by atom index. Produced by the SAME MolDraw2D instance that
+    # rendered `svg`, so the two cannot drift. Empty when svg is None.
+    atom_points: list[list[float]] = []
     total_atoms: int = 0
     segments: list[ExplainSegment] = []
     error: Optional[str] = None

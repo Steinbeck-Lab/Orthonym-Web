@@ -56,16 +56,27 @@ _EXPLAIN_HEIGHT = 260
 _MAX_SUBSTRUCT_MATCHES = 4096
 
 
-def _inline_svg(mol: Chem.Mol) -> str:
-    """Render `mol` as raw (non-data-URI) SVG markup with RDKit's default
-    atom-N / bond-N CSS classes intact, so the frontend can style individual
-    atoms/bonds on hover. Unlike depiction.py's data-URI helper, this is
-    meant to be inlined directly into the page DOM, not used in an <img>.
+def _inline_svg(mol: Chem.Mol) -> tuple[str, list[list[float]]]:
+    """Render `mol` as raw (non-data-URI) SVG markup, plus the pixel
+    coordinate of every atom in that same drawing.
+
+    The coordinates come from the SAME MolDraw2D instance that produced the
+    markup, so the two cannot drift. They exist because RDKit emits a
+    standalone atom-N element only for atoms it draws a SYMBOL for --
+    caffeine's SVG has standalone classes only at its six heteroatoms, and
+    every carbon appears solely inside bond paths like
+    `bond-10 atom-7 atom-11`. A highlight built on those elements can never
+    light a carbon. Coordinates let the frontend draw its own highlight for
+    any atom, which is what the glow needs.
     """
     drawer = rdMolDraw2D.MolDraw2DSVG(_EXPLAIN_WIDTH, _EXPLAIN_HEIGHT)
     drawer.DrawMolecule(mol)
     drawer.FinishDrawing()
-    return drawer.GetDrawingText()
+    points = []
+    for index in range(mol.GetNumAtoms()):
+        point = drawer.GetDrawCoords(index)
+        points.append([float(point.x), float(point.y)])
+    return drawer.GetDrawingText(), points
 
 
 def _segment(label, kind, explanation, atoms, *, owns=True,
@@ -291,7 +302,7 @@ def explain_name(name: str) -> dict:
     result = decompose(name)
     if result is None:
         return {
-            "smiles": "", "name": name, "svg": None, "total_atoms": 0,
+            "smiles": "", "name": name, "svg": None, "atom_points": [], "total_atoms": 0,
             "segments": [],
             "error": "OPSIN could not parse this name.",
         }
@@ -299,15 +310,17 @@ def explain_name(name: str) -> dict:
     mol = Chem.MolFromSmiles(result.smiles)
     if mol is None:
         return {
-            "smiles": result.smiles, "name": name, "svg": None,
+            "smiles": result.smiles, "name": name, "svg": None, "atom_points": [],
             "total_atoms": 0, "segments": [],
             "error": "OPSIN parsed this name but the structure could not be read.",
         }
 
+    svg, atom_points = _inline_svg(mol)
     return {
         "smiles": result.smiles,
         "name": name,
-        "svg": _inline_svg(mol),
+        "svg": svg,
+        "atom_points": atom_points,
         "total_atoms": mol.GetNumAtoms(),
         "segments": _build_segments(result),
         "error": None,
@@ -416,6 +429,7 @@ def explain_molecule(smiles: str, namer: Orthonym) -> dict:
             "smiles": smiles,
             "name": None,
             "svg": None,
+            "atom_points": [],
             "total_atoms": 0,
             "segments": [],
             "error": "Could not parse this SMILES string",
@@ -429,13 +443,14 @@ def explain_molecule(smiles: str, namer: Orthonym) -> dict:
             "smiles": smiles,
             "name": None,
             "svg": None,
+            "atom_points": [],
             "total_atoms": mol.GetNumAtoms(),
             "segments": [],
             "error": "Orthonym could not confidently name this molecule, so "
             "there is nothing to explain.",
         }
 
-    svg = _inline_svg(mol)
+    svg, atom_points = _inline_svg(mol)
     total_atoms = mol.GetNumAtoms()
 
     named = explain_name(name)
@@ -444,6 +459,7 @@ def explain_molecule(smiles: str, namer: Orthonym) -> dict:
             "smiles": smiles,
             "name": name,
             "svg": svg,
+            "atom_points": atom_points,
             "total_atoms": total_atoms,
             "segments": [],
             "error": named["error"],
@@ -510,6 +526,7 @@ def explain_molecule(smiles: str, namer: Orthonym) -> dict:
         "smiles": smiles,
         "name": name,
         "svg": svg,
+        "atom_points": atom_points,
         "total_atoms": total_atoms,
         "segments": segments,
         "error": None,
