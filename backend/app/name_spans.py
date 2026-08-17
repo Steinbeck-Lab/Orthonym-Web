@@ -38,8 +38,8 @@ logger = logging.getLogger(__name__)
 # swallowed the locant token belonging to whatever the bracket encloses:
 # in "2-[4-(2-methylpropyl)phenyl]propanoic acid" the methyl's left-growth
 # walked all the way back to index 0 and adopted the PARENT propanoic acid's
-# "2" as if it were the methyl's own, producing parts["meth"] == (0, 14) ==
-# "2-[4-(2-methyl" and locants["meth"]["2"] == (0, 1) instead of the
+# "2" as if it were the methyl's own, producing the methyl's part span ==
+# (0, 14) == "2-[4-(2-methyl" and its locant "2" == (0, 1) instead of the
 # methyl's real locant "2" at index 6. Every proof still passed (the text
 # is "2" and it sits inside the part's own span) -- this is a confidently
 # wrong highlight, not a missing one.
@@ -65,19 +65,30 @@ _TRAILING = frozenset({
 # The hydro / indicated-hydrogen run, which is its own referential part.
 _MODIFIER = frozenset({"hydro", "bigCapitalH"})
 
-_MODIFIER_KEY = "__modifier__"
+# The modifier's key in `parts`/`locants`, distinct from every legitimate
+# `group_tokens` position (which are always >= 0).
+MODIFIER_KEY = -1
 
 
 class SpanSet(NamedTuple):
-    parts: dict          # group token value (or _MODIFIER_KEY) -> (start, end)
-    # part key -> {locant string -> (start, end)}. Nested, NOT flat: a locant
-    # string is not unique within a name. Caffeine has three locant tokens
-    # ("1,3,7-", "3,7-", "2,6-") and both 3 and 7 appear in two of them. A flat
-    # first-wins map would hand the modifier's "3" child the TRIMETHYL's "3" at
-    # (2,3) instead of its own at (16,17) -- a span pointing at the wrong
-    # letters. Nesting by part, and taking each part's locants only from tokens
-    # inside that part's own span, makes child-inside-parent true by
-    # construction instead of merely asserted.
+    # POSITION in the caller's `group_tokens` list (or MODIFIER_KEY) ->
+    # (start, end). Keyed by position, not by the group token's text: two
+    # different parts of a name can share the same stem text -- ibuprofen's
+    # "propyl" substituent and its "propanoic acid" parent both strip to
+    # "prop" -- and a text key would collapse both onto one span, handing the
+    # parent the substituent's letters. `group_tokens` is expected to carry
+    # one entry per span-bearing part, WITH duplicates, in document order;
+    # the monotonic anchor below then matches each entry to its own
+    # occurrence in the raw name.
+    parts: dict
+    # part position -> {locant string -> (start, end)}. Nested, NOT flat: a
+    # locant string is not unique within a name. Caffeine has three locant
+    # tokens ("1,3,7-", "3,7-", "2,6-") and both 3 and 7 appear in two of
+    # them. A flat first-wins map would hand the modifier's "3" child the
+    # TRIMETHYL's "3" at (2,3) instead of its own at (16,17) -- a span
+    # pointing at the wrong letters. Nesting by part, and taking each part's
+    # locants only from tokens inside that part's own span, makes
+    # child-inside-parent true by construction instead of merely asserted.
     locants: dict
 
 
@@ -118,7 +129,14 @@ def compute_spans(
     if not tokens:
         return None
 
-    # 1. Anchor each group token to a raw token, monotonically.
+    # 1. Anchor each group token to a raw token, monotonically. `group_tokens`
+    # carries one entry per span-bearing part, WITH duplicates, in document
+    # order -- no dedup here. Two different parts can share the same stem
+    # text (ibuprofen's "propyl" substituent and its "propanoic acid" parent
+    # both strip to "prop"); the monotonic scan anchors the first occurrence
+    # to the first entry and the second occurrence to the second, which is
+    # exactly right, and `parts` below is keyed by POSITION so the two never
+    # collide.
     anchors = []
     cursor = 0
     for group in group_tokens:
@@ -156,7 +174,10 @@ def compute_spans(
         end_index = index
         while end_index + 1 < limit and tokens[end_index + 1].category in _TRAILING:
             end_index += 1
-        parts[group] = (tokens[start_index].start, tokens[end_index].end)
+        # Keyed by POSITION (this anchor's index in `group_tokens`), not by
+        # `group`'s text -- see the SpanSet docstring for why a text key
+        # would collide.
+        parts[position] = (tokens[start_index].start, tokens[end_index].end)
         consumed.update(range(start_index, end_index + 1))
         last_end_index = end_index
 
@@ -178,7 +199,7 @@ def compute_spans(
             and (first - 1) not in consumed
         ):
             first -= 1
-        parts[_MODIFIER_KEY] = (tokens[first].start, tokens[last].end)
+        parts[MODIFIER_KEY] = (tokens[first].start, tokens[last].end)
 
     # 4. Locants, PER PART -- only from locant tokens inside that part's span.
     #    A flat map would collide: caffeine's 3 and 7 appear in two different
@@ -196,13 +217,13 @@ def compute_spans(
         locants[key] = found
 
     # 5. Prove it, or withhold everything.
-    for group, (start, end) in parts.items():
+    for position, (start, end) in parts.items():
         if not (0 <= start < end <= len(name)):
             return None
-        if group != _MODIFIER_KEY and group not in name[start:end]:
+        if position != MODIFIER_KEY and group_tokens[position] not in name[start:end]:
             logger.debug(
                 "name_spans: %r span for %r is %r, which lacks the token",
-                name, group, name[start:end],
+                name, group_tokens[position], name[start:end],
             )
             return None
     ordered = sorted(parts.values())
