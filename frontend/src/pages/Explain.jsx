@@ -244,6 +244,14 @@ function Explain() {
         // bond and atom-label path (so those stay readable on top), but
         // above the opaque background, which is what "behind the
         // molecule" actually requires.
+        // The defs.nextSibling branch is a last resort, not a real defense:
+        // it only re-triggers this same invisible-glow bug (silently, no
+        // error) if RDKit ever emits no <rect> at all, and it doesn't
+        // protect against a <rect> that isn't RDKit's first paint op
+        // either -- anything painted before it would still sit under the
+        // glow. Accepted for now because RDKit's SVG writer always emits
+        // this background rect as its literal first drawing element; if
+        // that ever changes, this insertion point needs revisiting.
         const background = svgEl.querySelector('rect')
         svgEl.insertBefore(layer, background ? background.nextSibling : defs.nextSibling)
       }
@@ -256,7 +264,12 @@ function Explain() {
         circle.setAttribute('cx', point[0])
         circle.setAttribute('cy', point[1])
         circle.setAttribute('r', '13')
-        circle.setAttribute('fill', 'var(--glow, #ffd400)')
+        // A style PROPERTY, not a presentation attribute: var() inside a
+        // presentation attribute is newer SVG2 behavior with weaker
+        // cross-engine guarantees, and it's inconsistent with the
+        // pre-existing highlight below, which already sets el.style.stroke
+        // / el.style.fill rather than the matching attributes.
+        circle.style.fill = 'var(--glow, #ffd400)'
         circle.setAttribute('opacity', '0.85')
         layer.appendChild(circle)
       }
