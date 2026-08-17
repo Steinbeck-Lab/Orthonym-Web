@@ -1,16 +1,22 @@
 """Real name tokenization via OPSIN's own parser -- not a guess.
 
-CURRENTLY UNUSED, AND DELIBERATELY KEPT. Nothing imports this module: the
-SMARTS-based suffix detection it was built to feed was deleted along with
+NOW LOAD-BEARING. `name_spans.py` imports `tokenize` from this module and
+builds every `name_range` in the Explain response on its character offsets,
+which is the work this module was kept for -- "Spans come instead from
+`ParseRules.getParses()`, which `opsin_tokenizer.py` already turns into exact
+character offsets with a full-reconstruction check" (spec §4). Until the
+2026-08-16 name-driven-UI branch it was genuinely unused: the SMARTS-based
+suffix detection it was first built to feed had been deleted along with
 `explain.py`'s `_SUFFIX_RULES`, and `opsin_decompose.py` reaches the same
 name parts a different way (OPSIN's internal post-buildFragment parse tree,
-which carries real atom fragments this public tokenizer cannot). Do not
-delete it: the design spec names it by name as the source for the deferred
-`name_range` work -- "Spans come instead from `ParseRules.getParses()`,
-which `opsin_tokenizer.py` already turns into exact character offsets with a
-full-reconstruction check" (spec §4). That character-offset machinery, and
-the two verified constraints documented below, are the part worth keeping;
-re-deriving them would cost the same testing again.
+which carries real atom fragments this public tokenizer cannot). That
+character-offset machinery, and the two verified constraints documented
+below, are what made it worth keeping; re-deriving them would have cost the
+same testing again.
+
+`find_suffix_span` below has no caller. It is retained for the same reason
+the module itself was, and its behaviour is the documented evidence for the
+two suffix categories the constraints section names.
 
 One line below is now historical rather than current: the paragraph about
 `explain.py`'s "rest of the structure" segment describes the retired design.

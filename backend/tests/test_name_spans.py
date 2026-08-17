@@ -197,6 +197,94 @@ def test_locant_subspans_walked_cursor_does_not_confuse_a_prefix_locant():
     assert found["1"] == (103, 104)
 
 
+# ---------------------------------------------------------------------------
+# The four proofs in step 5, one test each.
+#
+# Every test above exercises the algorithm's HAPPY path: it proves the growth
+# rules land on the right characters for names that work. None of them touched
+# the fail-closed net, and that net is the entire reason spec §3.1/§8 accept a
+# heuristic alignment at all -- verified by deleting each proof in turn, after
+# which 23/23 tests still passed. A proof no test can kill is not a proof.
+#
+# Real names cannot reach these branches (that is the point: the growth rules
+# are correct), so each test monkeypatches `tokenize` to hand `compute_spans`
+# a token stream that violates exactly ONE proof and leaves the others
+# satisfied. Each was checked by deleting its proof and confirming the test
+# then fails.
+# ---------------------------------------------------------------------------
+
+
+def _fake_tokens(monkeypatch, tokens):
+    monkeypatch.setattr("app.name_spans.tokenize", lambda name: tokens)
+
+
+def test_a_span_running_past_the_end_of_the_name_is_withheld(monkeypatch):
+    # The in-bounds proof. The token claims to end at 99 in a 4-character
+    # name; every other proof is satisfied (name[0:99] == "meth" contains
+    # "meth", one span cannot overlap, there are no locants).
+    _fake_tokens(monkeypatch, [Token("meth", "substituentGroup", 0, 99)])
+    assert compute_spans("meth", ["meth"], want_modifier=False) is None
+
+
+def test_a_span_whose_text_lacks_its_own_group_token_is_withheld(monkeypatch):
+    # The group-token containment proof. The token's TEXT is "meth" (so it
+    # anchors) but its offsets point at "zzzz", which is what the user would
+    # see underlined. In bounds, single span, no locants -- only this proof
+    # can catch it.
+    _fake_tokens(monkeypatch, [Token("meth", "substituentGroup", 0, 4)])
+    assert compute_spans("zzzzmeth", ["meth"], want_modifier=False) is None
+
+
+def test_two_overlapping_part_spans_withhold_the_whole_name(monkeypatch):
+    # The overlap proof. Both spans are in bounds and both contain their own
+    # group token, but they share characters 3-5, so one of the two is lying
+    # about which letters name its atoms.
+    _fake_tokens(monkeypatch, [
+        Token("meth", "substituentGroup", 0, 6),
+        Token("hyl", "substituentGroup", 3, 6),
+    ])
+    spans = compute_spans("methyl", ["meth", "hyl"], want_modifier=False)
+    assert spans is None
+
+
+def test_a_locant_span_that_slices_to_other_characters_is_withheld(monkeypatch):
+    # The locant-text proof. The locant token says "1-" while the name has
+    # "9-" at those offsets, so the locant sub-span slices to "9". The part
+    # span itself is in bounds, contains "meth", does not overlap anything,
+    # and the locant sub-span DOES sit inside its part -- this proof is the
+    # only one left that can reject it.
+    _fake_tokens(monkeypatch, [
+        Token("1-", "locant", 0, 2),
+        Token("meth", "substituentGroup", 2, 6),
+    ])
+    assert compute_spans("9-meth", ["meth"], want_modifier=False) is None
+
+
+def test_a_grouped_segments_span_reports_how_many_instances_it_claims():
+    # `claims` is what lets explain.py refuse a grouped segment whose span
+    # cannot account for every part it owns. Pinned on the two real shapes:
+    # a locant list plus a multiplier word, and a multiplier word alone.
+    caffeine = compute_spans(CAFFEINE, CAFFEINE_GROUPS, want_modifier=True)
+    assert CAFFEINE[slice(*caffeine.parts[METH])] == "1,3,7-trimethyl-"
+    assert caffeine.claims[METH] == 3
+    assert caffeine.claims[PURIN] == 1
+
+    ddt = "1,1,1-trichloro-2,2-bis(4-chlorophenyl)ethane"
+    spans = compute_spans(ddt, ["chloro", "phenyl", "eth"], want_modifier=False)
+    # `1,1,1-trichloro-` claims three chlorines -- not the five that the
+    # text-grouped `chloro` segment owns, which is the whole point.
+    assert ddt[slice(*spans.parts[0])] == "1,1,1-trichloro-"
+    assert spans.claims[0] == 3
+    # `phenyl)` states no count of its own; the `bis` sits outside its span.
+    assert ddt[slice(*spans.parts[1])] == "phenyl)"
+    assert spans.claims[1] == 1
+
+    name = "diethyl carbonate"
+    spans = compute_spans(name, ["eth", "carbon"], want_modifier=False)
+    assert name[slice(*spans.parts[0])] == "diethyl"
+    assert spans.claims[0] == 2
+
+
 def test_never_returns_a_span_that_does_not_contain_its_group_token():
     # The safety property, stated directly: whatever names DO produce spans,
     # each span must literally contain the token it was anchored on.

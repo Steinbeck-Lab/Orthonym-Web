@@ -56,6 +56,15 @@ _LEADING = frozenset({
 # In caffeine the hyphen after "purine" is a plain hyphen; absorbing it would
 # make the parent span read "purine-" instead of "purine", and would steal the
 # character that lets the suffix run claim "-2,6-dione".
+#
+# "closeBracket" IS deliberately here, and it is the mirror image of the
+# _LEADING note above rather than a contradiction of it. Growing LEFT through
+# an openBracket is unsafe because the tokens beyond it (a locant) make a real
+# claim about atoms that belong to a different part. A closing bracket claims
+# no atom at all, so absorbing it can only ever be cosmetic -- ibuprofen's
+# spans read "propyl)" and "phenyl]" -- never a wrong letters-to-atoms claim.
+# Dropping it would merely move those two characters into the uncovered class
+# while perturbing spans that are pinned by measurement.
 _TRAILING = frozenset({
     "inlineSuffix", "nonAcidStemSuffix", "suffixesThatCanBeModifiedByAPrefix",
     "e", "ane", "an", "o", "closeBracket",
@@ -64,6 +73,17 @@ _TRAILING = frozenset({
 
 # The hydro / indicated-hydrogen run, which is its own referential part.
 _MODIFIER = frozenset({"hydro", "bigCapitalH"})
+
+# Multiplier tokens, and what each one's text says about HOW MANY instances of
+# the following group its own span names. Used only by `claims` below, whose
+# job is to let a caller ask "can this one span honestly account for every
+# atom my segment owns?".
+_MULTIPLIER_CATEGORIES = frozenset({"multiplier", "diOrTri", "groupMultiplier"})
+_MULTIPLIER_VALUES = {
+    "mono": 1, "di": 2, "bis": 2, "tri": 3, "tris": 3,
+    "tetra": 4, "tetrakis": 4, "penta": 5, "pentakis": 5,
+    "hexa": 6, "hexakis": 6, "hepta": 7, "octa": 8, "nona": 9, "deca": 10,
+}
 
 # The modifier's key in `parts`/`locants`, distinct from every legitimate
 # `group_tokens` position (which are always >= 0).
@@ -90,6 +110,19 @@ class SpanSet(NamedTuple):
     # locants only from tokens inside that part's own span, makes
     # child-inside-parent true by construction instead of merely asserted.
     locants: dict
+    # part position -> how many instances of its group the span's OWN TEXT
+    # claims. This is what lets a caller detect a segment whose atoms come
+    # from MORE occurrences of a substituent than its single span covers:
+    # `1,1,1-trichloro-` claims three chlorines, so a segment holding five
+    # of them is naming two atoms with letters this span does not contain --
+    # they are named by the `4-chloro` further along, which no span covers.
+    # A span states the count two independent ways: its locant list
+    # ("1,3,7-" -> 3) and its multiplier word ("tri" -> 3). Either statement
+    # alone is enough to prove the text claims that many, so the larger of
+    # the two is taken -- an unlocanted `diethyl` still claims 2, and a
+    # multiplier word missing from _MULTIPLIER_VALUES still claims whatever
+    # its locants say. Floor of 1: one occurrence always names one instance.
+    claims: dict
 
 
 def _locant_subspans(token) -> dict:
@@ -216,6 +249,26 @@ def compute_spans(
                 found.setdefault(locant, span)
         locants[key] = found
 
+    # 4b. What each span's own text CLAIMS -- see SpanSet.claims. Derived from
+    #     the same tokens-inside-this-span rule as the locants above, so a
+    #     multiplier or locant belonging to another part can never be counted
+    #     here.
+    claims = {}
+    for key, (part_start, part_end) in parts.items():
+        pieces, multiplier = 0, 0
+        for token in tokens:
+            if token.start < part_start or token.end > part_end:
+                continue
+            if token.category == "locant":
+                pieces += len(
+                    [p for p in token.text.replace("-", "").split(",") if p]
+                )
+            elif token.category in _MULTIPLIER_CATEGORIES:
+                multiplier = max(
+                    multiplier, _MULTIPLIER_VALUES.get(token.text.lower(), 0)
+                )
+        claims[key] = max(pieces, multiplier, 1)
+
     # 5. Prove it, or withhold everything.
     for position, (start, end) in parts.items():
         if not (0 <= start < end <= len(name)):
@@ -239,4 +292,4 @@ def compute_spans(
             if not (part_start <= start < end <= part_end):
                 return None
 
-    return SpanSet(parts=parts, locants=locants)
+    return SpanSet(parts=parts, locants=locants, claims=claims)
