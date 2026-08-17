@@ -1,4 +1,5 @@
-from app.name_spans import compute_spans
+from app.name_spans import _locant_subspans, compute_spans
+from app.opsin_tokenizer import Token
 from tests.conftest import CAFFEINE, GOLDEN_NAMES
 
 # Document order: the methyl stem, the ring, then the suffix token.
@@ -93,6 +94,68 @@ def test_no_group_tokens_yields_none_rather_than_an_empty_success():
     # An empty SpanSet would read as success to every caller and make the
     # coverage check vacuous.
     assert compute_spans(CAFFEINE, [], want_modifier=False) is None
+
+
+def test_ibuprofen_methyl_locant_is_its_own_not_the_parents():
+    # Regression for the bracket bug: "openBracket" used to sit in _LEADING,
+    # so the methyl's left-growth walked straight through "[4-(" and adopted
+    # the PARENT propanoic acid's "2" (index 0) as if it belonged to the
+    # methyl. The methyl's own "2" is the one inside the brackets, at index
+    # 6 ("2-[4-(2-methylpropyl)phenyl]propanoic acid"). Pin the real offset,
+    # not just "some span containing the text 2".
+    name = "2-[4-(2-methylpropyl)phenyl]propanoic acid"
+    spans = compute_spans(name, ["meth", "phenyl", "prop"], want_modifier=False)
+    assert spans is not None
+    assert spans.parts["meth"] == (6, 14)
+    assert name[6:14] == "2-methyl"
+    assert spans.locants["meth"]["2"] == (6, 7)
+    assert name[6:7] == "2"
+    # The parent's own "2" (index 0) must NOT be what the methyl's locant
+    # map points at.
+    assert spans.locants["meth"]["2"] != (0, 1)
+
+
+def test_tnt_part_spans_match_the_brief_reference_values_verbatim():
+    # Regression for the last_end_index overlap bug: mutating
+    # `last_end_index = index` (instead of `end_index`) let the methyl's
+    # left-growth bound reach past the nitro run's own leading locant,
+    # producing an overlap that made compute_spans discard EVERY span for
+    # this name. Only caffeine was pinned before; this name's values from
+    # the brief were asserted nowhere, so that mutation survived undetected.
+    name = "2-methyl-1,3,5-trinitrobenzene"
+    spans = compute_spans(name, ["meth", "nitro", "benzen"], want_modifier=False)
+    assert spans is not None
+    assert spans.parts["meth"] == (0, 9)
+    assert name[0:9] == "2-methyl-"
+    assert spans.parts["nitro"] == (9, 23)
+    assert name[9:23] == "1,3,5-trinitro"
+    assert spans.parts["benzen"] == (23, 30)
+    assert name[23:30] == "benzene"
+
+
+def test_butylcyclohexanol_part_spans_match_the_brief_reference_values_verbatim():
+    name = "4-tert-butylcyclohexan-1-ol"
+    spans = compute_spans(name, ["but", "hex", "ol"], want_modifier=False)
+    assert spans is not None
+    assert spans.parts["but"] == (0, 12)
+    assert name[0:12] == "4-tert-butyl"
+    assert spans.parts["hex"] == (12, 22)
+    assert name[12:22] == "cyclohexan"
+    assert spans.parts["ol"] == (22, 27)
+    assert name[22:27] == "-1-ol"
+
+
+def test_locant_subspans_walked_cursor_does_not_confuse_a_prefix_locant():
+    # No golden name has a locant token where one locant is a prefix of the
+    # next (e.g. "11" then "1"), so this branch of _locant_subspans -- the
+    # walked cursor documented as preventing exactly this collision -- is
+    # otherwise never exercised. A naive `text.find(piece)` search (no
+    # cursor) would find "1" INSIDE "11" at index 0 instead of the real
+    # standalone "1" at index 3.
+    token = Token(text="11,1-", category="locant", start=100, end=105)
+    found = _locant_subspans(token)
+    assert found["11"] == (100, 102)
+    assert found["1"] == (103, 104)
 
 
 def test_never_returns_a_span_that_does_not_contain_its_group_token():
