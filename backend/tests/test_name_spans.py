@@ -1,17 +1,20 @@
-from app.name_spans import _locant_subspans, compute_spans
+from app.name_spans import MODIFIER_KEY, _locant_subspans, compute_spans
 from app.opsin_tokenizer import Token
 from tests.conftest import CAFFEINE, GOLDEN_NAMES
 
 # Document order: the methyl stem, the ring, then the suffix token.
+# `compute_spans` keys its result by POSITION in this list (0, 1, 2, ...),
+# not by text -- see the ibuprofen tests below for why a text key is unsafe.
 CAFFEINE_GROUPS = ["meth", "purin", "one"]
+METH, PURIN, ONE = 0, 1, 2
 
 
 def test_caffeine_part_spans_are_pinned_exactly():
     spans = compute_spans(CAFFEINE, CAFFEINE_GROUPS, want_modifier=True)
     assert spans is not None
-    assert CAFFEINE[slice(*spans.parts["meth"])] == "1,3,7-trimethyl-"
-    assert CAFFEINE[slice(*spans.parts["purin"])] == "purine"
-    assert CAFFEINE[slice(*spans.parts["one"])] == "-2,6-dione"
+    assert CAFFEINE[slice(*spans.parts[METH])] == "1,3,7-trimethyl-"
+    assert CAFFEINE[slice(*spans.parts[PURIN])] == "purine"
+    assert CAFFEINE[slice(*spans.parts[ONE])] == "-2,6-dione"
 
 
 def test_caffeine_spans_partition_the_whole_name_without_gaps():
@@ -28,17 +31,17 @@ def test_caffeine_spans_partition_the_whole_name_without_gaps():
 
 def test_caffeine_suffix_locants_are_pinned_and_distinct_from_the_methyls():
     spans = compute_spans(CAFFEINE, CAFFEINE_GROUPS, want_modifier=True)
-    suffix = spans.locants["one"]
+    suffix = spans.locants[ONE]
     assert CAFFEINE[slice(*suffix["2"])] == "2"
     assert CAFFEINE[slice(*suffix["6"])] == "6"
-    assert suffix["2"][0] > spans.parts["purin"][1]
+    assert suffix["2"][0] > spans.parts[PURIN][1]
 
 
 def test_caffeine_locant_spans_are_pinned_exactly():
     spans = compute_spans(CAFFEINE, CAFFEINE_GROUPS, want_modifier=True)
-    assert spans.locants["meth"]["1"] == (0, 1)
-    assert spans.locants["meth"]["3"] == (2, 3)
-    assert spans.locants["meth"]["7"] == (4, 5)
+    assert spans.locants[METH]["1"] == (0, 1)
+    assert spans.locants[METH]["3"] == (2, 3)
+    assert spans.locants[METH]["7"] == (4, 5)
     assert CAFFEINE[0:1] == "1"
     assert CAFFEINE[4:5] == "7"
 
@@ -48,12 +51,12 @@ def test_the_same_locant_in_two_places_gets_two_different_spans():
     # (the hydro prefix). They mean different things and must not share a
     # span -- a flat locant map would hand the modifier the methyls' letters.
     spans = compute_spans(CAFFEINE, CAFFEINE_GROUPS, want_modifier=True)
-    methyl_3 = spans.locants["meth"]["3"]
-    modifier_3 = spans.locants["__modifier__"]["3"]
+    methyl_3 = spans.locants[METH]["3"]
+    modifier_3 = spans.locants[MODIFIER_KEY]["3"]
     assert methyl_3 != modifier_3
     assert methyl_3 == (2, 3)
     assert CAFFEINE[slice(*modifier_3)] == "3"
-    assert modifier_3[0] >= spans.parts["__modifier__"][0]
+    assert modifier_3[0] >= spans.parts[MODIFIER_KEY][0]
 
 
 def test_each_locant_span_sits_inside_its_own_part():
@@ -68,7 +71,7 @@ def test_each_locant_span_sits_inside_its_own_part():
 
 def test_caffeine_modifier_span_covers_the_hydro_prefix():
     spans = compute_spans(CAFFEINE, CAFFEINE_GROUPS, want_modifier=True)
-    text = CAFFEINE[slice(*spans.parts["__modifier__"])]
+    text = CAFFEINE[slice(*spans.parts[MODIFIER_KEY])]
     assert "hydro" in text and "1H" in text
 
 
@@ -104,15 +107,47 @@ def test_ibuprofen_methyl_locant_is_its_own_not_the_parents():
     # 6 ("2-[4-(2-methylpropyl)phenyl]propanoic acid"). Pin the real offset,
     # not just "some span containing the text 2".
     name = "2-[4-(2-methylpropyl)phenyl]propanoic acid"
-    spans = compute_spans(name, ["meth", "phenyl", "prop"], want_modifier=False)
+    groups = ["meth", "phenyl", "prop"]
+    meth, phenyl, prop = 0, 1, 2
+    spans = compute_spans(name, groups, want_modifier=False)
     assert spans is not None
-    assert spans.parts["meth"] == (6, 14)
+    assert spans.parts[meth] == (6, 14)
     assert name[6:14] == "2-methyl"
-    assert spans.locants["meth"]["2"] == (6, 7)
+    assert spans.locants[meth]["2"] == (6, 7)
     assert name[6:7] == "2"
     # The parent's own "2" (index 0) must NOT be what the methyl's locant
     # map points at.
-    assert spans.locants["meth"]["2"] != (0, 1)
+    assert spans.locants[meth]["2"] != (0, 1)
+
+
+def test_ibuprofen_propyl_substituent_and_propanoic_parent_get_different_spans():
+    # Regression for the shared-stem bug: the propyl SUBSTITUENT
+    # ("2-methylpropyl"'s chain) and the propanoic acid PARENT both strip to
+    # the stem "prop". A key keyed by that text collapsed both onto the
+    # substituent's occurrence, so hovering the parent underlined "propyl)"
+    # -- the substituent's own letters. `group_tokens` here is what
+    # `explain.py`'s `_apply_name_spans` actually builds for this name, one
+    # entry per span-bearing segment, WITH the duplicate "prop" preserved, in
+    # document order: methyl, propyl, phenyl, the propanoic-acid parent,
+    # then its "ic acid" suffix.
+    name = "2-[4-(2-methylpropyl)phenyl]propanoic acid"
+    groups = ["meth", "prop", "phenyl", "prop", "ic acid"]
+    meth, propyl, phenyl, parent, suffix = 0, 1, 2, 3, 4
+    spans = compute_spans(name, groups, want_modifier=False)
+    assert spans is not None
+    assert spans.parts[propyl] == (14, 21)
+    assert name[14:21] == "propyl)"
+    assert spans.parts[parent] == (28, 35)
+    assert name[28:35] == "propano"
+    # The two "prop" positions must not share a span, and the parent's own
+    # occurrence must be the LATER one in the name.
+    assert spans.parts[propyl] != spans.parts[parent]
+    assert spans.parts[parent][0] > spans.parts[propyl][1]
+    # Sanity on the other anchors, so the whole document-order list is
+    # verified, not just the two that collided.
+    assert spans.parts[meth] == (6, 14)
+    assert spans.parts[phenyl] == (21, 28)
+    assert spans.parts[suffix] == (35, 42)
 
 
 def test_tnt_part_spans_match_the_brief_reference_values_verbatim():
@@ -123,25 +158,29 @@ def test_tnt_part_spans_match_the_brief_reference_values_verbatim():
     # this name. Only caffeine was pinned before; this name's values from
     # the brief were asserted nowhere, so that mutation survived undetected.
     name = "2-methyl-1,3,5-trinitrobenzene"
-    spans = compute_spans(name, ["meth", "nitro", "benzen"], want_modifier=False)
+    groups = ["meth", "nitro", "benzen"]
+    meth, nitro, benzen = 0, 1, 2
+    spans = compute_spans(name, groups, want_modifier=False)
     assert spans is not None
-    assert spans.parts["meth"] == (0, 9)
+    assert spans.parts[meth] == (0, 9)
     assert name[0:9] == "2-methyl-"
-    assert spans.parts["nitro"] == (9, 23)
+    assert spans.parts[nitro] == (9, 23)
     assert name[9:23] == "1,3,5-trinitro"
-    assert spans.parts["benzen"] == (23, 30)
+    assert spans.parts[benzen] == (23, 30)
     assert name[23:30] == "benzene"
 
 
 def test_butylcyclohexanol_part_spans_match_the_brief_reference_values_verbatim():
     name = "4-tert-butylcyclohexan-1-ol"
-    spans = compute_spans(name, ["but", "hex", "ol"], want_modifier=False)
+    groups = ["but", "hex", "ol"]
+    but, hex_, ol = 0, 1, 2
+    spans = compute_spans(name, groups, want_modifier=False)
     assert spans is not None
-    assert spans.parts["but"] == (0, 12)
+    assert spans.parts[but] == (0, 12)
     assert name[0:12] == "4-tert-butyl"
-    assert spans.parts["hex"] == (12, 22)
+    assert spans.parts[hex_] == (12, 22)
     assert name[12:22] == "cyclohexan"
-    assert spans.parts["ol"] == (22, 27)
+    assert spans.parts[ol] == (22, 27)
     assert name[22:27] == "-1-ol"
 
 
@@ -166,9 +205,7 @@ def test_never_returns_a_span_that_does_not_contain_its_group_token():
             spans = compute_spans(name, groups, want_modifier=False)
             if spans is None:
                 continue
-            for group, (start, end) in spans.parts.items():
-                if group == "__modifier__":
-                    continue
-                assert group in name[start:end], (
-                    f"{name}: span for {group!r} is {name[start:end]!r}"
+            for position, (start, end) in spans.parts.items():
+                assert groups[position] in name[start:end], (
+                    f"{name}: span for {groups[position]!r} is {name[start:end]!r}"
                 )

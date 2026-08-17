@@ -40,6 +40,7 @@ from rdkit.Chem.Draw import rdMolDraw2D
 from openstout import OpenSTOUT
 
 from .glossary import describe_locant, describe_part
+from .name_spans import MODIFIER_KEY, compute_spans
 from .opsin_decompose import decompose, heavy_atom_indices
 from .root_split import split_root
 
@@ -114,10 +115,97 @@ def _parent_label(root) -> str:
     return label or root.text.strip("-")
 
 
+def _strip_suffixes(label: str, result) -> str:
+    """The group token behind a substituent label: "methyl" -> "meth".
+
+    OPSIN's raw group token is what name_spans anchors on, and a substituent
+    label is that token plus its inline suffix ("meth" + "yl").
+    """
+    for part in result.parts:
+        if part.kind != "substituent":
+            continue
+        text = part.text.strip("-")
+        if text != label:
+            continue
+        for suffix in reversed(part.suffix_texts):
+            if suffix and text.endswith(suffix):
+                text = text[: -len(suffix)]
+        return text
+    return label
+
+
 def _locant_sort_key(segment: dict):
     locant = segment.get("locant") or ""
     digits = "".join(c for c in locant if c.isdigit())
     return (int(digits) if digits else 0, locant)
+
+
+def _apply_name_spans(name: str, segments: list, result) -> None:
+    """Fill in each segment's and child's `name_range`, or leave every one
+    of them None. Never partial: a response with some spans and some not
+    would leave regions of the name dead that look identical to live ones.
+    """
+    # Anchor keys in DOCUMENT order: substituent stems, then the ring, then the
+    # suffix token. `compute_spans` matches monotonically, so the order matters.
+    root = next((p for p in result.parts if p.kind == "root"), None)
+    suffix_key = root.suffix_texts[0] if (root and root.suffix_texts) else None
+
+    def token_for(segment):
+        if segment["kind"] == "substituent":
+            return _strip_suffixes(segment["label"], result)
+        if segment["kind"] == "parent":
+            return segment["label"]
+        if segment["kind"] == "suffix":
+            return suffix_key
+        return None
+
+    # One entry per span-bearing segment, WITH duplicates, in document order.
+    # `compute_spans` keys its result by POSITION in this list, not by text:
+    # two different segments can share the same stem text -- ibuprofen's
+    # "propyl" substituent and its "propanoic acid" parent both strip to
+    # "prop" -- and a text key would collapse both onto one span, handing the
+    # parent the substituent's letters. `spanned` tracks, in the same order,
+    # which segment each position belongs to.
+    group_tokens: list = []
+    spanned: list = []
+    for segment in segments:
+        if segment["kind"] in ("substituent", "parent", "suffix"):
+            text = token_for(segment)
+            if text:
+                group_tokens.append(text)
+                spanned.append(segment)
+
+    want_modifier = any(s["kind"] == "modifier" for s in segments)
+    spans = compute_spans(name, group_tokens, want_modifier)
+    if spans is None:
+        return
+
+    for position, segment in enumerate(spanned):
+        span = spans.parts.get(position)
+        if span is not None:
+            segment["name_range"] = list(span)
+        # Locants are nested PER PART, not flat: a locant string is not unique
+        # within a name. Caffeine's "3" appears in both "1,3,7-" (the methyls)
+        # and "3,7-" (the hydro prefix); a flat lookup would give the modifier
+        # the methyls' letters.
+        found = spans.locants.get(position, {})
+        for child in segment["children"]:
+            child_span = found.get(child["locant"])
+            if child_span is not None:
+                child["name_range"] = list(child_span)
+
+    if want_modifier:
+        modifier_span = spans.parts.get(MODIFIER_KEY)
+        modifier_locants = spans.locants.get(MODIFIER_KEY, {})
+        for segment in segments:
+            if segment["kind"] != "modifier":
+                continue
+            if modifier_span is not None:
+                segment["name_range"] = list(modifier_span)
+            for child in segment["children"]:
+                child_span = modifier_locants.get(child["locant"])
+                if child_span is not None:
+                    child["name_range"] = list(child_span)
 
 
 def _build_segments(result) -> list[dict]:
@@ -315,6 +403,8 @@ def explain_name(name: str) -> dict:
             "error": "OPSIN parsed this name but the structure could not be read.",
         }
 
+    segments = _build_segments(result)
+    _apply_name_spans(name, segments, result)
     svg, atom_points = _inline_svg(mol)
     return {
         "smiles": result.smiles,
@@ -322,7 +412,7 @@ def explain_name(name: str) -> dict:
         "svg": svg,
         "atom_points": atom_points,
         "total_atoms": mol.GetNumAtoms(),
-        "segments": _build_segments(result),
+        "segments": segments,
         "error": None,
     }
 
