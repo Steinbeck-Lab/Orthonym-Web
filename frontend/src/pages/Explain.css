@@ -380,6 +380,29 @@
   padding: 0.05em 0.15em;
 }
 
+/* The name itself, hoverable: each locant/part becomes its own target,
+   sliced from the character spans Task 3 proved OPSIN really wrote (see
+   `nameTargets`/`sliceName` above). Combined with `.explain-result__name`
+   in JSX rather than replacing it, so the Silkscreen chemical-name
+   treatment above still applies -- this class only adds the spacing and
+   hover mechanics a name made of individually-hoverable spans needs. */
+.explain-name {
+  font-size: 1.15rem;
+  line-height: 2;
+  word-break: break-word;
+}
+.explain-name__part {
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 0.1em 0;
+  transition: background-color 120ms ease;
+}
+.explain-name__part:hover,
+.explain-name__part--active {
+  background: var(--glow, #ffd400);
+  outline: none;
+}
+
 .explain-result__body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -423,7 +446,27 @@
     fill 0.15s ease;
 }
 
-/* -------------------- segments -------------------- */
+/* -------------------- detail panel -------------------- */
+/* The one panel beside the structure that explains whatever part of the
+   name is active (hovered or pinned). Shown instead of `.explain-segments`
+   whenever spans are available -- the part list becomes the fallback for
+   names that could not be proven span-complete (see spansAvailable). */
+
+.explain-detail {
+  min-height: 8rem;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--glow, #ffd400);
+}
+.explain-detail__label {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+}
+.explain-detail__hint {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+/* -------------------- segments (fallback part list) -------------------- */
 
 .explain-segments {
   display: flex;
