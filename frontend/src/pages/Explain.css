@@ -8,7 +8,18 @@
    No new colors: the single accent thread is reused for both the
    confirmed-suffix highlight and the active segment button, exactly as
    it already marks the confirmed-PIN tile and the active nav tab.
+
+   One deliberate exception: --glow below. The accent thread means
+   "confirmed part of the name," but the glow means something else --
+   "an atom exists here," independent of whether RDKit gave it a
+   selectable element at all (see Explain.jsx's highlight effect). That
+   is a different signal, so it earns its own token rather than reusing
+   --accent.
    ============================================================ */
+
+:root {
+  --glow: #ffd400;
+}
 
 .explain-page {
   flex: 1;
