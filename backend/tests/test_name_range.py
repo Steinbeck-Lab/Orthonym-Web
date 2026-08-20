@@ -133,6 +133,30 @@ def test_a_second_written_occurrence_of_a_substituent_forces_the_fallback():
     assert "1-methyl-4-(1-methylethyl)benzene"[12:20] == "1-methyl"
 
 
+def test_a_repeated_unlocanted_hydro_substituent_still_forces_the_fallback():
+    # Same family as test_a_second_written_occurrence_of_a_substituent_
+    # forces_the_fallback above, but the repeated substituent is itself an
+    # unlocanted hydro ring ("tetrahydrofuran-2-yl"). Measured live before
+    # the claims-window fence: the "furanyl" segment's own claims window
+    # swept in the leaked "tetr" from its OWN preceding, unlocanted
+    # "tetrahydro" run (no locant on that hydro token, so no MODIFIER_KEY
+    # part bounds it), inflating claims from 1 to 4 -- enough to satisfy
+    # owned_by(2) <= claims(4) and let a span through for the FIRST
+    # "tetrahydrofuran" occurrence's text while the segment's atom_indices
+    # covered BOTH ring occurrences. The fence must restore the correct
+    # all-or-nothing fallback here exactly as it does for phenyl above.
+    name = "1-(tetrahydrofuran-2-yl)-2-(tetrahydrofuran-2-yl)ethane"
+    assert name[13:18] == "furan"
+    result = explain_name(name)
+    assert result["error"] is None
+    furanyl = next(s for s in result["segments"] if s["label"] == "furanyl")
+    assert len(furanyl["atom_indices"]) == 10, furanyl["atom_indices"]
+    assert result["segments"], "expected a real decomposition, not an empty one"
+    assert [s["name_range"] for s in result["segments"]] == [
+        None for _ in result["segments"]
+    ]
+
+
 def test_the_repeated_locant_3_points_at_different_letters_per_part():
     # "3" appears in "1,3,7-" and again in "3,7-". The methyl child and the
     # modifier child must underline DIFFERENT characters.

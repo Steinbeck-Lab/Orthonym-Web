@@ -277,18 +277,47 @@ def compute_spans(
     # Widening this window can only RAISE claims, which makes the guard
     # withhold LESS -- it can never fabricate a span. Verified: all four
     # wrong-atom Criticals still withhold after this change.
+    #
+    # One case needs fencing OUT of that widened window, not just left in
+    # it: a two-token multiplier's first half (tetr, oct, ...) can decorate
+    # a fully-saturating hydro/indicated-hydrogen run that carries NO
+    # locant -- "tetr" in "tetrahydrofuran", say. `_collect_modifiers`
+    # (opsin_decompose.py) only records a Modifier when its token carries a
+    # locant, so an unlocanted run gets no MODIFIER_KEY part here, and
+    # nothing bounds this multiplier token's window on the right; it leaks
+    # into whichever real part's window reaches it next. Measured live:
+    # "1-(tetrahydrofuran-2-yl)-2-(tetrahydrofuran-2-yl)ethane" claimed 4 for
+    # its `furanyl` substituent (from the leaked "tetr") instead of 1 --
+    # letting a span through for a segment that owns TWO ring occurrences
+    # under one first-occurrence span, the exact wrong-atom class this guard
+    # exists to catch. A LOCANTED run is unaffected: it gets a real
+    # MODIFIER_KEY part, and this same multiplier prefix always sits inside
+    # that part's OWN window (nothing else can fall between "oct" and the
+    # hydro token it decorates), so it self-counts there, never a different
+    # part's -- verified on `octahydro-1H-indene`.
+    excluded_multipliers = set()
+    if MODIFIER_KEY not in parts:
+        for i, token in enumerate(tokens):
+            if token.category not in _MODIFIER:
+                continue
+            j = i - 1
+            while j >= 0 and tokens[j].category == "a":
+                j -= 1
+            if j >= 0 and tokens[j].category in _MULTIPLIER_CATEGORIES:
+                excluded_multipliers.add(j)
+
     claims = {}
     previous_end = 0
     for (part_start, part_end), key in sorted((v, k) for k, v in parts.items()):
         pieces, multiplier = 0, 0
-        for token in tokens:
+        for i, token in enumerate(tokens):
             if token.start < previous_end or token.end > part_end:
                 continue
             if token.category == "locant":
                 pieces += len(
                     [p for p in token.text.replace("-", "").split(",") if p]
                 )
-            elif token.category in _MULTIPLIER_CATEGORIES:
+            elif token.category in _MULTIPLIER_CATEGORIES and i not in excluded_multipliers:
                 multiplier = max(
                     multiplier, _MULTIPLIER_VALUES.get(token.text.lower(), 0)
                 )
