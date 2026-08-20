@@ -40,3 +40,14 @@ def test_error_responses_carry_an_empty_list_not_a_missing_key():
     result = explain_name("definitely not a chemical name")
     assert result["error"]
     assert result["atom_points"] == []
+
+
+def test_every_atom_gets_its_own_distinct_point():
+    # The existing tests only prove no point is (0,0). A stub returning ONE
+    # constant for every atom would pass all of them, and the glow would
+    # then draw every circle on top of the same spot.
+    result = explain_name(CAFFEINE)
+    points = [tuple(p) for p in result["atom_points"]]
+    assert len(set(points)) == len(points), (
+        f"{len(points) - len(set(points))} atoms share a coordinate"
+    )
