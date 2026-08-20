@@ -20,3 +20,21 @@
 }
 .teach__button:disabled { cursor: not-allowed; opacity: 0.6; }
 .teach__note, .teach__editor-error { margin-top: 0.6rem; }
+
+.teach__name { font-size: 1.3rem; line-height: 2; word-break: break-word; }
+.teach__part {
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 0.1em 0;
+  transition: background-color 120ms ease;
+}
+.teach__part:hover, .teach__part--active {
+  background: var(--glow, #ffd400);
+  outline: none;
+}
+.teach__body { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: flex-start; }
+.teach__structure { flex: 0 0 auto; }
+.teach__detail { flex: 1 1 16rem; border-left: 3px solid var(--glow, #ffd400); padding: 0.5rem 1rem; }
+.teach__detail-label { margin: 0 0 0.4rem; font-size: 1.05rem; }
+.teach__hint { opacity: 0.7; font-style: italic; }
+.teach__parts { margin-top: 1.5rem; line-height: 1.7; }
