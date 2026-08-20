@@ -295,6 +295,15 @@ def compute_spans(
     # that part's OWN window (nothing else can fall between "oct" and the
     # hydro token it decorates), so it self-counts there, never a different
     # part's -- verified on `octahydro-1H-indene`.
+    #
+    # This guard is per-NAME, not per-run: a single locanted modifier
+    # elsewhere in the name puts MODIFIER_KEY in `parts` and skips the fence
+    # for every run, including an unlocanted one that still leaks its
+    # multiplier. Not exploitable -- the unlocanted run's own hydro token is
+    # itself a mark, so step 3's first-to-last-mark span for MODIFIER_KEY
+    # necessarily brackets that leaking multiplier and overlaps the
+    # substituent parts between the two runs, and the overlap proof in step
+    # 5 throws the whole name away instead of letting the leak through.
     excluded_multipliers = set()
     if MODIFIER_KEY not in parts:
         for i, token in enumerate(tokens):
