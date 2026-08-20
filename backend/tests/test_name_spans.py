@@ -340,3 +340,38 @@ def test_a_ring_stem_that_looks_like_a_multiplier_is_not_counted_as_one():
     spans = compute_spans("cyclohexane", ["hex"], want_modifier=False)
     assert spans is not None
     assert spans.claims[0] == 1, f"cyclohexane claims {spans.claims[0]}, need 1"
+
+
+def test_an_unlocanted_hydro_runs_multiplier_prefix_does_not_leak_into_the_next_part():
+    # "tetrahydrofuran" tokenizes as tetr(tetrOrHigher) + a(a) + hydro(hydro)
+    # + furan -- no locant anywhere, so opsin_decompose's _collect_modifiers
+    # never records a Modifier for it (it only fires when the token carries
+    # a locant), and compute_spans never gets a MODIFIER_KEY part to bound
+    # this run. Task 2's new tetrOrHigher category then lets the leading
+    # "tetr" leak, uncontained, into whichever real part's claims window
+    # reaches it. Here that part is the substituent's OWN window: "furanyl"
+    # is the substituent (group token "furan"), anchored right after
+    # tetr+a+hydro, so its own claims window -- which starts at the previous
+    # part's end (0, there is none before it) -- swept the leaked "tetr" in.
+    # Measured live before the fence: claims[0] == 4, not 1.
+    spans = compute_spans(
+        "1-(tetrahydrofuran-2-yl)-2-(tetrahydrofuran-2-yl)ethane",
+        ["furan", "eth"],
+        want_modifier=False,
+    )
+    assert spans is not None
+    assert spans.claims[0] == 1, f"furanyl claims {spans.claims[0]}, need 1"
+
+
+def test_a_locanted_hydro_runs_multiplier_prefix_still_self_counts():
+    # The other side of the fence: when a hydro/indicated-hydrogen run DOES
+    # carry a locant it gets a real MODIFIER_KEY part, and this run's own
+    # multiplier prefix ("oct" in octahydro) legitimately lands inside that
+    # part's OWN claims window (nothing precedes it here), not a different
+    # part's. The fence must not touch this -- it only excludes a multiplier
+    # that decorates a run with NO MODIFIER_KEY part at all.
+    spans = compute_spans("octahydro-1H-indene", ["inden"], want_modifier=True)
+    assert spans is not None
+    assert spans.claims[MODIFIER_KEY] == 8, (
+        f"octahydro modifier claims {spans.claims[MODIFIER_KEY]}, need 8"
+    )
