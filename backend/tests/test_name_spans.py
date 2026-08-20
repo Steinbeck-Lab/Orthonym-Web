@@ -322,3 +322,21 @@ def test_widening_the_window_does_not_inflate_a_later_part():
     assert spans is not None
     assert spans.claims[0] == 1, "methyl has one locant, must claim 1"
     assert spans.claims[1] == 3, "nitro has three locants, must claim 3"
+
+
+def test_an_unlocanted_two_token_multiplier_is_recognised():
+    # OPSIN splits "hexa" into ('hex','tetrOrHigher') + ('a','a'). With no
+    # locant list to count, the multiplier word is the only evidence that
+    # this one span names six methyls.
+    spans = compute_spans("hexamethylbenzene", ["meth", "benzen"], want_modifier=False)
+    assert spans is not None
+    assert spans.claims[0] == 6, f"methyl claims {spans.claims[0]}, need 6"
+
+
+def test_a_ring_stem_that_looks_like_a_multiplier_is_not_counted_as_one():
+    # cyclohexane's "hex" is category alkaneStemTrivial, not tetrOrHigher.
+    # The category gate is what keeps "hex": 6 from being read as a
+    # multiplier here; without it this would claim 6 for a single ring.
+    spans = compute_spans("cyclohexane", ["hex"], want_modifier=False)
+    assert spans is not None
+    assert spans.claims[0] == 1, f"cyclohexane claims {spans.claims[0]}, need 1"
