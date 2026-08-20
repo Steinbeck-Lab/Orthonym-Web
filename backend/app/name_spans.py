@@ -78,11 +78,25 @@ _MODIFIER = frozenset({"hydro", "bigCapitalH"})
 # the following group its own span names. Used only by `claims` below, whose
 # job is to let a caller ask "can this one span honestly account for every
 # atom my segment owns?".
-_MULTIPLIER_CATEGORIES = frozenset({"multiplier", "diOrTri", "groupMultiplier"})
+#
+# `tetrOrHigher` is here because OPSIN emits the higher multipliers as TWO
+# tokens: "tetra" arrives as ('tetr','tetrOrHigher') + ('a','a'), and "hexa"
+# as ('hex','tetrOrHigher') + ('a','a'). Without this category the multiplier
+# is invisible, and an unlocanted name like `hexamethylbenzene` -- which has
+# no locant list to count instead -- withholds its spans entirely.
+_MULTIPLIER_CATEGORIES = frozenset({
+    "multiplier", "diOrTri", "groupMultiplier", "tetrOrHigher",
+})
+
+# The bare stems below (tetr, pent, hex, ...) are the two-token form's first
+# half. Listing "hex" is safe ONLY because the category gate above runs
+# first: cyclohexane's "hex" is category alkaneStemTrivial, never
+# tetrOrHigher, so it is never looked up here. Do not drop that gate.
 _MULTIPLIER_VALUES = {
     "mono": 1, "di": 2, "bis": 2, "tri": 3, "tris": 3,
     "tetra": 4, "tetrakis": 4, "penta": 5, "pentakis": 5,
     "hexa": 6, "hexakis": 6, "hepta": 7, "octa": 8, "nona": 9, "deca": 10,
+    "tetr": 4, "pent": 5, "hex": 6, "hept": 7, "oct": 8, "non": 9, "dec": 10,
 }
 
 # The modifier's key in `parts`/`locants`, distinct from every legitimate
