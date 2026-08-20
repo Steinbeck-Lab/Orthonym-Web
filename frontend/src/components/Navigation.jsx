@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom'
 
-// The site's index-tab strip. Six destinations, one active at a time.
+// The site's index-tab strip. Seven destinations, one active at a time.
 // The active tab is marked three ways at once — never color alone:
 // aria-current="page" (assistive tech), a heavier border + weight
 // (sighted, non-color), and the sole accent thread on that border
