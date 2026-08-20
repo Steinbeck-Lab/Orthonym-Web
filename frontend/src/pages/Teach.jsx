@@ -95,6 +95,8 @@ function Teach() {
   async function handleName() {
     if (phase === 'working') return
     setNote(null)
+    setPinnedPath(null)
+    setHoveredPath(null)
     const ketcher = iframeRef.current?.contentWindow?.ketcher
     if (!ketcher) {
       setNote('The drawing area is still starting up. Give it a moment and try again.')
@@ -275,7 +277,7 @@ function Teach() {
 
       {phase === 'done' && data && (
         <section className="teach__result">
-          <p className="teach__name">
+          <p className="teach__name" aria-live="polite">
             {(() => {
               const segments = data.segments || []
               const spansAvailable =
