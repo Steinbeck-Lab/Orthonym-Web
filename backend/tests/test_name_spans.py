@@ -275,9 +275,12 @@ def test_a_grouped_segments_span_reports_how_many_instances_it_claims():
     # text-grouped `chloro` segment owns, which is the whole point.
     assert ddt[slice(*spans.parts[0])] == "1,1,1-trichloro-"
     assert spans.claims[0] == 3
-    # `phenyl)` states no count of its own; the `bis` sits outside its span.
+    # `phenyl)`'s span is still just "phenyl)", but the claims WINDOW now reaches
+    # left to the previous part's end, so it counts the decorating `2,2-`, `bis`
+    # and `4-` that sit between the two parts. Over-counting only makes the guard
+    # withhold LESS; it can never fabricate a span. The span offsets are unchanged.
     assert ddt[slice(*spans.parts[1])] == "phenyl)"
-    assert spans.claims[1] == 1
+    assert spans.claims[1] == 3
 
     name = "diethyl carbonate"
     spans = compute_spans(name, ["eth", "carbon"], want_modifier=False)
@@ -297,3 +300,25 @@ def test_never_returns_a_span_that_does_not_contain_its_group_token():
                 assert groups[position] in name[start:end], (
                     f"{name}: span for {groups[position]!r} is {name[start:end]!r}"
                 )
+
+
+def test_a_locant_list_outside_the_span_still_counts_toward_claims():
+    # 1,1,2,2-tetrachloroethane's locant list sits BEFORE the chloro span,
+    # because the two-token multiplier between them is not absorbed. The
+    # count must still see its four positions, or the guard withholds a name
+    # whose span is perfectly correct.
+    spans = compute_spans(
+        "1,1,2,2-tetrachloroethane", ["chloro", "eth"], want_modifier=False
+    )
+    assert spans is not None
+    assert spans.claims[0] >= 4, f"chloro claims {spans.claims[0]}, need >= 4"
+
+
+def test_widening_the_window_does_not_inflate_a_later_part():
+    # The window must start at the PREVIOUS part's end, not at 0 -- otherwise
+    # every part inherits every earlier locant and the guard stops guarding.
+    name = "2-methyl-1,3,5-trinitrobenzene"
+    spans = compute_spans(name, ["meth", "nitro", "benzen"], want_modifier=False)
+    assert spans is not None
+    assert spans.claims[0] == 1, "methyl has one locant, must claim 1"
+    assert spans.claims[1] == 3, "nitro has three locants, must claim 3"

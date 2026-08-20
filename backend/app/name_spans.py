@@ -249,15 +249,26 @@ def compute_spans(
                 found.setdefault(locant, span)
         locants[key] = found
 
-    # 4b. What each span's own text CLAIMS -- see SpanSet.claims. Derived from
-    #     the same tokens-inside-this-span rule as the locants above, so a
-    #     multiplier or locant belonging to another part can never be counted
-    #     here.
+    # 4b. What each span's own text CLAIMS -- see SpanSet.claims.
+    #
+    # Counted over the part's DECORATING NEIGHBOURHOOD, not just the span:
+    # from the previous part's span end up to this part's own end. A span
+    # cannot always reach the tokens that decorate it. `openBracket` is
+    # deliberately absent from _LEADING (growing left through a bracket let
+    # ibuprofen's methyl adopt the PARENT's locant -- a wrong-atom defect),
+    # and a two-token multiplier is not in _LEADING either. So the locant
+    # list of `1,1,2,2-tetrachloroethane` sits just outside the chloro span
+    # and used to go uncounted, withholding a name whose span was correct.
+    #
+    # Widening this window can only RAISE claims, which makes the guard
+    # withhold LESS -- it can never fabricate a span. Verified: all four
+    # wrong-atom Criticals still withhold after this change.
     claims = {}
-    for key, (part_start, part_end) in parts.items():
+    previous_end = 0
+    for (part_start, part_end), key in sorted((v, k) for k, v in parts.items()):
         pieces, multiplier = 0, 0
         for token in tokens:
-            if token.start < part_start or token.end > part_end:
+            if token.start < previous_end or token.end > part_end:
                 continue
             if token.category == "locant":
                 pieces += len(
@@ -268,6 +279,7 @@ def compute_spans(
                     multiplier, _MULTIPLIER_VALUES.get(token.text.lower(), 0)
                 )
         claims[key] = max(pieces, multiplier, 1)
+        previous_end = part_end
 
     # 5. Prove it, or withhold everything.
     for position, (start, end) in parts.items():
