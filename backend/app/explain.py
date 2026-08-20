@@ -178,6 +178,14 @@ def _apply_name_spans(name: str, segments: list, result) -> None:
     want_modifier = any(s["kind"] == "modifier" for s in segments)
     spans = compute_spans(name, group_tokens, want_modifier)
     if spans is None:
+        # Not an error: a name whose spans cannot be PROVEN falls back to the
+        # part list by design. Logged at INFO because the fallback is now an
+        # expected outcome, and without a line here there is no way to tell
+        # which name lost its spans or why.
+        logger.info(
+            "explain: no proven name spans for %r -- the page will fall back "
+            "to the part list", name,
+        )
         return
 
     # A grouped substituent segment can own atoms that ITS SPAN DOES NOT NAME.
@@ -211,10 +219,17 @@ def _apply_name_spans(name: str, segments: list, result) -> None:
     # Substituents only, because they are the only grouped-by-text segments:
     # `parent` and `suffix` are emitted one per root, and a multiplied suffix
     # ("dione") is written ONCE in the name, so neither can leave a second
-    # occurrence uncovered. Known over-conservative case, accepted because
-    # falling back is the designed outcome: `bis(4-chlorophenyl)` writes its
-    # substituent once too, but the `bis` sits outside the bracket and so
-    # outside the span, which reads as a claim of 1 against 2 parts.
+    # occurrence uncovered. Known over-conservative case, though no longer
+    # DDT's reason for falling back: `bis(4-chlorophenyl)` writes `phenyl`
+    # once per occurrence, and the `bis` sits outside the bracket and so
+    # outside phenyl's own span -- but the claims window (4b in name_spans.py)
+    # has since widened to each part's decorating neighbourhood, so
+    # `phenyl)`'s claim now reaches the `2,2` and `4` locants just before it
+    # and lands at 3, comfortably covering the 2 parts it owns. Measured
+    # live: DDT's full `explain_name` run still withholds end-to-end, though
+    # now via the unrelated `chloro` segment instead -- `1,1,1-trichloro-`
+    # owns five chlorines while claiming only three, so 5 > 3 fires this
+    # same clause there.
     contributors: dict[str, int] = {}
     for part in result.parts:
         if part.kind == "substituent":
