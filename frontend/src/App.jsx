@@ -7,6 +7,7 @@ import IupacToSmiles from './pages/IupacToSmiles'
 import Explain from './pages/Explain'
 import HealthCheck from './pages/HealthCheck'
 import About from './pages/About'
+import Teach from './pages/Teach'
 import './App.css'
 
 // Shared shell for every route: the nav strip on top, the matched page's
@@ -30,6 +31,7 @@ function App() {
           <Route path="/structure" element={<StructureToIupac />} />
           <Route path="/from-name" element={<IupacToSmiles />} />
           <Route path="/explain" element={<Explain />} />
+          <Route path="/teach" element={<Teach />} />
           <Route path="/health" element={<HealthCheck />} />
           <Route path="/about" element={<About />} />
         </Route>
