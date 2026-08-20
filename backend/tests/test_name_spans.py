@@ -311,7 +311,7 @@ def test_a_locant_list_outside_the_span_still_counts_toward_claims():
         "1,1,2,2-tetrachloroethane", ["chloro", "eth"], want_modifier=False
     )
     assert spans is not None
-    assert spans.claims[0] >= 4, f"chloro claims {spans.claims[0]}, need >= 4"
+    assert spans.claims[0] == 4, f"chloro claims {spans.claims[0]}, need 4"
 
 
 def test_widening_the_window_does_not_inflate_a_later_part():
