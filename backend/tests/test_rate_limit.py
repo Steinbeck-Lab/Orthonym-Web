@@ -98,6 +98,20 @@ def test_an_unparseable_forwarded_header_falls_back_to_the_tcp_peer(monkeypatch)
     assert ratelimit.client_ip(request) == "10.0.0.5"
 
 
+def test_an_unparseable_rightmost_hop_does_not_fall_through_leftward(monkeypatch):
+    # Round 2 review, finding 7: the walk used to keep going left past an
+    # unparseable rightmost hop until it found ANYTHING that parsed --
+    # which, on "1.2.3.4, junk", was "1.2.3.4": attacker-supplied text
+    # sitting to the left of the one hop nginx itself controls. If that one
+    # hop does not parse, the honest fallback is the TCP peer, not more of
+    # the client's own text.
+    monkeypatch.setattr(get_settings(), "TRUST_PROXY_HEADERS", True, raising=False)
+    request = _request(
+        {"x-forwarded-for": "1.2.3.4, junk"}, host="10.0.0.6"
+    )
+    assert ratelimit.client_ip(request) == "10.0.0.6"
+
+
 def test_ipv6_addresses_are_bucketed_by_slash_64(monkeypatch):
     # A routed /64 is a single allocation to one client; bucketing by /128
     # would give a rotating client 2**64 free buckets.
@@ -106,6 +120,20 @@ def test_ipv6_addresses_are_bucketed_by_slash_64(monkeypatch):
     second = _request({"x-real-ip": "2001:db8:abcd:1234:ffff:ffff:ffff:ffff"})
     assert ratelimit.client_ip(first) == ratelimit.client_ip(second)
     assert ratelimit.client_ip(first) == "2001:db8:abcd:1234::"
+
+
+def test_ipv4_mapped_ipv6_addresses_are_not_collapsed_together(monkeypatch):
+    # Round 2 review, finding 6, measured: ::ffff:1.2.3.4 and ::1 both
+    # bucketed to '::', because /64 was applied to the mapped address
+    # too -- its first 64 bits are the same fixed all-zero prefix as ::1's.
+    # An IPv4-mapped address must normalise to its v4 form BEFORE bucketing.
+    monkeypatch.setattr(get_settings(), "TRUST_PROXY_HEADERS", True, raising=False)
+    mapped = _request({"x-real-ip": "::ffff:1.2.3.4"})
+    loopback = _request({"x-real-ip": "::1"})
+    other_mapped = _request({"x-real-ip": "::ffff:5.6.7.8"})
+    assert ratelimit.client_ip(mapped) == "1.2.3.4"
+    assert ratelimit.client_ip(loopback) != ratelimit.client_ip(mapped)
+    assert ratelimit.client_ip(other_mapped) != ratelimit.client_ip(mapped)
 
 
 def test_concurrent_job_cap(monkeypatch):
@@ -122,23 +150,49 @@ def test_concurrent_job_cap(monkeypatch):
 
 
 def test_a_simultaneous_third_admission_still_cannot_pass_the_cap(monkeypatch):
-    # The whole point of the Lua script: a separate SCARD-then-SADD lets N
-    # simultaneous submissions all read the same pre-admission count and
-    # all pass. This asserts the cap holds across repeated calls with no
-    # gap for that race to land in.
+    """The whole point of the Lua script: a separate SCARD-then-SADD lets N
+    simultaneous submissions all read the same pre-admission count and all
+    pass. Round 2 review: a SEQUENTIAL loop (the original version of this
+    test) can never expose that race -- each call fully completes before
+    the next one starts, so it passes even against the un-fixed
+    SCARD-then-SADD code. Only real concurrent threads distinguish them
+    (the reviewer measured 40 concurrent admissions giving 5 admitted
+    against a cap of 2 on the un-fixed code, and 2 on the Lua script).
+
+    Job meta for every job id is created up front, single-threaded, before
+    any thread starts -- concurrent admission is what is under test, not
+    concurrent job-meta creation (a separate concern _admit's docstring
+    already covers).
+    """
+    import threading
+
     monkeypatch.setattr(
         get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 2, raising=False
     )
-    admitted = 0
-    rejected = 0
-    for i in range(5):
+    n = 40
+    for i in range(n):
+        redis_store.create_job(
+            f"job-{i}", total=1, fmt="smiles_list", client_ip=IP
+        )
+
+    admitted: list[int] = []
+    lock = threading.Lock()
+
+    def attempt(i: int) -> None:
         try:
-            _admit(IP, f"job-{i}")
-            admitted += 1
+            ratelimit.check_and_register_job(IP, f"job-{i}")
         except HTTPException:
-            rejected += 1
-    assert admitted == 2
-    assert rejected == 3
+            return
+        with lock:
+            admitted.append(i)
+
+    threads = [threading.Thread(target=attempt, args=(i,)) for i in range(n)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(admitted) == 2
 
 
 def test_releasing_a_job_frees_the_slot(monkeypatch):
@@ -189,6 +243,96 @@ def test_hourly_job_cap(monkeypatch):
         ratelimit.check_job_allowed(IP)
     assert excinfo.value.status_code == 429
     assert "hour" in excinfo.value.detail.lower()
+
+
+def test_translate_envelope_path_enforces_the_hourly_job_cap(
+    redis_client, monkeypatch
+):
+    """Round 2 review, finding 1, measured: only POST /api/jobs called
+    check_job_allowed, so /api/translate's job-dispatch branch (chosen by
+    submitting more than FAST_PATH_MAX_MOLECULES molecules) never touched
+    RATE_LIMIT_JOBS_PER_HOUR at all -- 30 jobs of up to 10,000 molecules
+    each were admitted in 30 requests, where POST /api/jobs would have
+    429'd after 3. This is the coverage gap the reviewer called out
+    directly: the earlier C2 test exercised /api/jobs, the endpoint that
+    already had the check, not /api/translate, where the bug actually was.
+    """
+    from app.main import app
+
+    monkeypatch.setattr(
+        get_settings(), "RATE_LIMIT_JOBS_PER_HOUR", 2, raising=False
+    )
+    monkeypatch.setattr(
+        get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 1000, raising=False
+    )
+    monkeypatch.setattr(
+        get_settings(), "FAST_PATH_MAX_MOLECULES", 1, raising=False
+    )
+
+    c = TestClient(app)
+    first = c.post("/api/translate", json={"smiles": ["CCO", "CCC"]})
+    second = c.post("/api/translate", json={"smiles": ["CCCC", "CCCCC"]})
+    third = c.post("/api/translate", json={"smiles": ["c1ccccc1", "CCN"]})
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert third.status_code == 429, third.text
+    assert "hour" in third.json()["detail"].lower()
+
+
+def test_delete_does_not_free_a_slot_for_a_job_still_running(
+    redis_client, monkeypatch
+):
+    """Round 2 review, finding 2, measured: a submit-then-delete loop
+    against a cap of 2 admitted 10 jobs in a row, all already dispatched --
+    DELETE released the concurrent-job slot unconditionally, regardless of
+    whether the job it belonged to had actually finished.
+
+    Eager Celery is turned off for this one test: in eager mode
+    translate_job_inline runs and closes (and releases its own slot)
+    synchronously inside apply_async(), so every submitted job would
+    already be "done" by the time DELETE runs regardless of what DELETE
+    itself does -- masking exactly the bug this test is for, the same way
+    it masked Critical 2 in round 1.
+    """
+    from app.celery_app import celery_app
+    from app.main import app
+
+    monkeypatch.setattr(
+        get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 2, raising=False
+    )
+    celery_app.conf.task_always_eager = False
+    admitted = 0
+    try:
+        c = TestClient(app)
+        for _ in range(10):
+            submitted = c.post("/api/jobs", json={"text": "CCO\n"})
+            if submitted.status_code == 429:
+                continue
+            assert submitted.status_code == 200, submitted.text
+            admitted += 1
+            job_id = submitted.json()["job_id"]
+            deleted = c.delete(f"/api/jobs/{job_id}")
+            # Still queued -- no worker ever consumes it in this test --
+            # so DELETE must refuse rather than quietly free its slot.
+            assert deleted.status_code == 409, deleted.text
+        assert admitted == 2
+    finally:
+        celery_app.conf.task_always_eager = True
+
+
+def test_depict_rejects_a_molecule_over_the_atom_limit(redis_client):
+    """Round 2 review, finding 3, measured with the real renderer: a
+    ~2,400-heavy-atom molecule drew in 16.7 s; a 4,000-carbon chain and a
+    large fused system each ran past 25 s. check_depict_allowed's
+    1,200/minute budget bounds request COUNT, not per-call cost, so it is
+    not itself a defence against this -- MAX_DEPICT_ATOMS is.
+    """
+    from app.main import app
+
+    huge = "C" * 350  # 350 heavy atoms, comfortably over MAX_DEPICT_ATOMS
+    c = TestClient(app)
+    response = c.get("/api/depict", params={"smiles": huge})
+    assert response.status_code == 400
 
 
 def test_fast_path_has_its_own_cap(monkeypatch):

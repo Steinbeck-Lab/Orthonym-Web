@@ -81,7 +81,12 @@ def test_health_degrades_without_a_live_jvm(redis_client, no_worker_opsin):
 def test_naming_endpoints_503_without_a_live_jvm(redis_client, no_worker_opsin):
     """Nothing in the original 218 asserted the fail-closed rule at all --
     hardwiring any_worker_has_opsin() to True (or deleting
-    _require_a_live_jvm from an endpoint) still left every test green.
+    require_a_live_jvm from an endpoint) still left every test green.
+
+    Includes POST /api/jobs (round 2 review, Also-fix): the batch path
+    named molecules with no verified JVM anywhere, the exact fail-open this
+    rule exists to prevent, on the endpoint that produces the artefact
+    users keep.
     """
     assert (
         client.post("/api/translate", json={"smiles": ["CCO"]}).status_code
@@ -103,28 +108,53 @@ def test_naming_endpoints_503_without_a_live_jvm(redis_client, no_worker_opsin):
         ).status_code
         == 503
     )
+    assert (
+        client.post("/api/jobs", json={"text": "CCO\n"}).status_code == 503
+    )
 
 
-def test_main_does_not_import_opsin_decompose():
-    """The web process must never start a JVM -- that is this whole task's
-    headline claim. opsin_decompose.self_check() (called via the old
-    startup hook) reaches opsin_available() -> _ensure_jvm() ->
-    jpype.startJVM(), so every uvicorn worker would boot its own 512 MB
-    JVM. OPSIN now lives only in Celery workers (celery_app._start_child_jvm
-    calls self_check() in each forked child).
+def test_importing_main_does_not_start_a_jvm():
+    """The web process must never start a JVM -- this task's headline
+    claim, tested for real. opsin_decompose.self_check() (called via the
+    old startup hook, since removed) reaches opsin_available() ->
+    _ensure_jvm() -> jpype.startJVM(), so every uvicorn worker would boot
+    its own 512 MB JVM. OPSIN now lives only in Celery workers
+    (celery_app._start_child_jvm calls self_check() in each forked child).
 
-    A source grep, not an in-process assertion: the test suite itself
-    starts a JVM (test_api.py's explain endpoints, run eagerly in-process),
-    so "no JVM started" cannot be asserted from within this same process --
-    it would already be false by the time this test runs, for reasons that
-    have nothing to do with main.py.
+    Round 2 review: a source grep (the previous version of this test) is
+    defeated by a comment naming the module, and passed by code that
+    imports it indirectly through importlib or a re-export -- it tests the
+    text of main.py, not the claim. A subprocess is required regardless:
+    the test suite's OWN process already has a JVM started (test_api.py's
+    eager-mode explain calls), so "no JVM started" cannot be asserted from
+    within this same process no matter how it is checked.
     """
+    import os
+    import subprocess
+    import sys
     from pathlib import Path
 
-    import app.main
-
-    source = Path(app.main.__file__).read_text()
-    assert "opsin_decompose" not in source
+    backend_root = Path(__file__).resolve().parent.parent
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import app.main; import jpype; print(jpype.isJVMStarted())",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd=str(backend_root),
+        env={
+            **os.environ,
+            "PYTHONPATH": str(backend_root),
+            "REDIS_URL": os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
+        },
+    )
+    assert result.stdout.strip() == "False", (
+        "importing app.main started a JVM.\n"
+        f"stdout: {result.stdout!r}\nstderr: {result.stderr[-3000:]!r}"
+    )
 
 
 class _FakeTimedOutResult:
@@ -205,6 +235,28 @@ def test_explain_name_returns_504_on_timeout(redis_client, monkeypatch):
     assert response.status_code == 504
 
 
+def test_translate_blank_list_still_counts_against_the_fast_cap(
+    redis_client, monkeypatch
+):
+    """Round 2 review, finding 4, measured: three requests of an all-blank
+    `smiles` list with the cap at 1 came back 200, 200, 200 with no
+    counter key ever written -- the empty-list short-circuit ran BEFORE
+    check_fast_allowed, making /api/translate an unlimited-rate endpoint
+    for anyone who pads the body with whitespace instead of real SMILES.
+    The 200-with-empty-results contract itself is unchanged.
+    """
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(
+        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 1, raising=False
+    )
+    first = client.post("/api/translate", json={"smiles": ["   ", ""]})
+    second = client.post("/api/translate", json={"smiles": ["  "]})
+    assert first.status_code == 200
+    assert first.json() == {"results": []}
+    assert second.status_code == 429
+
+
 def test_translate_over_http_enforces_the_fast_per_minute_cap(
     redis_client, monkeypatch
 ):
@@ -221,3 +273,53 @@ def test_translate_over_http_enforces_the_fast_per_minute_cap(
     assert client.post("/api/translate", json={"smiles": ["CCO"]}).status_code == 200
     assert client.post("/api/translate", json={"smiles": ["CCC"]}).status_code == 200
     assert client.post("/api/translate", json={"smiles": ["CCCC"]}).status_code == 429
+
+
+def test_explain_over_http_enforces_the_fast_per_minute_cap(
+    redis_client, monkeypatch
+):
+    # Round 2 review, coverage gap: deleting check_fast_allowed from any
+    # one of the three explain/iupac endpoints alone stayed green before.
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(
+        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 1, raising=False
+    )
+    assert client.get("/api/explain", params={"smiles": "CCO"}).status_code == 200
+    assert client.get("/api/explain", params={"smiles": "CCC"}).status_code == 429
+
+
+def test_explain_name_over_http_enforces_the_fast_per_minute_cap(
+    redis_client, monkeypatch
+):
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(
+        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 1, raising=False
+    )
+    assert (
+        client.get("/api/explain-name", params={"name": "ethanol"}).status_code
+        == 200
+    )
+    assert (
+        client.get("/api/explain-name", params={"name": "ethanol"}).status_code
+        == 429
+    )
+
+
+def test_iupac_to_smiles_over_http_enforces_the_fast_per_minute_cap(
+    redis_client, monkeypatch
+):
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(
+        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 1, raising=False
+    )
+    assert (
+        client.get("/api/iupac-to-smiles", params={"name": "ethanol"}).status_code
+        == 200
+    )
+    assert (
+        client.get("/api/iupac-to-smiles", params={"name": "ethanol"}).status_code
+        == 429
+    )

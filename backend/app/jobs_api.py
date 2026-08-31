@@ -20,8 +20,10 @@ from app import redis_store
 from app.core.config import get_settings
 from app.depiction import mol_to_svg_data_uri
 from app.inputs import TooManyMolecules, parse, sniff
+from app.jvm_guard import require_a_live_jvm
 from app.ratelimit import (
     check_and_register_job,
+    check_concurrent_cap_only,
     check_depict_allowed,
     check_fast_allowed,
     check_job_allowed,
@@ -169,7 +171,12 @@ def admit_and_dispatch(
     The ONLY place that creates and dispatches a batch job -- POST
     /api/jobs and POST /api/translate's over-the-fast-limit and
     ratelimit-timeout branches all call this, so there is no path that
-    dispatches without admitting (round 1 review, Critical 2).
+    dispatches without admitting (round 1 review, Critical 2), and no path
+    that admits without the hourly cap either (round 2 review, finding 1:
+    /api/translate's job branch used to call NEITHER check_job_allowed NOR
+    register_job -- measured at 30 jobs of up to 10,000 molecules admitted
+    against a cap of 3/hour that only POST /api/jobs was ever charged
+    against).
 
     Job meta is created BEFORE the atomic admission check, not after: a
     concurrent admission call from the SAME ip self-heals stale members by
@@ -179,23 +186,41 @@ def admit_and_dispatch(
     evicting a job that is still being admitted. If admission is then
     rejected, the now-orphaned meta hash is deleted immediately rather than
     left to expire on its own TTL.
+
+    check_job_allowed runs BEFORE check_and_register_job: it is the one
+    that can still reject after the concurrent-cap dry-run passes (the
+    hourly cap), and rejecting there must happen before the atomic script
+    actually registers the job -- otherwise a request that fails on the
+    hourly cap would still have consumed a concurrent-job slot for a job
+    that is never dispatched.
     """
     settings = get_settings()
     job_id = uuid.uuid4().hex
     redis_store.create_job(job_id, len(molecules), fmt, ip)
     try:
+        check_job_allowed(ip)
         check_and_register_job(ip, job_id)
     except HTTPException:
         redis_store.get_redis().delete(redis_store.job_meta_key(job_id))
         raise
 
-    prepared = prepared_payload(molecules)
-    if len(prepared) <= settings.FAST_PATH_MAX_MOLECULES:
-        translate_job_inline.apply_async(
-            args=[job_id, prepared, best_effort], queue="fast"
-        )
-    else:
-        dispatch_batch(job_id, prepared, best_effort, settings.BATCH_CHUNK_SIZE)
+    try:
+        prepared = prepared_payload(molecules)
+        if len(prepared) <= settings.FAST_PATH_MAX_MOLECULES:
+            translate_job_inline.apply_async(
+                args=[job_id, prepared, best_effort], queue="fast"
+            )
+        else:
+            dispatch_batch(job_id, prepared, best_effort, settings.BATCH_CHUNK_SIZE)
+    except Exception:
+        # A dispatch failure after a successful admission (a broker
+        # hiccup, say) must not leave a registered slot behind forever:
+        # its meta says "queued" -- non-terminal -- so self-healing would
+        # never prune it, and nothing else ever will either (round 2
+        # review, Also-fix).
+        release_job(ip, job_id)
+        redis_store.get_redis().delete(redis_store.job_meta_key(job_id))
+        raise
     return job_id
 
 
@@ -237,9 +262,15 @@ async def create_job(
     # Before reading or parsing anything: a 429'd caller should not have
     # already made the server read up to 50 MB and RDKit-parse up to
     # 10,000 molecules first (round 1 review, Important). This is a cheap,
-    # non-authoritative pre-check -- admit_and_dispatch's
-    # check_and_register_job is what actually enforces the cap.
-    check_job_allowed(ip)
+    # non-authoritative pre-check (concurrent cap only -- see its
+    # docstring for why NOT check_job_allowed) -- admit_and_dispatch's
+    # check_job_allowed + check_and_register_job is what actually enforces
+    # both caps.
+    check_concurrent_cap_only(ip)
+    # This produces the artefact users keep (results.csv), same as any
+    # single-molecule naming endpoint -- it was the one naming path that
+    # never checked this at all (round 2 review, Also-fix).
+    require_a_live_jvm()
 
     data, best_effort = await _read_input(request, file)
     fmt, molecules = _parse_or_400(data, settings.MAX_BATCH_SIZE)
@@ -383,8 +414,36 @@ def job_results_csv(request: Request, job_id: str) -> StreamingResponse:
 
 
 @router.delete("/api/jobs/{job_id}")
-def delete_job(job_id: str) -> dict[str, str]:
+def delete_job(request: Request, job_id: str) -> dict[str, str]:
+    # No ownership check exists (or can, without accounts -- see
+    # ratelimit.py's module docstring): a job id appearing in a shared
+    # results.csv URL lets anyone holding it delete that job. A rate limit
+    # is the one thing available short of accounts (round 2 review,
+    # finding 2).
+    check_fast_allowed(client_ip(request))
     meta = _meta_or_error(job_id)
+    status = meta.get("status")
+    if status not in ("done", "failed"):
+        # Refuse outright, rather than deleting everything but skipping
+        # just the slot release: this job's chunks are still running (or
+        # queued) somewhere and keep consuming OPSIN regardless of this
+        # call -- Celery task ids are not tracked anywhere a delete could
+        # revoke them from -- and deleting the meta hash while leaving the
+        # slot registered does not actually protect the cap either, since
+        # check_and_register_job's self-heal treats a MISSING meta exactly
+        # like a finished one and frees the slot on the very next
+        # admission regardless (round 2 review, finding 2, measured: a
+        # submit-then-delete loop against a cap of 2 admitted 10 jobs in a
+        # row, all already dispatched, this way). Refusing the whole
+        # delete until the job reaches a terminal state is what actually
+        # closes the loop.
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"This job is {status}; wait for it to finish (or fail) "
+                "before deleting it."
+            ),
+        )
     release_job(meta.get("ip", "unknown"), job_id)
 
     # Explicit keys, never a glob built from a path parameter. Job ids are
@@ -410,6 +469,21 @@ def delete_job(job_id: str) -> dict[str, str]:
 # time limit -- so one pathological input would stall every request.
 MAX_DEPICT_SMILES = 4000
 
+# check_depict_allowed's 1,200/minute is a request-COUNT budget; it is not
+# a cost bound, because per-call cost is not uniform. Measured (round 2
+# review, finding 3), all within MAX_DEPICT_SMILES: ethanol draws in
+# 0.2 ms; a ~2,400-heavy-atom fused system draws in 16,724 ms (parsing
+# alone is only 5-80 ms even at that size -- essentially ALL of the cost is
+# 2D coordinate generation); a 4,000-carbon chain and a large fused
+# cyclopropane system each ran past 25 s and had to be killed. At
+# 1,200/minute one IP is otherwise authorised to request roughly 20
+# calls/second of multi-second, GIL-holding work. A few hundred heavy
+# atoms comfortably covers every molecule this UI actually shows (caffeine
+# is 14; the natural products and drug-like structures the demo depicts
+# are well under 100) -- nothing legitimate needs more, so this is checked
+# right after parsing, before the expensive draw call.
+MAX_DEPICT_ATOMS = 300
+
 
 @router.get("/api/depict", response_model=DepictResponse)
 def depict(
@@ -426,13 +500,22 @@ def depict(
     deterministic. check_depict_allowed, not check_fast_allowed: this
     endpoint's own legitimate traffic pattern (one call per visible row) is
     exactly what check_fast_allowed's 60/minute budget would mistake for
-    abuse.
+    abuse. That budget bounds request COUNT, not per-call cost -- see
+    MAX_DEPICT_ATOMS above for the latter.
     """
     check_depict_allowed(client_ip(request))
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return DepictResponse(
             depiction_svg=None, error="Could not parse this SMILES string"
+        )
+    if mol.GetNumAtoms() > MAX_DEPICT_ATOMS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Too many atoms to depict ({mol.GetNumAtoms()} > "
+                f"{MAX_DEPICT_ATOMS})"
+            ),
         )
     if response is not None:
         response.headers["Cache-Control"] = "public, max-age=86400"
