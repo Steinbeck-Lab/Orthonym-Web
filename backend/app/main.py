@@ -112,7 +112,7 @@ def examples() -> ExamplesResponse:
 def translate(request: TranslateRequest) -> TranslateResponse:
     non_blank = [s for s in request.smiles if s.strip()]
     batch = non_blank[:MAX_SMILES_PER_REQUEST]
-    results = translate_many(batch)
+    results = translate_many(batch, best_effort=request.best_effort)
     return TranslateResponse(results=results)
 
 

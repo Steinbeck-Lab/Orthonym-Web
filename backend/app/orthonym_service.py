@@ -145,8 +145,17 @@ def _roundtrip_check(name: str, mol: Chem.Mol) -> tuple[Optional[str], Optional[
     return raw, original_canonical == roundtrip_canonical
 
 
-def translate_one(smiles: str) -> ResultItem:
-    """Translate a single SMILES string into a ResultItem."""
+def translate_one(smiles: str, best_effort: bool = True) -> ResultItem:
+    """Translate a single SMILES string into a ResultItem.
+
+    `best_effort` gates the escalation described in the module docstring.
+    When False the escalated namer is never consulted, so no OPSIN-
+    unverified name (T4 / "best_effort") can ever be produced and a
+    molecule the primary namer abstained on ships as an honest abstain.
+    Note that turning it off also forfeits the T3 fallbacks the escalated
+    pass would have round-trip-VERIFIED -- the escalation is one call, and
+    its two possible good outcomes cannot be separated before it runs.
+    """
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return ResultItem(
@@ -165,7 +174,7 @@ def translate_one(smiles: str) -> ResultItem:
     row = _namer.name_tiered(smiles)
     status, name, tier = classify(row)
 
-    if status == "abstain":
+    if status == "abstain" and best_effort:
         # Primary pass abstained -- escalate. `row` is reassigned so that,
         # if this ALSO abstains, the formula/limit_code populated below
         # come from this (the last-computed) row.
@@ -204,6 +213,6 @@ def translate_one(smiles: str) -> ResultItem:
     )
 
 
-def translate_many(smiles_list: list[str]) -> list[ResultItem]:
+def translate_many(smiles_list: list[str], best_effort: bool = True) -> list[ResultItem]:
     """Translate each SMILES string, preserving input order."""
-    return [translate_one(s) for s in smiles_list]
+    return [translate_one(s, best_effort=best_effort) for s in smiles_list]
