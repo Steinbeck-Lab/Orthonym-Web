@@ -4,7 +4,7 @@ import ExampleChips from '../components/ExampleChips'
 import SamplerGrid from '../components/SamplerGrid'
 import ConfidenceLegend from '../components/ConfidenceLegend'
 import Switch from '../components/Switch'
-import { fetchExamples, translateBatch } from '../lib/api'
+import { fetchExamples, translateBatch, TranslateJobQueuedError } from '../lib/api'
 import { parseSmilesLines } from '../lib/parseSmiles'
 import useReducedMotion from '../lib/useReducedMotion'
 import './Home.css'
@@ -114,6 +114,20 @@ function Home() {
       })
       .catch((err) => {
         setIsSubmitting(false)
+        if (err instanceof TranslateJobQueuedError) {
+          // Not a failure -- real work is running on the server, just too
+          // large or slow for the synchronous fast path. STITCH has no
+          // batch-job polling UI (a separate, larger project), so the
+          // honest thing is to say that plainly rather than render an
+          // empty grid, which used to look identical to zero results.
+          setRows([])
+          setValidationNote(
+            `This batch (${err.moleculeCount} molecules) is running as a background job on ` +
+              'the server instead of returning immediately. This page cannot track a queued ' +
+              "job's progress — try a smaller batch for an immediate result."
+          )
+          return
+        }
         setFetchError(err?.message || 'unknown network error')
         setRows([])
       })

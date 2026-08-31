@@ -1,8 +1,12 @@
 // Thin fetch wrappers around the OpenSTOUT showcase API.
 // Contract:
-//   GET  /api/health           -> { status: string }
+//   GET  /api/health           -> { status: string, opsin: string }
 //   GET  /api/examples         -> { examples: ExampleItem[] }
-//   POST /api/translate        -> { results: ResultItem[] }
+//   POST /api/translate        -> { results: ResultItem[] } OR, when the
+//                                  submission doesn't finish inside the
+//                                  server's fast-path timeout, a job
+//                                  envelope { job_id, molecule_count, status }
+//                                  -- see TranslateJobQueuedError below.
 //   GET  /api/iupac-to-smiles  -> { smiles: string|null, depiction_svg: string|null, error: string|null }
 //   GET  /api/explain          -> { smiles, name, svg, total_atoms, segments: ExplainSegment[], error }
 //   GET  /api/explain-name     -> same shape, decomposing a typed IUPAC name directly
@@ -15,7 +19,10 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' }
  * Hits the backend's own liveness probe. Resolves with the raw parsed body
  * on a 2xx response; rejects (with a message safe to show a visitor) on a
  * non-2xx response or a network-level failure (backend unreachable).
- * @returns {Promise<{status:string}>}
+ * `opsin` reports whether at least one Celery worker has a live JVM -- see
+ * HealthResponse in backend/app/schemas.py; "DEGRADED" is what makes every
+ * naming endpoint 503 rather than serving an unverified tier.
+ * @returns {Promise<{status:string, opsin:string}>}
  */
 export async function checkHealth() {
   const res = await fetch('/api/health')
@@ -38,8 +45,33 @@ export async function fetchExamples() {
 }
 
 /**
+ * Thrown by translateBatch when the backend hands back a job envelope
+ * (`{job_id, molecule_count, status}`, from POST /api/translate) instead of
+ * finished results -- the submission didn't finish inside the server's
+ * fast-path timeout (too many molecules, or a slow one), so the backend
+ * queued it as a background job rather than blocking the request. STITCH's
+ * frontend has no batch-job polling UI (a separate, larger project), so
+ * there is nothing useful this promise can resolve with; throwing lets the
+ * caller tell this apart from "zero results" and say something true
+ * instead of silently rendering an empty grid.
+ */
+export class TranslateJobQueuedError extends Error {
+  constructor(jobId, moleculeCount) {
+    super(
+      `Submission queued as background job ${jobId} (${moleculeCount} molecule` +
+        `${moleculeCount === 1 ? '' : 's'}) instead of returning immediately.`
+    )
+    this.name = 'TranslateJobQueuedError'
+    this.jobId = jobId
+    this.moleculeCount = moleculeCount
+  }
+}
+
+/**
  * @param {string[]} smilesList
  * @returns {Promise<{smiles:string, status:string, name:string|null, tier:string|null, formula:string|null, limit_code:string|null, error:string|null, depiction_svg:string|null, roundtrip_smiles:string|null, roundtrip_match:boolean|null}[]>}
+ * @throws {TranslateJobQueuedError} when the backend queues the submission
+ *   as a background job instead of returning results directly (see above).
  */
 export async function translateBatch(smilesList, { bestEffort = true } = {}) {
   const res = await fetch('/api/translate', {
@@ -54,6 +86,16 @@ export async function translateBatch(smilesList, { bestEffort = true } = {}) {
     throw new Error(`POST /api/translate failed with ${res.status}`)
   }
   const data = await res.json()
+  // A job envelope carries `job_id`; a finished TranslateResponse never
+  // does (see JobEnvelope's own docstring in backend/app/schemas.py: "tell
+  // it apart from a completed response by the presence of job_id"). This
+  // used to fall through to `Array.isArray(data?.results) ? ... : []`,
+  // which made a queued job indistinguishable from a genuine empty result
+  // set -- real work would be running on the server while the UI told the
+  // user nothing at all.
+  if (data?.job_id) {
+    throw new TranslateJobQueuedError(data.job_id, data.molecule_count)
+  }
   return Array.isArray(data?.results) ? data.results : []
 }
 
