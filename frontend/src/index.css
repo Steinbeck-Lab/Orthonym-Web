@@ -1,70 +1,214 @@
 /* ============================================================
-   Orthonym — Needlework Sampler
-   Global tokens, resets, base typography, themed browser chrome.
-   One committed palette: ecru/linen ground, ink-floss neutral text,
-   a single accent thread reserved for the primary action + PIN state.
+   Orthonym — Inverted Bugatti
+   Global tokens, reset, base typography, themed browser chrome.
+
+   The world: Bugatti's marketing system (getdesign.md/bugatti), which
+   ships as pure-black canvas with white type and states outright that it
+   "does not have a light mode". This build inverts it to a white canvas
+   by explicit instruction, and widens it edge-to-edge past Bugatti's
+   1280px cap for the same reason. Everything else is held exactly:
+   monochrome only, weight 400 only, radius 0 on every surface except the
+   button pill, hairline seams instead of shadows, and a rigid trinity of
+   faces that never blur into one another.
+
+   The three real Bugatti faces are licensed to Bugatti and unavailable,
+   so substitutes are self-hosted here: Saira Condensed (display),
+   Public Sans (body), JetBrains Mono (buttons/captions/nav/data).
+
+   NOTE ON THE BODY FACE: the source's body voice is a Garamond SERIF, and
+   this build shipped EB Garamond for it. The serif was then replaced with
+   a sans on explicit instruction ("use sans serif type fonts throughout").
+   Public Sans was chosen over Saira's own normal-width sibling so the body
+   still reads as a different FAMILY from the display face rather than just
+   a different width — the source's trinity is about family contrast, and
+   that much survives the substitution. This is a departure from the source
+   and must not be "fixed" back to a serif.
    ============================================================ */
 
-/* -- self-hosted type: OWN-WORLD commits to "quantized letterforms for the
-   result name only, workhorse grotesk elsewhere" — a system-font fallback
-   never renders either promise, so both faces are sourced and shipped. -- */
-@font-face {
-  font-family: 'Silkscreen';
-  src: url('/fonts/Silkscreen-Regular.ttf') format('truetype');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Silkscreen';
-  src: url('/fonts/Silkscreen-Bold.ttf') format('truetype');
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Inter';
-  src: url('/fonts/Inter-Variable.ttf') format('truetype-variations');
-  font-weight: 100 900;
-  font-style: normal;
-  font-display: swap;
-}
+@import './fonts.css';
 
 :root {
-  /* -- palette -- */
-  --ground: #f2ead8; /* ecru / linen ground */
-  --ground-well: #e9dfc6; /* recessed linen — wells, tracks, hairline fills */
-  --ground-deep: #ddd0ac; /* deeper linen — scrollbar track, strong recess */
-  --ink: #2b2b28; /* ink-floss — primary text */
-  --ink-soft: #55534c; /* secondary text — still >=4.5:1 on ground */
-  --thread: #8b8578; /* neutral thread — decorative lines/dashes only, NOT text */
-  --accent: #b5433e; /* the one accent thread — primary action + confirmed PIN */
-  --accent-deep: #963632; /* accent, pressed/hover depth */
-  --on-accent: #fbf5e8; /* text/labels sitting on the accent fill */
-  --line: rgba(43, 43, 28, 0.24); /* hairline structural borders */
-  --line-soft: rgba(43, 43, 28, 0.14); /* fainter hairlines / grid ticks */
+  /* -- surfaces: Bugatti's black stack, inverted ------------------
+     Bugatti:  canvas #000000 · soft #0d0d0d · card #141414 · elev #1f1f1f
+     Here:     the same four steps walking up from white instead of
+     black, so a "barely-different-from-canvas" surface stays barely
+     different. No surface ever carries a shadow. */
+  --canvas: #ffffff;
+  --surface-soft: #f4f4f4;
+  --surface-card: #ebebeb;
+  --surface-elevated: #e0e0e0;
 
-  /* -- type --
-     Three faces, each earning its place:
-     --font-sans   self-hosted Inter, the workhorse grotesk OWN-WORLD commits
-                   to for chrome/body/labels — not a system-font guess.
-     --font-mono   a real system monospace for DATA (SMILES strings, tier
-                   codes, molecular formulas) — legitimate per craft-floor's
-                   code/data/measurement carve-out, not a "technical" costume.
-     --font-orthonym self-hosted Silkscreen, the one quantized/blocky display
-                   face reserved ONLY for the rendered result name — the
-                   single typographic commitment the direction makes. */
-  --font-sans:
-    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
-    Arial, sans-serif;
-  --font-mono:
-    ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono',
-    monospace;
-  --font-orthonym: 'Silkscreen', var(--font-mono);
+  /* -- hairlines: the only depth device in the system --
+     Bugatti: #262626 / #3a3a3a on black. Inverted, these are the 1px
+     seams that weld every bento cell to its neighbour. */
+  --hairline: #d9d9d9;
+  --hairline-strong: #c5c5c5;
+
+  /* -- ink -------------------------------------------------------
+     Bugatti's single brand color is white on black; inverted, the single
+     brand color is black. There is no accent color in this system, which
+     is exactly why the confidence rules below can carry meaning: nothing
+     else competes for attention.
+
+     Every value below is checked against WCAG 2.2 AA (>=4.5:1) on
+     --canvas. The two-tier muted scale is where naive inversion breaks:
+     Bugatti's #666666 second-tier muted inverts to #999999, which is
+     2.85:1 on white and fails. --muted-soft is therefore darkened to
+     #757575 (4.61:1) and is restricted to text sitting directly on
+     --canvas -- never on a surface, where it would drop below AA. */
+  --ink: #000000; /* 21.00:1 — headlines, primary text, outlines */
+  --body: #333333; /* 12.63:1 — running body copy */
+  --body-strong: #1a1a1a; /* 17.40:1 — lead paragraphs */
+  --muted: #666666; /* 5.74:1 — captions, metadata, dates, labels */
+  --muted-soft: #757575; /* 4.61:1 — fine print. CANVAS ONLY. */
+  --on-primary: #ffffff; /* text on an inked fill */
+
+  /* -- the two justified non-monochrome tokens --
+     --link is Bugatti's one chromatic token (#c3d9f3, a desaturated ice
+     blue). At 1.44:1 on white it is unusable, so it is deepened to the
+     same hue at 7.69:1 rather than dropped -- the system keeps exactly
+     one non-monochrome color, as designed.
+
+     --glow is Orthonym's own named exception, kept from the previous world
+     because it is a function, not decoration: it marks "you are pointing
+     at these atoms right now" on Explain/Learn, independent of whether
+     the name is confirmed. It only ever appears as a pale wash behind
+     content, never as text, a border, or a fill. */
+  --glow: #ffd400;
+  --glow-wash: #fff8d6; /* --glow at 16% over canvas; black on it = 19.65:1 */
+  --glow-wash-strong: #fff3b8; /* --glow at 28% over canvas */
+
+  /* -- the one brand accent: ChemAudit's "Laboratory Crimson" ----------
+     A later instruction adopted ChemAudit's header/footer and asked for its
+     crimson to come in as Orthonym's single accent ("adapt to Bugatti but not
+     too much"). This is a deliberate departure from the source's zero-accent
+     rule, confined to CHROME only: the header logo mark + active route, the
+     primary action button, inline links, the focus ring, and a faint footer
+     glow. It is NEVER used on a confidence tier — confidence stays a
+     monochrome rule beneath the name, which is the product's whole point.
+     #c41e3a is 5.84:1 on --canvas (AA for text and UI, and as a filled
+     button with white text); --accent-deep is the hover/press depth. */
+  --accent: #c41e3a; /* 5.84:1 on white */
+  --accent-deep: #9d1830; /* 8.06:1 — hover/press */
+  --accent-wash: #faedef; /* crimson 8% over white — active pill / focus tint */
+  --accent-line: rgba(196, 30, 58, 0.16); /* faint crimson keyline / glow */
+
+  /* Inline anchors are crimson now (was a desaturated blue), so the one
+     accent stays consistent everywhere it appears. 5.84:1 = AA for body. */
+  --link: #c41e3a;
+
+  /* -- glass: the ChemAudit header floats as a blurred panel over the
+     canvas. This is the one place a shadow and a >0 radius are allowed;
+     the rest of the system stays flat with radius 0. */
+  --glass-bg: color-mix(in srgb, #ffffff 74%, transparent);
+  --glass-bg-scrolled: color-mix(in srgb, #ffffff 86%, transparent);
+  --glass-shadow: 0 8px 32px rgba(26, 24, 21, 0.08), 0 2px 6px rgba(26, 24, 21, 0.04);
+  --r-panel: 16px; /* the header/footer-pill radius — ChemAudit's rounded-2xl, softened */
+
+  /* -- the bento world (TechX reference, dribbble 23855252) ------------
+     A later instruction ("like this") replaced the flat, 0-radius,
+     hairline-seamed body with a soft-grey ground carrying rounded cards
+     separated by modest gaps, in varied sizes — a couple of near-black
+     feature cards for punch. The crimson accent is kept (user's choice).
+     This supersedes the "flat / no shadow / radius 0" body rules; the
+     header/footer glass already fit this language. */
+  --ground: #d5d8dc; /* cool light-grey page floor; shows in the gaps between cards */
+  --card: #ffffff; /* the default white card */
+  --card-soft: #edeff2; /* a quieter grey card, for secondary cells */
+  --card-dark: #1b1c20; /* near-black feature card */
+  --on-dark: #f5f6f8; /* text on a dark card (16.5:1 on --card-dark) */
+  --muted-on-dark: #a9adb4; /* secondary text on a dark card (5.3:1) */
+  --hairline-on-dark: rgba(255, 255, 255, 0.12);
+
+  --r-card: 22px; /* the card radius — matches the reference's generous round */
+  --r-card-sm: 14px; /* inner tiles, small controls */
+  --gap: 14px; /* the bento gap — modest, per "minimum gap, no whitespace" */
+  --card-shadow: 0 1px 2px rgba(17, 18, 20, 0.05), 0 12px 30px -14px rgba(17, 18, 20, 0.14);
+  --card-border: 1px solid rgba(17, 18, 20, 0.05);
+
+  /* -- semantic: Bugatti reserves these for technical callouts and they
+     almost never appear. Both are darkened for AA on white. */
+  --warning: #7a5a07; /* 6.38:1 */
+  --success: #2f6b28; /* 6.45:1 */
+
+  /* -- type: the unbreakable trinity ----------------------------
+     --font-display  Saira Condensed 400. Every headline, the wordmark,
+                     the rendered chemical name. UPPERCASE and wide-
+                     tracked everywhere EXCEPT the chemical name (see
+                     the exception note in App.css).
+     --font-body     Public Sans 400. Running prose only. Sentence case,
+                     no tracking. Never in a button, never a label.
+     --font-mono     JetBrains Mono 400. Buttons, nav, captions, and
+                     genuine machine data (SMILES, formulae, tier codes).
+                     Always uppercase and tracked when it is a label;
+                     left alone when it is data.
+     Bugatti's rule is absolute: display in a button breaks the machined
+     voice, mono in a paragraph breaks the engineered-elegance voice. */
+  --font-display: 'Saira Condensed', 'Helvetica Neue', Arial, sans-serif;
+  --font-body: 'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  /* -- type scale: Bugatti's table, verbatim.
+     body-md/body-sm were briefly set 1px larger to compensate for EB
+     Garamond's small x-height; Public Sans has a large x-height, so the
+     source's nominal 16/14 is correct again and that optical correction
+     is retired. Nothing deviates now. */
+  --t-display-xl: clamp(2.5rem, 5.2vw, 4rem); /* 40 -> 64px */
+  --t-display-lg: clamp(2rem, 3.6vw, 3rem); /* 32 -> 48px */
+  --t-display-md: clamp(1.5rem, 2.4vw, 2rem); /* 24 -> 32px */
+  --t-display-sm: 1.5rem; /* 24px */
+  --t-title-md: 1.25rem; /* 20px */
+  --t-title-sm: 1rem; /* 16px */
+  --t-body-md: 1rem; /* 16px */
+  --t-body-sm: 0.875rem; /* 14px */
+  --t-button: 0.875rem; /* 14px */
+  --t-wordmark: 0.875rem; /* 14px */
+  --t-nav: 0.75rem; /* 12px */
+  --t-caption: 0.6875rem; /* 11px */
+
+  --track-wordmark: 0.375rem; /* 6px — the widest in the system */
+  --track-display-xl: 0.25rem; /* 4px */
+  --track-display-lg: 0.1875rem; /* 3px */
+  --track-display-md: 0.125rem; /* 2px */
+  --track-display-sm: 0.09375rem; /* 1.5px */
+  --track-button: 0.15625rem; /* 2.5px */
+  --track-caption: 0.125rem; /* 2px */
+  --track-nav: 0.125rem; /* 2px */
+
+  /* -- spacing: Bugatti's 4px base, verbatim -- */
+  --s-xxs: 4px;
+  --s-xs: 8px;
+  --s-sm: 12px;
+  --s-md: 16px;
+  --s-lg: 24px;
+  --s-xl: 40px;
+  --s-xxl: 64px;
+  --s-section: 120px;
+
+  /* -- shape: binary by design. Nothing in between; a 4px or 8px radius
+     would read "designed" rather than "engineered". -- */
+  --r-none: 0px;
+  --r-pill: 9999px;
+
+  /* -- width: Bugatti caps content at ~1280px. Widened here by explicit
+     instruction to use the whole wide screen; bands still go fully
+     edge-to-edge, as Bugatti's photo bands do. -- */
+  --shell-max: 1600px;
+  --shell-pad: var(--s-lg);
 
   color-scheme: light;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --shell-pad: var(--s-xl);
+  }
+}
+
+@media (min-width: 1440px) {
+  :root {
+    --shell-pad: var(--s-xxl);
+  }
 }
 
 *,
@@ -74,43 +218,102 @@
 }
 
 html {
-  scrollbar-color: var(--ink-soft) var(--ground-deep);
-  scrollbar-width: thin;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
-  min-height: 100vh;
-  background-color: var(--ground);
-  /* a fine woven-cloth dot grid — the ground itself is aida cloth */
-  background-image: radial-gradient(
-    rgba(43, 43, 40, 0.09) 1px,
-    transparent 1.3px
-  );
-  background-size: 9px 9px;
-  color: var(--ink);
-  font-family: var(--font-sans);
-  font-size: 16px;
+  background: var(--ground);
+  color: var(--body);
+  font-family: var(--font-body);
+  font-size: var(--t-body-md);
   line-height: 1.5;
+  letter-spacing: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
 }
 
+/* -- headings: display face, uppercase, wide-tracked, weight 400.
+   The system has no bold role at all; hierarchy is size, tracking, case
+   and family contrast. -- */
 h1,
 h2,
 h3,
-p,
-ul,
-ol,
-figure {
+h4,
+h5,
+h6 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  color: var(--ink);
+  text-transform: uppercase;
+}
+
+h1 {
+  font-size: var(--t-display-xl);
+  line-height: 1.1;
+  letter-spacing: var(--track-display-xl);
+}
+
+h2 {
+  font-size: var(--t-display-lg);
+  line-height: 1.15;
+  letter-spacing: var(--track-display-lg);
+}
+
+h3 {
+  font-size: var(--t-display-md);
+  line-height: 1.2;
+  letter-spacing: var(--track-display-md);
+}
+
+h4 {
+  font-size: var(--t-display-sm);
+  line-height: 1.3;
+  letter-spacing: var(--track-display-sm);
+}
+
+h5,
+h6 {
+  font-size: var(--t-title-md);
+  line-height: 1.3;
+  letter-spacing: 0.0625rem;
+}
+
+p {
   margin: 0;
 }
 
 ul,
 ol {
+  margin: 0;
   padding: 0;
   list-style: none;
+}
+
+a {
+  color: var(--link);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+a:hover {
+  text-decoration-thickness: 2px;
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  font-weight: 400;
+}
+
+img,
+svg {
+  max-width: 100%;
 }
 
 button {
@@ -118,57 +321,61 @@ button {
   color: inherit;
 }
 
-textarea,
-input {
-  font: inherit;
-}
-
-code {
-  font-family: var(--font-mono);
-}
-
-/* -- themed selection -- */
+/* -- browser surfaces: the parts we did not draw still belong to the
+   system. Defaults here would be the loudest off-brand color on an
+   otherwise monochrome page. -- */
 ::selection {
-  background: var(--accent);
-  color: var(--on-accent);
+  background: var(--ink);
+  color: var(--on-primary);
 }
 
-/* -- themed scrollbar (webkit) -- */
+:root {
+  accent-color: var(--accent);
+  caret-color: var(--ink);
+  scrollbar-color: var(--hairline-strong) var(--canvas);
+  scrollbar-width: thin;
+}
+
 ::-webkit-scrollbar {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--ground-deep);
+  background: var(--canvas);
+  border-left: 1px solid var(--hairline);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--ink-soft);
-  border-radius: 8px;
-  border: 3px solid var(--ground-deep);
+  background: var(--hairline-strong);
+  border: none;
+  border-radius: var(--r-none);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--ink);
+  background: var(--muted);
 }
 
-/* -- themed, always-visible keyboard focus --
-   A dashed ring on the ecru ground reads as a basting thread marking the
-   active element — it belongs to this world instead of a bare UA outline. */
+/* One focus ring for the whole surface: the crimson accent, offset. Crimson
+   is 5.84:1 on canvas, well above the 3:1 a focus indicator needs. */
 :focus-visible {
-  outline: 3px dashed var(--ink);
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
-  border-radius: 2px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
-  }
+/* Numerals in data columns must line up. */
+code {
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

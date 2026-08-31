@@ -1,725 +1,735 @@
 /* ============================================================
-   Orthonym — Needlework Sampler
-   Home page ("Translate"): the SMILES-to-IUPAC batch translator —
-   header, input panel, disclaimer, examples, and the sampler-grid
-   state language. Extracted from the app-wide App.css so this page
-   owns its styles independently.
+   Orthonym — Home (Translate) + the shared result mosaic
+
+   The workbench is one bento mosaic, not a page of cards: the input cell
+   and every result cell sit in the same grid, welded by 1px hairline
+   seams over a hairline ground, every corner at 0px. Structure→IUPAC
+   reuses the same SamplerGrid/Tile components and therefore the same
+   cells.
+
+   The confidence vocabulary is the product's whole point, so it is
+   carried entirely by rule STYLE beneath the name — double (PIN), dashed
+   (fallback), dotted (best-effort), a blank ruled slot (abstain), two
+   struck lines (error) — plus a plain-text label. Never color. In a
+   monochrome system that is not a compromise; it is the only signal
+   available, which is exactly why it reads.
    ============================================================ */
 
-/* -------------------- header -------------------- */
+/* -------------------- hero -------------------- */
+/* Compact two-up: the display title holds the left column, the lede sits
+   beside it. Deliberately short vertical padding — the old hero left a tall
+   empty band above the workbench, which read as wasted space. */
 
-.site-header {
-  padding-top: 3rem;
-  padding-bottom: 1.75rem;
-  border-bottom: 1px dashed var(--line);
-}
-
-.site-header__title {
-  font-size: clamp(2.1rem, 5vw, 2.9rem);
-  font-weight: 800;
-  letter-spacing: 0.01em;
-  color: var(--ink);
-}
-
-.site-header__tagline {
-  margin-top: 0.65rem;
-  max-width: 62ch;
-  color: var(--ink-soft);
-  font-size: 1.05rem;
-  line-height: 1.55;
-}
-
-.site-header__tagline strong {
-  color: var(--ink);
-  font-weight: 700;
-}
-
-/* -------------------- layout -------------------- */
-
-.layout {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2.25rem;
-  padding-top: 2rem;
-  padding-bottom: 1rem;
-}
-
-/* -------------------- input panel -------------------- */
-
-.input-panel form {
-  display: flex;
-  flex-direction: column;
-  gap: 1.35rem;
-}
-
-.input-panel__grid {
+.home-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-  gap: 1.5rem;
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-md);
+  width: min(100% - 2 * var(--shell-pad), var(--shell-max));
+  margin-inline: auto;
+  padding: clamp(var(--s-lg), 3vw, var(--s-xl));
+  background: var(--card);
+  border-radius: var(--r-card);
+  box-shadow: var(--card-shadow);
+  border: var(--card-border);
 }
 
-@media (max-width: 780px) {
-  .input-panel__grid {
-    grid-template-columns: 1fr;
+.home-hero__title {
+  max-width: 20ch;
+  text-wrap: balance;
+  font-size: clamp(2.25rem, 4.2vw, 4.25rem);
+  line-height: 1.05;
+}
+
+.home-hero__lede {
+  max-width: 60ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-md);
+  line-height: 1.55;
+  color: var(--body-strong);
+}
+
+@media (min-width: 1000px) {
+  .home-hero {
+    grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
+    align-items: center;
+    gap: var(--s-xl);
   }
 }
 
-.input-panel__field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  min-width: 0;
-}
+/* -------------------- the mosaic -------------------- */
 
-.input-panel__label {
-  font-weight: 700;
-  font-size: 0.95rem;
-  color: var(--ink);
-}
-
-.input-panel__label-note {
-  font-weight: 500;
-  color: var(--ink-soft);
-}
-
-.input-panel__textarea {
+.workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap);
   width: 100%;
-  min-height: 8.5rem;
-  padding: 0.85rem 1rem;
-  background: var(--ground);
-  border: 2px solid var(--ink);
-  border-radius: 3px;
+  max-width: var(--shell-max);
+  margin-inline: auto;
+  padding-inline: var(--shell-pad);
+}
+
+.workbench__alert {
+  grid-column: 1 / -1;
+  padding: var(--s-lg) var(--s-xl);
+  background: var(--card);
+  border-radius: var(--r-card);
+  box-shadow: var(--card-shadow);
+  border: var(--card-border);
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
   color: var(--ink);
-  font-family: var(--font-sans);
-  font-size: 1rem;
-  line-height: 1.55;
-  resize: vertical;
 }
 
-.input-panel__textarea::placeholder {
-  color: var(--ink-soft);
-  opacity: 0.8;
+.workbench__alert code {
+  padding: 0 0.25em;
+  background: var(--surface-card);
+  color: var(--ink);
 }
 
-.input-panel__actions {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.translate-button {
-  appearance: none;
-  border: 2px solid var(--accent);
-  background: var(--accent);
-  color: var(--on-accent);
-  font-weight: 700;
-  font-size: 1rem;
-  padding: 0.7rem 1.7rem;
-  border-radius: 3px;
-  cursor: pointer;
-  letter-spacing: 0.02em;
-  transition:
-    background-color 0.15s ease,
-    border-color 0.15s ease,
-    transform 0.1s ease;
-}
-
-.translate-button:hover:not(:disabled) {
-  background: var(--accent-deep);
-  border-color: var(--accent-deep);
-}
-
-.translate-button:active:not(:disabled) {
-  transform: translateY(1px);
-}
-
-.translate-button:disabled {
-  opacity: 0.6;
-  cursor: progress;
-}
-
-.input-panel__note {
-  color: var(--ink-soft);
-  font-size: 0.88rem;
-}
-
-/* -------------------- disclaimer -------------------- */
-/* Load-bearing copy, not fine print: sits directly beside the input,
-   framed like a marked-up sampler note rather than a muted footnote. */
-
-.disclaimer {
-  background: var(--ground-well);
-  border: 2px dashed var(--ink);
-  border-radius: 2px;
-  padding: 1rem 1.15rem;
+.workbench__input {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: var(--s-lg);
+  min-width: 0;
+  padding: var(--s-xl);
+  background: var(--card);
+  border-radius: var(--r-card);
+  box-shadow: var(--card-shadow);
+  border: var(--card-border);
 }
 
-.disclaimer__lead {
-  font-weight: 700;
-  color: var(--ink);
-  font-size: 0.95rem;
-  line-height: 1.45;
+.workbench__input form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-lg);
 }
 
-.disclaimer__body {
-  color: var(--ink-soft);
-  font-size: 0.88rem;
-  line-height: 1.55;
-}
-
-.disclaimer__body strong {
-  color: var(--ink);
-  font-weight: 700;
-}
-
-/* -------------------- example chips -------------------- */
-
-.examples {
+.workbench__actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.55rem 0.75rem;
+  gap: var(--s-md) var(--s-lg);
 }
 
-.examples__label {
-  font-weight: 700;
-  font-size: 0.88rem;
-  color: var(--ink-soft);
-}
-
-.examples__list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-}
-
-.chip {
-  appearance: none;
-  background: var(--ground);
-  border: 1.5px solid var(--ink);
+.workbench__note {
+  flex: 1 1 22ch;
+  min-width: 22ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
   color: var(--ink);
-  padding: 0.45rem 0.9rem;
-  border-radius: 999px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background-color 0.15s ease,
-    color 0.15s ease;
 }
 
-.chip:hover:not(:disabled) {
-  background: var(--ink);
-  color: var(--ground);
+.workbench__about {
+  padding-top: var(--s-lg);
+  border-top: 1px solid var(--hairline);
 }
 
-.chip:disabled {
-  opacity: 0.5;
-  cursor: progress;
-}
-
-.examples__error,
-.examples__loading {
-  font-size: 0.85rem;
-  color: var(--ink-soft);
-}
-
-/* -------------------- fetch error banner -------------------- */
-
-.fetch-error {
-  background: var(--ground-well);
-  border: 1.5px dashed var(--ink);
-  padding: 0.85rem 1.1rem;
-  border-radius: 3px;
-  color: var(--ink);
-  font-size: 0.9rem;
-}
-
-.fetch-error code {
-  background: var(--ground-deep);
-  padding: 0.1rem 0.35rem;
-  border-radius: 2px;
-}
-
-/* -------------------- results / sampler grid -------------------- */
-
-.results {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  padding-bottom: 3rem;
-}
+/* -------------------- the result register -------------------- */
+/* SamplerGrid's own root is a cell of the workbench AND a grid of result
+   cells — one nesting level, sharing the identical seam, ground and
+   radius so it reads as a continuation of the same mosaic rather than a
+   panel of cards inside a panel. */
 
 .sampler {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
-  gap: 1.25rem;
-}
-
-@media (max-width: 640px) {
-  .sampler {
-    grid-template-columns: 1fr;
-  }
+  /* Equal-width cards that fill the row by count — no wider feature cell,
+     and no stranded empty cell for odd counts at typical widths. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: var(--gap);
+  min-width: 0;
+  background: transparent;
 }
 
 .sampler--empty {
-  border: 2px dashed var(--line);
-  border-radius: 4px;
-  padding: 2.75rem 1.5rem;
   display: flex;
   align-items: center;
-  justify-content: center;
-  text-align: center;
-  min-height: 8rem;
+  padding: var(--s-xxl) var(--shell-pad);
+  background: var(--canvas);
 }
 
 .sampler__empty-note {
-  color: var(--ink-soft);
-  max-width: 42ch;
-  line-height: 1.55;
+  max-width: 48ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-md);
+  line-height: 1.5;
+  color: var(--muted);
 }
 
-/* -------------------- tile: shared shell -------------------- */
+/* Every result card is the same width — a uniform 2-up grid, no wider
+   feature cell. */
+@media (min-width: 1000px) {
+  .workbench {
+    grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+  }
 
-.tile {
-  border: 2px solid var(--ink);
-  border-radius: 3px;
-  background: var(--ground);
-  padding: 0.85rem 1rem 1rem;
+  .workbench__alert {
+    grid-column: 1 / -1;
+  }
+
+}
+
+/* Two columns, not three: the common batch is a few molecules, and a
+   3-column grid stranded an empty cell whenever the count did not fill the
+   last row. Two columns also gives each result a larger, more legible
+   depiction. The first result spans both as the feature cell. */
+
+/* -------------------- confidence legend (empty results state) -------------------- */
+/* Fills what used to be a blank right-hand cell with the one thing a new
+   visitor needs: what the five marks under a name mean. Each swatch is the
+   exact rule a real result carries, so the legend and the results share a
+   vocabulary. Monochrome only — confidence is never the crimson accent. */
+
+.home-legend {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  min-height: 9.5rem;
+  justify-content: center;
+  gap: var(--s-lg);
+  min-width: 0;
+  padding: var(--s-xl);
+  background: var(--card);
+  border-radius: var(--r-card);
+  box-shadow: var(--card-shadow);
+  border: var(--card-border);
+}
+
+.home-legend__title {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  line-height: 1.4;
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.home-legend__list {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--hairline);
+}
+
+.home-legend__row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s-lg);
+  padding-block: var(--s-md);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.home-legend__mark {
   position: relative;
+  display: block;
+  width: 56px;
+  height: 20px;
+}
+
+.home-legend__mark::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 9px;
+}
+
+.home-legend__mark--pin::before {
+  top: 8px;
+  height: 3px;
+  border-top: 3px double var(--ink);
+}
+
+.home-legend__mark--fallback::before {
+  border-top: 1px dashed var(--ink);
+}
+
+.home-legend__mark--best-effort::before {
+  border-top: 1px dotted var(--muted);
+}
+
+.home-legend__mark--abstain::before {
+  border-top: 1px solid var(--hairline-strong);
+}
+
+.home-legend__mark--error::before {
+  top: 7px;
+  border-top: 1px solid var(--ink);
+}
+
+.home-legend__mark--error::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 12px;
+  border-top: 1px solid var(--ink);
+}
+
+.home-legend__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.home-legend__name {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  line-height: 1.4;
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.home-legend__code {
+  color: var(--muted-soft);
+}
+
+.home-legend__body {
+  max-width: 66ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.home-legend__foot {
+  max-width: 66ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* -------------------- one result cell -------------------- */
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-md);
+  min-width: 0;
+  padding: var(--s-lg);
+  background: var(--card);
+  border-radius: var(--r-card);
+  box-shadow: var(--card-shadow);
+  border: var(--card-border);
+}
+
+/* A queued entry is a quieter grey card — visibly not yet worked. */
+.tile--pending {
+  background: var(--card-soft);
+  box-shadow: none;
+}
+
+/* The single authored moment in the system: the entry currently being
+   resolved carries a 1px ink ring drawn inside its own cell, so the seam
+   grid never shifts, and its name settles out of blur (below). No
+   shadow, no pulse, no glow. */
+.tile--active {
+  outline: 1px solid var(--ink);
+  outline-offset: -1px;
 }
 
 .tile__head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: var(--s-md);
+  padding-bottom: var(--s-xs);
+  border-bottom: 1px solid var(--hairline);
 }
 
 .tile__smiles {
   font-family: var(--font-mono);
-  font-size: 0.78rem;
-  color: var(--ink-soft);
-  background: var(--ground-well);
-  padding: 0.15rem 0.4rem;
-  border-radius: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 72%;
+  font-size: var(--t-caption);
+  line-height: 1.5;
+  letter-spacing: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .tile__tier {
+  flex: none;
   font-family: var(--font-mono);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: var(--ink);
-  border: 1px solid var(--ink);
-  border-radius: 2px;
-  padding: 0.1rem 0.35rem;
-  flex-shrink: 0;
+  font-size: var(--t-caption);
+  line-height: 1.5;
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 .tile__patch {
-  flex: 1;
   display: flex;
-  align-items: center;
-  min-height: 3.4rem;
+  flex-direction: column;
 }
 
-/* A named result (pin/fallback/best-effort) pairs its name-block with a
-   small supporting depiction thumbnail, side by side. The name-block
-   always takes the lion's share of the row -- the depiction is a modest
-   proof element, never the focal point (that's still the sewn name). */
 .tile__result-row {
-  width: 100%;
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
+  flex-direction: column;
+  gap: var(--s-md);
 }
+
+/* -------------------- the name and its rule -------------------- */
 
 .tile__name-block {
-  flex: 1;
-  min-width: 0;
+  max-width: 100%;
+  padding-bottom: var(--s-sm);
 }
 
+/* One constant rule length for every tier in every cell: the mark means
+   the same thing everywhere, so it must MEASURE the same everywhere. A
+   rule that hugs its name reads as a 105px stub under "benzene" and an
+   855px bar under "ethanol" — same tier, two different signals. */
+.tile__name-block--pin,
+.tile__name-block--fallback,
+.tile__name-block--best-effort {
+  width: min(100%, 30ch);
+}
+
+/* Verified Preferred IUPAC Name — the double rule, the strongest mark in
+   the system. */
+.tile__name-block--pin {
+  border-bottom: 3px double var(--ink);
+}
+
+/* Verified fallback: real, round-trip confirmed, but not a PIN. */
+.tile__name-block--fallback {
+  border-bottom: 1px dashed var(--ink);
+}
+
+/* Best effort: a real name that OPSIN could not confirm. The rule goes
+   dotted AND drops to --muted, so it reads as weaker at a glance without
+   ever becoming a colour code. */
+.tile__name-block--best-effort {
+  border-bottom: 1px dotted var(--muted);
+}
+
+/* Honest abstain: the slot is present and ruled, and deliberately empty.
+   Nothing is dressed up as an answer. */
+.tile__name-block--abstain {
+  display: flex;
+  align-items: center;
+  width: min(100%, 30ch);
+  min-height: 44px;
+}
+
+.tile__weave {
+  display: block;
+  width: 100%;
+  height: 1px;
+  background: var(--hairline-strong);
+}
+
+/* Parse error: the entry is struck through, twice, close together. */
+.tile__name-block--error {
+  position: relative;
+  width: min(100%, 30ch);
+  min-height: 44px;
+}
+
+.tile__snip {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: var(--ink);
+}
+
+.tile__snip--a {
+  top: 20px;
+}
+
+.tile__snip--b {
+  top: 25px;
+}
+
+/* The rendered chemical name: the display face, the largest thing in the
+   cell, with Bugatti's tracking.
+
+   The one place the system's uppercase rule is refused. IUPAC case is
+   semantic — N,N-dimethyl is not n,n-dimethyl, and (R) is not (r) — so
+   uppercasing the name would print a different, wrong name. The name
+   therefore keeps its true case, and earns its display weight from size,
+   tracking and family instead. */
+.citation-name {
+  display: block;
+  font-family: var(--font-display);
+  /* Non-feature cells are narrower, so the name sits a step smaller here to
+     keep long IUPAC names to a couple of lines. The feature (first) cell
+     overrides this larger below. */
+  font-size: clamp(1.25rem, 1.6vw, 1.625rem);
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: var(--track-display-sm);
+  text-transform: none;
+  color: var(--ink);
+  /* normal, not break-word: breaks land only at spaces, hyphens and the
+     <wbr> points ThreadedName inserts after brackets — never mid-token. */
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.citation-name__visual {
+  display: inline;
+}
+
+.citation-name__cell {
+  display: inline;
+  white-space: pre-wrap;
+}
+
+/* The name settles into focus from an already-legible default: it is
+   never invisible, only unresolved. Exponential ease-out, once. */
+.citation-name--animate .citation-name__cell {
+  animation: name-settle 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--cell-index) * 14ms);
+}
+
+@keyframes name-settle {
+  from {
+    opacity: 0.35;
+    filter: blur(2px);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .citation-name--animate .citation-name__cell {
+    animation: none;
+  }
+}
+
+/* -------------------- pending marks -------------------- */
+
+.tile__pending-cloth {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xs);
+  padding-block: var(--s-sm);
+}
+
+.tile__pending-dash {
+  display: block;
+  height: 1px;
+  background: var(--hairline-strong);
+  animation: dash-wait 1.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.tile__pending-dash:nth-child(1) {
+  width: 70%;
+}
+
+.tile__pending-dash:nth-child(2) {
+  width: 45%;
+  animation-delay: 160ms;
+}
+
+.tile__pending-dash:nth-child(3) {
+  width: 58%;
+  animation-delay: 320ms;
+}
+
+@keyframes dash-wait {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile__pending-dash {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+/* -------------------- depiction -------------------- */
+/* Treated as the system's photography: edge to edge inside its cell, 0px
+   corners, a single hairline frame, never a rounded thumbnail. */
+
 .tile__depiction {
-  flex-shrink: 0;
-  width: 3.6rem;
-  height: 2.7rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--ground);
-  border: 1.5px solid var(--ink);
-  border-radius: 2px;
-  overflow: hidden;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  padding: var(--s-sm);
+  background: var(--card-soft);
+  border: var(--card-border);
+  border-radius: var(--r-card-sm);
 }
 
 .tile__depiction img {
-  display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
 }
 
+/* -------------------- foot -------------------- */
+
 .tile__foot {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--s-xs);
   margin-top: auto;
+  padding-top: var(--s-sm);
+  border-top: 1px solid var(--hairline);
+}
+
+/* An empty slot has nothing to align to, so its label sits under its mark
+   rather than at the floor of a row sized by a neighbour's depiction. */
+.tile--abstain .tile__foot,
+.tile--error .tile__foot {
+  margin-top: 0;
 }
 
 .tile__state-label {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--ink-soft);
-  line-height: 1.4;
-}
-
-.tile__formula {
   font-family: var(--font-mono);
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-size: var(--t-caption);
+  line-height: 1.4;
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
   color: var(--ink);
 }
 
-/* -------------------- tile: round-trip proof line -------------------- */
-/* Visible, honest proof of the determinism claim: the name is re-parsed
-   independently (OPSIN) and compared back to the input SMILES. Data/
-   measurement text, same font-mono carve-out as the SMILES tag and
-   formula above -- never Silkscreen, that face is reserved for the name
-   itself. A mismatch is never hidden or softened: it gets the same
-   neutral ink tone as a match, distinguished only by its plain-text
-   wording and weight, never by a second accent/status color. */
 .tile__roundtrip {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
-  line-height: 1.5;
-  color: var(--ink-soft);
+  font-size: var(--t-caption);
+  line-height: 1.6;
+  letter-spacing: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .tile__roundtrip-smiles {
+  font-size: inherit;
+  color: var(--body);
+}
+
+/* The round-trip verdict is never colour-coded — it is the glyph and the
+   word that carry it, exactly as the confidence rule does above. */
+.tile__roundtrip-result {
   color: var(--ink);
-  font-weight: 700;
-  /* the SMILES string itself has no natural word-break points, but the
-     surrounding label/result text does -- only break mid-token here so
-     "does not match" never fractures across a line */
-  word-break: break-all;
+  white-space: nowrap;
 }
 
 .tile__roundtrip-result--mismatch {
   color: var(--ink);
-  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-style: wavy;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.25em;
 }
 
-/* -------------------- tile: pending (queued for the chase) -------------------- */
-
-.tile--pending {
-  border-style: dotted;
-  border-color: var(--line);
+.tile__formula {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  line-height: 1.4;
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
-.tile__pending-cloth {
+/* -------------------- accuracy band -------------------- */
+/* One coherent grid with the rest of the page: the three figures sit in a
+   3-equal-column row, so their seams fall at 1/3 and 2/3 of the viewport —
+   exactly under the workbench input|results seam (1/3) and the results
+   internal seam (2/3). The intro is a full-width row above with no vertical
+   seam of its own, so no stray dividing line wanders off the shared grid.
+   The three figures are Orthonym v1.0.0's published round-trip numbers. */
+
+.home-accuracy {
   display: flex;
-  gap: 0.4rem;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  gap: var(--gap);
   width: 100%;
+  max-width: var(--shell-max);
+  margin-inline: auto;
+  padding-inline: var(--shell-pad);
 }
 
-.tile__pending-dash {
-  width: 22px;
-  height: 3px;
-  background: var(--line);
-  border-radius: 2px;
-  animation: pending-shimmer 1.4s ease-in-out infinite;
-}
-
-.tile__pending-dash:nth-child(2) {
-  animation-delay: 0.15s;
-}
-
-.tile__pending-dash:nth-child(3) {
-  animation-delay: 0.3s;
-}
-
-@keyframes pending-shimmer {
-  0%,
-  100% {
-    opacity: 0.3;
-  }
-  50% {
-    opacity: 0.85;
-  }
-}
-
-/* -------------------- tile: active (the batch chase highlight) -------------------- */
-
-.tile--active {
-  border-color: var(--accent);
-  border-style: solid;
-  animation: chase-pulse 900ms ease-in-out infinite;
-}
-
-@keyframes chase-pulse {
-  0%,
-  100% {
-    box-shadow: 0 2px 4px rgba(43, 43, 28, 0.15);
-  }
-  50% {
-    box-shadow: 0 6px 14px 2px rgba(181, 67, 62, 0.35);
-  }
-}
-
-/* -------------------- tile: PIN — a fully solid, completed block -------------------- */
-
-.tile--pin {
-  border-color: var(--accent);
-}
-
-.tile__name-block--pin {
-  background-color: var(--accent);
-  /* the world's own device, landed where it matters most: a completed
-     PIN is genuinely built from small crossed knots, not a flat fill */
-  background-image:
-    repeating-linear-gradient(
-      45deg,
-      var(--accent-deep) 0,
-      var(--accent-deep) 2px,
-      transparent 2px,
-      transparent 10px
-    ),
-    repeating-linear-gradient(
-      -45deg,
-      var(--accent-deep) 0,
-      var(--accent-deep) 2px,
-      transparent 2px,
-      transparent 10px
-    );
-  border: 2px solid var(--accent-deep);
-  border-radius: 2px;
-  padding: 0.65rem 0.75rem;
+.home-accuracy__intro {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: var(--s-sm);
+  padding: var(--s-xl);
+  background: var(--card);
+  border-radius: var(--r-card);
+  box-shadow: var(--card-shadow);
+  border: var(--card-border);
 }
 
-.tile__name-block--pin .threaded-name {
-  color: var(--on-accent);
+.home-accuracy__title {
+  font-size: var(--t-display-md);
+  line-height: 1.2;
+  letter-spacing: var(--track-display-md);
 }
 
-/* -------------------- tile: fallback — dashed basting, provisional -------------------- */
-
-.tile--fallback {
-  border-style: dashed;
+.home-accuracy__note {
+  max-width: 68ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.55;
+  color: var(--body-strong);
 }
 
-.tile__name-block--fallback {
-  background: transparent;
-  border: 3px dashed var(--ink);
-  border-radius: 2px;
-  padding: 0.55rem 0.7rem;
-  display: flex;
-  align-items: center;
-}
-
-.tile__name-block--fallback .threaded-name {
-  color: var(--ink);
-}
-
-.tile__name-block--fallback .threaded-name__cell {
-  border-bottom: 1px dashed var(--thread);
-}
-
-/* -------------------- tile: best-effort — a loose, untied tack -------------------- */
-/* A real name shipped, but this one could NOT be round-trip verified --
-   meaningfully less confident than fallback (which IS verified). Dotted is
-   already spent by the pending/queued state (DESIGN.md reserves it for
-   "not yet worked"), so best-effort can't reuse it without colliding with
-   that grammar. Instead: a thin SOLID hairline in the neutral --thread
-   color (never --ink, never --accent, never dashed/dotted) -- thinner and
-   lighter than fallback's 3px dashed ink, with no crossed-thread texture
-   (reserved for pin). Recessed into the ground-well fill so it visually
-   sinks below fallback's flush-transparent block: the faintest of the
-   three named states, distinct by weight+color+fill, not by a style
-   already owned elsewhere. */
-
-.tile--best-effort {
-  border-color: var(--thread);
-  border-style: solid;
-  border-width: 1px;
-}
-
-.tile__name-block--best-effort {
-  background: var(--ground-well);
-  border: 1.5px solid var(--thread);
-  border-radius: 2px;
-  padding: 0.55rem 0.7rem;
-  display: flex;
-  align-items: center;
-}
-
-.tile__name-block--best-effort .threaded-name {
-  color: var(--ink);
-}
-
-/* -------------------- tile: abstain — bare, unworked cloth -------------------- */
-
-.tile--abstain {
-  border-color: var(--line);
-  border-style: solid;
-  border-width: 1px;
-}
-
-.tile__name-block--abstain {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-}
-
-.tile__weave {
-  width: 100%;
-  min-height: 2.6rem;
-  border-radius: 2px;
-  background-image:
-    repeating-linear-gradient(
-      45deg,
-      var(--line-soft) 0,
-      var(--line-soft) 1px,
-      transparent 1px,
-      transparent 8px
-    ),
-    repeating-linear-gradient(
-      -45deg,
-      var(--line-soft) 0,
-      var(--line-soft) 1px,
-      transparent 1px,
-      transparent 8px
-    );
-}
-
-/* -------------------- tile: error — snipped thread, a torn corner -------------------- */
-
-.tile--error {
-  border-color: var(--ink);
-}
-
-.tile__name-block--error {
-  width: 100%;
-  height: 2.6rem;
-  position: relative;
-}
-
-.tile__snip {
-  position: absolute;
-  top: 50%;
-  width: 42%;
-  height: 3px;
-  background: var(--ink);
-  border-radius: 2px;
-}
-
-.tile__snip--a {
-  left: 6%;
-  transform: rotate(-16deg);
-}
-
-.tile__snip--b {
-  right: 6%;
-  transform: rotate(16deg);
-}
-
-/* -------------------- the sewn name itself -------------------- */
-/* The one place in the whole surface that uses a quantized/monospace
-   letterform — every other label, button, and line of copy stays in the
-   workhorse grotesk. */
-
-.threaded-name {
-  font-family: var(--font-orthonym);
-  font-weight: 400;
-  font-size: 1.05rem;
-  letter-spacing: 0.02em;
+.home-accuracy__source {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
   line-height: 1.6;
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
-.threaded-name__visual {
-  display: inline-flex;
-  flex-wrap: wrap;
-  row-gap: 2px;
-  word-break: break-word;
+/* The three figures: a 3-equal-column bento row. Seams at 1/3 and 2/3
+   line up with every other seam on the page. */
+.home-accuracy__stats {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap);
+  background: transparent;
 }
 
-/* Visually hidden but readable by assistive tech — carries the real
-   accessible name for the sewn name, since a bare <span> (role
-   "generic") cannot take a name from aria-label per the ARIA spec. */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+.home-accuracy__cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--s-xs);
+  min-width: 0;
+  padding: var(--s-xl);
+  background: var(--card);
+  border-radius: var(--r-card);
+  box-shadow: var(--card-shadow);
+  border: var(--card-border);
 }
 
-.threaded-name__cell {
-  display: inline-block;
-  min-width: 0.66em;
-  text-align: center;
+/* The headline figure gets the reference's dark feature-card treatment. */
+.home-accuracy__cell:first-child {
+  background: var(--card-dark);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.threaded-name--animate .threaded-name__cell {
-  opacity: 0;
-  transform: translateY(-4px) scale(0.55) rotate(-6deg);
-  animation: orthonym-cell-in 240ms ease-out forwards;
-  animation-delay: calc(var(--cell-index) * 34ms);
+.home-accuracy__cell:first-child .spec__value {
+  color: var(--on-dark);
 }
 
-@keyframes orthonym-cell-in {
-  0% {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.55) rotate(-6deg);
-  }
-  60% {
-    opacity: 1;
-    transform: translateY(1px) scale(1.12) rotate(2deg);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1) rotate(0deg);
-  }
+.home-accuracy__cell:first-child .spec__label {
+  color: var(--muted-on-dark);
 }
 
-/* -------------------- reduced motion -------------------- */
-
-@media (prefers-reduced-motion: reduce) {
-  .tile--active {
-    animation: none;
-    box-shadow: 0 0 0 3px rgba(181, 67, 62, 0.3);
-  }
-
-  .tile__pending-dash {
-    animation: none;
-    opacity: 0.6;
-  }
-
-  .threaded-name--animate .threaded-name__cell {
-    animation: none;
-    opacity: 1;
-    transform: none;
+@media (min-width: 700px) {
+  .home-accuracy__stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

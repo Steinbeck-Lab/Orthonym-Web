@@ -9,10 +9,10 @@ const STATE_LABEL = {
 }
 
 // Live status page for Orthonym's backend. Mirrors the same three-phase
-// grammar the Home sampler tiles already use (queued/resolving/settled),
-// so "healthy" reads as a completed accent-fill thread (the PIN device)
-// and "unreachable" reads as a snipped thread (the error device) — no new
-// semantic color is introduced for "healthy".
+// grammar the Home register entries already use (queued/resolving/settled),
+// so "healthy" reads as a stamped, double-ruled citation (the PIN device)
+// and "unreachable" reads as a struck, redacted line (the error device) —
+// no new semantic color is introduced for "healthy".
 function HealthCheck() {
   const [phase, setPhase] = useState('checking')
   const [raw, setRaw] = useState(null)
@@ -44,13 +44,15 @@ function HealthCheck() {
   const rawDisplay = isChecking ? '—' : phase === 'healthy' ? JSON.stringify(raw) : error
 
   return (
-    <section className="health-page page-shell" aria-label="Health Check">
-      <h1 className="health-page__title">Health Check</h1>
-      <p className="health-page__lead">
-        Orthonym&rsquo;s naming engine runs behind a small backend API. This checks whether that
-        backend is reachable right now &mdash; the same <code>GET /api/health</code> call the
-        app itself relies on.
-      </p>
+    <>
+      <div className="page-head page-shell">
+        <h1 className="page-head__title">Is the engine up?</h1>
+        <p className="page-head__lede">
+          Orthonym&rsquo;s naming engine runs behind a small backend API. This checks whether that
+          backend is reachable right now &mdash; the same <code>GET /api/health</code> call the
+          app itself relies on.
+        </p>
+      </div>
 
       <div
         className={`health-patch health-patch--${phase}`}
@@ -58,11 +60,12 @@ function HealthCheck() {
         aria-live="polite"
         aria-busy={isChecking}
       >
+        <div className="health-patch__state">
         <div className="health-patch__top">
           <span className="health-patch__label">{STATE_LABEL[phase]}</span>
           <button
             type="button"
-            className="health-patch__button"
+            className="btn"
             onClick={runCheck}
             disabled={isChecking}
           >
@@ -86,6 +89,7 @@ function HealthCheck() {
             </div>
           )}
         </div>
+        </div>
 
         <dl className="health-patch__details">
           <div className="health-patch__row">
@@ -106,7 +110,7 @@ function HealthCheck() {
           </div>
         </dl>
       </div>
-    </section>
+    </>
   )
 }
 
