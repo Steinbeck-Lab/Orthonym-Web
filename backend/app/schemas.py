@@ -174,10 +174,32 @@ class JobResultsResponse(BaseModel):
     rows: list[BatchRow]
 
 
+class DepictResponse(BaseModel):
+    depiction_svg: Optional[str] = None
+    error: Optional[str] = None
+
+
+class ParsePreviewRow(BaseModel):
+    """One molecule as PARSED, before anything has been named.
+
+    Deliberately NOT a BatchRow: it has no `status`. A preview row has no
+    tier, and borrowing the tier vocabulary would put "the engine honestly
+    refused" (abstain) and "naming was never attempted" into the same value
+    of the one field PRODUCT.md forbids conflating -- and the frontend would
+    draw the abstain rule under a molecule nothing has judged yet.
+    """
+
+    index: int
+    input: str
+    input_id: Optional[str] = None
+    smiles: Optional[str] = None
+    error: Optional[str] = None
+
+
 class ParsePreviewResponse(BaseModel):
     format: str
     molecule_count: int
     # First 5 of each, so a 10,000-molecule paste does not return 10,000 rows
     # before the user has agreed to run anything.
-    sample: list[BatchRow]
+    sample: list[ParsePreviewRow]
     errors: list[str]
