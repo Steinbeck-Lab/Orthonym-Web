@@ -164,6 +164,10 @@ def _depict_minute_key(ip: str) -> str:
     return f"stitch:ip:{ip}:depict:{int(time.time()) // _MINUTE}"
 
 
+def _poll_minute_key(ip: str) -> str:
+    return f"stitch:ip:{ip}:poll:{int(time.time()) // _MINUTE}"
+
+
 def _reject_if_concurrent_cap_exceeded(ip: str) -> None:
     settings = get_settings()
     active = _admit_job_script()(
@@ -185,34 +189,26 @@ def _reject_if_concurrent_cap_exceeded(ip: str) -> None:
         )
 
 
-def check_concurrent_cap_only(ip: str) -> None:
-    """A cheap, early, non-authoritative pre-check: reject an obviously-
-    over-cap caller before the server reads or parses their submission at
-    all (round 1 review, Important -- a 429'd caller had already made the
-    server read up to 50 MB and RDKit-parse up to 10,000 molecules).
-
-    Concurrent cap only, and deliberately does NOT touch the hourly
-    counter -- check_job_allowed (below) is where that is counted, exactly
-    once per admission, from app.jobs_api.admit_and_dispatch. Calling
-    check_job_allowed here TOO, as an earlier version of this pre-check
-    did, would charge the hourly cap twice for every POST /api/jobs
-    submission while /api/translate's job branch (which never called this
-    pre-check at all) charged it zero times -- which is exactly the round
-    2 review's finding 1.
-    """
-    _reject_if_concurrent_cap_exceeded(ip)
-
-
 def check_job_allowed(ip: str) -> None:
     """The admission gate: concurrent cap (a cheap self-healing dry-run)
-    AND the hourly cap, together. Called exactly once per admission, from
-    app.jobs_api.admit_and_dispatch -- both POST /api/jobs and
-    POST /api/translate's job-dispatch branches go through
-    admit_and_dispatch, so this now applies uniformly to both (round 2
-    review, finding 1: only POST /api/jobs used to call this, so
-    RATE_LIMIT_JOBS_PER_HOUR did not exist at all on the envelope path --
-    measured at 30 jobs of up to 10,000 molecules each in 30 requests,
-    where POST /api/jobs would have 429'd after 3).
+    AND the hourly cap, together.
+
+    Called EARLY by both POST /api/jobs and POST /api/translate's
+    job-dispatch branches, BEFORE either one does its own expensive
+    parsing (RDKit-parsing up to 10,000 molecules, or canonicalizing them
+    for translate) -- not from inside app.jobs_api.admit_and_dispatch,
+    which runs strictly after that parse. Round 3 review, finding 1,
+    measured: with the check living in admit_and_dispatch (round 2's
+    fix for a DIFFERENT gap -- the hourly cap not existing on
+    /api/translate at all), a caller over either cap still paid the full
+    46 s RDKit parse before being told no. Moving the check earlier is
+    the conservative direction if a caller races past it before their
+    parse finishes: check_and_register_job (the atomic, TOCTOU-safe
+    registration step, still called from admit_and_dispatch) is what
+    catches that, and the accepted cost of the gap between the two checks
+    is an hourly counter that can over-charge by at most a few
+    concurrent racers, never under-charge (see check_and_register_job's
+    docstring, and the round 3 review's explicit "deferred, do not fix").
 
     Not itself the TOCTOU-safe registration step -- check_and_register_job
     is. The hourly counter does not need the same Lua treatment: a bare
@@ -310,6 +306,31 @@ def check_depict_allowed(ip: str) -> None:
                 f"Limit of {settings.RATE_LIMIT_DEPICT_PER_MINUTE} "
                 f"depictions per minute reached. Resets in "
                 f"{client.ttl(key)} seconds."
+            ),
+        )
+
+
+def check_poll_allowed(ip: str) -> None:
+    """GET /api/jobs/{id} and GET /api/jobs/{id}/results are polled
+    repeatedly BY DESIGN -- a progress bar checking every 1-2 s is already
+    30-60 requests/minute for a single job. check_fast_allowed's budget
+    (60/minute, sized for a single OPSIN lookup) would throttle ordinary
+    polling, so this is the same mechanism against a separate, larger
+    budget instead (round 3 review, finding 4 -- these two endpoints had
+    no limiter of any kind before this).
+    """
+    settings = get_settings()
+    client = get_redis()
+    key = _poll_minute_key(ip)
+    count = client.incr(key)
+    if count == 1:
+        client.expire(key, _MINUTE)
+    if count > settings.RATE_LIMIT_POLL_PER_MINUTE:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Limit of {settings.RATE_LIMIT_POLL_PER_MINUTE} polls per "
+                f"minute reached. Resets in {client.ttl(key)} seconds."
             ),
         )
 

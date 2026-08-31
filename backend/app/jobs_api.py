@@ -19,14 +19,14 @@ from rdkit import Chem
 from app import redis_store
 from app.core.config import get_settings
 from app.depiction import mol_to_svg_data_uri
-from app.inputs import TooManyMolecules, parse, sniff
+from app.inputs import TooManyMolecules, parse, parse_preview_sample, sniff
 from app.jvm_guard import require_a_live_jvm
 from app.ratelimit import (
     check_and_register_job,
-    check_concurrent_cap_only,
     check_depict_allowed,
     check_fast_allowed,
     check_job_allowed,
+    check_poll_allowed,
     client_ip,
     release_job,
 )
@@ -187,18 +187,20 @@ def admit_and_dispatch(
     rejected, the now-orphaned meta hash is deleted immediately rather than
     left to expire on its own TTL.
 
-    check_job_allowed runs BEFORE check_and_register_job: it is the one
-    that can still reject after the concurrent-cap dry-run passes (the
-    hourly cap), and rejecting there must happen before the atomic script
-    actually registers the job -- otherwise a request that fails on the
-    hourly cap would still have consumed a concurrent-job slot for a job
-    that is never dispatched.
+    The caller MUST already have called check_job_allowed(ip) BEFORE doing
+    any expensive parsing to build `molecules` (round 3 review, finding 1):
+    doing that check in HERE instead would put it after the exact
+    expensive work every caller does to produce `molecules` in the first
+    place, which is what let a 46-second RDKit parse run to completion
+    before a 429 in the previous round. This function only does the
+    ATOMIC, TOCTOU-safe concurrent-cap registration
+    (check_and_register_job) -- the hourly cap and the cheap concurrent
+    pre-check both already happened, earlier, in the caller.
     """
     settings = get_settings()
     job_id = uuid.uuid4().hex
     redis_store.create_job(job_id, len(molecules), fmt, ip)
     try:
-        check_job_allowed(ip)
         check_and_register_job(ip, job_id)
     except HTTPException:
         redis_store.get_redis().delete(redis_store.job_meta_key(job_id))
@@ -228,12 +230,30 @@ def admit_and_dispatch(
 async def parse_preview(
     request: Request, file: UploadFile | None = File(default=None)
 ) -> ParsePreviewResponse:
-    # Cheapest thing here to abuse: no admission, no parsing cost gate at
-    # all before this. Same per-minute cap as the other single-shot reads.
+    """Round 3 review, finding 1 (the priority): this used to RDKit-parse
+    the WHOLE upload just to show 5 rows and a count. Measured: a 7.07 MB
+    body of 10,000 large molecules cost 45.9 s of GIL-held RDKit here, with
+    no job quota consumed at all (this endpoint never creates a job) --
+    ~2,750 s of that per minute per IP at the default rate cap. It needs
+    exactly PREVIEW_SAMPLE records parsed plus a total count, and the count
+    does not need RDKit at all: app.inputs.count_molecules is a STRUCTURAL
+    count (line count for a SMILES list or CSV, `$$$$` occurrences for an
+    SDF), so `molecule_count` stays honest without paying for a full parse.
+    """
     check_fast_allowed(client_ip(request))
-    settings = get_settings()
     data, _ = await _read_input(request, file)
-    fmt, molecules = _parse_or_400(data, settings.MAX_BATCH_SIZE)
+    fmt = sniff(data)
+    try:
+        sample_molecules, total = parse_preview_sample(data, fmt, PREVIEW_SAMPLE)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400, detail=f"Could not read this {fmt.value}: {exc}"
+        ) from exc
+    if not sample_molecules and total == 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No molecules found in this {fmt.value} input",
+        )
     sample = [
         ParsePreviewRow(
             index=m.index,
@@ -242,12 +262,16 @@ async def parse_preview(
             smiles=m.smiles,
             error=m.error,
         )
-        for m in molecules[:PREVIEW_SAMPLE]
+        for m in sample_molecules
     ]
-    errors = [m.error for m in molecules if m.error][:PREVIEW_SAMPLE]
+    # Only the sample is ever parsed now, so an error further into the file
+    # than PREVIEW_SAMPLE records is no longer visible here -- previewing
+    # is genuinely "the first few, plus a count," not a full validation
+    # pass. /api/jobs still does the full parse and reports every error.
+    errors = [m.error for m in sample_molecules if m.error]
     return ParsePreviewResponse(
         format=fmt.value,
-        molecule_count=len(molecules),
+        molecule_count=total,
         sample=sample,
         errors=errors,
     )
@@ -261,12 +285,14 @@ async def create_job(
     ip = client_ip(request)
     # Before reading or parsing anything: a 429'd caller should not have
     # already made the server read up to 50 MB and RDKit-parse up to
-    # 10,000 molecules first (round 1 review, Important). This is a cheap,
-    # non-authoritative pre-check (concurrent cap only -- see its
-    # docstring for why NOT check_job_allowed) -- admit_and_dispatch's
-    # check_job_allowed + check_and_register_job is what actually enforces
-    # both caps.
-    check_concurrent_cap_only(ip)
+    # 10,000 molecules first (round 1 review, Important; round 3 review,
+    # finding 1: an earlier version of this called a concurrent-cap-only
+    # pre-check here and left the hourly cap to admit_and_dispatch, AFTER
+    # the parse below -- measured at 46 s of RDKit work before a 429).
+    # check_job_allowed is the full, authoritative concurrent+hourly
+    # admission gate; admit_and_dispatch only does the atomic
+    # TOCTOU-safe registration now, since this already ran.
+    check_job_allowed(ip)
     # This produces the artefact users keep (results.csv), same as any
     # single-molecule naming endpoint -- it was the one naming path that
     # never checked this at all (round 2 review, Also-fix).
@@ -312,7 +338,11 @@ def _require_complete_meta(job_id: str) -> dict[str, str]:
 
 
 @router.get("/api/jobs/{job_id}", response_model=JobStatusResponse)
-def job_status(job_id: str) -> JobStatusResponse:
+def job_status(request: Request, job_id: str) -> JobStatusResponse:
+    # Polling is the intended usage pattern (round 3 review, finding 4):
+    # its own, larger budget, not check_fast_allowed's -- see
+    # check_poll_allowed's docstring.
+    check_poll_allowed(client_ip(request))
     meta = _require_complete_meta(job_id)
     response = JobStatusResponse(
         job_id=job_id,
@@ -332,10 +362,12 @@ def job_status(job_id: str) -> JobStatusResponse:
 
 @router.get("/api/jobs/{job_id}/results", response_model=JobResultsResponse)
 def job_results(
+    request: Request,
     job_id: str,
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=1000),
 ) -> JobResultsResponse:
+    check_poll_allowed(client_ip(request))
     meta = _require_complete_meta(job_id)
     rows = redis_store.read_rows(job_id, offset, limit)
     return JobResultsResponse(
@@ -510,9 +542,14 @@ def depict(
             depiction_svg=None, error="Could not parse this SMILES string"
         )
     if mol.GetNumAtoms() > MAX_DEPICT_ATOMS:
-        raise HTTPException(
-            status_code=400,
-            detail=(
+        # 200-with-error, not a 400 (round 3 review, finding 5): a per-row
+        # caller in a results table had to handle two different shapes for
+        # "cannot draw this" depending on WHY. One shape lets a row show
+        # the reason inline the same way an unparseable SMILES already
+        # does, instead of branching on status code first.
+        return DepictResponse(
+            depiction_svg=None,
+            error=(
                 f"Too many atoms to depict ({mol.GetNumAtoms()} > "
                 f"{MAX_DEPICT_ATOMS})"
             ),
