@@ -53,9 +53,19 @@ class ParsedMolecule:
 
 
 class TooManyMolecules(Exception):
-    def __init__(self, limit: int) -> None:
+    """Raised by the per-format parsers once they hit `max_molecules`.
+
+    Carries `partial` -- the rows already built before the limit was hit --
+    so a caller previewing a large upload (parse_preview_sample, below) can
+    use "the first N I got before this fired" instead of losing them. A
+    caller that means to REJECT the whole input outright (app.jobs_api's
+    _parse_or_400) just ignores `partial` and 413s, same as before.
+    """
+
+    def __init__(self, limit: int, partial: list["ParsedMolecule"] | None = None) -> None:
         super().__init__(f"Input exceeds the {limit}-molecule limit")
         self.limit = limit
+        self.partial = partial if partial is not None else []
 
 
 def _decode(data: bytes) -> str:
@@ -106,7 +116,7 @@ def _parse_sdf(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
     supplier.SetData(_decode(data), sanitize=True)
     for index in range(len(supplier)):
         if index >= max_molecules:
-            raise TooManyMolecules(max_molecules)
+            raise TooManyMolecules(max_molecules, partial=rows)
         mol = supplier[index]
         if mol is None:
             rows.append(
@@ -125,7 +135,7 @@ def _parse_sdf(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
 
 def _parse_molfile(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
     if max_molecules < 1:
-        raise TooManyMolecules(max_molecules)
+        raise TooManyMolecules(max_molecules, partial=[])
     text = _decode(data)
     mol = Chem.MolFromMolBlock(text)
     if mol is None:
@@ -148,9 +158,37 @@ def _split_smiles_line(line: str) -> tuple[str, str | None]:
     return parts[0], parts[1].strip() or None
 
 
+# Bounds the cost of a SINGLE record, not the batch as a whole (MAX_BATCH_
+# SIZE already bounds molecule COUNT; this is the "total-length ceiling"
+# from round 3 review, finding 1's third bullet). One absurdly long SMILES
+# string is cheap to reject on length alone, before ever calling into
+# RDKit -- the measured attack, though, was many MODERATELY sized
+# molecules (10,000 x 298 atoms), not one enormous one, and a per-record
+# cap does not bound that cumulative cost: parsing 10,000 legitimate
+# ~300-atom molecules still costs whatever it costs. That is accepted
+# here, not solved -- the parse still runs synchronously in the web
+# process before a job can be created at all, and moving it into a worker
+# task is a bigger change than this round's scope. What DOES bound it now:
+# check_job_allowed runs before this, so a caller is only ever charged
+# their hourly/concurrent quota's worth of these parses, not an unlimited
+# number per minute the way check_fast_allowed alone would allow.
+MAX_MOLECULE_SMILES_LENGTH = 2000
+
+
 def _canonical_or_error(
     index: int, raw_input: str, smiles: str, input_id: str | None
 ) -> ParsedMolecule:
+    if len(smiles) > MAX_MOLECULE_SMILES_LENGTH:
+        return ParsedMolecule(
+            index=index,
+            raw_input=raw_input,
+            input_id=input_id,
+            smiles=None,
+            error=(
+                "SMILES string exceeds "
+                f"{MAX_MOLECULE_SMILES_LENGTH} characters"
+            ),
+        )
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return ParsedMolecule(
@@ -176,7 +214,7 @@ def _parse_smiles_list(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
         if not stripped:
             continue
         if len(rows) >= max_molecules:
-            raise TooManyMolecules(max_molecules)
+            raise TooManyMolecules(max_molecules, partial=rows)
         smiles, input_id = _split_smiles_line(stripped)
         rows.append(_canonical_or_error(len(rows), stripped, smiles, input_id))
     return rows
@@ -201,7 +239,7 @@ def _parse_csv(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
         if not smiles:
             continue
         if len(rows) >= max_molecules:
-            raise TooManyMolecules(max_molecules)
+            raise TooManyMolecules(max_molecules, partial=rows)
         input_id = (record.get(id_col) or "").strip() if id_col else ""
         rows.append(
             _canonical_or_error(len(rows), smiles, smiles, input_id or None)
@@ -225,3 +263,56 @@ def parse(
     column). Individual bad records become error rows instead.
     """
     return _PARSERS[fmt](data, max_molecules)
+
+
+def _count_smiles_lines(data: bytes) -> int:
+    return sum(1 for line in _decode(data).splitlines() if line.strip())
+
+
+def _count_csv_rows(data: bytes) -> int:
+    reader = csv.DictReader(io.StringIO(_decode(data)))
+    if not reader.fieldnames:
+        return 0
+    lowered = {name.strip().lower(): name for name in reader.fieldnames}
+    if "smiles" not in lowered:
+        return 0
+    smiles_col = lowered["smiles"]
+    return sum(1 for record in reader if (record.get(smiles_col) or "").strip())
+
+
+_COUNTERS = {
+    InputFormat.SDF: lambda data: _decode(data).count("$$$$"),
+    InputFormat.MOLFILE: lambda data: 1,
+    InputFormat.CSV: _count_csv_rows,
+    InputFormat.SMILES_LIST: _count_smiles_lines,
+}
+
+
+def count_molecules(data: bytes, fmt: InputFormat) -> int:
+    """A STRUCTURAL count -- line count, `$$$$` occurrences, or CSV row
+    count -- never RDKit. Used to report `molecule_count` without paying
+    for a full parse (see parse_preview_sample, and round 3 review, finding
+    1: RDKit-parsing all 10,000 records of a crafted upload just to preview
+    5 of them held the GIL for 46 s with no rate limit or job quota
+    consumed at all). Not bounded by any max_molecules cap -- it is meant
+    to answer "how many molecules are actually in this file," which is a
+    question worth answering honestly even for a file too large to submit
+    as a job.
+    """
+    return _COUNTERS[fmt](data)
+
+
+def parse_preview_sample(
+    data: bytes, fmt: InputFormat, sample_size: int
+) -> tuple[list[ParsedMolecule], int]:
+    """The first `sample_size` records, RDKit-parsed (for a real preview:
+    canonical SMILES, per-record errors), plus a cheap structural total
+    that never touches RDKit. Never raises TooManyMolecules -- a
+    `sample_size`-only parse hitting that limit just means "there were
+    more than the sample," which TooManyMolecules.partial already carries.
+    """
+    try:
+        sample = parse(data, fmt, sample_size)
+    except TooManyMolecules as exc:
+        sample = exc.partial[:sample_size]
+    return sample, count_molecules(data, fmt)

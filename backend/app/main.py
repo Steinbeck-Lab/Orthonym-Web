@@ -23,7 +23,7 @@ from .inputs import parse as parse_molecules
 from .jobs_api import admit_and_dispatch
 from .jobs_api import router as jobs_router
 from .jvm_guard import require_a_live_jvm
-from .ratelimit import check_fast_allowed, client_ip
+from .ratelimit import check_fast_allowed, check_job_allowed, client_ip
 from .schemas import (
     ExamplesResponse,
     ExplainResponse,
@@ -210,6 +210,12 @@ def translate(request: Request, body: TranslateRequest):
     # envelope and let the caller poll. Nothing is silently truncated any
     # more -- the old MAX_SMILES_PER_REQUEST dropped molecule 51 in silence.
     if len(non_blank) > settings.FAST_PATH_MAX_MOLECULES:
+        # Before _canonicalize, not after (round 3 review, finding 1,
+        # measured: a caller over cap paid the full RDKit canonicalization
+        # cost -- 48.1 s in the reviewer's measurement -- regardless of
+        # whether they were admitted or 429'd, since the job-cap check
+        # used to live inside admit_and_dispatch, strictly after this).
+        check_job_allowed(ip)
         molecules = _canonicalize(non_blank, settings.MAX_BATCH_SIZE)
         job_id = admit_and_dispatch(
             ip, molecules, "smiles_list", body.best_effort
@@ -228,6 +234,9 @@ def translate(request: Request, body: TranslateRequest):
         # if it ever finishes, is simply discarded once nothing is waiting
         # on it any more; this is the accepted "abandoned tasks are not
         # revoked" tradeoff, applied here rather than left unhandled.
+        # Same ordering fix as the branch above: check the job cap before
+        # paying for canonicalization, not after.
+        check_job_allowed(ip)
         molecules = _canonicalize(non_blank, settings.MAX_BATCH_SIZE)
         job_id = admit_and_dispatch(
             ip, molecules, "smiles_list", body.best_effort

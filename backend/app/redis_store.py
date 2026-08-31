@@ -51,8 +51,14 @@ def job_chunk_key(job_id: str, index: int) -> str:
     return f"{_KEY_PREFIX}:job:{job_id}:chunk:{index}"
 
 
-def _worker_key(pid: int) -> str:
-    return f"{_KEY_PREFIX}:worker:{pid}:opsin"
+# ONE hash, field = worker pid, value = "ok:<unix ts>" / "failed:<unix ts>".
+# Round 3 review, finding 3: a distinct "orthonym:worker:{pid}:opsin" key per
+# worker made any_worker_has_opsin() scan_iter() the WHOLE keyspace on
+# every naming request and on GET /api/health (which has no rate limiter
+# at all) -- measured at 0.372 s over 200,000 keys, an ordinary size once
+# a 7-day name cache and 10,000-row jobs are in the mix. A single hash
+# makes both record and read O(number of workers), never O(keyspace size).
+_WORKERS_HASH_KEY = f"{_KEY_PREFIX}:workers:opsin"
 
 
 def ip_jobs_key(ip: str) -> str:
@@ -225,19 +231,48 @@ def iter_all_rows(job_id: str, page: int = 500) -> Iterator[dict]:
 
 
 def record_worker_opsin_status(pid: int, ok: bool) -> None:
-    get_redis().set(
-        _worker_key(pid), "ok" if ok else "failed", ex=_WORKER_STATUS_TTL
-    )
+    """Record this worker's status in the shared hash, carrying its own
+    timestamp (there is no per-FIELD TTL in Redis, only per-KEY), and prune
+    any field that has aged out past _WORKER_STATUS_TTL -- including this
+    one, if `ok` somehow arrives already stale, and every OTHER worker's
+    entry too. Pruning here, on every write, is what keeps the hash from
+    growing across worker restarts over a long-running deployment: as long
+    as at least one worker writes periodically, the hash never holds more
+    than the currently-live pids.
+    """
+    client = get_redis()
+    key = _WORKERS_HASH_KEY
+    now = int(time.time())
+    client.hset(key, str(pid), f"{'ok' if ok else 'failed'}:{now}")
+
+    stale = []
+    for field, value in client.hgetall(key).items():
+        status_ts = value.rsplit(":", 1)
+        if len(status_ts) != 2 or not status_ts[1].isdigit():
+            stale.append(field)  # malformed -- cannot be trusted either way
+            continue
+        if now - int(status_ts[1]) > _WORKER_STATUS_TTL:
+            stale.append(field)
+    if stale:
+        client.hdel(key, *stale)
 
 
 def any_worker_has_opsin() -> bool:
-    """True when at least one live worker reported a working JVM.
+    """True when at least one live worker reported a working JVM within
+    the last _WORKER_STATUS_TTL seconds.
 
     False is what makes /api/health degrade and naming endpoints return 503
-    rather than serving names whose tier nobody verified.
+    rather than serving names whose tier nobody verified. A single HGETALL
+    -- never a keyspace scan -- so this stays cheap regardless of how many
+    OTHER keys (name cache entries, job rows) Redis is holding.
     """
     client = get_redis()
-    for key in client.scan_iter(match=f"{_KEY_PREFIX}:worker:*:opsin"):
-        if client.get(key) == "ok":
+    now = int(time.time())
+    for value in client.hgetall(_WORKERS_HASH_KEY).values():
+        status_ts = value.rsplit(":", 1)
+        if len(status_ts) != 2 or not status_ts[1].isdigit():
+            continue
+        status, ts = status_ts
+        if status == "ok" and now - int(ts) <= _WORKER_STATUS_TTL:
             return True
     return False

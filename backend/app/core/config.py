@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     # pure RDKit with no JVM/worker/queue behind it, so the cost per call is
     # far lower anyway.
     RATE_LIMIT_DEPICT_PER_MINUTE: int = 1200
+    # GET /api/jobs/{id} and .../results are polled repeatedly by design --
+    # a progress bar checking every 1-2 s is 30-60 req/min for ONE job, and
+    # a caller can have several open at once. check_fast_allowed's budget
+    # (60/minute, sized for a single OPSIN lookup) would throttle ordinary
+    # polling, so this is its own, larger budget (round 3 review, finding
+    # 4) -- still bounded, unlike having no limiter at all.
+    RATE_LIMIT_POLL_PER_MINUTE: int = 300
 
     CHUNK_SOFT_TIME_LIMIT: int = 600
     CHUNK_HARD_TIME_LIMIT: int = 900
