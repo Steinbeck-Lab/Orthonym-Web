@@ -84,6 +84,17 @@ def test_parse_sdf_bad_record_becomes_an_error_row_not_an_abort():
     assert rows[2].smiles == "c1ccccc1"
 
 
+def test_parse_sdf_stops_at_the_limit_rather_than_reading_the_whole_file():
+    # 3 records, limit 2: the raise must happen at index 2 (2 >= 2), not
+    # after the third record is read. A check loosened to `>`, or moved
+    # after the supplier[index] access, would let all 3 records through
+    # instead of raising.
+    data = _sdf(ETHANOL_MOLBLOCK, BENZENE_MOLBLOCK, ETHANOL_MOLBLOCK)
+    with pytest.raises(TooManyMolecules) as excinfo:
+        parse(data, InputFormat.SDF, 2)
+    assert excinfo.value.limit == 2
+
+
 def test_parse_single_molfile():
     rows = parse(ETHANOL_MOLBLOCK.encode(), InputFormat.MOLFILE, 100)
     assert len(rows) == 1
