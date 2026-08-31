@@ -55,6 +55,24 @@ def _worker_key(pid: int) -> str:
     return f"{_KEY_PREFIX}:worker:{pid}:opsin"
 
 
+def ip_jobs_key(ip: str) -> str:
+    """The per-IP concurrent-job set. Owned here, not app.ratelimit, so
+    Celery worker code (app.tasks) can release a slot via remove_ip_job
+    below without importing app.ratelimit -- which imports fastapi for its
+    HTTPException-raising checks, a dependency worker code should not need.
+    """
+    return f"{_KEY_PREFIX}:ip:{ip}:jobs"
+
+
+def remove_ip_job(ip: str, job_id: str) -> None:
+    """Bare srem primitive: drop `job_id` from the per-IP concurrent-job
+    set. Called both from app.ratelimit.release_job (the HTTP-facing name)
+    and directly from app.tasks (_close_job, mark_job_failed), which must
+    not import fastapi just to free a slot.
+    """
+    get_redis().srem(ip_jobs_key(ip), job_id)
+
+
 def create_job(job_id: str, total: int, fmt: str, client_ip: str) -> None:
     settings = get_settings()
     client = get_redis()
