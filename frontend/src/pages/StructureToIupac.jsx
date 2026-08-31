@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import SamplerGrid from '../components/SamplerGrid'
-import { translateBatch } from '../lib/api'
+import { translateBatch, TranslateJobQueuedError } from '../lib/api'
 import useReducedMotion from '../lib/useReducedMotion'
 import { useKetcher } from '../lib/useKetcher'
 import './StructureToIupac.css'
@@ -100,6 +100,21 @@ function StructureToIupac() {
       })
       .catch((err) => {
         setIsSubmitting(false)
+        if (err instanceof TranslateJobQueuedError) {
+          // Not a failure -- real work is running on the server, just too
+          // slow for the synchronous fast path (a single structure rarely
+          // hits the molecule-count limit, but a slow one can still time
+          // out). Orthonym has no batch-job polling UI (a separate, larger
+          // project), so say that plainly rather than render an empty
+          // grid, which used to look identical to zero results.
+          setRows([])
+          setNote(
+            'This structure is running as a background job on the server instead of ' +
+              "returning immediately. This page cannot track a queued job's progress " +
+              '— try again in a moment.'
+          )
+          return
+        }
         setFetchError(err?.message || 'unknown network error')
         setRows([])
       })
