@@ -57,5 +57,60 @@ def test_translate_rejects_an_empty_list(redis_client):
 
 def test_health_reports_worker_opsin_status(redis_client):
     body = client.get("/api/health").json()
-    assert "status" in body
-    assert "opsin" in body
+    assert body["status"] == "OK"
+    assert body["opsin"] == "available"
+
+
+def test_health_degrades_without_a_live_jvm(redis_client, no_worker_opsin):
+    body = client.get("/api/health").json()
+    assert body["status"] == "DEGRADED"
+    assert body["opsin"] == "no worker has a live JVM"
+
+
+def test_naming_endpoints_503_without_a_live_jvm(redis_client, no_worker_opsin):
+    """Nothing in the original 218 asserted the fail-closed rule at all --
+    hardwiring any_worker_has_opsin() to True (or deleting
+    _require_a_live_jvm from an endpoint) still left every test green.
+    """
+    assert (
+        client.post("/api/translate", json={"smiles": ["CCO"]}).status_code
+        == 503
+    )
+    assert (
+        client.get(
+            "/api/iupac-to-smiles", params={"name": "ethanol"}
+        ).status_code
+        == 503
+    )
+    assert (
+        client.get("/api/explain", params={"smiles": "CCO"}).status_code
+        == 503
+    )
+    assert (
+        client.get(
+            "/api/explain-name", params={"name": "ethanol"}
+        ).status_code
+        == 503
+    )
+
+
+def test_main_does_not_import_opsin_decompose():
+    """The web process must never start a JVM -- that is this whole task's
+    headline claim. opsin_decompose.self_check() (called via the old
+    startup hook) reaches opsin_available() -> _ensure_jvm() ->
+    jpype.startJVM(), so every uvicorn worker would boot its own 512 MB
+    JVM. OPSIN now lives only in Celery workers (celery_app._start_child_jvm
+    calls self_check() in each forked child).
+
+    A source grep, not an in-process assertion: the test suite itself
+    starts a JVM (test_api.py's explain endpoints, run eagerly in-process),
+    so "no JVM started" cannot be asserted from within this same process --
+    it would already be false by the time this test runs, for reasons that
+    have nothing to do with main.py.
+    """
+    from pathlib import Path
+
+    import app.main
+
+    source = Path(app.main.__file__).read_text()
+    assert "opsin_decompose" not in source
