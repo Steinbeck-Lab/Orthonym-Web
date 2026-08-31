@@ -14,8 +14,27 @@ assert the tier is real.
 """
 
 import multiprocessing as mp
+import os
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
+
+BACKEND_ROOT = Path(__file__).resolve().parent.parent
+
+# Probing in a subprocess, not in-process: see the docstring of
+# test_parent_import_does_not_start_a_jvm. os._exit(0) skips interpreter
+# shutdown, because a started JVM refuses to let the process exit and would
+# turn a clean assertion failure into a timeout.
+_JVM_PROBE = (
+    "import sys, os; "
+    "import app.orthonym_service; "
+    "import jpype; "
+    "sys.stdout.write('JVM_STARTED=%s' % jpype.isJVMStarted()); "
+    "sys.stdout.flush(); "
+    "os._exit(0)"
+)
 
 # The regression molecule from README.md. A fused polycyclic: Orthonym can
 # name it, but the name does not round-trip, so a working SELF-01 gate must
@@ -40,15 +59,35 @@ def _name_in_child(queue) -> None:
 
 
 def test_parent_import_does_not_start_a_jvm():
-    # Importing the service builds both namers. If that alone started a JVM,
-    # every forked child would inherit a dead one and refuse to use it.
-    import app.orthonym_service  # noqa: F401
-    import jpype
+    """Importing the service must not start a JVM. Probed in a FRESH process.
 
-    assert not jpype.isJVMStarted(), (
-        "Importing app.orthonym_service started a JVM in this process. "
-        "Every Celery child forked from it would refuse that JVM and lose "
-        "OPSIN, so SELF-01 would fail open."
+    Asserting on *this* process would assert on test order, not on the
+    property. pytest shares one process across the whole suite, and an
+    earlier module (test_api.py, which sorts first) exercises
+    /api/explain-name -- that starts a JVM through OPSIN name decomposition,
+    a different codepath from translate_one/SELF-01. By the time this file
+    runs, a JVM is already live for reasons that have nothing to do with the
+    import under test.
+
+    The property that actually matters is about a fresh Celery parent: it
+    imports app.orthonym_service, builds both namers, and must still own no
+    JVM, because jvm_bridge refuses a JVM started by another pid and every
+    forked child would therefore lose OPSIN and fail SELF-01 open.
+    """
+    result = subprocess.run(
+        [sys.executable, "-c", _JVM_PROBE],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        cwd=str(BACKEND_ROOT),
+        env={**os.environ, "PYTHONPATH": str(BACKEND_ROOT)},
+    )
+    assert "JVM_STARTED=False" in result.stdout, (
+        "Importing app.orthonym_service started a JVM in a fresh process. "
+        "Every Celery child forked from such a parent would refuse that JVM "
+        "and lose OPSIN, so SELF-01 would fail open and a fallback could "
+        f"ship labelled as a verified PIN.\n"
+        f"stdout: {result.stdout!r}\nstderr: {result.stderr[-2000:]!r}"
     )
 
 
