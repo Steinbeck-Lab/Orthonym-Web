@@ -166,7 +166,11 @@ class JobResultsResponse(BaseModel):
     job_id: str
     offset: int
     limit: int
+    # The DECLARED molecule count from submission.
     total: int
+    # The rows actually retrievable. Equals `total` on a done job; short of
+    # it on a failed one. Paginate against this, not `total`.
+    retrievable: int
     rows: list[BatchRow]
 
 

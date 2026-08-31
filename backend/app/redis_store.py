@@ -180,6 +180,14 @@ def assemble_rows(job_id: str, n_chunks: int) -> int:
     return written
 
 
+def rows_length(job_id: str) -> int:
+    """How many rows the job actually has. Used to tell an already-closed
+    job from one that needs assembling, so a redelivered close is a no-op
+    instead of wiping a finished job's results.
+    """
+    return int(get_redis().llen(job_rows_key(job_id)))
+
+
 def read_rows(job_id: str, offset: int, limit: int) -> list[dict]:
     raw = get_redis().lrange(job_rows_key(job_id), offset, offset + limit - 1)
     return [json.loads(r) for r in raw]
