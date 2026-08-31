@@ -10,18 +10,23 @@ Endpoints (see Orthonym API contract):
 """
 
 import logging
-import uuid
 
+from celery.exceptions import TimeoutError as CeleryTimeoutError
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from . import redis_store
 from .core.config import get_settings
+from .inputs import InputFormat
+from .inputs import parse as parse_molecules
+from .jobs_api import admit_and_dispatch
 from .jobs_api import router as jobs_router
 from .ratelimit import check_fast_allowed, client_ip
 from .schemas import (
     ExamplesResponse,
     ExplainResponse,
+    HealthResponse,
     IupacToSmilesResponse,
     JobEnvelope,
     ResultItem,
@@ -89,6 +94,40 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def _limit_translate_body_size(request: Request, call_next):
+    """/api/translate has no body-size limit otherwise: MAX_BATCH_SIZE only
+    bounds the molecule COUNT, checked after FastAPI has already read and
+    JSON-parsed the whole body into TranslateRequest -- a single 100 MB
+    SMILES string was accepted (round 1 review, Important). This mirrors
+    _read_input's declared-Content-Length guard for file uploads, and
+    inherits the same caveat: Content-Length is client-supplied and may be
+    absent under chunked transfer, or a lie -- an honest common case, not a
+    hard guarantee, exactly the tradeoff already accepted there.
+
+    A middleware, not a check inside translate() itself, because FastAPI
+    parses `body: TranslateRequest` before the route handler runs at all --
+    by the time our own code could inspect anything, the oversized body has
+    already been buffered and parsed.
+    """
+    if request.url.path == "/api/translate":
+        settings = get_settings()
+        declared = request.headers.get("content-length")
+        if declared and declared.isdigit():
+            if int(declared) > settings.max_file_size_bytes:
+                return JSONResponse(
+                    status_code=413,
+                    content={
+                        "detail": (
+                            "Body is larger than the "
+                            f"{settings.MAX_FILE_SIZE_MB} MB limit"
+                        )
+                    },
+                )
+    return await call_next(request)
+
+
 app.include_router(jobs_router)
 
 
@@ -108,13 +147,45 @@ def _require_a_live_jvm() -> None:
         )
 
 
-@app.get("/api/health")
-def health() -> dict[str, str]:
+def _timeout_504(settings) -> HTTPException:
+    """For the three endpoints with no job store behind them: a JobEnvelope
+    here would be a lie (round 1 review, Critical 4, a deliberate departure
+    from the brief's "return a union" wording for these three -- recorded
+    here, not silently decided).
+    """
+    return HTTPException(
+        status_code=504,
+        detail=(
+            f"This request exceeded the {settings.FAST_PATH_TIMEOUT}s "
+            "limit and there is no job to poll for it here. Please retry."
+        ),
+    )
+
+
+def _canonicalize(smiles_list: list[str], max_molecules: int):
+    """Route /api/translate's job-dispatch branches through the same
+    canonicalization and per-row error handling as every other input path
+    (app.inputs.parse), rather than hand-building ParsedMolecule(smiles=s)
+    from the raw string. The bypass gave the same molecule two different
+    cache entries (canonical vs. as-typed) and different error text
+    depending on which endpoint submitted it (round 1 review, Important).
+    """
+    data = "\n".join(smiles_list).encode("utf-8")
+    return parse_molecules(data, InputFormat.SMILES_LIST, max_molecules)
+
+
+@app.get("/api/health", response_model=HealthResponse)
+def health() -> HealthResponse:
+    # Typed rather than a bare dict (round 1 review, Important: this had
+    # drifted into dead code -- HealthResponse existed in schemas.py but
+    # was unused). Chose to update the model over deleting it: schemas.py
+    # is where every other response shape lives, and an OpenAPI consumer
+    # should see the "opsin" field documented like any other.
     opsin_ok = redis_store.any_worker_has_opsin()
-    return {
-        "status": "OK" if opsin_ok else "DEGRADED",
-        "opsin": "available" if opsin_ok else "no worker has a live JVM",
-    }
+    return HealthResponse(
+        status="OK" if opsin_ok else "DEGRADED",
+        opsin="available" if opsin_ok else "no worker has a live JVM",
+    )
 
 
 @app.get("/api/examples", response_model=ExamplesResponse)
@@ -122,16 +193,23 @@ def examples() -> ExamplesResponse:
     return ExamplesResponse(examples=EXAMPLES)
 
 
-@app.post("/api/translate")
+@app.post("/api/translate", response_model=TranslateResponse | JobEnvelope)
 def translate(request: Request, body: TranslateRequest):
     settings = get_settings()
+
+    non_blank = [s for s in body.smiles if s.strip()]
+    if not non_blank:
+        # Restored (round 1 review, Important): this used to be, and
+        # frontend/src/lib/api.js still assumes it is, a normal 200 with no
+        # results, not a 400. An empty submission does no work at all, so
+        # it short-circuits before the rate limit / live-JVM gate below
+        # rather than spending either on nothing.
+        return TranslateResponse(results=[])
+
     ip = client_ip(request)
     check_fast_allowed(ip)
     _require_a_live_jvm()
 
-    non_blank = [s for s in body.smiles if s.strip()]
-    if not non_blank:
-        raise HTTPException(status_code=400, detail="No SMILES strings given")
     if len(non_blank) > settings.MAX_BATCH_SIZE:
         raise HTTPException(
             status_code=413,
@@ -142,28 +220,31 @@ def translate(request: Request, body: TranslateRequest):
     # envelope and let the caller poll. Nothing is silently truncated any
     # more -- the old MAX_SMILES_PER_REQUEST dropped molecule 51 in silence.
     if len(non_blank) > settings.FAST_PATH_MAX_MOLECULES:
-        from .jobs_api import prepared_payload
-        from .inputs import ParsedMolecule
-        from .tasks import dispatch_batch
-
-        molecules = [
-            ParsedMolecule(
-                index=i, raw_input=s, input_id=None, smiles=s, error=None
-            )
-            for i, s in enumerate(non_blank)
-        ]
-        job_id = uuid.uuid4().hex
-        redis_store.create_job(job_id, len(molecules), "smiles_list", ip)
-        dispatch_batch(
-            job_id, prepared_payload(molecules), body.best_effort, settings.BATCH_CHUNK_SIZE
+        molecules = _canonicalize(non_blank, settings.MAX_BATCH_SIZE)
+        job_id = admit_and_dispatch(
+            ip, molecules, "smiles_list", body.best_effort
         )
         return JobEnvelope(
             job_id=job_id, molecule_count=len(molecules), status="queued"
         )
 
-    results = translate_fast.apply_async(
-        args=[non_blank, body.best_effort], queue="fast"
-    ).get(timeout=settings.FAST_PATH_TIMEOUT)
+    try:
+        results = translate_fast.apply_async(
+            args=[non_blank, body.best_effort], queue="fast"
+        ).get(timeout=settings.FAST_PATH_TIMEOUT)
+    except CeleryTimeoutError:
+        # translate_fast itself is NOT revoked -- the caller polls the job
+        # below instead (round 1 review, Critical 4). Its eventual result,
+        # if it ever finishes, is simply discarded once nothing is waiting
+        # on it any more; this is the accepted "abandoned tasks are not
+        # revoked" tradeoff, applied here rather than left unhandled.
+        molecules = _canonicalize(non_blank, settings.MAX_BATCH_SIZE)
+        job_id = admit_and_dispatch(
+            ip, molecules, "smiles_list", body.best_effort
+        )
+        return JobEnvelope(
+            job_id=job_id, molecule_count=len(molecules), status="queued"
+        )
     return TranslateResponse(results=[ResultItem.model_validate(r) for r in results])
 
 
@@ -176,9 +257,12 @@ def iupac_to_smiles(
     check_fast_allowed(ip)
     _require_a_live_jvm()
 
-    result = name_to_smiles.apply_async(
-        args=[name], queue="fast"
-    ).get(timeout=settings.FAST_PATH_TIMEOUT)
+    try:
+        result = name_to_smiles.apply_async(
+            args=[name], queue="fast"
+        ).get(timeout=settings.FAST_PATH_TIMEOUT)
+    except CeleryTimeoutError as exc:
+        raise _timeout_504(settings) from exc
     return IupacToSmilesResponse(**result)
 
 
@@ -191,9 +275,12 @@ def explain(
     check_fast_allowed(ip)
     _require_a_live_jvm()
 
-    result = explain_smiles.apply_async(
-        args=[smiles], queue="fast"
-    ).get(timeout=settings.FAST_PATH_TIMEOUT)
+    try:
+        result = explain_smiles.apply_async(
+            args=[smiles], queue="fast"
+        ).get(timeout=settings.FAST_PATH_TIMEOUT)
+    except CeleryTimeoutError as exc:
+        raise _timeout_504(settings) from exc
     return ExplainResponse(**result)
 
 
@@ -206,7 +293,10 @@ def explain_by_name(
     check_fast_allowed(ip)
     _require_a_live_jvm()
 
-    result = explain_iupac_name.apply_async(
-        args=[name], queue="fast"
-    ).get(timeout=settings.FAST_PATH_TIMEOUT)
+    try:
+        result = explain_iupac_name.apply_async(
+            args=[name], queue="fast"
+        ).get(timeout=settings.FAST_PATH_TIMEOUT)
+    except CeleryTimeoutError as exc:
+        raise _timeout_504(settings) from exc
     return ExplainResponse(**result)

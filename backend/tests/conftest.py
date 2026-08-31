@@ -80,6 +80,26 @@ def eager_celery_by_default():
     celery_app.conf.task_eager_propagates = False
 
 
+def _redis_or_none():
+    """The shared Redis client, or None if it is not reachable right now.
+
+    Used only by the autouse fixtures below (which run for EVERY test,
+    including ones that never touch Redis themselves), so an environment
+    with no Redis still gets the redis_client fixture's clear, actionable
+    pytest.fail message on the tests that actually need Redis -- instead of
+    a raw ConnectionError surfacing from an autouse fixture on every test
+    in the suite (round 1 review, Important).
+    """
+    from app.redis_store import get_redis
+
+    client = get_redis()
+    try:
+        client.ping()
+    except Exception:  # noqa: BLE001 - absence, not the exact error, matters here
+        return None
+    return client
+
+
 @pytest.fixture(autouse=True)
 def _reset_rate_limit_state():
     """Clear every per-IP rate-limit key before each test.
@@ -93,9 +113,10 @@ def _reset_rate_limit_state():
     so a handful of tests would exhaust RATE_LIMIT_MAX_CONCURRENT_JOBS and
     every later job submission in the suite would 429.
     """
-    from app.redis_store import get_redis
-
-    client = get_redis()
+    client = _redis_or_none()
+    if client is None:
+        yield
+        return
     for key in client.scan_iter(match="orthonym:ip:*"):
         client.delete(key)
     yield
@@ -112,11 +133,15 @@ def pretend_a_worker_has_opsin():
     whole suite (see scripts/run-tests.sh), so there is no test for which
     skipping this would be correct.
     """
-    from app.redis_store import get_redis, record_worker_opsin_status
+    client = _redis_or_none()
+    if client is None:
+        yield
+        return
+    from app.redis_store import record_worker_opsin_status
 
     record_worker_opsin_status(999999, ok=True)
     yield
-    get_redis().delete("orthonym:worker:999999:opsin")
+    client.delete("orthonym:worker:999999:opsin")
 
 
 @pytest.fixture
