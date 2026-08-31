@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import DOMPurify from 'dompurify'
 import { explainMolecule, explainName } from '../lib/api'
 import { nameTargets, sliceName } from '../lib/nameTargets'
@@ -281,8 +282,8 @@ function Explain() {
       const shouldHighlight =
         targetSet !== null && refs.length > 0 && refs.every((i) => targetSet.has(i))
       if (shouldHighlight) {
-        el.style.stroke = 'var(--accent)'
-        el.style.fill = 'var(--accent)'
+        el.style.stroke = 'var(--ink)'
+        el.style.fill = 'var(--ink)'
       } else {
         el.style.stroke = original.stroke
         el.style.fill = original.fill
@@ -317,14 +318,17 @@ function Explain() {
   const activeSegment = segmentAtPath(segments, activePath)
 
   return (
-    <section className="explain-page page-shell" aria-label="Explain a name">
-      <h1 className="explain-page__title">Explain</h1>
-      <p className="explain-page__lead">
-        STITCH doesn&rsquo;t just produce a name &mdash; on this page it shows its work. Enter an
-        IUPAC name or a SMILES string, then hover (or tap) any part of the decomposed name to see
-        exactly which atoms it refers to.
-      </p>
+    <>
+      <div className="page-head page-shell">
+        <h1 className="page-head__title">Show the working</h1>
+        <p className="page-head__lede">
+          STITCH doesn&rsquo;t just produce a name &mdash; on this page it shows its work. Enter
+          an IUPAC name or a SMILES string, then hover (or tap) any part of the decomposed name to
+          see exactly which atoms it refers to.
+        </p>
+      </div>
 
+      <main className="workspace" aria-label="Explain a name">
       <section className="explain-panel" aria-label="Explain a molecule">
         <form onSubmit={handleSubmit} noValidate>
           <fieldset className="explain-mode">
@@ -347,57 +351,41 @@ function Explain() {
             ))}
           </fieldset>
 
-          <div className="explain-panel__grid">
-            <div className="explain-panel__field">
-              <label htmlFor="explain-smiles-input" className="explain-panel__label">
-                {mode === 'name' ? 'IUPAC name' : 'SMILES'}
-              </label>
-              <input
-                id="explain-smiles-input"
-                type="text"
-                className="explain-panel__input"
-                spellCheck={false}
-                autoCorrect="off"
-                autoCapitalize="off"
-                placeholder={mode === 'name' ? 'e.g. ethanol' : 'e.g. CCO'}
-                value={smilesInput}
-                onChange={(event) => setSmilesInput(event.target.value)}
-              />
-              <div className="explain-panel__actions">
-                <button type="submit" className="explain-button" disabled={isLoading}>
-                  {isLoading ? 'Explaining…' : 'Explain'}
-                </button>
-                {validationNote && (
-                  <p className="explain-panel__note" role="status">
-                    {validationNote}
-                  </p>
-                )}
-              </div>
+          <div className="field">
+            <label htmlFor="explain-smiles-input" className="field__label">
+              {mode === 'name' ? 'IUPAC name' : 'SMILES'}
+            </label>
+            <input
+              id="explain-smiles-input"
+              type="text"
+              className="field__control"
+              spellCheck={false}
+              autoCorrect="off"
+              autoCapitalize="off"
+              placeholder={mode === 'name' ? 'e.g. ethanol' : 'e.g. CCO'}
+              value={smilesInput}
+              onChange={(event) => setSmilesInput(event.target.value)}
+            />
+            <div className="explain-panel__actions">
+              <button type="submit" className="btn" disabled={isLoading}>
+                {isLoading ? 'Explaining…' : 'Explain'}
+              </button>
+              {validationNote && (
+                <p className="explain-panel__note" role="status">
+                  {validationNote}
+                </p>
+              )}
             </div>
-
-            <aside className="explain-aside" aria-label="How this works">
-              <p className="explain-aside__lead">
-                Every highlight comes from OPSIN&rsquo;s own parse of the name, never a guess.
-              </p>
-              <p className="explain-aside__body">
-                The name is broken into the parts OPSIN itself found &mdash; the parent skeleton,
-                each substituent, the ending that names the main group, and prefixes that only
-                move hydrogens around &mdash; and each part carries the atoms OPSIN built it from.
-                Failure is per part: anything STITCH can&rsquo;t pin to specific atoms is marked
-                &ldquo;could not work out which atoms,&rdquo; and the parts around it are
-                unaffected.
-              </p>
-            </aside>
           </div>
 
-          <div className="explain-examples" role="group" aria-label="Try a curated example">
-            <span className="explain-examples__label">Try one:</span>
-            <ul className="explain-examples__list">
+          <div className="examples" role="group" aria-label="Try a curated example">
+            <span className="examples__label">Try one:</span>
+            <ul className="examples__list">
               {EXAMPLES.map((example) => (
                 <li key={example.smiles}>
                   <button
                     type="button"
-                    className="explain-chip"
+                    className="chip"
                     disabled={isLoading}
                     onClick={() => handleExamplePick(example)}
                   >
@@ -408,6 +396,14 @@ function Explain() {
             </ul>
           </div>
         </form>
+
+        <p className="page-about-note">
+          Read how this works, and STITCH&rsquo;s measured accuracy, on the{' '}
+          <Link to="/about" className="about-link">
+            About
+          </Link>{' '}
+          page.
+        </p>
       </section>
 
       <section className="explain-results" aria-label="Explanation">
@@ -506,6 +502,19 @@ function Explain() {
                       {name && renderAnnotatedName(name, segments, activePath)}
                     </p>
                   )}
+                  {/* /api/explain returns the name and its decomposition, but
+                      no confidence tier, so this page cannot show one. Saying
+                      that plainly is the honest option; inventing a tier mark
+                      here would misrepresent confidence, which the product
+                      forbids. Translate is where the tier lives. */}
+                  <p className="explain-tier-note">
+                    This page shows how the name breaks down. It does not check the
+                    name&rsquo;s confidence tier &mdash; run the same molecule through{' '}
+                    <Link to="/" className="about-link">
+                      Translate
+                    </Link>{' '}
+                    to see whether it is a verified PIN, a fallback, or a best effort.
+                  </p>
                 </div>
 
                 {/* A partial result is a real case (see runExplain): the
@@ -565,7 +574,8 @@ function Explain() {
           )}
         </div>
       </section>
-    </section>
+      </main>
+    </>
   )
 }
 

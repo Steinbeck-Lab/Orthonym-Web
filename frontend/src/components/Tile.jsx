@@ -28,7 +28,7 @@ const NAMED_STATUSES = new Set(['pin', 'fallback', 'best_effort'])
  * One cell of the sampler grid.
  *
  * phase: 'pending' (queued, result not yet revealed) | 'active' (currently
- *        being stitched into place) | 'done' (settled, final state)
+ *        resolving into place) | 'done' (settled, final state)
  */
 export default function Tile({ row, phase, reduceMotion }) {
   const { smiles, status, name, tier, formula, error, depiction_svg, roundtrip_smiles, roundtrip_match } = row

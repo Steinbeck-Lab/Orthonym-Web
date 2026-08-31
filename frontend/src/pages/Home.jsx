@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import ExampleChips from '../components/ExampleChips'
 import SamplerGrid from '../components/SamplerGrid'
+import ConfidenceLegend from '../components/ConfidenceLegend'
+import Switch from '../components/Switch'
 import { fetchExamples, translateBatch } from '../lib/api'
 import { parseSmilesLines } from '../lib/parseSmiles'
 import useReducedMotion from '../lib/useReducedMotion'
@@ -28,6 +31,11 @@ function Home() {
   const [examplesError, setExamplesError] = useState(null)
   const [rows, setRows] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  // Best-effort mode. Defaults ON, which is the behaviour STITCH has always
+  // shipped: a molecule the strict namer abstains on gets retried against
+  // the escalated one. Turning it off makes the engine strict — it can then
+  // only ever return a verified name or an honest abstain.
+  const [bestEffort, setBestEffort] = useState(true)
   const [validationNote, setValidationNote] = useState(null)
   const [fetchError, setFetchError] = useState(null)
   const reduceMotion = useReducedMotion()
@@ -70,7 +78,7 @@ function Home() {
     setRows(lines.map(emptyRow))
     setIsSubmitting(true)
 
-    translateBatch(lines)
+    translateBatch(lines, { bestEffort })
       .then((results) => {
         setIsSubmitting(false)
 
@@ -133,61 +141,71 @@ function Home() {
     runTranslate([example.smiles])
   }
 
+  const hasResults = rows.length > 0
+
   return (
     <>
-      <header className="site-header page-shell">
-        <h1 className="site-header__title">STITCH</h1>
-        <p className="site-header__tagline">
-          A SMILES <span aria-hidden="true">&rarr;</span> IUPAC name translator built on a{' '}
-          <strong>deterministic, rule-based naming engine</strong> &mdash; not a language model.
+      <section className="home-hero page-shell" aria-label="Introduction">
+        <h1 className="home-hero__title">A name you can check</h1>
+        <p className="home-hero__lede">
+          STITCH translates SMILES into IUPAC names with a deterministic, rule-based engine
+          &mdash; not a language model. Every result carries the rule that earned it, so you can
+          see whether it is a verified Preferred IUPAC Name, a verified fallback, an unverified
+          best effort, or an honest refusal.
         </p>
-      </header>
+      </section>
 
-      <main className="layout page-shell">
-        <section className="input-panel" aria-label="Translate a SMILES string">
+      <main className="workbench" aria-label="Translate SMILES to IUPAC names">
+        {fetchError && (
+          <p className="workbench__alert" role="alert">
+            Could not reach STITCH&rsquo;s backend ({fetchError}). Is it running on{' '}
+            <code>localhost:8000</code>?
+          </p>
+        )}
+
+        <section className="workbench__input" aria-label="Translate a SMILES string">
           <form onSubmit={handleSubmit} noValidate>
-            <div className="input-panel__grid">
-              <div className="input-panel__field">
-                <label htmlFor="smiles-input" className="input-panel__label">
-                  SMILES, one per line
-                  <span className="input-panel__label-note"> &mdash; up to 50</span>
-                </label>
-                <textarea
-                  id="smiles-input"
-                  className="input-panel__textarea"
-                  rows={6}
-                  spellCheck={false}
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  placeholder={'CCO\nC[C@H](O)CC\nCC(C)(C)C1=CC2=C(C=C1)...'}
-                  value={smilesText}
-                  onChange={(event) => setSmilesText(event.target.value)}
-                />
-                <div className="input-panel__actions">
-                  <button type="submit" className="translate-button" disabled={isSubmitting}>
-                    {isSubmitting ? 'Translating…' : 'Translate'}
-                  </button>
-                  {validationNote && (
-                    <p className="input-panel__note" role="status">
-                      {validationNote}
-                    </p>
-                  )}
-                </div>
-              </div>
+            <div className="field">
+              <label htmlFor="smiles-input" className="field__label">
+                SMILES &mdash; one per line, up to 50
+              </label>
+              <textarea
+                id="smiles-input"
+                className="field__control"
+                rows={8}
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+                placeholder={'CCO\nC[C@H](O)CC\nCC(C)(C)C1=CC2=C(C=C1)...'}
+                value={smilesText}
+                onChange={(event) => setSmilesText(event.target.value)}
+              />
+            </div>
 
-              <aside className="disclaimer" aria-label="Accuracy disclaimer">
-                <p className="disclaimer__lead">
-                  STITCH&rsquo;s naming engine is alpha-stage and rule-based &mdash; the same
-                  input always gives the same output, and it will tell you when it isn&rsquo;t
-                  sure.
+            <Switch
+              id="best-effort-mode"
+              checked={bestEffort}
+              onChange={setBestEffort}
+              disabled={isSubmitting}
+              label="Best-effort mode"
+              onWord="On"
+              offWord="Off"
+              hint={
+                bestEffort
+                  ? 'A molecule the strict rules cannot name is retried with a looser pass. That can return a real name OPSIN could not confirm — always marked as unverified, never as a PIN.'
+                  : 'Strict. Only names the engine can verify are shown; anything else comes back as an honest abstain rather than an unverified guess.'
+              }
+            />
+
+            <div className="workbench__actions">
+              <button type="submit" className="btn btn--accent" disabled={isSubmitting}>
+                {isSubmitting ? 'Translating…' : 'Translate'}
+              </button>
+              {validationNote && (
+                <p className="workbench__note" role="status">
+                  {validationNote}
                 </p>
-                <p className="disclaimer__body">
-                  Measured round-trip accuracy: <strong>~30.4% overall</strong> (ChEBI 29.6%,
-                  PubChem 16.9%), rising to <strong>~92.2%</strong> on its own OPSIN self-test
-                  corpus. A lower-confidence name is always shown as such, never hidden; when it
-                  can&rsquo;t confidently name a molecule, it abstains instead of guessing.
-                </p>
-              </aside>
+              )}
             </div>
 
             <ExampleChips
@@ -197,19 +215,56 @@ function Home() {
               onPick={handleExamplePick}
             />
           </form>
+
+          <p className="page-about-note workbench__about">
+            Read how this works, and STITCH&rsquo;s measured accuracy, on the{' '}
+            <Link to="/about" className="about-link">
+              About
+            </Link>{' '}
+            page.
+          </p>
         </section>
 
-        <section className="results" aria-label="Translation results">
-          {fetchError && (
-            <p className="fetch-error" role="alert">
-              Could not reach STITCH&rsquo;s backend ({fetchError}). Is it running on{' '}
-              <code>localhost:8000</code>?
-            </p>
-          )}
-
+        {hasResults ? (
           <SamplerGrid rows={rows} reduceMotion={reduceMotion} />
-        </section>
+        ) : (
+          <ConfidenceLegend />
+        )}
       </main>
+
+      {/* The accuracy band, on the page where people submit molecules rather
+          than only on About. One edge-to-edge bento: an intro cell welded to
+          the three figures, so the width carries real content instead of a
+          void. These are OpenSTOUT v1.0.0's published figures (its README
+          § Accuracy), the same ones About cites — never rounded up, and never
+          split per-corpus, because v1.0.0 publishes no per-corpus breakdown. */}
+      <section className="home-accuracy" aria-label="Measured accuracy">
+        <div className="home-accuracy__intro">
+          <h2 className="home-accuracy__title">How accurate is it?</h2>
+          <p className="home-accuracy__note">
+            Deterministic, so the same input always gives the same output. Its stated priority is
+            never to emit a name for the wrong molecule &mdash; a refusal counts as a failure
+            here, so the figure is not flattered by abstentions.
+          </p>
+          <p className="home-accuracy__source">
+            OpenSTOUT v1.0.0 &middot; 1,500-molecule round-trip benchmark (ChEBI + PubChem)
+          </p>
+        </div>
+        <div className="home-accuracy__stats">
+          <div className="home-accuracy__cell">
+            <span className="spec__value">94.8%</span>
+            <span className="spec__label">Round-trip exact match</span>
+          </div>
+          <div className="home-accuracy__cell">
+            <span className="spec__value">0</span>
+            <span className="spec__label">Wrong structures emitted</span>
+          </div>
+          <div className="home-accuracy__cell">
+            <span className="spec__value">1,500</span>
+            <span className="spec__label">Molecules benchmarked</span>
+          </div>
+        </div>
+      </section>
     </>
   )
 }

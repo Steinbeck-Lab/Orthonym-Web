@@ -41,11 +41,14 @@ export async function fetchExamples() {
  * @param {string[]} smilesList
  * @returns {Promise<{smiles:string, status:string, name:string|null, tier:string|null, formula:string|null, limit_code:string|null, error:string|null, depiction_svg:string|null, roundtrip_smiles:string|null, roundtrip_match:boolean|null}[]>}
  */
-export async function translateBatch(smilesList) {
+export async function translateBatch(smilesList, { bestEffort = true } = {}) {
   const res = await fetch('/api/translate', {
     method: 'POST',
     headers: JSON_HEADERS,
-    body: JSON.stringify({ smiles: smilesList }),
+    // best_effort defaults to true server-side too, so an older caller that
+    // omits it keeps the shipped behaviour. False stops after the primary
+    // namer, which means no OPSIN-unverified name can come back at all.
+    body: JSON.stringify({ smiles: smilesList, best_effort: bestEffort }),
   })
   if (!res.ok) {
     throw new Error(`POST /api/translate failed with ${res.status}`)

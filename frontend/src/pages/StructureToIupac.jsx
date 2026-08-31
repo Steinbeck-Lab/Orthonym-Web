@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import SamplerGrid from '../components/SamplerGrid'
 import { translateBatch } from '../lib/api'
 import useReducedMotion from '../lib/useReducedMotion'
@@ -15,7 +16,7 @@ import './StructureToIupac.css'
 const READY_TIMEOUT_MS = 20000
 
 const EMPTY_SAMPLER_MESSAGE =
-  "Nothing drawn yet. Sketch a structure above, then press Translate and it will be stitched in below."
+  "Nothing drawn yet. Sketch a structure above, then press Translate and it will be entered below."
 
 function emptyRow(smiles) {
   return {
@@ -146,14 +147,17 @@ function StructureToIupac() {
   }
 
   return (
-    <section className="structure-page page-shell" aria-label="Structure to IUPAC">
-      <h1 className="structure-page__title">Structure &rarr; IUPAC</h1>
-      <p className="structure-page__tagline">
-        Draw a molecule and STITCH will translate it with the exact same{' '}
-        <strong>deterministic, rule-based naming engine</strong> the Translate page uses.
-      </p>
+    <>
+      <div className="page-head page-shell">
+        <h1 className="page-head__title">Draw it, name it</h1>
+        <p className="page-head__lede">
+          Draw a molecule and STITCH translates it with the exact same deterministic, rule-based
+          naming engine the Translate page uses &mdash; and reports the same honest confidence
+          tier for the result.
+        </p>
+      </div>
 
-      <div className="structure-page__layout">
+      <main className="workspace workspace--draw" aria-label="Structure to IUPAC">
         <section className="editor-panel" aria-label="Draw a structure">
           <div className="editor-panel__frame-wrap">
             <iframe
@@ -184,7 +188,7 @@ function StructureToIupac() {
           <div className="editor-panel__actions">
             <button
               type="button"
-              className="translate-button"
+              className="btn"
               onClick={handleTranslate}
               disabled={isSubmitting || editorState !== 'ready'}
             >
@@ -196,35 +200,28 @@ function StructureToIupac() {
               </p>
             )}
           </div>
-        </section>
 
-        <aside className="structure-page__aside" aria-label="How this works">
-          <p className="structure-page__aside-lead">
-            Draw a molecule, then press Translate &mdash; the drawn structure is read straight
-            out of the editor as a SMILES string and sent to the same engine behind the Translate
+          <p className="page-about-note">
+            Read how this works, and STITCH&rsquo;s measured accuracy, on the{' '}
+            <Link to="/about" className="about-link">
+              About
+            </Link>{' '}
             page.
           </p>
-          <p className="structure-page__aside-body">
-            The result lands in the same sampler tile you&rsquo;d see there: a solid stitched
-            fill means a confirmed Preferred IUPAC Name (PIN), a dashed name is a lower-confidence
-            but round-trip&ndash;verified fallback, a faint thread-colored outline means a name
-            the engine could produce but not verify, and bare weave means it honestly
-            couldn&rsquo;t name it at all.
-          </p>
-        </aside>
-      </div>
+        </section>
 
-      <section className="results" aria-label="Translation result">
-        {fetchError && (
-          <p className="fetch-error" role="alert">
-            Could not reach STITCH&rsquo;s backend ({fetchError}). Is it running on{' '}
-            <code>localhost:8000</code>?
-          </p>
-        )}
+        <section className="results" aria-label="Translation result">
+          {fetchError && (
+            <p className="fetch-error" role="alert">
+              Could not reach STITCH&rsquo;s backend ({fetchError}). Is it running on{' '}
+              <code>localhost:8000</code>?
+            </p>
+          )}
 
-        <SamplerGrid rows={rows} reduceMotion={reduceMotion} emptyMessage={EMPTY_SAMPLER_MESSAGE} />
-      </section>
-    </section>
+          <SamplerGrid rows={rows} reduceMotion={reduceMotion} emptyMessage={EMPTY_SAMPLER_MESSAGE} />
+        </section>
+      </main>
+    </>
   )
 }
 

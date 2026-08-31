@@ -5,6 +5,27 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light" />
+    <link
+      rel="preload"
+      href="/fonts/saira-condensed-3.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin="anonymous"
+    />
+    <link
+      rel="preload"
+      href="/fonts/public-sans-3.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin="anonymous"
+    />
+    <link
+      rel="preload"
+      href="/fonts/jetbrains-mono-6.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin="anonymous"
+    />
     <meta
       name="description"
       content="STITCH — a deterministic, rule-based SMILES-to-IUPAC name translator. Try your own molecules and see its honest confidence: verified PIN, fallback, or abstain."
@@ -13,11 +34,11 @@
   </head>
   <body>
     <!--
-THESIS: A name is stitched from discrete rule-fragments, not guessed by an opaque model — refusing the clean-SaaS-card default.
-OWN-WORLD: Ecru/linen ground (#F2EAD8), ink-floss neutral (#2B2B28), one accent thread (#B5433E); sampler-grid tiles; quantized letterforms for the result name only, workhorse grotesk elsewhere.
-STORY: Visitor submits SMILES, watches the name embroider into place rule-by-rule, and reads its true confidence: solid stitch (PIN), dashed basting (fallback), bare patch (abstain), snipped thread (invalid input).
-FIRST VIEWPORT: Batch textarea over an empty sampler grid; curated example chips below; Translate button in the sole accent color; accuracy disclaimer beside the input, not footer fine print.
-FORM: Cross-Stitch Sampler — assigned direction, candidate 7 of 7, seed key 1de2dec1.
+THESIS: The name is the instrument reading, so it gets the whole machined panel — refusing both the SaaS dashboard card-deck and the warm-paper citation world this replaces.
+OWN-WORLD: Inverted Bugatti. Pure white canvas (#ffffff), black type (#000000), zero accent; three faces held apart absolutely — Saira Condensed uppercase wide-tracked display, Public Sans body, JetBrains Mono uppercase captions/buttons/nav. Weight 400 only, no bold anywhere. Radius 0 on every surface; the pill belongs to buttons alone. Depth is hairline seam, never shadow. Full-bleed edge-to-edge bento mosaic, cells welded by 1px seams.
+STORY: A visitor submits a structure and reads its true confidence off a rule beneath the name — double (PIN), dashed (fallback), dotted (best-effort), blank slot (abstain), struck (error). Never a color, at any width.
+FIRST VIEWPORT: A 56px wordmark bar, the route index below it, then one edge-to-edge bento mosaic: an oversized input cell left, the empty result panel right, spec-cells for the measured accuracy beneath. Primary action is a transparent black-outlined pill inside the input cell.
+FORM: Bugatti design analysis (getdesign.md/bugatti), user-pinned; light-inverted, widened and bento-gridded by explicit instruction. Seed key: none — the concept roll was preempted, because the brief named the world by URL rather than leaving it open.
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md.
 -->
     <div id="root"></div>

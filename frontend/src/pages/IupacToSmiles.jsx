@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { fetchStructureFromName } from '../lib/api'
 import './IupacToSmiles.css'
 
@@ -72,24 +73,26 @@ function IupacToSmiles() {
   const isLoading = phase === 'loading'
 
   return (
-    <section className="from-name-page page-shell" aria-label="IUPAC to Structure">
-      <h1 className="from-name-page__title">IUPAC &rarr; Structure</h1>
-      <p className="from-name-page__lead">
-        Type an IUPAC name and STITCH will parse it back into a molecule &mdash; a SMILES string
-        plus a 2D depiction &mdash; using OPSIN, an independent name-to-structure parser.
-      </p>
+    <>
+      <div className="page-head page-shell">
+        <h1 className="page-head__title">Read the name back</h1>
+        <p className="page-head__lede">
+          Type an IUPAC name and STITCH parses it back into a molecule &mdash; a SMILES string
+          plus a 2D depiction &mdash; using OPSIN, an independent name-to-structure parser.
+        </p>
+      </div>
 
-      <section className="from-name-panel" aria-label="Convert an IUPAC name">
-        <form onSubmit={handleSubmit} noValidate>
-          <div className="from-name-panel__grid">
-            <div className="from-name-panel__field">
-              <label htmlFor="iupac-name-input" className="from-name-panel__label">
+      <main className="workspace" aria-label="IUPAC to Structure">
+        <section className="from-name-panel" aria-label="Convert an IUPAC name">
+          <form onSubmit={handleSubmit} noValidate>
+            <div className="field">
+              <label htmlFor="iupac-name-input" className="field__label">
                 IUPAC name
               </label>
               <input
                 id="iupac-name-input"
                 type="text"
-                className="from-name-panel__input"
+                className="field__control"
                 spellCheck={false}
                 autoCorrect="off"
                 autoCapitalize="off"
@@ -98,7 +101,7 @@ function IupacToSmiles() {
                 onChange={(event) => setNameInput(event.target.value)}
               />
               <div className="from-name-panel__actions">
-                <button type="submit" className="from-name-button" disabled={isLoading}>
+                <button type="submit" className="btn" disabled={isLoading}>
                   {isLoading ? 'Converting…' : 'Convert'}
                 </button>
                 {validationNote && (
@@ -109,107 +112,101 @@ function IupacToSmiles() {
               </div>
             </div>
 
-            <aside className="from-name-aside" aria-label="How this works">
-              <p className="from-name-aside__lead">
-                This direction runs through OPSIN, not STITCH&rsquo;s own naming engine in
-                reverse.
-              </p>
-              <p className="from-name-aside__body">
-                STITCH&rsquo;s naming engine turns structures into names; going the other way
-                needs a name-to-structure parser instead, so this page hands your text straight to
-                OPSIN. If OPSIN can&rsquo;t resolve a name &mdash; a trade name, a misspelling, or
-                anything outside strict IUPAC nomenclature &mdash; STITCH says so plainly rather
-                than guessing.
-              </p>
-            </aside>
-          </div>
+            <div className="examples" role="group" aria-label="Try a curated example">
+              <span className="examples__label">Try one:</span>
+              <ul className="examples__list">
+                {EXAMPLES.map((example) => (
+                  <li key={example.name}>
+                    <button
+                      type="button"
+                      className="chip"
+                      disabled={isLoading}
+                      onClick={() => handleExamplePick(example)}
+                    >
+                      {example.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </form>
 
-          <div className="from-name-examples" role="group" aria-label="Try a curated example">
-            <span className="from-name-examples__label">Try one:</span>
-            <ul className="from-name-examples__list">
-              {EXAMPLES.map((example) => (
-                <li key={example.name}>
-                  <button
-                    type="button"
-                    className="from-name-chip"
-                    disabled={isLoading}
-                    onClick={() => handleExamplePick(example)}
-                  >
-                    {example.label}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </form>
-      </section>
-
-      <section className="from-name-results" aria-label="Structure result">
-        {fetchError && (
-          <p className="from-name-fetch-error" role="alert">
-            Could not reach STITCH&rsquo;s backend ({fetchError}). Is it running on{' '}
-            <code>localhost:8000</code>?
+          <p className="page-about-note">
+            Read how this works, and STITCH&rsquo;s measured accuracy, on the{' '}
+            <Link to="/about" className="about-link">
+              About
+            </Link>{' '}
+            page.
           </p>
-        )}
+        </section>
 
-        <div aria-live="polite">
-          {phase === 'idle' && (
-            <div className="from-name-patch from-name-patch--idle">
-              <p className="from-name-patch__empty-note">
-                Nothing stitched here yet &mdash; type an IUPAC name above and convert to see its
-                structure.
-              </p>
-            </div>
+        <section className="from-name-results" aria-label="Structure result">
+          {fetchError && (
+            <p className="from-name-fetch-error" role="alert">
+              Could not reach STITCH&rsquo;s backend ({fetchError}). Is it running on{' '}
+              <code>localhost:8000</code>?
+            </p>
           )}
 
-          {phase === 'loading' && (
-            <div className="from-name-patch from-name-patch--loading" aria-busy="true">
-              <div className="from-name-patch__top">
-                <span className="from-name-patch__state-label">Converting&hellip;</span>
+          <div aria-live="polite">
+            {phase === 'idle' && (
+              <div className="from-name-patch from-name-patch--idle">
+                <p className="from-name-patch__empty-note">
+                  Nothing entered here yet &mdash; type an IUPAC name above and convert to see its
+                  structure.
+                </p>
               </div>
-              <div className="from-name-patch__pending-cloth" aria-hidden="true">
-                <span className="from-name-patch__pending-dash" />
-                <span className="from-name-patch__pending-dash" />
-                <span className="from-name-patch__pending-dash" />
-              </div>
-            </div>
-          )}
+            )}
 
-          {phase === 'success' && (
-            <div className="from-name-patch from-name-patch--success">
-              <div className="from-name-patch__top">
-                <span className="from-name-patch__state-label">Parsed successfully</span>
-              </div>
-              <div className="from-name-patch__body">
-                <div className="from-name-patch__field">
-                  <span className="from-name-patch__field-label">SMILES</span>
-                  <code className="from-name-patch__smiles">{smiles}</code>
+            {phase === 'loading' && (
+              <div className="from-name-patch from-name-patch--loading" aria-busy="true">
+                <div className="from-name-patch__top">
+                  <span className="from-name-patch__state-label">Converting&hellip;</span>
                 </div>
-                {depictionSvg && (
-                  <div className="from-name-patch__depiction">
-                    <img src={depictionSvg} alt={`2D structure depiction for "${resolvedName}"`} />
-                  </div>
-                )}
+                <div className="from-name-patch__pending-cloth" aria-hidden="true">
+                  <span className="from-name-patch__pending-dash" />
+                  <span className="from-name-patch__pending-dash" />
+                  <span className="from-name-patch__pending-dash" />
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {phase === 'error' && (
-            <div className="from-name-patch from-name-patch--error" role="alert">
-              <div className="from-name-patch__top">
-                <span className="from-name-patch__state-label">
-                  {apiError || 'Could not parse this name'}
-                </span>
+            {phase === 'success' && (
+              <div className="from-name-patch from-name-patch--success">
+                <div className="from-name-patch__top">
+                  <span className="from-name-patch__state-label">Parsed successfully</span>
+                </div>
+                <div className="from-name-patch__body">
+                  <div className="from-name-patch__field">
+                    <span className="from-name-patch__field-label">SMILES</span>
+                    <code className="from-name-patch__smiles">{smiles}</code>
+                  </div>
+                  {depictionSvg && (
+                    <div className="from-name-patch__depiction">
+                      <img src={depictionSvg} alt={`2D structure depiction for "${resolvedName}"`} />
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="from-name-patch__snip-wrap" aria-hidden="true">
-                <span className="from-name-patch__snip from-name-patch__snip--a" />
-                <span className="from-name-patch__snip from-name-patch__snip--b" />
+            )}
+
+            {phase === 'error' && (
+              <div className="from-name-patch from-name-patch--error" role="alert">
+                <div className="from-name-patch__top">
+                  <span className="from-name-patch__state-label">
+                    {apiError || 'Could not parse this name'}
+                  </span>
+                </div>
+                <div className="from-name-patch__snip-wrap" aria-hidden="true">
+                  <span className="from-name-patch__snip from-name-patch__snip--a" />
+                  <span className="from-name-patch__snip from-name-patch__snip--b" />
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      </section>
-    </section>
+            )}
+          </div>
+        </section>
+      </main>
+    </>
   )
 }
 

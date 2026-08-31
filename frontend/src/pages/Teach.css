@@ -1,40 +1,247 @@
-.teach {
-  max-width: 62rem;
-  margin: 0 auto;
-  padding: 1.5rem 1rem 3rem;
-}
-.teach__title { margin: 0 0 0.5rem; }
-.teach__lede { margin: 0 0 1.5rem; line-height: 1.6; max-width: 44rem; }
-.teach__editor {
-  width: 100%;
-  height: 26rem;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #fff;
-}
-.teach__button {
-  margin-top: 0.75rem;
-  padding: 0.55rem 1.2rem;
-  font-size: 1rem;
-  cursor: pointer;
-}
-.teach__button:disabled { cursor: not-allowed; opacity: 0.6; }
-.teach__note, .teach__editor-error { margin-top: 0.6rem; }
+/* ============================================================
+   STITCH — Learn
 
-.teach__name { font-size: 1.3rem; line-height: 2; word-break: break-word; }
+   The drawn-structure way into the same name decomposition Explain does
+   from typed input, so it uses the same vocabulary throughout: the shared
+   full-bleed workspace mosaic, the same 0px hairline-framed editor and
+   diagram, the same glow wash for "you are pointing at these atoms",
+   and the same struck mark for a part that could not be pinned.
+   ============================================================ */
+
+.teach__draw {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-lg);
+}
+
+/* The drawing area is treated as the page's photograph: it fills its
+   cell, 0px corners, one hairline frame, no shadow. */
+.teach__editor {
+  display: block;
+  width: 100%;
+  min-height: 460px;
+  background: var(--canvas);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-none);
+}
+
+.teach__editor-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  padding: var(--s-xl);
+  background: var(--surface-soft);
+  border: 1px solid var(--ink);
+  border-radius: var(--r-none);
+  font-family: var(--font-body);
+  font-size: var(--t-body-md);
+  line-height: 1.5;
+  text-align: center;
+  color: var(--ink);
+}
+
+.teach__note {
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+/* -------------------- output -------------------- */
+
+.teach__output {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-lg);
+}
+
+.teach__empty-note {
+  max-width: 46ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-md);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.teach__empty-note {
+  margin-block: auto;
+}
+
+.teach__result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-lg);
+}
+
+/* The name: display face at its true case, for the same reason Explain
+   keeps it — IUPAC case carries meaning, so uppercasing would print a
+   different name. */
+.teach__name {
+  padding-bottom: var(--s-md);
+  border-bottom: 1px solid var(--hairline-strong);
+  font-family: var(--font-display);
+  font-size: clamp(var(--t-display-sm), 2.6vw, var(--t-display-md));
+  font-weight: 400;
+  line-height: 1.3;
+  letter-spacing: var(--track-display-sm);
+  text-transform: none;
+  color: var(--ink);
+  overflow-wrap: break-word;
+}
+
+/* No rule at rest: a dotted underline is the best-effort tier mark
+   elsewhere on the site and must not double as a hover affordance. The
+   pointing signal is a solid ink rule, a weight no tier uses. */
 .teach__part {
-  border-radius: 3px;
+  padding: 0 0.06em;
+  border-bottom: 1px solid transparent;
   cursor: pointer;
-  padding: 0.1em 0;
-  transition: background-color 120ms ease;
+  transition:
+    background-color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.teach__part:hover, .teach__part--active {
-  background: var(--glow, #ffd400);
-  outline: none;
+
+.teach__part:hover {
+  background: var(--glow-wash);
+  border-bottom-color: var(--ink);
 }
-.teach__body { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: flex-start; }
-.teach__structure { flex: 0 0 auto; }
-.teach__detail { flex: 1 1 16rem; border-left: 3px solid var(--glow, #ffd400); padding: 0.5rem 1rem; }
-.teach__detail-label { margin: 0 0 0.4rem; font-size: 1.05rem; }
-.teach__hint { opacity: 0.7; font-style: italic; }
-.teach__parts { margin-top: 1.5rem; line-height: 1.7; }
+
+.teach__part--active {
+  background: var(--glow-wash-strong);
+  border-bottom-color: var(--ink);
+}
+
+.teach__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-lg);
+}
+
+.teach__structure {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  padding: var(--s-md);
+  background: var(--canvas);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-none);
+}
+
+.teach__structure svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* A seamed region on the canvas. The glow stays on what is being pointed
+   at — the name part and its atoms — never on a panel fill. */
+.teach__detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xs);
+  padding: var(--s-lg) 0 0;
+  background: var(--canvas);
+  border-top: 1px solid var(--hairline-strong);
+  border-radius: var(--r-none);
+}
+
+.teach__detail p {
+  font-family: var(--font-body);
+  font-size: var(--t-body-md);
+  line-height: 1.5;
+  color: var(--body);
+}
+
+.teach__detail-label {
+  font-family: var(--font-display);
+  font-size: var(--t-title-md);
+  font-weight: 400;
+  line-height: 1.3;
+  letter-spacing: 0.0625rem;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* A sentence, therefore the serif. */
+.teach__hint {
+  font-family: var(--font-body);
+  font-size: var(--t-body-md);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* -------------------- the parts list -------------------- */
+/* Rows on hairlines, a mono-caption label over its explanation. The
+   source markup uses <strong>, which this system has no bold weight for,
+   so it renders as the label voice instead. */
+
+.teach__parts {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--hairline);
+  counter-reset: teach-part;
+}
+
+.teach__parts li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xxs);
+  padding-block: var(--s-md);
+  border-bottom: 1px solid var(--hairline);
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
+  color: var(--body);
+}
+
+.teach__parts strong {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+@media (min-width: 1000px) {
+  .teach__editor {
+    min-height: 620px;
+  }
+}
+
+@media (min-width: 1600px) {
+  .teach__editor {
+    min-height: 720px;
+  }
+}
+
+@media (min-width: 1400px) {
+  .teach__body {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: var(--s-xl);
+  }
+
+  .teach__structure {
+    flex: 1 1 55%;
+    min-width: 0;
+  }
+
+  .teach__detail {
+    flex: 1 1 45%;
+    min-width: 0;
+  }
+}
+
+/* This route shows how a name decomposes; it does not report the name's
+   confidence tier, because /api/explain does not return one. Saying so
+   plainly beats inventing a mark. */
+.teach__tier-note {
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
+  color: var(--muted);
+}
