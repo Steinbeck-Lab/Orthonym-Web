@@ -16,15 +16,24 @@ Derivation logic (verified against the live openstout package):
    "best_effort"), or it may still abstain (T5) -- whichever it actually
    produces is what ships.
 
-Tier -> status mapping used for BOTH namers (`classify`):
-  - is_pin True  -> "pin"          (tier is always T1 here)
-  - tier == "T5" -> "abstain"      (name is ALWAYS null -- T5's own "name"
-    field, when non-null, is a recognized failure placeholder like "unknown
-    organic compound" and must never be surfaced as a real name)
-  - tier == "T3" -> "fallback"     (RT-verified via the general engine)
-  - tier == "T4" -> "best_effort"  (NOT RT-verified -- OPSIN could not
-    confirm this one; genuinely uncommon, reserved for exactly this case --
-    never used as a catch-all for "needed escalation")
+Tier -> status mapping used for BOTH namers (`classify`). The tier names are
+OpenSTOUT's own, from `OpenSTOUT.name_tiered`'s docstring:
+  - "pin_verified"        -> "pin"
+  - "systematic_verified" -> "fallback"     (RT-verified via the general
+    engine, or a trivial-retained name)
+  - "best_effort"         -> "best_effort"  (engine, E1-only, NOT RT-verified
+    -- requires the general_fallback_unverified opt-in, so it only appears on
+    the escalated pass)
+  - "abstain"             -> "abstain"      (name is ALWAYS reported as null,
+    because an abstain row's own "name" field, when non-null, is a
+    recognized failure placeholder like "unknown organic compound" and must
+    never be surfaced as a real name)
+  - "pin_unverified"      -> "best_effort"  (reserved upstream for
+    systematic-PIN certification; an UNVERIFIED pin must never be shown as a
+    verified one, so it degrades to the honest unverified status)
+
+These replaced an earlier T1/T3/T4/T5 scheme. No T-code exists in the engine
+any more, and `classify`'s final `raise` is what caught the rename.
 
 Note that "best_effort" is NOT what a molecule gets just because it needed
 the escalated/second-pass namer -- a molecule that abstains on the primary
@@ -104,18 +113,27 @@ def classify(row: dict) -> tuple[str, Optional[str], str]:
     Valid for the output of EITHER namer -- see module docstring for the
     tier -> status contract.
     """
-    if row["is_pin"] is True:
-        return "pin", row["name"], row["tier"]
-    if row["tier"] == "T5":
-        return "abstain", None, "T5"
-    if row["tier"] == "T3":
-        return "fallback", row["name"], row["tier"]
-    if row["tier"] == "T4":
-        return "best_effort", row["name"], row["tier"]
-    # is_pin False always implies tier in {T3, T4, T5} in the current
-    # openstout namer (T1 only ever accompanies is_pin True) -- this is a
-    # defensive guard against that invariant changing out from under us,
-    # not a reachable branch today.
+    tier = row["tier"]
+
+    if tier == "abstain":
+        return "abstain", None, tier
+    if tier == "pin_verified":
+        return "pin", row["name"], tier
+    if tier == "systematic_verified":
+        # RT-verified via the general engine or a trivial-retained name --
+        # which is exactly what STITCH means by "fallback".
+        return "fallback", row["name"], tier
+    if tier == "best_effort":
+        return "best_effort", row["name"], tier
+    if tier == "pin_unverified":
+        # Reserved upstream for systematic-PIN certification. A PIN whose
+        # round trip has NOT been confirmed must never be shown as a
+        # verified PIN, so it ships as the honest "a real name, but
+        # OPSIN-unverified" status instead.
+        return "best_effort", row["name"], tier
+
+    # This guard earned its keep: it is what caught the upstream rename from
+    # T1/T3/T4/T5 to these names, instead of a wrong tier reaching a user.
     raise ValueError(f"Unexpected name_tiered() row, cannot classify: {row!r}")
 
 
@@ -186,7 +204,10 @@ def translate_one(smiles: str, best_effort: bool = True) -> ResultItem:
             smiles=smiles,
             status="abstain",
             name=None,
-            tier="T5",
+            # `tier` from classify(), never a hardcoded constant: hardcoding
+            # "T5" here is what made every abstain 500 after the upstream
+            # tier rename, even though classify() itself had been updated.
+            tier=tier,
             formula=row.get("formula"),
             limit_code=row.get("limit_code"),
             error=None,

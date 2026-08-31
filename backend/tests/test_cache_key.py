@@ -35,7 +35,7 @@ def test_round_trip_through_redis(redis_client):
         smiles="CCO",
         status="pin",
         name="ethanol",
-        tier="T1",
+        tier="pin_verified",
         roundtrip_smiles="CCO",
         roundtrip_match=True,
     )

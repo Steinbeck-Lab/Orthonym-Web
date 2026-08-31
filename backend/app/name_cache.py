@@ -17,7 +17,20 @@ from app.core.config import get_settings
 from app.redis_store import get_redis
 from app.schemas import ResultItem
 
-_KEY_VERSION = "v1"
+# BUMP THIS whenever the vendored OpenSTOUT snapshot is refreshed.
+#
+# The key embeds openstout.__version__ so a release bump invalidates the
+# cache automatically -- but upstream develops on a static "1.0.0" and does
+# not bump per change, so a vendor refresh can change naming behaviour while
+# the version string stays identical. That would serve names from the old
+# engine beside tiers computed by the new one, which is exactly the
+# PRODUCT.md principle 2 violation this key exists to prevent. The version
+# string alone is therefore NOT sufficient; this counter is the manual half.
+#
+# v2: 2026-08-31 vendor refresh -- upstream replaced the whole tier
+#     vocabulary (T1/T3/T4/T5 -> pin_verified/systematic_verified/
+#     best_effort/abstain) and changed best-effort gating.
+_KEY_VERSION = "v2"
 _ENGINE_VERSION = openstout.__version__
 
 # Statuses worth keeping. "error" is about the input, not the engine's

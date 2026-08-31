@@ -49,17 +49,20 @@ EXAMPLES = [
         "expected_status": "fallback",
     },
     {
-        # NOTE: an earlier version of this example used
-        # "CC(C)(C)C1=CC2=C(C=C1)C1(C)CCC(C)(C)C2(C)C1", which DID abstain
-        # under the single-namer design. Under the three-tier escalation
-        # added for T5-abstain handling (see openstout_service.py), that
-        # molecule's primary-pass abstain now escalates to a verified T3
-        # "fallback" name -- exactly the intended behavior, but it means
-        # that SMILES is no longer an honest-abstain example. This
-        # spiro-fused system was verified live to still abstain on BOTH
+        # This example has been replaced twice, both times because OpenSTOUT
+        # got BETTER and started naming the molecule that used to abstain:
+        #   1. "CC(C)(C)C1=CC2=C(C=C1)C1(C)CCC(C)(C)C2(C)C1" -- began
+        #      escalating to a verified fallback.
+        #   2. "CC1(C)CCC(C)(C)C12c1ccccc1C1(CCCC1)C2" (spiro-fused) -- named
+        #      as 2,2,5,5-tetra(methan-1-yl)dispiro[...] after the 2026-08-31
+        #      vendor refresh.
+        # So an ORGANIC honest-abstain example is a moving target. Uranium
+        # trioxide is stable in that role for a structural reason rather than
+        # a coverage gap: OpenSTOUT targets organic nomenclature, and it
+        # refuses here instead of guessing. Verified live to abstain on BOTH
         # the primary and the escalated namer.
-        "label": "A spiro-fused ring system — honest abstain",
-        "smiles": "CC1(C)CCC(C)(C)C12c1ccccc1C1(CCCC1)C2",
+        "label": "Uranium trioxide — outside organic nomenclature, honest abstain",
+        "smiles": "O=[U](=O)=O",
         "expected_status": "abstain",
     },
 ]
