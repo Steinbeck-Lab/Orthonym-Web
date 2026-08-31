@@ -136,15 +136,18 @@ def test_worker_opsin_status_round_trips(redis_client):
     try:
         assert redis_store.any_worker_has_opsin() is True
     finally:
-        redis_client.delete("stitch:worker:999001:opsin")
+        redis_client.hdel("stitch:workers:opsin", "999001")
 
 
 def test_a_failed_worker_does_not_count_as_having_opsin(redis_client):
     # Clear first: this asserts on a global property ("is ANY worker
-    # healthy"), so a stray ok key from another test -- or from a later
-    # task's autouse fixture -- would mask the thing being tested.
-    for key in redis_client.scan_iter(match="stitch:worker:*:opsin"):
-        redis_client.delete(key)
+    # healthy"), so a stray ok field from another test -- or from a later
+    # task's autouse fixture -- would mask the thing being tested. Round 3
+    # review, finding 3: worker status moved from one key per pid
+    # ("stitch:worker:{pid}:opsin", scan_iter-discovered) to a single hash
+    # ("stitch:workers:opsin", field = pid) so any_worker_has_opsin() never
+    # scans the keyspace.
+    redis_client.delete("stitch:workers:opsin")
 
     redis_store.record_worker_opsin_status(999002, ok=False)
     try:
@@ -155,4 +158,42 @@ def test_a_failed_worker_does_not_count_as_having_opsin(redis_client):
         # decides whether naming is served at all.
         assert redis_store.any_worker_has_opsin() is False
     finally:
-        redis_client.delete("stitch:worker:999002:opsin")
+        redis_client.hdel("stitch:workers:opsin", "999002")
+
+
+def test_record_worker_opsin_status_prunes_stale_entries_on_write(
+    redis_client, monkeypatch
+):
+    # Round 3 review, finding 3: the hash must not grow forever across
+    # worker restarts -- pruning happens on every write, not just on read.
+    import time
+
+    monkeypatch.setattr(redis_store, "_WORKER_STATUS_TTL", 1, raising=False)
+    redis_client.hset(
+        "stitch:workers:opsin", "999003", f"ok:{int(time.time()) - 10}"
+    )
+    try:
+        redis_store.record_worker_opsin_status(999004, ok=True)
+        assert redis_client.hget("stitch:workers:opsin", "999003") is None
+        assert redis_client.hget("stitch:workers:opsin", "999004") is not None
+    finally:
+        redis_client.hdel("stitch:workers:opsin", "999003", "999004")
+
+
+def test_any_worker_has_opsin_ignores_an_aged_out_entry(
+    redis_client, monkeypatch
+):
+    # A dead worker's "ok" must not linger past _WORKER_STATUS_TTL and make
+    # health lie -- covers the read side; the write-side prune above covers
+    # the other half of the same guarantee.
+    import time
+
+    redis_client.delete("stitch:workers:opsin")
+    monkeypatch.setattr(redis_store, "_WORKER_STATUS_TTL", 1, raising=False)
+    redis_client.hset(
+        "stitch:workers:opsin", "999005", f"ok:{int(time.time()) - 10}"
+    )
+    try:
+        assert redis_store.any_worker_has_opsin() is False
+    finally:
+        redis_client.hdel("stitch:workers:opsin", "999005")
