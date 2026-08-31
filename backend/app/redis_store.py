@@ -60,7 +60,8 @@ def create_job(job_id: str, total: int, fmt: str, client_ip: str) -> None:
     client = get_redis()
     key = job_meta_key(job_id)
     now = int(time.time())
-    client.hset(
+    pipe = client.pipeline()
+    pipe.hset(
         key,
         mapping={
             "status": "queued",
@@ -73,11 +74,35 @@ def create_job(job_id: str, total: int, fmt: str, client_ip: str) -> None:
             "ip": client_ip,
         },
     )
-    client.expire(key, settings.JOB_RESULT_TTL_SECONDS)
+    pipe.expire(key, settings.JOB_RESULT_TTL_SECONDS)
+    pipe.execute()
+
+
+def _retag_if_untagged(pipe, key: str) -> None:
+    """Give `key` a TTL if and only if it currently has none.
+
+    HSET and HINCRBY recreate a missing hash, and the recreated key has NO
+    expiry -- the unbounded-growth failure this module exists to prevent. The
+    key can go missing at any moment, not just after its 24 hours: the Redis
+    container runs `volatile-lru`, which makes every TTL-tagged key an
+    eviction candidate under memory pressure regardless of remaining TTL.
+
+    EXPIRE ... NX rather than a plain EXPIRE, because re-arming the full TTL
+    on every progress bump would push a busy job's expiry past the
+    `expires` timestamp create_job recorded and reports to callers as
+    expires_at. NX touches only a key that lost its expiry, so a live TTL
+    keeps counting down. Verified against Redis 7.4: NX returns 1 on an
+    untagged key and 0 on a tagged one, leaving its TTL unchanged.
+    """
+    pipe.expire(key, get_settings().JOB_RESULT_TTL_SECONDS, nx=True)
 
 
 def set_job_status(job_id: str, status: str) -> None:
-    get_redis().hset(job_meta_key(job_id), "status", status)
+    key = job_meta_key(job_id)
+    pipe = get_redis().pipeline()
+    pipe.hset(key, "status", status)
+    _retag_if_untagged(pipe, key)
+    pipe.execute()
 
 
 def bump_job_done(job_id: str, done: int, failed: int) -> None:
@@ -89,6 +114,7 @@ def bump_job_done(job_id: str, done: int, failed: int) -> None:
         pipe.hincrby(key, "done", done)
     if failed:
         pipe.hincrby(key, "failed", failed)
+    _retag_if_untagged(pipe, key)
     pipe.execute()
 
 
