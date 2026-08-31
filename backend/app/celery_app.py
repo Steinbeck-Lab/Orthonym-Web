@@ -71,6 +71,10 @@ celery_app.conf.update(
         "app.tasks.run_chunk": {"queue": "batch"},
         "app.tasks.finalize_job": {"queue": "batch"},
         "app.tasks.mark_job_failed": {"queue": "batch"},
+        "app.tasks.translate_fast": {"queue": "fast"},
+        "app.tasks.explain_smiles": {"queue": "fast"},
+        "app.tasks.explain_iupac_name": {"queue": "fast"},
+        "app.tasks.name_to_smiles": {"queue": "fast"},
     },
 )
 

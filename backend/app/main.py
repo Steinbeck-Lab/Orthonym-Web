@@ -10,27 +10,25 @@ Endpoints (see Orthonym API contract):
 """
 
 import logging
+import uuid
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from orthonym.validation.opsin_roundtrip import opsin_parse
-from rdkit import Chem
 
-from . import opsin_decompose
+from . import opsin_decompose, redis_store
+from .core.config import get_settings
 from .jobs_api import router as jobs_router
-from .depiction import mol_to_svg_data_uri
-from .explain import explain_molecule, explain_name
-from .orthonym_service import get_primary_namer, translate_many
+from .ratelimit import check_fast_allowed, client_ip
 from .schemas import (
     ExamplesResponse,
     ExplainResponse,
-    HealthResponse,
     IupacToSmilesResponse,
+    JobEnvelope,
+    ResultItem,
     TranslateRequest,
     TranslateResponse,
 )
-
-MAX_SMILES_PER_REQUEST = 50
+from .tasks import explain_iupac_name, explain_smiles, name_to_smiles, translate_fast
 
 # Verified live against the real Orthonym engine -- do not invent
 # different examples.
@@ -101,9 +99,29 @@ def _verify_opsin_internals() -> None:
     )
 
 
-@app.get("/api/health", response_model=HealthResponse)
-def health() -> HealthResponse:
-    return HealthResponse(status="OK")
+def _require_a_live_jvm() -> None:
+    """Orthonym's SELF-01 gate fails OPEN without a JVM, shipping a
+    fallback labelled as a verified PIN. Serving names in that state would
+    break PRODUCT.md principle 3, so we refuse instead.
+    """
+    if not redis_store.any_worker_has_opsin():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "No worker currently has a live JVM, so OPSIN cannot verify "
+                "any name. Refusing rather than serving names with an "
+                "unverified confidence tier. See /api/health."
+            ),
+        )
+
+
+@app.get("/api/health")
+def health() -> dict[str, str]:
+    opsin_ok = redis_store.any_worker_has_opsin()
+    return {
+        "status": "OK" if opsin_ok else "DEGRADED",
+        "opsin": "available" if opsin_ok else "no worker has a live JVM",
+    }
 
 
 @app.get("/api/examples", response_model=ExamplesResponse)
@@ -111,45 +129,91 @@ def examples() -> ExamplesResponse:
     return ExamplesResponse(examples=EXAMPLES)
 
 
-@app.post("/api/translate", response_model=TranslateResponse)
-def translate(request: TranslateRequest) -> TranslateResponse:
-    non_blank = [s for s in request.smiles if s.strip()]
-    batch = non_blank[:MAX_SMILES_PER_REQUEST]
-    results = translate_many(batch, best_effort=request.best_effort)
-    return TranslateResponse(results=results)
+@app.post("/api/translate")
+def translate(request: Request, body: TranslateRequest):
+    settings = get_settings()
+    ip = client_ip(request)
+    check_fast_allowed(ip)
+    _require_a_live_jvm()
+
+    non_blank = [s for s in body.smiles if s.strip()]
+    if not non_blank:
+        raise HTTPException(status_code=400, detail="No SMILES strings given")
+    if len(non_blank) > settings.MAX_BATCH_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Input exceeds the {settings.MAX_BATCH_SIZE}-molecule limit",
+        )
+
+    # Above the fast limit this is a job, not a request: hand back an
+    # envelope and let the caller poll. Nothing is silently truncated any
+    # more -- the old MAX_SMILES_PER_REQUEST dropped molecule 51 in silence.
+    if len(non_blank) > settings.FAST_PATH_MAX_MOLECULES:
+        from .jobs_api import prepared_payload
+        from .inputs import ParsedMolecule
+        from .tasks import dispatch_batch
+
+        molecules = [
+            ParsedMolecule(
+                index=i, raw_input=s, input_id=None, smiles=s, error=None
+            )
+            for i, s in enumerate(non_blank)
+        ]
+        job_id = uuid.uuid4().hex
+        redis_store.create_job(job_id, len(molecules), "smiles_list", ip)
+        dispatch_batch(
+            job_id, prepared_payload(molecules), body.best_effort, settings.BATCH_CHUNK_SIZE
+        )
+        return JobEnvelope(
+            job_id=job_id, molecule_count=len(molecules), status="queued"
+        )
+
+    results = translate_fast.apply_async(
+        args=[non_blank, body.best_effort], queue="fast"
+    ).get(timeout=settings.FAST_PATH_TIMEOUT)
+    return TranslateResponse(results=[ResultItem.model_validate(r) for r in results])
 
 
 @app.get("/api/iupac-to-smiles", response_model=IupacToSmilesResponse)
-def iupac_to_smiles(name: str = Query(..., min_length=1)) -> IupacToSmilesResponse:
-    raw_smiles = opsin_parse(name)
-    if not raw_smiles:
-        return IupacToSmilesResponse(
-            smiles=None,
-            depiction_svg=None,
-            error="Could not parse this name via OPSIN",
-        )
+def iupac_to_smiles(
+    request: Request, name: str = Query(..., min_length=1)
+) -> IupacToSmilesResponse:
+    settings = get_settings()
+    ip = client_ip(request)
+    check_fast_allowed(ip)
+    _require_a_live_jvm()
 
-    mol = Chem.MolFromSmiles(raw_smiles)
-    if mol is None:
-        return IupacToSmilesResponse(
-            smiles=None,
-            depiction_svg=None,
-            error="Could not parse this name via OPSIN",
-        )
-
-    return IupacToSmilesResponse(
-        smiles=raw_smiles,
-        depiction_svg=mol_to_svg_data_uri(mol),
-        error=None,
-    )
+    result = name_to_smiles.apply_async(
+        args=[name], queue="fast"
+    ).get(timeout=settings.FAST_PATH_TIMEOUT)
+    return IupacToSmilesResponse(**result)
 
 
 @app.get("/api/explain", response_model=ExplainResponse)
-def explain(smiles: str = Query(..., min_length=1)) -> ExplainResponse:
-    result = explain_molecule(smiles, namer=get_primary_namer())
+def explain(
+    request: Request, smiles: str = Query(..., min_length=1)
+) -> ExplainResponse:
+    settings = get_settings()
+    ip = client_ip(request)
+    check_fast_allowed(ip)
+    _require_a_live_jvm()
+
+    result = explain_smiles.apply_async(
+        args=[smiles], queue="fast"
+    ).get(timeout=settings.FAST_PATH_TIMEOUT)
     return ExplainResponse(**result)
 
 
 @app.get("/api/explain-name", response_model=ExplainResponse)
-def explain_by_name(name: str = Query(..., min_length=1)) -> ExplainResponse:
-    return ExplainResponse(**explain_name(name))
+def explain_by_name(
+    request: Request, name: str = Query(..., min_length=1)
+) -> ExplainResponse:
+    settings = get_settings()
+    ip = client_ip(request)
+    check_fast_allowed(ip)
+    _require_a_live_jvm()
+
+    result = explain_iupac_name.apply_async(
+        args=[name], queue="fast"
+    ).get(timeout=settings.FAST_PATH_TIMEOUT)
+    return ExplainResponse(**result)

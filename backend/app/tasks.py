@@ -282,6 +282,78 @@ def mark_job_failed(request, exc, traceback, job_id: str) -> None:
     redis_store.set_job_status(job_id, "failed")
 
 
+@celery_app.task(name="app.tasks.translate_fast")
+def translate_fast(smiles_list: list[str], best_effort: bool) -> list[dict]:
+    """The single-molecule path: full ResultItems, picture included.
+
+    Separate from the batch tasks because the response must stay
+    byte-compatible with today's TranslateResponse, which includes
+    depiction_svg -- the one thing batch rows deliberately omit.
+    """
+    from app.depiction import mol_to_svg_data_uri
+    from rdkit import Chem
+
+    rows = []
+    for smiles in smiles_list:
+        cached = name_cache.get_cached(smiles, best_effort)
+        item = cached if cached is not None else translate_one(
+            smiles, best_effort=best_effort
+        )
+        if cached is None:
+            name_cache.put_cached(item, best_effort)
+        if item.depiction_svg is None and item.status in (
+            "pin",
+            "fallback",
+            "best_effort",
+        ):
+            # A cached item was stored without its picture; redraw it here so
+            # the response shape never varies by cache hit or miss.
+            mol = Chem.MolFromSmiles(item.smiles)
+            if mol is not None:
+                item = item.model_copy(
+                    update={"depiction_svg": mol_to_svg_data_uri(mol)}
+                )
+        rows.append(item.model_dump())
+    return rows
+
+
+@celery_app.task(name="app.tasks.explain_smiles")
+def explain_smiles(smiles: str) -> dict:
+    from app.explain import explain_molecule
+    from app.orthonym_service import get_primary_namer
+
+    return explain_molecule(smiles, namer=get_primary_namer())
+
+
+@celery_app.task(name="app.tasks.explain_iupac_name")
+def explain_iupac_name(name: str) -> dict:
+    from app.explain import explain_name
+
+    return explain_name(name)
+
+
+@celery_app.task(name="app.tasks.name_to_smiles")
+def name_to_smiles(name: str) -> dict:
+    from orthonym.validation.opsin_roundtrip import opsin_parse
+    from rdkit import Chem
+
+    from app.depiction import mol_to_svg_data_uri
+
+    raw = opsin_parse(name)
+    mol = Chem.MolFromSmiles(raw) if raw else None
+    if mol is None:
+        return {
+            "smiles": None,
+            "depiction_svg": None,
+            "error": "Could not parse this name via OPSIN",
+        }
+    return {
+        "smiles": raw,
+        "depiction_svg": mol_to_svg_data_uri(mol),
+        "error": None,
+    }
+
+
 def dispatch_batch(
     job_id: str, prepared: list[dict], best_effort: bool, chunk_size: int
 ) -> int:

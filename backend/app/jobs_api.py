@@ -20,6 +20,7 @@ from app import redis_store
 from app.core.config import get_settings
 from app.depiction import mol_to_svg_data_uri
 from app.inputs import TooManyMolecules, parse, sniff
+from app.ratelimit import check_job_allowed, client_ip, register_job, release_job
 from app.schemas import (
     BatchRow,
     DepictResponse,
@@ -188,8 +189,10 @@ async def create_job(
     fmt, molecules = _parse_or_400(data, settings.MAX_BATCH_SIZE)
 
     job_id = uuid.uuid4().hex
-    client_ip = request.client.host if request.client else "unknown"
-    redis_store.create_job(job_id, len(molecules), fmt.value, client_ip)
+    ip = client_ip(request)
+    check_job_allowed(ip)
+    redis_store.create_job(job_id, len(molecules), fmt.value, ip)
+    register_job(ip, job_id)
 
     prepared = prepared_payload(molecules)
     if len(prepared) <= settings.FAST_PATH_MAX_MOLECULES:
@@ -237,7 +240,7 @@ def _require_complete_meta(job_id: str) -> dict[str, str]:
 @router.get("/api/jobs/{job_id}", response_model=JobStatusResponse)
 def job_status(job_id: str) -> JobStatusResponse:
     meta = _require_complete_meta(job_id)
-    return JobStatusResponse(
+    response = JobStatusResponse(
         job_id=job_id,
         status=meta["status"],
         total=int(meta["total"]),
@@ -246,6 +249,11 @@ def job_status(job_id: str) -> JobStatusResponse:
         created_at=int(meta["created"]),
         expires_at=int(meta["expires"]),
     )
+    if meta["status"] in ("done", "failed"):
+        # Release the slot once the job is finished, so a user is not held
+        # to their concurrent-job cap by work that has already completed.
+        release_job(meta.get("ip", "unknown"), job_id)
+    return response
 
 
 @router.get("/api/jobs/{job_id}/results", response_model=JobResultsResponse)
@@ -333,6 +341,7 @@ def job_results_csv(job_id: str) -> StreamingResponse:
 @router.delete("/api/jobs/{job_id}")
 def delete_job(job_id: str) -> dict[str, str]:
     meta = _meta_or_error(job_id)
+    release_job(meta.get("ip", "unknown"), job_id)
 
     # Explicit keys, never a glob built from a path parameter. Job ids are
     # server-generated uuid4 hex today, but scan_iter(match=f"...{job_id}*")
