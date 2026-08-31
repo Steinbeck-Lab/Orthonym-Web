@@ -11,7 +11,19 @@ from pydantic import BaseModel
 
 
 Status = Literal["pin", "fallback", "best_effort", "abstain", "error"]
-Tier = Literal["T1", "T3", "T4", "T5"]
+# Orthonym's own tier labels, from Orthonym.name_tiered's docstring. The
+# earlier T1/T3/T4/T5 codes were replaced upstream by these names; there is
+# no T-code anywhere in the engine any more. `pin_unverified` is documented
+# upstream as reserved (systematic-PIN certification) and is listed here so a
+# row carrying it validates rather than 500s -- classify() maps it to the
+# honest "best_effort" status, never to "pin".
+Tier = Literal[
+    "pin_verified",
+    "systematic_verified",
+    "best_effort",
+    "abstain",
+    "pin_unverified",
+]
 ExpectedStatus = Literal["pin", "fallback", "abstain"]
 
 
