@@ -155,9 +155,19 @@ def test_a_simultaneous_third_admission_still_cannot_pass_the_cap(monkeypatch):
     pass. Round 2 review: a SEQUENTIAL loop (the original version of this
     test) can never expose that race -- each call fully completes before
     the next one starts, so it passes even against the un-fixed
-    SCARD-then-SADD code. Only real concurrent threads distinguish them
-    (the reviewer measured 40 concurrent admissions giving 5 admitted
-    against a cap of 2 on the un-fixed code, and 2 on the Lua script).
+    SCARD-then-SADD code.
+
+    Round 3 review: the first threaded version of this test (staggered
+    `for t in threads: t.start()`, plus lazy per-thread Redis connection
+    setup) was itself only a 2/15-reliable detector -- threads 1-2 had
+    already SADDed before thread 3 even had a connection open, so the
+    check-then-write window mostly never opened. Measured fix: force each
+    thread's Redis connection open with a ping() BEFORE the race (so
+    connection setup cost happens outside the timed section), then hold
+    every thread at a threading.Barrier(n) so they all call
+    check_and_register_job as close to simultaneously as CPython's GIL
+    allows. That took detection to 15/15 with 0/10 false failures against
+    the real (atomic) code.
 
     Job meta for every job id is created up front, single-threaded, before
     any thread starts -- concurrent admission is what is under test, not
@@ -177,8 +187,11 @@ def test_a_simultaneous_third_admission_still_cannot_pass_the_cap(monkeypatch):
 
     admitted: list[int] = []
     lock = threading.Lock()
+    barrier = threading.Barrier(n)
 
     def attempt(i: int) -> None:
+        redis_store.get_redis().ping()  # force this thread's connection open
+        barrier.wait()  # release every thread as close to together as possible
         try:
             ratelimit.check_and_register_job(IP, f"job-{i}")
         except HTTPException:
@@ -326,13 +339,20 @@ def test_depict_rejects_a_molecule_over_the_atom_limit(redis_client):
     large fused system each ran past 25 s. check_depict_allowed's
     1,200/minute budget bounds request COUNT, not per-call cost, so it is
     not itself a defence against this -- MAX_DEPICT_ATOMS is.
+
+    200-with-error, not 400 (round 3 review, finding 5): unified with the
+    unparseable-SMILES shape below it, so a results-table row can show why
+    inline either way instead of branching on status code first.
     """
     from app.main import app
 
     huge = "C" * 350  # 350 heavy atoms, comfortably over MAX_DEPICT_ATOMS
     c = TestClient(app)
     response = c.get("/api/depict", params={"smiles": huge})
-    assert response.status_code == 400
+    assert response.status_code == 200
+    body = response.json()
+    assert body["depiction_svg"] is None
+    assert body["error"]
 
 
 def test_fast_path_has_its_own_cap(monkeypatch):
@@ -478,6 +498,43 @@ def test_depict_over_http_enforces_its_own_cap(redis_client, monkeypatch):
     c = TestClient(app)
     assert c.get("/api/depict", params={"smiles": "CCO"}).status_code == 200
     assert c.get("/api/depict", params={"smiles": "CCC"}).status_code == 429
+
+
+def test_job_status_over_http_enforces_its_own_poll_cap(
+    redis_client, monkeypatch, job_id
+):
+    # Round 3 review, finding 4, measured: 30 consecutive requests with the
+    # cap at 1 all returned 200 -- no limiter at all on this endpoint.
+    from app.main import app
+
+    monkeypatch.setattr(
+        get_settings(), "RATE_LIMIT_POLL_PER_MINUTE", 1, raising=False
+    )
+    redis_store.create_job(job_id, total=1, fmt="smiles_list", client_ip="::1")
+
+    c = TestClient(app)
+    assert c.get(f"/api/jobs/{job_id}").status_code == 200
+    assert c.get(f"/api/jobs/{job_id}").status_code == 429
+
+
+def test_job_results_over_http_enforces_its_own_poll_cap(
+    redis_client, monkeypatch, job_id
+):
+    from app.main import app
+
+    monkeypatch.setattr(
+        get_settings(), "RATE_LIMIT_POLL_PER_MINUTE", 1, raising=False
+    )
+    redis_store.create_job(job_id, total=1, fmt="smiles_list", client_ip="::1")
+    redis_store.write_chunk(
+        job_id, 0, [{"index": 0, "input": "CCO", "status": "pin"}]
+    )
+    redis_store.assemble_rows(job_id, n_chunks=1)
+    redis_store.set_job_status(job_id, "done")
+
+    c = TestClient(app)
+    assert c.get(f"/api/jobs/{job_id}/results").status_code == 200
+    assert c.get(f"/api/jobs/{job_id}/results").status_code == 429
 
 
 def test_results_csv_over_http_enforces_the_fast_cap(redis_client, monkeypatch, job_id):

@@ -141,7 +141,7 @@ def pretend_a_worker_has_opsin():
 
     record_worker_opsin_status(999999, ok=True)
     yield
-    client.delete("orthonym:worker:999999:opsin")
+    client.hdel("orthonym:workers:opsin", "999999")
 
 
 @pytest.fixture
@@ -149,13 +149,12 @@ def no_worker_opsin(pretend_a_worker_has_opsin):
     """Opt out of the default healthy-worker fake, for a test that asserts
     the fail-closed 503 path. Depends on pretend_a_worker_has_opsin
     explicitly (rather than racing an unordered autouse fixture) so pytest
-    runs that fixture's setup -- which writes the 999999 key -- first, and
-    this deletes it afterwards. Also clears any other worker key a
-    different test may have left, so "no worker" really means none.
+    runs that fixture's setup -- which writes the 999999 field -- first,
+    and this deletes it afterwards. Also clears the whole worker-status
+    hash (round 3 review, finding 3: one hash now, not a key per pid), so
+    "no worker" really means none.
     """
     from app.redis_store import get_redis
 
-    client = get_redis()
-    for key in client.scan_iter(match="orthonym:worker:*:opsin"):
-        client.delete(key)
+    get_redis().delete("orthonym:workers:opsin")
     yield
