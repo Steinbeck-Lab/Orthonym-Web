@@ -17,6 +17,7 @@ from orthonym.validation.opsin_roundtrip import opsin_parse
 from rdkit import Chem
 
 from . import opsin_decompose
+from .jobs_api import router as jobs_router
 from .depiction import mol_to_svg_data_uri
 from .explain import explain_molecule, explain_name
 from .orthonym_service import get_primary_namer, translate_many
@@ -82,6 +83,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(jobs_router)
 
 
 @app.on_event("startup")

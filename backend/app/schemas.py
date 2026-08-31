@@ -115,3 +115,65 @@ class ExplainResponse(BaseModel):
     total_atoms: int = 0
     segments: list[ExplainSegment] = []
     error: Optional[str] = None
+
+
+JobState = Literal["queued", "running", "done", "failed"]
+
+
+class BatchRow(BaseModel):
+    """One molecule's result inside a batch job.
+
+    Deliberately NOT a ResultItem: no depiction_svg. At roughly 5 kB per
+    row an SVG would make a 5,000-row job 25-50 MB in Redis instead of
+    2-5 MB. The frontend fetches a picture per row from /api/depict.
+    """
+
+    index: int
+    input: str
+    input_id: Optional[str] = None
+    smiles: Optional[str] = None
+    name: Optional[str] = None
+    status: Status
+    roundtrip_smiles: Optional[str] = None
+    roundtrip_match: Optional[bool] = None
+    formula: Optional[str] = None
+    limit_code: Optional[str] = None
+    error: Optional[str] = None
+
+
+class JobEnvelope(BaseModel):
+    """Returned when work did not finish inside FAST_PATH_TIMEOUT, and by
+    POST /api/jobs. Callers tell it apart from a completed response by the
+    presence of job_id.
+    """
+
+    job_id: str
+    molecule_count: int
+    status: JobState
+
+
+class JobStatusResponse(BaseModel):
+    job_id: str
+    status: JobState
+    total: int
+    done: int
+    failed: int
+    created_at: int
+    expires_at: int
+
+
+class JobResultsResponse(BaseModel):
+    job_id: str
+    offset: int
+    limit: int
+    total: int
+    rows: list[BatchRow]
+
+
+class ParsePreviewResponse(BaseModel):
+    format: str
+    molecule_count: int
+    # First 5 of each, so a 10,000-molecule paste does not return 10,000 rows
+    # before the user has agreed to run anything.
+    sample: list[BatchRow]
+    errors: list[str]
