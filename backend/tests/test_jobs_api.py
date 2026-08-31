@@ -90,8 +90,8 @@ def test_chunk_order_is_preserved_across_multiple_chunks(redis_client, monkeypat
     # at its default 10, a 5-molecule job takes the single-task fast path and
     # never chunks at all -- so this test would pass while exercising none of
     # the chunking, chord or assembly-ordering code it is named for.
-    monkeypatch.setattr(settings, "FAST_PATH_MAX_MOLECULES", 1, raising=False)
-    monkeypatch.setattr(settings, "BATCH_CHUNK_SIZE", 2, raising=False)
+    monkeypatch.setattr(settings, "FAST_PATH_MAX_MOLECULES", 1)
+    monkeypatch.setattr(settings, "BATCH_CHUNK_SIZE", 2)
 
     smiles = ["CCO", "CCC", "CCCC", "CCCCC", "c1ccccc1"]
     job_id = _submit("\n".join(smiles))["job_id"]
@@ -103,11 +103,12 @@ def test_chunk_order_is_preserved_across_multiple_chunks(redis_client, monkeypat
 
 
 def test_dispatch_batch_chunks_and_assembles_in_order(redis_client, job_id):
-    """The chunking path directly, including the short final chunk.
+    """The chunking path directly: 5 molecules at chunk size 2 is 3 chunks.
 
-    5 molecules at chunk size 2 is 3 chunks: 2 + 2 + 1. The short last chunk
-    is exactly the case where taking start_index from arithmetic
-    (index * chunk_size) instead of from the data would misnumber rows.
+    Ordering across chunks and the chunk count are what this covers. It does
+    NOT prove rows take their index from the data rather than from
+    arithmetic -- with contiguous zero-based indices the two agree by
+    construction, so that property needs the next test.
     """
     from app import redis_store
     from app.inputs import ParsedMolecule
@@ -127,6 +128,148 @@ def test_dispatch_batch_chunks_and_assembles_in_order(redis_client, job_id):
     assert [r["index"] for r in rows] == [0, 1, 2, 3, 4]
     assert [r["input"] for r in rows] == smiles
     assert redis_store.read_job_meta(job_id)["status"] == "done"
+
+
+def test_row_indices_come_from_the_data_not_the_chunk_position(redis_client, job_id):
+    """Non-contiguous indices, which arithmetic cannot reproduce.
+
+    prepared_payload normally emits index == position, so
+    prepared[0]["index"] and index * chunk_size agree and a contiguous
+    fixture cannot tell them apart. These molecules are numbered 10..14, so
+    a row numbered from the chunk's position would come back 0..4.
+    """
+    from app import redis_store
+    from app.tasks import dispatch_batch
+
+    prepared = [
+        {
+            "index": 10 + i,
+            "raw_input": s,
+            "input_id": None,
+            "smiles": s,
+            "error": None,
+        }
+        for i, s in enumerate(["CCO", "CCC", "CCCC", "CCCCC", "c1ccccc1"])
+    ]
+    redis_store.create_job(job_id, total=5, fmt="smiles_list", client_ip="::1")
+
+    assert dispatch_batch(job_id, prepared, True, 2) == 3
+
+    rows = redis_store.read_rows(job_id, 0, 100)
+    assert [r["index"] for r in rows] == [10, 11, 12, 13, 14]
+
+
+def test_a_soft_time_limit_keeps_named_rows_and_times_out_the_rest(
+    redis_client, job_id, monkeypatch
+):
+    """The timeout path, which nothing covered before.
+
+    SoftTimeLimitExceeded subclasses Exception, so the per-molecule
+    `except Exception` used to swallow it: the timeout became one misleading
+    "Naming failed" row and the loop ran on past the limit. This raises it
+    from the third molecule and asserts the first two survive as real rows
+    while the rest are marked limit_code="timeout".
+    """
+    from celery.exceptions import SoftTimeLimitExceeded
+
+    from app import redis_store, tasks
+
+    calls = {"n": 0}
+    real = tasks.name_one
+
+    def fake_name_one(smiles, best_effort):
+        calls["n"] += 1
+        if calls["n"] > 2:
+            raise SoftTimeLimitExceeded()
+        return real(smiles, best_effort)
+
+    monkeypatch.setattr(tasks, "name_one", fake_name_one)
+
+    smiles = ["CCO", "CCC", "CCCC", "CCCCC"]
+    prepared = [
+        {"index": i, "raw_input": s, "input_id": None, "smiles": s, "error": None}
+        for i, s in enumerate(smiles)
+    ]
+    redis_store.create_job(job_id, total=4, fmt="smiles_list", client_ip="::1")
+    tasks.run_chunk(job_id, 0, prepared, True)
+    redis_store.assemble_rows(job_id, n_chunks=1)
+
+    rows = redis_store.read_rows(job_id, 0, 100)
+    assert len(rows) == 4, "the timeout lost rows instead of marking them"
+    assert rows[0]["status"] == "pin"
+    assert [r["limit_code"] for r in rows[2:]] == ["timeout", "timeout"]
+
+
+def test_one_molecule_raising_does_not_lose_the_rest_of_the_chunk(
+    redis_client, job_id, monkeypatch
+):
+    """The "one bad molecule must not lose the other 24" constraint.
+
+    The existing coverage exercises a PARSE failure, which is a different
+    branch -- this one makes naming itself raise.
+    """
+    from app import redis_store, tasks
+
+    real = tasks.name_one
+
+    def fake_name_one(smiles, best_effort):
+        if smiles == "CCC":
+            raise RuntimeError("engine exploded")
+        return real(smiles, best_effort)
+
+    monkeypatch.setattr(tasks, "name_one", fake_name_one)
+
+    prepared = [
+        {"index": i, "raw_input": s, "input_id": None, "smiles": s, "error": None}
+        for i, s in enumerate(["CCO", "CCC", "CCCC"])
+    ]
+    redis_store.create_job(job_id, total=3, fmt="smiles_list", client_ip="::1")
+    tasks.run_chunk(job_id, 0, prepared, True)
+    redis_store.assemble_rows(job_id, n_chunks=1)
+
+    rows = redis_store.read_rows(job_id, 0, 100)
+    assert [r["status"] for r in rows] == ["pin", "error", "pin"]
+    assert "engine exploded" in rows[1]["error"]
+
+
+def test_a_redelivered_close_does_not_destroy_a_finished_job(redis_client):
+    """finalize_job must be idempotent.
+
+    task_acks_late=True makes redelivery real, and assemble_rows deletes the
+    chunk keys as it goes -- so a second, naive close would find nothing,
+    wipe the rows and flip a done job to failed.
+    """
+    from app.tasks import finalize_job
+
+    job_id = _submit("CCO\nc1ccccc1\n")["job_id"]
+    before = client.get(f"/api/jobs/{job_id}/results").json()
+    assert before["rows"], "setup failed: no rows to protect"
+
+    finalize_job(None, job_id, 1)
+
+    after = client.get(f"/api/jobs/{job_id}").json()
+    assert after["status"] == "done"
+    assert client.get(f"/api/jobs/{job_id}/results").json()["rows"] == before["rows"]
+
+
+def test_a_close_with_missing_meta_does_not_claim_done(redis_client):
+    """A job whose meta was evicted must not be reported complete.
+
+    Reading `total` as 0 would make `written < total` false and set "done"
+    over any row count; writing a status at all would recreate the hash with
+    only that field, and a later read would then 500 instead of 410.
+    """
+    from app import redis_store
+    from app.tasks import finalize_job
+
+    job_id = _submit("CCO\n")["job_id"]
+    redis_store.get_redis().delete(redis_store.job_meta_key(job_id))
+
+    assert finalize_job(None, job_id, 1) == 0
+    assert redis_store.read_job_meta(job_id) is None, (
+        "close resurrected a partial meta hash; /api/jobs/{id} will now 500"
+    )
+    assert client.get(f"/api/jobs/{job_id}").status_code == 410
 
 
 def test_a_json_body_without_text_is_400():
@@ -202,7 +345,7 @@ def test_expired_job_is_410(redis_client):
 def test_oversize_input_is_413(monkeypatch):
     from app.core.config import get_settings
 
-    monkeypatch.setattr(get_settings(), "MAX_BATCH_SIZE", 2, raising=False)
+    monkeypatch.setattr(get_settings(), "MAX_BATCH_SIZE", 2)
     response = client.post("/api/jobs", json={"text": "CCO\nCCC\nCCCC\n"})
     assert response.status_code == 413
     assert "2" in response.json()["detail"]

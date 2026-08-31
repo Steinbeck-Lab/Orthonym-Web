@@ -62,12 +62,13 @@ async def _read_input(
     is rejected rather than parsed.
 
     A multipart request with no `file` part has already had its body stream
-    consumed by the time FastAPI resolves `file` to None, so falling
-    through to request.json() would raise a bare RuntimeError ("Stream
-    consumed") -- and an empty or non-JSON body raises a bare
-    JSONDecodeError, and JSON missing "text" raises pydantic's
-    ValidationError. All three would otherwise surface as a raw 500. Caught
-    here so a malformed request comes back as an honest 400 instead.
+    consumed by the time FastAPI resolves `file` to None, so falling through
+    to request.json() raises a bare RuntimeError ("Stream consumed"). An
+    empty or non-JSON body raises JSONDecodeError, and JSON missing "text"
+    raises pydantic's ValidationError. All three would otherwise surface as
+    a raw 500, so they are caught here and reported as an honest 400 -- this
+    is a trust boundary, and a malformed request is the caller's mistake to
+    be told about, not the server's to crash on.
     """
     settings = get_settings()
     if file is not None:
@@ -198,9 +199,27 @@ def _meta_or_error(job_id: str) -> dict[str, str]:
     raise HTTPException(status_code=404, detail="No such job")
 
 
+def _require_complete_meta(job_id: str) -> dict[str, str]:
+    """A meta hash with every field, or 410.
+
+    A partial hash is reachable: any writer that HSETs a single field into an
+    evicted key recreates it carrying only that field. Indexing it directly
+    would raise KeyError and answer 500 where the design promises 410, so a
+    hash missing its `total` is treated as gone rather than trusted.
+    """
+    meta = _meta_or_error(job_id)
+    required = ("status", "total", "done", "failed", "created", "expires")
+    if not all(field in meta for field in required):
+        raise HTTPException(
+            status_code=410,
+            detail="This job's record is incomplete or has expired",
+        )
+    return meta
+
+
 @router.get("/api/jobs/{job_id}", response_model=JobStatusResponse)
 def job_status(job_id: str) -> JobStatusResponse:
-    meta = _meta_or_error(job_id)
+    meta = _require_complete_meta(job_id)
     return JobStatusResponse(
         job_id=job_id,
         status=meta["status"],
@@ -218,13 +237,17 @@ def job_results(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=1000),
 ) -> JobResultsResponse:
-    meta = _meta_or_error(job_id)
+    meta = _require_complete_meta(job_id)
     rows = redis_store.read_rows(job_id, offset, limit)
     return JobResultsResponse(
         job_id=job_id,
         offset=offset,
         limit=limit,
         total=int(meta["total"]),
+        # What a caller can actually page through. On a failed job this is
+        # SHORT of `total`, and a client paginating to `total` would
+        # otherwise never terminate on row count alone.
+        retrievable=redis_store.rows_length(job_id),
         rows=[BatchRow.model_validate(r) for r in rows],
     )
 
