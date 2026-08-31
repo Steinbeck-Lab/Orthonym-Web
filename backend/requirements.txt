@@ -5,3 +5,7 @@ requests
 lxml
 JPype1
 ./vendor/openstout
+celery[redis]>=5.4
+redis>=5.0
+pydantic-settings>=2.0
+PyYAML>=6.0
