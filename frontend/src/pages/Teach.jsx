@@ -1,62 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import DOMPurify from 'dompurify'
 import { explainMolecule } from '../lib/api'
 import { nameTargets, sliceName } from '../lib/nameTargets'
+import { sanitizeSvg, atomRefsOf, segmentAtPath } from '../lib/svgHighlight'
+import { useKetcher } from '../lib/useKetcher'
 import './Teach.css'
 
-// The SVG comes from Orthonym's own backend (RDKit-generated structure
-// drawing, never raw user text echoed into markup), but it's injected
-// directly into the DOM (see the effect below) -- unlike an <img
-// src="data:..."> elsewhere in this app, inlined SVG becomes live DOM and
-// could execute embedded scripts/handlers if the backend or a future
-// change ever introduced one. Sanitize defensively regardless of the
-// current trusted source. `class`/`style` are explicitly kept: the
-// hover-highlighting mechanism below depends on both (atom-N/bond-N
-// classes to find elements, inline style to read/restore their original
-// stroke and fill colors).
-function sanitizeSvg(svg) {
-  return DOMPurify.sanitize(svg, {
-    USE_PROFILES: { svg: true, svgFilters: true },
-    ADD_ATTR: ['class', 'style'],
-  })
-}
-
-// Matches a CSS class attribute like "bond-1 atom-1 atom-2" or "atom-2" --
-// pulls out every atom-N reference on that SVG element.
-const ATOM_REF_RE = /atom-(\d+)/g
-
-function atomRefsOf(classAttr) {
-  if (!classAttr) return []
-  return [...classAttr.matchAll(ATOM_REF_RE)].map((m) => Number(m[1]))
-}
-
-// The vendored standalone Ketcher app posts window.parent a single
-// {eventType: "init"} message once its structure service has actually
-// finished initialising. That fires LATER than the iframe's own `load`
-// event, which only means the HTML shell downloaded. Listening for this
-// message is the real "editor is interactive" signal; a bare onLoad
-// handler races the startup and can grab `contentWindow.ketcher` before it
-// exists. Same pattern as StructureToIupac.jsx, deliberately duplicated
-// rather than abstracted -- the two pages will diverge.
-const READY_TIMEOUT_MS = 20000
-
-// Resolves a dotted path like "0.2" to its segment: top-level index 0, then
-// its child index 2. Returns null for a stale path, which happens normally
-// when a new molecule replaces the old one while something is pinned.
-function segmentAtPath(segments, path) {
-  if (path === null || path === undefined) return null
-  const parts = String(path).split('.').map(Number)
-  let node = segments?.[parts[0]]
-  for (let i = 1; i < parts.length && node; i += 1) {
-    node = node.children?.[parts[i]]
-  }
-  return node || null
-}
-
 function Teach() {
-  const iframeRef = useRef(null)
-  const [editorState, setEditorState] = useState('loading') // loading | ready | error
+  const { iframeRef, editorState, handleFrameLoad, handleFrameError, getKetcher } = useKetcher()
   const [phase, setPhase] = useState('idle') // idle | working | done | failed
   const [data, setData] = useState(null)
   const [note, setNote] = useState(null)
@@ -66,39 +17,12 @@ function Teach() {
   const svgWrapperRef = useRef(null)
   const originalColorsRef = useRef(new Map())
 
-  useEffect(() => {
-    function handleMessage(event) {
-      if (event.data && event.data.eventType === 'init') {
-        setEditorState('ready')
-      }
-    }
-    window.addEventListener('message', handleMessage)
-    const timeoutId = setTimeout(() => {
-      setEditorState((current) => (current === 'loading' ? 'error' : current))
-    }, READY_TIMEOUT_MS)
-    return () => {
-      window.removeEventListener('message', handleMessage)
-      clearTimeout(timeoutId)
-    }
-  }, [])
-
-  function handleFrameLoad() {
-    // Fast networks and warm caches can beat our listener into place.
-    if (iframeRef.current?.contentWindow?.ketcher) {
-      setEditorState('ready')
-    }
-  }
-
-  function handleFrameError() {
-    setEditorState('error')
-  }
-
   async function handleName() {
     if (phase === 'working') return
     setNote(null)
     setPinnedPath(null)
     setHoveredPath(null)
-    const ketcher = iframeRef.current?.contentWindow?.ketcher
+    const ketcher = getKetcher()
     if (!ketcher) {
       setNote('The drawing area is still starting up. Give it a moment and try again.')
       return
