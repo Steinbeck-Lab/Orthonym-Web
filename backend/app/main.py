@@ -22,6 +22,7 @@ from .inputs import InputFormat
 from .inputs import parse as parse_molecules
 from .jobs_api import admit_and_dispatch
 from .jobs_api import router as jobs_router
+from .jvm_guard import require_a_live_jvm
 from .ratelimit import check_fast_allowed, client_ip
 from .schemas import (
     ExamplesResponse,
@@ -131,22 +132,6 @@ async def _limit_translate_body_size(request: Request, call_next):
 app.include_router(jobs_router)
 
 
-def _require_a_live_jvm() -> None:
-    """OpenSTOUT's SELF-01 gate fails OPEN without a JVM, shipping a
-    fallback labelled as a verified PIN. Serving names in that state would
-    break PRODUCT.md principle 3, so we refuse instead.
-    """
-    if not redis_store.any_worker_has_opsin():
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "No worker currently has a live JVM, so OPSIN cannot verify "
-                "any name. Refusing rather than serving names with an "
-                "unverified confidence tier. See /api/health."
-            ),
-        )
-
-
 def _timeout_504(settings) -> HTTPException:
     """For the three endpoints with no job store behind them: a JobEnvelope
     here would be a lie (round 1 review, Critical 4, a deliberate departure
@@ -196,19 +181,24 @@ def examples() -> ExamplesResponse:
 @app.post("/api/translate", response_model=TranslateResponse | JobEnvelope)
 def translate(request: Request, body: TranslateRequest):
     settings = get_settings()
+    ip = client_ip(request)
+    # Before the blank-list short-circuit below, not after (round 2
+    # review, finding 4): a request with an all-blank `smiles` list used to
+    # return before this ran at all, making /api/translate an unlimited-
+    # rate endpoint for anyone who padded the body with whitespace instead
+    # of real SMILES. The 200-with-empty-results CONTRACT is unchanged --
+    # only its place relative to the rate limit moved.
+    check_fast_allowed(ip)
 
     non_blank = [s for s in body.smiles if s.strip()]
     if not non_blank:
         # Restored (round 1 review, Important): this used to be, and
         # frontend/src/lib/api.js still assumes it is, a normal 200 with no
-        # results, not a 400. An empty submission does no work at all, so
-        # it short-circuits before the rate limit / live-JVM gate below
-        # rather than spending either on nothing.
+        # results, not a 400. An empty submission does no naming work at
+        # all, so it still skips the live-JVM gate below.
         return TranslateResponse(results=[])
 
-    ip = client_ip(request)
-    check_fast_allowed(ip)
-    _require_a_live_jvm()
+    require_a_live_jvm()
 
     if len(non_blank) > settings.MAX_BATCH_SIZE:
         raise HTTPException(
@@ -255,7 +245,7 @@ def iupac_to_smiles(
     settings = get_settings()
     ip = client_ip(request)
     check_fast_allowed(ip)
-    _require_a_live_jvm()
+    require_a_live_jvm()
 
     try:
         result = name_to_smiles.apply_async(
@@ -273,7 +263,7 @@ def explain(
     settings = get_settings()
     ip = client_ip(request)
     check_fast_allowed(ip)
-    _require_a_live_jvm()
+    require_a_live_jvm()
 
     try:
         result = explain_smiles.apply_async(
@@ -291,7 +281,7 @@ def explain_by_name(
     settings = get_settings()
     ip = client_ip(request)
     check_fast_allowed(ip)
-    _require_a_live_jvm()
+    require_a_live_jvm()
 
     try:
         result = explain_iupac_name.apply_async(
