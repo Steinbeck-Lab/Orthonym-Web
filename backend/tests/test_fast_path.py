@@ -50,9 +50,20 @@ def test_translate_above_the_fast_limit_returns_a_job_envelope(
     assert body["molecule_count"] == 2
 
 
-def test_translate_rejects_an_empty_list(redis_client):
+def test_translate_returns_empty_results_for_an_empty_list(redis_client):
+    # Round 1 review, Important: this used to 400. frontend/src/lib/api.js
+    # throws on a non-2xx response and nobody decided this should change --
+    # restored to the original 200-with-empty-results behaviour. An empty
+    # submission does no work, so it must not need a live worker JVM either.
     response = client.post("/api/translate", json={"smiles": []})
-    assert response.status_code == 400
+    assert response.status_code == 200
+    assert response.json() == {"results": []}
+
+
+def test_translate_returns_empty_results_for_an_all_blank_list(redis_client):
+    response = client.post("/api/translate", json={"smiles": ["   ", ""]})
+    assert response.status_code == 200
+    assert response.json() == {"results": []}
 
 
 def test_health_reports_worker_opsin_status(redis_client):
@@ -114,3 +125,99 @@ def test_main_does_not_import_opsin_decompose():
 
     source = Path(app.main.__file__).read_text()
     assert "opsin_decompose" not in source
+
+
+class _FakeTimedOutResult:
+    """Stands in for an AsyncResult whose .get(timeout=...) never got an
+    answer in time, without needing a real broker/worker round trip.
+    """
+
+    def get(self, timeout=None):
+        from celery.exceptions import TimeoutError as CeleryTimeoutError
+
+        raise CeleryTimeoutError("simulated timeout for testing")
+
+
+def test_translate_returns_a_job_envelope_on_timeout(redis_client, monkeypatch):
+    """Round 1 review, Critical 4: nothing caught celery.exceptions.
+    TimeoutError at all -- it escaped as a bare 500, even though
+    schemas.JobEnvelope's own docstring promises a job envelope on timeout.
+    /api/translate DOES have job machinery, so on timeout it must fall back
+    to a real, pollable job rather than failing the request.
+    """
+    from app import main as main_module
+
+    monkeypatch.setattr(
+        main_module.translate_fast,
+        "apply_async",
+        lambda *a, **k: _FakeTimedOutResult(),
+    )
+    response = client.post("/api/translate", json={"smiles": ["CCO"]})
+    assert response.status_code == 200
+    body = response.json()
+    assert "job_id" in body
+    assert body["molecule_count"] == 1
+
+    # The fallback job is real and pollable -- translate_job_inline still
+    # runs eagerly (a different task, not the one monkeypatched above), so
+    # it has already completed.
+    status = client.get(f"/api/jobs/{body['job_id']}").json()
+    assert status["status"] == "done"
+
+
+def test_iupac_to_smiles_returns_504_on_timeout(redis_client, monkeypatch):
+    """/api/iupac-to-smiles has no job store behind it, so a JobEnvelope
+    here would be a lie -- a deliberate departure from a literal "return a
+    union" reading, recorded rather than silently decided.
+    """
+    from app import main as main_module
+
+    monkeypatch.setattr(
+        main_module.name_to_smiles,
+        "apply_async",
+        lambda *a, **k: _FakeTimedOutResult(),
+    )
+    response = client.get("/api/iupac-to-smiles", params={"name": "ethanol"})
+    assert response.status_code == 504
+
+
+def test_explain_returns_504_on_timeout(redis_client, monkeypatch):
+    from app import main as main_module
+
+    monkeypatch.setattr(
+        main_module.explain_smiles,
+        "apply_async",
+        lambda *a, **k: _FakeTimedOutResult(),
+    )
+    response = client.get("/api/explain", params={"smiles": "CCO"})
+    assert response.status_code == 504
+
+
+def test_explain_name_returns_504_on_timeout(redis_client, monkeypatch):
+    from app import main as main_module
+
+    monkeypatch.setattr(
+        main_module.explain_iupac_name,
+        "apply_async",
+        lambda *a, **k: _FakeTimedOutResult(),
+    )
+    response = client.get("/api/explain-name", params={"name": "ethanol"})
+    assert response.status_code == 504
+
+
+def test_translate_over_http_enforces_the_fast_per_minute_cap(
+    redis_client, monkeypatch
+):
+    """Round 1 review, Important: deleting check_fast_allowed from all
+    four main.py endpoint bodies used to leave every test green, because
+    nothing exercised the cap over real HTTP -- only
+    ratelimit.check_fast_allowed directly, in tests/test_rate_limit.py.
+    """
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(
+        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 2, raising=False
+    )
+    assert client.post("/api/translate", json={"smiles": ["CCO"]}).status_code == 200
+    assert client.post("/api/translate", json={"smiles": ["CCC"]}).status_code == 200
+    assert client.post("/api/translate", json={"smiles": ["CCCC"]}).status_code == 429

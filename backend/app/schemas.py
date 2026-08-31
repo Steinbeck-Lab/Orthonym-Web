@@ -63,6 +63,11 @@ class TranslateResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str
+    # Whether at least one Celery worker has reported a live JVM. See
+    # app.redis_store.any_worker_has_opsin -- this is what "OK" versus
+    # "DEGRADED" is actually reporting on, and what makes every naming
+    # endpoint 503 rather than serving a name with an unverified tier.
+    opsin: str
 
 
 class ExampleItem(BaseModel):
