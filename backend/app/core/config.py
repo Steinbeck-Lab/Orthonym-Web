@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     RATE_LIMIT_MAX_CONCURRENT_JOBS: int = 2
     RATE_LIMIT_JOBS_PER_HOUR: int = 20
     RATE_LIMIT_FAST_PER_MINUTE: int = 60
+    # /api/depict is called once per visible row in a batch results table --
+    # a legitimate 1,000-row view is 1,000 calls well within a minute, which
+    # RATE_LIMIT_FAST_PER_MINUTE (sized for a single OPSIN lookup) would
+    # wrongly treat as abuse. Same mechanism, a much larger budget: it is
+    # pure RDKit with no JVM/worker/queue behind it, so the cost per call is
+    # far lower anyway.
+    RATE_LIMIT_DEPICT_PER_MINUTE: int = 1200
 
     CHUNK_SOFT_TIME_LIMIT: int = 600
     CHUNK_HARD_TIME_LIMIT: int = 900

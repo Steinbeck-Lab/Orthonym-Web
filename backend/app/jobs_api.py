@@ -20,7 +20,14 @@ from app import redis_store
 from app.core.config import get_settings
 from app.depiction import mol_to_svg_data_uri
 from app.inputs import TooManyMolecules, parse, sniff
-from app.ratelimit import check_job_allowed, client_ip, register_job, release_job
+from app.ratelimit import (
+    check_and_register_job,
+    check_depict_allowed,
+    check_fast_allowed,
+    check_job_allowed,
+    client_ip,
+    release_job,
+)
 from app.schemas import (
     BatchRow,
     DepictResponse,
@@ -154,10 +161,51 @@ def prepared_payload(molecules) -> list[dict]:
     ]
 
 
+def admit_and_dispatch(
+    ip: str, molecules, fmt: str, best_effort: bool
+) -> str:
+    """Admit, register, and dispatch one batch job as a single unit.
+
+    The ONLY place that creates and dispatches a batch job -- POST
+    /api/jobs and POST /api/translate's over-the-fast-limit and
+    ratelimit-timeout branches all call this, so there is no path that
+    dispatches without admitting (round 1 review, Critical 2).
+
+    Job meta is created BEFORE the atomic admission check, not after: a
+    concurrent admission call from the SAME ip self-heals stale members by
+    treating "no meta yet" the same as "meta expired long ago" (see
+    ratelimit._ADMIT_JOB_SCRIPT), so creating the meta first (status
+    "queued", not done/failed, present) is what keeps that self-heal from
+    evicting a job that is still being admitted. If admission is then
+    rejected, the now-orphaned meta hash is deleted immediately rather than
+    left to expire on its own TTL.
+    """
+    settings = get_settings()
+    job_id = uuid.uuid4().hex
+    redis_store.create_job(job_id, len(molecules), fmt, ip)
+    try:
+        check_and_register_job(ip, job_id)
+    except HTTPException:
+        redis_store.get_redis().delete(redis_store.job_meta_key(job_id))
+        raise
+
+    prepared = prepared_payload(molecules)
+    if len(prepared) <= settings.FAST_PATH_MAX_MOLECULES:
+        translate_job_inline.apply_async(
+            args=[job_id, prepared, best_effort], queue="fast"
+        )
+    else:
+        dispatch_batch(job_id, prepared, best_effort, settings.BATCH_CHUNK_SIZE)
+    return job_id
+
+
 @router.post("/api/parse-preview", response_model=ParsePreviewResponse)
 async def parse_preview(
     request: Request, file: UploadFile | None = File(default=None)
 ) -> ParsePreviewResponse:
+    # Cheapest thing here to abuse: no admission, no parsing cost gate at
+    # all before this. Same per-minute cap as the other single-shot reads.
+    check_fast_allowed(client_ip(request))
     settings = get_settings()
     data, _ = await _read_input(request, file)
     fmt, molecules = _parse_or_400(data, settings.MAX_BATCH_SIZE)
@@ -185,23 +233,18 @@ async def create_job(
     request: Request, file: UploadFile | None = File(default=None)
 ) -> JobEnvelope:
     settings = get_settings()
+    ip = client_ip(request)
+    # Before reading or parsing anything: a 429'd caller should not have
+    # already made the server read up to 50 MB and RDKit-parse up to
+    # 10,000 molecules first (round 1 review, Important). This is a cheap,
+    # non-authoritative pre-check -- admit_and_dispatch's
+    # check_and_register_job is what actually enforces the cap.
+    check_job_allowed(ip)
+
     data, best_effort = await _read_input(request, file)
     fmt, molecules = _parse_or_400(data, settings.MAX_BATCH_SIZE)
 
-    job_id = uuid.uuid4().hex
-    ip = client_ip(request)
-    check_job_allowed(ip)
-    redis_store.create_job(job_id, len(molecules), fmt.value, ip)
-    register_job(ip, job_id)
-
-    prepared = prepared_payload(molecules)
-    if len(prepared) <= settings.FAST_PATH_MAX_MOLECULES:
-        translate_job_inline.apply_async(
-            args=[job_id, prepared, best_effort], queue="fast"
-        )
-    else:
-        dispatch_batch(job_id, prepared, best_effort, settings.BATCH_CHUNK_SIZE)
-
+    job_id = admit_and_dispatch(ip, molecules, fmt.value, best_effort)
     return JobEnvelope(
         job_id=job_id, molecule_count=len(molecules), status="queued"
     )
@@ -291,7 +334,7 @@ def _csv_safe(value):
 
 
 @router.get("/api/jobs/{job_id}/results.csv")
-def job_results_csv(job_id: str) -> StreamingResponse:
+def job_results_csv(request: Request, job_id: str) -> StreamingResponse:
     """The finished job as CSV. Only for a job that has actually finished.
 
     A mid-run download would hand back a header-only or half-length file
@@ -300,6 +343,7 @@ def job_results_csv(job_id: str) -> StreamingResponse:
     rather than served short. A `failed` job IS served, because its partial
     rows are real results, but the status header and the filename say so.
     """
+    check_fast_allowed(client_ip(request))
     meta = _require_complete_meta(job_id)
     status = meta["status"]
     if status not in ("done", "failed"):
@@ -369,6 +413,7 @@ MAX_DEPICT_SMILES = 4000
 
 @router.get("/api/depict", response_model=DepictResponse)
 def depict(
+    request: Request,
     smiles: str = Query(..., min_length=1, max_length=MAX_DEPICT_SMILES),
     response: Response = None,  # noqa: B008 - FastAPI injects this
 ) -> DepictResponse:
@@ -378,8 +423,12 @@ def depict(
     batch rows deliberately carry no depiction. That also means a 1,000-row
     table makes 1,000 calls here, so the response is cacheable: the same
     SMILES always renders the same picture, and the renderer is
-    deterministic.
+    deterministic. check_depict_allowed, not check_fast_allowed: this
+    endpoint's own legitimate traffic pattern (one call per visible row) is
+    exactly what check_fast_allowed's 60/minute budget would mistake for
+    abuse.
     """
+    check_depict_allowed(client_ip(request))
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return DepictResponse(

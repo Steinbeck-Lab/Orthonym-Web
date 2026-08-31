@@ -177,6 +177,14 @@ def _close_job(job_id: str, n_chunks: int) -> int:
     Idempotent. task_acks_late=True makes redelivery real, and assemble_rows
     deletes the chunk keys as it goes -- so a second, naive close would find
     nothing, wipe a finished job's rows and flip it to failed.
+
+    Also releases the job's per-IP concurrent-job slot here, as the fast
+    path: a caller who submits and never polls GET /api/jobs/{id} (the
+    only other release point, along with DELETE) would otherwise hold that
+    slot until the job's TTL expired. This is not the ONLY thing that can
+    release it, though -- when `meta` itself is missing (below) there is no
+    `ip` on hand to release from at all, which is exactly what
+    check_and_register_job's self-healing exists to cover instead.
     """
     meta = redis_store.read_job_meta(job_id)
     if meta is None:
@@ -193,6 +201,7 @@ def _close_job(job_id: str, n_chunks: int) -> int:
         )
         return 0
 
+    ip = meta.get("ip", "unknown")
     total = int(meta.get("total", 0))
     already = redis_store.rows_length(job_id)
     if meta.get("status") == "done" and already == total:
@@ -201,11 +210,17 @@ def _close_job(job_id: str, n_chunks: int) -> int:
             job_id,
             already,
         )
+        # Idempotent: release_job's own SREM is a no-op if this job's slot
+        # was already freed by the FIRST close. Covers the leak class no
+        # errback reaches -- translate_job_inline has none, and this is the
+        # fast path's own terminal state, not a chord callback.
+        redis_store.remove_ip_job(ip, job_id)
         return already
 
     written = redis_store.assemble_rows(job_id, n_chunks)
     if written < total:
         redis_store.set_job_status(job_id, "failed")
+        redis_store.remove_ip_job(ip, job_id)
         logger.error(
             "Job %s assembled %s of %s rows and is INCOMPLETE -- marked "
             "failed. See the preceding assemble_rows error for which chunks "
@@ -217,6 +232,7 @@ def _close_job(job_id: str, n_chunks: int) -> int:
         return written
 
     redis_store.set_job_status(job_id, "done")
+    redis_store.remove_ip_job(ip, job_id)
     logger.info("Job %s finalised: %s rows from %s chunks", job_id, written, n_chunks)
     return written
 
@@ -277,9 +293,16 @@ def mark_job_failed(request, exc, traceback, job_id: str) -> None:
     Celery skips a chord's body when a header task fails, so finalize_job
     never runs and a caller polls a progress bar that will not move until the
     24-hour TTL turns it into a 404. Honest, but useless.
+
+    Also releases the job's per-IP concurrent-job slot, same reasoning as
+    _close_job -- a caller who never polls should not stay charged against
+    their cap for a job that has already reached a terminal state.
     """
     logger.error("Job %s failed with %r; marking it failed", job_id, exc)
     redis_store.set_job_status(job_id, "failed")
+    meta = redis_store.read_job_meta(job_id)
+    if meta is not None:
+        redis_store.remove_ip_job(meta.get("ip", "unknown"), job_id)
 
 
 @celery_app.task(name="app.tasks.translate_fast")
