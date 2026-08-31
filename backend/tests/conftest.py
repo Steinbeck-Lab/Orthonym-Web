@@ -117,3 +117,20 @@ def pretend_a_worker_has_opsin():
     record_worker_opsin_status(999999, ok=True)
     yield
     get_redis().delete("stitch:worker:999999:opsin")
+
+
+@pytest.fixture
+def no_worker_opsin(pretend_a_worker_has_opsin):
+    """Opt out of the default healthy-worker fake, for a test that asserts
+    the fail-closed 503 path. Depends on pretend_a_worker_has_opsin
+    explicitly (rather than racing an unordered autouse fixture) so pytest
+    runs that fixture's setup -- which writes the 999999 key -- first, and
+    this deletes it afterwards. Also clears any other worker key a
+    different test may have left, so "no worker" really means none.
+    """
+    from app.redis_store import get_redis
+
+    client = get_redis()
+    for key in client.scan_iter(match="stitch:worker:*:opsin"):
+        client.delete(key)
+    yield

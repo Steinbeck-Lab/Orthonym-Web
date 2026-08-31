@@ -15,7 +15,7 @@ import uuid
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import opsin_decompose, redis_store
+from . import redis_store
 from .core.config import get_settings
 from .jobs_api import router as jobs_router
 from .ratelimit import check_fast_allowed, client_ip
@@ -68,11 +68,15 @@ EXAMPLES = [
 ]
 
 # Nothing else in this app configures logging, so without this, plain
-# logger.info()/logger.exception() calls (e.g. opsin_decompose's startup
-# and failure diagnostics) are silently dropped -- Python's logging module
-# only falls back to a stderr "lastResort" handler at WARNING+ when no
-# handler is configured anywhere in the hierarchy. Explicit INFO-level
-# config is what actually makes "fails loudly, not silently" true.
+# logger.info()/logger.exception() calls anywhere in the process are
+# silently dropped -- Python's logging module only falls back to a stderr
+# "lastResort" handler at WARNING+ when no handler is configured anywhere
+# in the hierarchy. Explicit INFO-level config is what actually makes
+# "fails loudly, not silently" true. This process no longer runs any
+# OPSIN startup check of its own (OPSIN only lives in Celery workers now,
+# via celery_app._start_child_jvm) -- this still matters for eager-mode
+# test runs, which execute task bodies (and their logger calls) inline in
+# this same process.
 logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="STITCH backend")
@@ -86,20 +90,6 @@ app.add_middleware(
 )
 
 app.include_router(jobs_router)
-
-
-@app.on_event("startup")
-def _verify_opsin_internals() -> None:
-    # opsin_decompose reflects into OPSIN's package-private internals to
-    # get per-substituent atom highlighting on the Explain page (see that
-    # module's docstring). It always degrades safely on its own if the API
-    # shape has changed -- this just makes that check happen loudly at boot
-    # instead of silently on whichever request first needs it.
-    ok = opsin_decompose.self_check()
-    logging.getLogger(__name__).info(
-        "Explain name decomposition: %s",
-        "available" if ok else "disabled (see preceding log for why)",
-    )
 
 
 def _require_a_live_jvm() -> None:
