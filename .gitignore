@@ -23,3 +23,18 @@ dist/
 # is load-bearing (see docs/superpowers/specs/) and cannot be re-fetched by
 # any script in this repo -- vendor-openstout.sh copies it from a local
 # OpenSTOUT checkout that a fresh clone will not have.
+
+# graphify knowledge-graph output: 29 MB of generated data, rebuildable
+# with /graphify. The cache/ subdir makes an incremental rebuild cheap.
+graphify-out/
+
+# Stray design reference dropped in the repo root during the Bugatti/ChemAudit
+# review pass. The design system it fed is recorded in DESIGN.md; the image
+# itself is a source, not a deliverable.
+original-*.webp
+
+# macOS-side venv. The tracked-in-history backend/.venv is a Linux venv
+# (/home/kohulan/STITCH) and cannot run here; .venv-mac is the local
+# equivalent, built from backend/vendor/openstout so the pinned v1.0.0
+# snapshot is what tests actually exercise.
+.venv-mac/
