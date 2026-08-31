@@ -30,7 +30,14 @@ _MINUTE = 60
 # already aged out, is dropped before counting. This is what makes it safe
 # for _close_job/mark_job_failed to skip releasing in the cases they
 # cannot reach at all (no ip on hand, no errback, a hard-limit SIGKILL) --
-# the next admission call from that IP cleans them up itself.
+# the next admission call from that IP cleans them up itself. One
+# consequence this does NOT try to fix (round 2 review): if the Redis
+# container's volatile-lru evicts a RUNNING job's meta under memory
+# pressure, the next admission reads that the same way it reads a
+# genuinely finished job -- as absent -- and frees the slot early. Rare,
+# and the alternative (never self-healing on absence) reintroduces the
+# permanent leak this exists to prevent, so it is accepted rather than
+# solved.
 #
 # One round trip, so N simultaneous submissions from one IP cannot all read
 # the same pre-admission count and all pass the cap (round 1 review,
@@ -83,13 +90,22 @@ def _bucket(raw: str) -> str | None:
     The value becomes part of a Redis key, so attacker-supplied header text
     must never reach it unvalidated. IPv6 is bucketed by /64 -- a single
     routed allocation -- not /128: one address per rotating /64 would
-    otherwise be 2**64 free buckets for the same client.
+    otherwise be 2**64 free buckets for the same client. An IPv4-mapped
+    IPv6 address (::ffff:a.b.c.d) is normalised to its plain IPv4 form
+    FIRST: bucketing it as IPv6 instead would apply /64 to an address
+    whose first 64 bits are always the same fixed prefix, so EVERY mapped
+    address (and, per the round 2 review's measurement, an address like
+    ::1 that shares that same all-zero prefix) collapses onto one shared
+    bucket regardless of the actual v4 address embedded in it.
     """
     try:
         parsed = ipaddress.ip_address(raw)
     except ValueError:
         return None
     if isinstance(parsed, ipaddress.IPv6Address):
+        mapped = parsed.ipv4_mapped
+        if mapped is not None:
+            return str(mapped)
         network = ipaddress.ip_network(f"{parsed}/64", strict=False)
         return str(network.network_address)
     return str(parsed)
@@ -108,6 +124,15 @@ def client_ip(request: Request) -> str:
     first when present, since it carries no attacker-supplied prefix at
     all. (Round 1 review, Critical 3: the previous version read the
     leftmost XFF hop and ignored X-Real-IP entirely -- exactly backwards.)
+
+    Only the RIGHTMOST hop is ever consulted -- not a walk further left
+    looking for the first hop that happens to parse. Round 2 review: a
+    header like "1.2.3.4, junk" used to have the loop skip over the
+    unparseable rightmost hop and fall through to "1.2.3.4", which is
+    attacker-supplied text sitting to ITS left. If the one hop that is
+    actually trustworthy does not parse, the honest move is to fall back
+    to the TCP peer, not to keep searching left through text the client
+    controls.
     """
     settings = get_settings()
     if settings.TRUST_PROXY_HEADERS:
@@ -119,8 +144,8 @@ def client_ip(request: Request) -> str:
 
         forwarded = request.headers.get("x-forwarded-for", "")
         hops = [hop.strip() for hop in forwarded.split(",") if hop.strip()]
-        for hop in reversed(hops):
-            bucketed = _bucket(hop)
+        if hops:
+            bucketed = _bucket(hops[-1])
             if bucketed:
                 return bucketed
 
@@ -139,19 +164,8 @@ def _depict_minute_key(ip: str) -> str:
     return f"orthonym:ip:{ip}:depict:{int(time.time()) // _MINUTE}"
 
 
-def check_job_allowed(ip: str) -> None:
-    """A cheap, non-authoritative pre-check: reject an obviously-over-cap
-    caller before the server reads or parses their submission at all
-    (round 1 review, Important -- a 429'd caller had already made the
-    server read up to 50 MB and RDKit-parse up to 10,000 molecules).
-
-    check_and_register_job's atomic script, called right before a job is
-    actually created and dispatched, is the one that actually enforces the
-    cap; a caller that races past this cheap check is still caught there.
-    """
+def _reject_if_concurrent_cap_exceeded(ip: str) -> None:
     settings = get_settings()
-    client = get_redis()
-
     active = _admit_job_script()(
         keys=[ip_jobs_key(ip)],
         args=[
@@ -170,6 +184,45 @@ def check_job_allowed(ip: str) -> None:
             ),
         )
 
+
+def check_concurrent_cap_only(ip: str) -> None:
+    """A cheap, early, non-authoritative pre-check: reject an obviously-
+    over-cap caller before the server reads or parses their submission at
+    all (round 1 review, Important -- a 429'd caller had already made the
+    server read up to 50 MB and RDKit-parse up to 10,000 molecules).
+
+    Concurrent cap only, and deliberately does NOT touch the hourly
+    counter -- check_job_allowed (below) is where that is counted, exactly
+    once per admission, from app.jobs_api.admit_and_dispatch. Calling
+    check_job_allowed here TOO, as an earlier version of this pre-check
+    did, would charge the hourly cap twice for every POST /api/jobs
+    submission while /api/translate's job branch (which never called this
+    pre-check at all) charged it zero times -- which is exactly the round
+    2 review's finding 1.
+    """
+    _reject_if_concurrent_cap_exceeded(ip)
+
+
+def check_job_allowed(ip: str) -> None:
+    """The admission gate: concurrent cap (a cheap self-healing dry-run)
+    AND the hourly cap, together. Called exactly once per admission, from
+    app.jobs_api.admit_and_dispatch -- both POST /api/jobs and
+    POST /api/translate's job-dispatch branches go through
+    admit_and_dispatch, so this now applies uniformly to both (round 2
+    review, finding 1: only POST /api/jobs used to call this, so
+    RATE_LIMIT_JOBS_PER_HOUR did not exist at all on the envelope path --
+    measured at 30 jobs of up to 10,000 molecules each in 30 requests,
+    where POST /api/jobs would have 429'd after 3).
+
+    Not itself the TOCTOU-safe registration step -- check_and_register_job
+    is. The hourly counter does not need the same Lua treatment: a bare
+    INCR is already atomic, so there is no separate check-then-write race
+    to close for it the way there was for the concurrent-job set.
+    """
+    _reject_if_concurrent_cap_exceeded(ip)
+
+    settings = get_settings()
+    client = get_redis()
     key = _hour_key(ip)
     count = client.incr(key)
     if count == 1:
@@ -187,13 +240,16 @@ def check_job_allowed(ip: str) -> None:
 
 
 def check_and_register_job(ip: str, job_id: str) -> None:
-    """The authoritative gate: atomically self-heal, count, and register in
-    one round trip, right before a job is actually created and dispatched.
+    """The TOCTOU-safe registration step: atomically self-heal, count, and
+    register in one round trip, right before a job is actually created and
+    dispatched.
 
     No code path may create-and-dispatch a job without going through this
     (round 1 review, Critical 2) -- see app.jobs_api.admit_and_dispatch,
     which both POST /api/jobs and POST /api/translate's over-the-fast-limit
-    /ratelimit-timeout branches call.
+    /ratelimit-timeout branches call. admit_and_dispatch also calls
+    check_job_allowed (above) for the hourly cap, which this does not
+    itself enforce.
     """
     settings = get_settings()
     result = _admit_job_script()(
@@ -237,7 +293,9 @@ def check_depict_allowed(ip: str) -> None:
     -- a legitimate 1,000-row view is 1,000 calls well within a minute.
     check_fast_allowed's budget (60/minute, sized for a single OPSIN
     lookup) would treat ordinary use as abuse, so this is the same
-    mechanism against a separate, much larger budget instead.
+    mechanism against a separate, much larger budget instead. This is a
+    request-count throttle, not a cost bound -- see jobs_api.MAX_DEPICT_ATOMS
+    for the latter, which is what actually keeps one call cheap.
     """
     settings = get_settings()
     client = get_redis()
