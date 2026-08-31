@@ -83,10 +83,14 @@ def test_results_are_paginated(redis_client):
 
 
 def test_chunk_order_is_preserved_across_multiple_chunks(redis_client, monkeypatch):
-    # Force several chunks so assembly ordering is actually exercised.
     from app.core.config import get_settings
 
     settings = get_settings()
+    # BOTH knobs, and the first one is the point: with FAST_PATH_MAX_MOLECULES
+    # at its default 10, a 5-molecule job takes the single-task fast path and
+    # never chunks at all -- so this test would pass while exercising none of
+    # the chunking, chord or assembly-ordering code it is named for.
+    monkeypatch.setattr(settings, "FAST_PATH_MAX_MOLECULES", 1, raising=False)
     monkeypatch.setattr(settings, "BATCH_CHUNK_SIZE", 2, raising=False)
 
     smiles = ["CCO", "CCC", "CCCC", "CCCCC", "c1ccccc1"]
@@ -96,6 +100,47 @@ def test_chunk_order_is_preserved_across_multiple_chunks(redis_client, monkeypat
     ).json()["rows"]
     assert [r["index"] for r in rows] == [0, 1, 2, 3, 4]
     assert [r["input"] for r in rows] == smiles
+
+
+def test_dispatch_batch_chunks_and_assembles_in_order(redis_client, job_id):
+    """The chunking path directly, including the short final chunk.
+
+    5 molecules at chunk size 2 is 3 chunks: 2 + 2 + 1. The short last chunk
+    is exactly the case where taking start_index from arithmetic
+    (index * chunk_size) instead of from the data would misnumber rows.
+    """
+    from app import redis_store
+    from app.inputs import ParsedMolecule
+    from app.jobs_api import prepared_payload
+    from app.tasks import dispatch_batch
+
+    smiles = ["CCO", "CCC", "CCCC", "CCCCC", "c1ccccc1"]
+    molecules = [
+        ParsedMolecule(index=i, raw_input=s, input_id=None, smiles=s, error=None)
+        for i, s in enumerate(smiles)
+    ]
+    redis_store.create_job(job_id, total=5, fmt="smiles_list", client_ip="::1")
+
+    assert dispatch_batch(job_id, prepared_payload(molecules), True, 2) == 3
+
+    rows = redis_store.read_rows(job_id, 0, 100)
+    assert [r["index"] for r in rows] == [0, 1, 2, 3, 4]
+    assert [r["input"] for r in rows] == smiles
+    assert redis_store.read_job_meta(job_id)["status"] == "done"
+
+
+def test_a_json_body_without_text_is_400():
+    # _read_input's three failure modes all used to surface as a raw 500:
+    # a fileless multipart body (stream already consumed), an empty body,
+    # and JSON missing "text".
+    assert client.post("/api/jobs", json={}).status_code == 400
+
+
+def test_an_empty_body_is_400():
+    response = client.post(
+        "/api/jobs", content=b"", headers={"content-type": "application/json"}
+    )
+    assert response.status_code == 400
 
 
 def test_unparseable_molecule_becomes_an_error_row_not_a_failed_job(redis_client):
@@ -116,9 +161,13 @@ def test_a_job_missing_a_chunk_is_failed_not_done(redis_client, monkeypatch):
     from app import redis_store
 
     job_id = _submit("CCO\nc1ccccc1\n")["job_id"]
-    # Simulate a chunk key that expired between the chunk task and assembly.
-    redis_store.get_redis().delete(redis_store.job_rows_key(job_id))
-    redis_store.write_chunk(job_id, 0, [])
+    # A chunk key that is genuinely ABSENT, not present-and-empty: the
+    # failure being modelled is a key that expired or was evicted between
+    # the chunk task and assembly, and assemble_rows distinguishes the two.
+    client_r = redis_store.get_redis()
+    client_r.delete(redis_store.job_rows_key(job_id))
+    client_r.delete(redis_store.job_chunk_key(job_id, 0))
+    assert client_r.exists(redis_store.job_chunk_key(job_id, 0)) == 0
     from app.tasks import finalize_job
 
     finalize_job(None, job_id, 1)

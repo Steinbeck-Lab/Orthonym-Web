@@ -124,13 +124,9 @@ def translate_job_inline(
     return rows
 
 
-@celery_app.task(
-    name="app.tasks.run_chunk",
-    bind=True,
-    autoretry_for=(),
-)
+@celery_app.task(name="app.tasks.run_chunk")
 def run_chunk(
-    self, job_id: str, index: int, prepared: list[dict], best_effort: bool
+    job_id: str, index: int, prepared: list[dict], best_effort: bool
 ) -> int:
     """One chunk of a batch job. Writes its own key and bumps the counter."""
     from celery.exceptions import SoftTimeLimitExceeded
