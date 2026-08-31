@@ -9,12 +9,15 @@ so an untagged key would grow without bound.
 from __future__ import annotations
 
 import json
+import logging
 import time
 from typing import Iterator
 
 import redis
 
 from app.core.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 _KEY_PREFIX = "orthonym"
 # Long enough that a worker restart is visible within a poll or two, short
@@ -114,19 +117,38 @@ def assemble_rows(job_id: str, n_chunks: int) -> int:
 
     client.delete(rows_key)
     written = 0
+    missing: list[int] = []
     for index in range(n_chunks):
         raw = client.get(job_chunk_key(job_id, index))
         if raw is None:
-            # A chunk whose key expired or was never written. Recording a
-            # gap silently would make the job look complete when it is not.
+            # A chunk whose key expired or was never written. Skipping it
+            # silently would let the job report "done" with rows missing,
+            # which spec section 10 forbids -- so it is logged here, and
+            # finalize_job compares the returned count against the job's
+            # total and marks the job failed when they disagree.
+            missing.append(index)
             continue
         rows = json.loads(raw)
         if rows:
             client.rpush(rows_key, *(json.dumps(r) for r in rows))
             written += len(rows)
 
+    if missing:
+        logger.error(
+            "Job %s: %s of %s chunk keys were missing at assembly (indices "
+            "%s). The result list is INCOMPLETE; finalize_job will mark the "
+            "job failed.",
+            job_id,
+            len(missing),
+            n_chunks,
+            missing,
+        )
+
     client.expire(rows_key, settings.JOB_RESULT_TTL_SECONDS)
-    if n_chunks > 0:
+    if n_chunks:
+        # Redis rejects DEL with no keys, and a job with zero chunks is
+        # reachable only through a caller bug -- but an exception here would
+        # lose the rows already assembled above.
         client.delete(*(job_chunk_key(job_id, i) for i in range(n_chunks)))
     client.expire(job_meta_key(job_id), settings.JOB_RESULT_TTL_SECONDS)
     return written

@@ -75,6 +75,29 @@ def test_iter_all_rows_yields_every_row_in_order(redis_client, job_id):
     )
 
 
+def test_a_missing_chunk_is_reported_not_swallowed(redis_client, job_id, caplog):
+    # spec section 10: a job never completes silently wrong. If a chunk key
+    # expired or was never written, the row count must come back short AND
+    # the loss must be logged -- finalize_job turns that into a failed job.
+    redis_store.create_job(job_id, total=4, fmt="smiles_list", client_ip="::1")
+    redis_store.write_chunk(job_id, 0, [{"index": 0}, {"index": 1}])
+    # chunk 1 deliberately never written
+
+    with caplog.at_level("ERROR"):
+        written = redis_store.assemble_rows(job_id, n_chunks=2)
+
+    assert written == 2
+    assert "INCOMPLETE" in caplog.text
+    assert "[1]" in caplog.text
+
+
+def test_assemble_rows_tolerates_a_zero_chunk_job(redis_client, job_id):
+    # Redis rejects DEL with no keys. Reachable only through a caller bug,
+    # but raising here would lose rows already assembled.
+    redis_store.create_job(job_id, total=0, fmt="smiles_list", client_ip="::1")
+    assert redis_store.assemble_rows(job_id, n_chunks=0) == 0
+
+
 def test_worker_opsin_status_round_trips(redis_client):
     redis_store.record_worker_opsin_status(999001, ok=True)
     try:
