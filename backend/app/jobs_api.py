@@ -11,7 +11,7 @@ import csv
 import io
 import uuid
 
-from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from rdkit import Chem
@@ -19,13 +19,15 @@ from rdkit import Chem
 from app import redis_store
 from app.core.config import get_settings
 from app.depiction import mol_to_svg_data_uri
-from app.inputs import InputFormat, TooManyMolecules, parse, sniff
+from app.inputs import TooManyMolecules, parse, sniff
 from app.schemas import (
     BatchRow,
+    DepictResponse,
     JobEnvelope,
     JobResultsResponse,
     JobStatusResponse,
     ParsePreviewResponse,
+    ParsePreviewRow,
 )
 from app.tasks import dispatch_batch, translate_job_inline
 
@@ -71,6 +73,22 @@ async def _read_input(
     be told about, not the server's to crash on.
     """
     settings = get_settings()
+
+    # Reject on the declared length BEFORE reading, so an oversized upload
+    # costs a header rather than 500 MB of process memory. The post-read
+    # check below still stands: Content-Length is client-supplied and may be
+    # absent (chunked transfer) or a lie.
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit():
+        if int(declared) > settings.max_file_size_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    f"Body is larger than the {settings.MAX_FILE_SIZE_MB} MB "
+                    "limit"
+                ),
+            )
+
     if file is not None:
         data = await file.read()
         if len(data) > settings.max_file_size_bytes:
@@ -143,12 +161,11 @@ async def parse_preview(
     data, _ = await _read_input(request, file)
     fmt, molecules = _parse_or_400(data, settings.MAX_BATCH_SIZE)
     sample = [
-        BatchRow(
+        ParsePreviewRow(
             index=m.index,
             input=m.raw_input,
             input_id=m.input_id,
             smiles=m.smiles,
-            status="error" if m.error else "abstain",
             error=m.error,
         )
         for m in molecules[:PREVIEW_SAMPLE]
@@ -252,9 +269,40 @@ def job_results(
     )
 
 
+# Excel and Sheets treat a cell opening with any of these as a formula, and
+# `input` and `error` are verbatim user text. A pasted line starting "=cmd|..."
+# would become live on open. Prefixing with an apostrophe is the standard
+# mitigation and survives a round trip as data.
+_FORMULA_LEADERS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value):
+    if isinstance(value, str) and value.startswith(_FORMULA_LEADERS):
+        return "'" + value
+    return value
+
+
 @router.get("/api/jobs/{job_id}/results.csv")
 def job_results_csv(job_id: str) -> StreamingResponse:
-    _meta_or_error(job_id)
+    """The finished job as CSV. Only for a job that has actually finished.
+
+    A mid-run download would hand back a header-only or half-length file
+    that is byte-indistinguishable from a complete one, and this is the
+    artefact users keep -- so a job still queued or running is refused
+    rather than served short. A `failed` job IS served, because its partial
+    rows are real results, but the status header and the filename say so.
+    """
+    meta = _require_complete_meta(job_id)
+    status = meta["status"]
+    if status not in ("done", "failed"):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"This job is {status}; its results are not complete yet. "
+                "Poll the job until it reports done."
+            ),
+        )
+    suffix = "-partial" if status == "failed" else ""
 
     def generate():
         buffer = io.StringIO()
@@ -267,38 +315,67 @@ def job_results_csv(job_id: str) -> StreamingResponse:
         for row in redis_store.iter_all_rows(job_id):
             buffer.seek(0)
             buffer.truncate(0)
-            writer.writerow(row)
+            writer.writerow({k: _csv_safe(v) for k, v in row.items()})
             yield buffer.getvalue()
 
     return StreamingResponse(
         generate(),
         media_type="text/csv",
         headers={
-            "Content-Disposition": f'attachment; filename="orthonym-{job_id}.csv"'
+            "Content-Disposition": (
+                f'attachment; filename="orthonym-{job_id}{suffix}.csv"'
+            ),
+            "X-Orthonym-Job-Status": status,
         },
     )
 
 
 @router.delete("/api/jobs/{job_id}")
 def delete_job(job_id: str) -> dict[str, str]:
-    _meta_or_error(job_id)
+    meta = _meta_or_error(job_id)
+
+    # Explicit keys, never a glob built from a path parameter. Job ids are
+    # server-generated uuid4 hex today, but scan_iter(match=f"...{job_id}*")
+    # is one oddly-named id away from deleting other jobs, and the trailing
+    # star also matches longer ids that merely share a prefix.
     client = redis_store.get_redis()
-    for key in client.scan_iter(match=f"orthonym:job:{job_id}*"):
-        client.delete(key)
+    total = int(meta.get("total", 0)) or 1
+    chunk_size = get_settings().BATCH_CHUNK_SIZE
+    n_chunks = -(-total // chunk_size)  # ceil, so every chunk key is covered
+    client.delete(
+        redis_store.job_meta_key(job_id),
+        redis_store.job_rows_key(job_id),
+        *(redis_store.job_chunk_key(job_id, i) for i in range(n_chunks)),
+    )
     return {"job_id": job_id, "status": "deleted"}
 
 
-@router.get("/api/depict")
-def depict(smiles: str = Query(..., min_length=1)) -> dict[str, str | None]:
+# A real SMILES for anything this UI depicts is far shorter. The bound
+# matters because MolFromSmiles (ring perception) and the draw call
+# (2D coordinate generation) run synchronously in the WEB process, RDKit's
+# Boost.Python wrappers do not release the GIL, and this endpoint has no
+# time limit -- so one pathological input would stall every request.
+MAX_DEPICT_SMILES = 4000
+
+
+@router.get("/api/depict", response_model=DepictResponse)
+def depict(
+    smiles: str = Query(..., min_length=1, max_length=MAX_DEPICT_SMILES),
+    response: Response = None,  # noqa: B008 - FastAPI injects this
+) -> DepictResponse:
     """One molecule's 2D structure. Pure RDKit: no JVM, no worker, no queue.
 
     This is what lets a batch results table draw a row on demand, since
-    batch rows deliberately carry no depiction.
+    batch rows deliberately carry no depiction. That also means a 1,000-row
+    table makes 1,000 calls here, so the response is cacheable: the same
+    SMILES always renders the same picture, and the renderer is
+    deterministic.
     """
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
-        return {
-            "depiction_svg": None,
-            "error": "Could not parse this SMILES string",
-        }
-    return {"depiction_svg": mol_to_svg_data_uri(mol), "error": None}
+        return DepictResponse(
+            depiction_svg=None, error="Could not parse this SMILES string"
+        )
+    if response is not None:
+        response.headers["Cache-Control"] = "public, max-age=86400"
+    return DepictResponse(depiction_svg=mol_to_svg_data_uri(mol), error=None)

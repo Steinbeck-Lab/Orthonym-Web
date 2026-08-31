@@ -269,6 +269,19 @@ def finalize_job(chunk_counts: list[int], job_id: str, n_chunks: int) -> int:
     return _close_job(job_id, n_chunks)
 
 
+@celery_app.task(name="app.tasks.mark_job_failed")
+def mark_job_failed(request, exc, traceback, job_id: str) -> None:
+    """Errback: give a job that blew up a terminal state.
+
+    Without this, a raising chunk leaves the job at "running" forever --
+    Celery skips a chord's body when a header task fails, so finalize_job
+    never runs and a caller polls a progress bar that will not move until the
+    24-hour TTL turns it into a 404. Honest, but useless.
+    """
+    logger.error("Job %s failed with %r; marking it failed", job_id, exc)
+    redis_store.set_job_status(job_id, "failed")
+
+
 def dispatch_batch(
     job_id: str, prepared: list[dict], best_effort: bool, chunk_size: int
 ) -> int:
@@ -276,9 +289,10 @@ def dispatch_batch(
     chunks = [
         prepared[i : i + chunk_size] for i in range(0, len(prepared), chunk_size)
     ]
+    errback = mark_job_failed.s(job_id)
     header = [
-        run_chunk.s(job_id, index, chunk, best_effort)
+        run_chunk.s(job_id, index, chunk, best_effort).on_error(errback)
         for index, chunk in enumerate(chunks)
     ]
-    chord(header)(finalize_job.s(job_id, len(chunks)))
+    chord(header)(finalize_job.s(job_id, len(chunks)).on_error(errback))
     return len(chunks)

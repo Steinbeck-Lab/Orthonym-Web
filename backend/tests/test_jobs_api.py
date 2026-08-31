@@ -272,6 +272,95 @@ def test_a_close_with_missing_meta_does_not_claim_done(redis_client):
     assert client.get(f"/api/jobs/{job_id}").status_code == 410
 
 
+def test_csv_is_refused_while_a_job_is_still_running(redis_client, job_id):
+    # The CSV is the artefact users keep. A mid-run download would be a
+    # header-only or half-length file, byte-indistinguishable from a
+    # complete one.
+    from app import redis_store
+
+    redis_store.create_job(job_id, total=5, fmt="smiles_list", client_ip="::1")
+    redis_store.set_job_status(job_id, "running")
+    response = client.get(f"/api/jobs/{job_id}/results.csv")
+    assert response.status_code == 409
+    assert "running" in response.json()["detail"]
+
+
+def test_a_failed_jobs_csv_is_served_but_labelled(redis_client, job_id):
+    # Partial rows are real results, so they are served -- but the header and
+    # the filename must say the file is short.
+    from app import redis_store
+
+    redis_store.create_job(job_id, total=5, fmt="smiles_list", client_ip="::1")
+    redis_store.write_chunk(job_id, 0, [{"index": 0, "input": "CCO"}])
+    redis_store.assemble_rows(job_id, n_chunks=1)
+    redis_store.set_job_status(job_id, "failed")
+
+    response = client.get(f"/api/jobs/{job_id}/results.csv")
+    assert response.status_code == 200
+    assert response.headers["X-Orthonym-Job-Status"] == "failed"
+    assert "-partial.csv" in response.headers["content-disposition"]
+
+
+def test_a_formula_leading_cell_is_neutralised_in_the_csv(redis_client, job_id):
+    # `input` is verbatim user text. A pasted line opening with "=" becomes a
+    # live formula when the file is opened in Excel or Sheets.
+    from app import redis_store
+
+    redis_store.create_job(job_id, total=1, fmt="smiles_list", client_ip="::1")
+    redis_store.write_chunk(
+        job_id, 0, [{"index": 0, "input": "=cmd|'/c calc'!A1", "status": "error"}]
+    )
+    redis_store.assemble_rows(job_id, n_chunks=1)
+    redis_store.set_job_status(job_id, "done")
+
+    body = client.get(f"/api/jobs/{job_id}/results.csv").text
+    assert "'=cmd" in body, "formula-leading cell was not neutralised"
+
+
+def test_retrievable_is_short_of_total_on_a_failed_job(redis_client, job_id):
+    # `total` is what was submitted; `retrievable` is what can be paged. A
+    # client paginating to `total` on a failed job would never terminate.
+    from app import redis_store
+
+    redis_store.create_job(job_id, total=5, fmt="smiles_list", client_ip="::1")
+    # "status" is required by BatchRow -- /results validates rows against it
+    # (unlike /results.csv, which writes raw dicts), so a fixture row missing
+    # it would 500 with a pydantic ValidationError instead of exercising the
+    # retrievable-vs-total assertion this test is actually about.
+    redis_store.write_chunk(
+        job_id, 0, [{"index": 0, "input": "CCO", "status": "pin"}]
+    )
+    redis_store.assemble_rows(job_id, n_chunks=1)
+    redis_store.set_job_status(job_id, "failed")
+
+    body = client.get(f"/api/jobs/{job_id}/results").json()
+    assert body["total"] == 5
+    assert body["retrievable"] == 1
+
+
+def test_a_preview_row_carries_no_tier(redis_client):
+    # A preview row has no status: "the engine refused" and "nothing was
+    # attempted" must not share the one field the product forbids conflating.
+    body = client.post("/api/parse-preview", json={"text": "CCO\nbad(((\n"}).json()
+    assert body["sample"]
+    for row in body["sample"]:
+        assert "status" not in row
+
+
+def test_depict_rejects_an_absurdly_long_smiles():
+    # MolFromSmiles and the draw call run synchronously in the web process
+    # and RDKit does not release the GIL, so the input needs a bound.
+    response = client.get("/api/depict", params={"smiles": "C" * 5000})
+    assert response.status_code == 422
+
+
+def test_depict_is_cacheable():
+    # The results table calls this once per row, so a 1,000-row table is
+    # 1,000 renders without a cache header.
+    response = client.get("/api/depict", params={"smiles": "CCO"})
+    assert "max-age" in response.headers.get("cache-control", "")
+
+
 def test_a_json_body_without_text_is_400():
     # _read_input's three failure modes all used to surface as a raw 500:
     # a fileless multipart body (stream already consumed), an empty body,

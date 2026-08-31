@@ -70,6 +70,7 @@ celery_app.conf.update(
         "app.tasks.translate_job_inline": {"queue": "fast"},
         "app.tasks.run_chunk": {"queue": "batch"},
         "app.tasks.finalize_job": {"queue": "batch"},
+        "app.tasks.mark_job_failed": {"queue": "batch"},
     },
 )
 
