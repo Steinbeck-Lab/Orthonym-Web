@@ -98,6 +98,39 @@ def test_assemble_rows_tolerates_a_zero_chunk_job(redis_client, job_id):
     assert redis_store.assemble_rows(job_id, n_chunks=0) == 0
 
 
+def test_a_progress_write_retags_a_meta_key_that_lost_its_ttl(redis_client, job_id):
+    # HINCRBY/HSET recreate a missing hash with NO expiry. Under volatile-lru
+    # the meta key is an eviction candidate at any time, so this is not a
+    # once-per-24h edge case -- and if the job never reaches assemble_rows
+    # (worker dies, chord never completes) nothing else would ever re-tag it.
+    redis_store.create_job(job_id, total=10, fmt="smiles_list", client_ip="::1")
+    key = redis_store.job_meta_key(job_id)
+
+    redis_client.persist(key)  # stand in for the recreated, untagged key
+    assert redis_client.ttl(key) == -1
+    redis_store.bump_job_done(job_id, done=1, failed=0)
+    assert redis_client.ttl(key) > 0, "bump_job_done left the key untagged"
+
+    redis_client.persist(key)
+    assert redis_client.ttl(key) == -1
+    redis_store.set_job_status(job_id, "running")
+    assert redis_client.ttl(key) > 0, "set_job_status left the key untagged"
+
+
+def test_a_progress_write_does_not_extend_a_live_ttl(redis_client, job_id):
+    # EXPIRE NX, not EXPIRE. Re-arming the full 24h on every progress bump
+    # would push a busy job's real expiry past the `expires` timestamp
+    # create_job recorded and the API reports as expires_at.
+    redis_store.create_job(job_id, total=10, fmt="smiles_list", client_ip="::1")
+    key = redis_store.job_meta_key(job_id)
+    redis_client.expire(key, 50)
+
+    redis_store.bump_job_done(job_id, done=1, failed=0)
+    redis_store.set_job_status(job_id, "running")
+
+    assert 0 < redis_client.ttl(key) <= 50
+
+
 def test_worker_opsin_status_round_trips(redis_client):
     redis_store.record_worker_opsin_status(999001, ok=True)
     try:
@@ -107,10 +140,19 @@ def test_worker_opsin_status_round_trips(redis_client):
 
 
 def test_a_failed_worker_does_not_count_as_having_opsin(redis_client):
+    # Clear first: this asserts on a global property ("is ANY worker
+    # healthy"), so a stray ok key from another test -- or from a later
+    # task's autouse fixture -- would mask the thing being tested.
+    for key in redis_client.scan_iter(match="stitch:worker:*:opsin"):
+        redis_client.delete(key)
+
     redis_store.record_worker_opsin_status(999002, ok=False)
     try:
-        keys = list(redis_client.scan_iter(match="stitch:worker:*:opsin"))
-        statuses = {redis_client.get(k) for k in keys}
-        assert "failed" in statuses
+        # Call the function the test is named after. Asserting only that the
+        # string "failed" was written somewhere would not catch
+        # any_worker_has_opsin() treating any status at all as healthy --
+        # and that function is what makes /api/health honest and what
+        # decides whether naming is served at all.
+        assert redis_store.any_worker_has_opsin() is False
     finally:
         redis_client.delete("stitch:worker:999002:opsin")
