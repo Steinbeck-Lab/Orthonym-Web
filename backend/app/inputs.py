@@ -280,8 +280,28 @@ def _count_csv_rows(data: bytes) -> int:
     return sum(1 for record in reader if (record.get(smiles_col) or "").strip())
 
 
+def _count_sdf_records(data: bytes) -> int:
+    """Match Chem.SDMolSupplier's own record count, not just the number of
+    "$$$$" terminators (round 4 review: the supplier treats end-of-file as
+    an IMPLICIT terminator for a final, unterminated record -- confirmed
+    live: a 3-record SDF with its last "$$$$" removed still yields
+    len(supplier) == 3, while a bare `.count("$$$$")` would answer 2).
+
+    So: count the terminators actually present, then add one more if
+    anything after the LAST one is a real, non-blank record rather than
+    trailing whitespace -- and if there are no terminators at all but the
+    text is non-blank, that is one single unterminated record, not zero.
+    """
+    text = _decode(data)
+    count = text.count("$$$$")
+    tail = text.rsplit("$$$$", 1)[-1] if count else text
+    if any(line.strip() for line in tail.splitlines()):
+        count += 1
+    return count
+
+
 _COUNTERS = {
-    InputFormat.SDF: lambda data: _decode(data).count("$$$$"),
+    InputFormat.SDF: _count_sdf_records,
     InputFormat.MOLFILE: lambda data: 1,
     InputFormat.CSV: _count_csv_rows,
     InputFormat.SMILES_LIST: _count_smiles_lines,

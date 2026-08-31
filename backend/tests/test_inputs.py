@@ -4,6 +4,7 @@ from app.inputs import (
     InputFormat,
     ParsedMolecule,
     TooManyMolecules,
+    count_molecules,
     parse,
     sniff,
 )
@@ -140,3 +141,48 @@ def test_parsed_molecule_keeps_the_raw_input_for_reporting():
     rows = parse(b"CCO ethanol\n", InputFormat.SMILES_LIST, 100)
     assert isinstance(rows[0], ParsedMolecule)
     assert rows[0].raw_input == "CCO ethanol"
+
+
+def test_count_molecules_matches_parse_for_a_terminated_sdf():
+    data = _sdf(ETHANOL_MOLBLOCK, BENZENE_MOLBLOCK, ETHANOL_MOLBLOCK)
+    assert count_molecules(data, InputFormat.SDF) == len(
+        parse(data, InputFormat.SDF, 100)
+    )
+
+
+def test_count_molecules_matches_parse_for_an_unterminated_final_sdf_record():
+    """Round 4 review: Chem.SDMolSupplier treats end-of-file as an implicit
+    terminator for the final record, so a 3-record SDF missing its LAST
+    "$$$$" still parses as 3 -- a bare `.count("$$$$")` would answer 2 and
+    undercount by exactly one, which is the bug this test exists to catch.
+    """
+    terminated = _sdf(ETHANOL_MOLBLOCK, BENZENE_MOLBLOCK, ETHANOL_MOLBLOCK)
+    data = terminated[: terminated.rindex(b"$$$$")]
+    assert count_molecules(data, InputFormat.SDF) == len(
+        parse(data, InputFormat.SDF, 100)
+    )
+
+
+def test_count_molecules_matches_parse_for_an_sdf_with_no_terminator_at_all():
+    # No "$$$$" anywhere -- one unterminated record, not zero.
+    data = ETHANOL_MOLBLOCK.encode("utf-8")
+    assert count_molecules(data, InputFormat.SDF) == len(
+        parse(data, InputFormat.SDF, 100)
+    )
+    assert count_molecules(data, InputFormat.SDF) == 1
+
+
+def test_count_molecules_matches_parse_for_a_csv():
+    data = ("smiles,id\n" + "\n".join(f"CCO,m{i}" for i in range(11))).encode(
+        "utf-8"
+    )
+    assert count_molecules(data, InputFormat.CSV) == len(
+        parse(data, InputFormat.CSV, 100)
+    )
+
+
+def test_count_molecules_matches_parse_for_a_smiles_list():
+    data = "\n".join(["CCO"] * 13).encode("utf-8")
+    assert count_molecules(data, InputFormat.SMILES_LIST) == len(
+        parse(data, InputFormat.SMILES_LIST, 100)
+    )
