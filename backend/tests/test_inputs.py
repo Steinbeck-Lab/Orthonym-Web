@@ -85,15 +85,29 @@ def test_parse_sdf_bad_record_becomes_an_error_row_not_an_abort():
     assert rows[2].smiles == "c1ccccc1"
 
 
-def test_parse_sdf_stops_at_the_limit_rather_than_reading_the_whole_file():
-    # 3 records, limit 2: the raise must happen at index 2 (2 >= 2), not
-    # after the third record is read. A check loosened to `>`, or moved
-    # after the supplier[index] access, would let all 3 records through
-    # instead of raising.
+def test_parse_sdf_stops_sanitising_records_once_it_is_over_the_limit():
+    """TEST-4: this used to be named "...rather than reading the whole file",
+    which is not what the code does and never was.
+
+    _parse_sdf calls SDMolSupplier.SetData(_decode(data)) and then
+    len(supplier) -- both of which need the whole blob in memory and parsed
+    before the first limit check can run. The property that IS real, and is
+    the one worth protecting, is that the EXPENSIVE per-record work
+    (supplier[index], which sanitises the molecule) stops at the limit. What
+    bounds the blob itself is the byte cap in jobs_api._read_input, not this.
+
+    Naming the untrue property was the actual risk: the next reader assumes
+    an oversized upload is rejected without being fully read, and sizes
+    something else on that assumption.
+    """
     data = _sdf(ETHANOL_MOLBLOCK, BENZENE_MOLBLOCK, ETHANOL_MOLBLOCK)
     with pytest.raises(TooManyMolecules) as excinfo:
         parse(data, InputFormat.SDF, 2)
     assert excinfo.value.limit == 2
+    # The raise happens at index 2 (2 >= 2), BEFORE supplier[2] is touched,
+    # so exactly `limit` records were sanitised. A check loosened to `>`, or
+    # moved after the supplier[index] access, sanitises one record too many.
+    assert len(excinfo.value.partial) == 2
 
 
 def test_parse_single_molfile():
@@ -130,11 +144,22 @@ def test_parse_csv_without_smiles_column_raises():
         parse(b"structure,id\nCCO,a\n", InputFormat.CSV, 100)
 
 
-def test_parse_stops_at_the_limit_rather_than_reading_the_whole_file():
+def test_parse_stops_canonicalising_lines_once_it_is_over_the_limit():
+    """TEST-4, the SMILES-list half. Same correction: _parse_smiles_list does
+    `_decode(data).splitlines()`, which materialises every line in the input
+    before the loop starts, so nothing here avoids reading the file.
+
+    What it does avoid is the per-line RDKit work -- MolFromSmiles and
+    MolToSmiles -- which is the part that actually costs, and which is
+    bounded to `limit` calls.
+    """
     data = b"CCO\n" * 50
     with pytest.raises(TooManyMolecules) as excinfo:
         parse(data, InputFormat.SMILES_LIST, 10)
     assert excinfo.value.limit == 10
+    assert len(excinfo.value.partial) == 10, (
+        "more lines were canonicalised than the limit allows"
+    )
 
 
 def test_parsed_molecule_keeps_the_raw_input_for_reporting():

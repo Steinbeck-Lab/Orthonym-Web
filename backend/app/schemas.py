@@ -31,8 +31,9 @@ class TranslateRequest(BaseModel):
     smiles: list[str]
     # Best-effort mode. True (the default, and the app's shipped behaviour)
     # lets a molecule the primary namer abstained on be retried against the
-    # escalated namer, which may return an OPSIN-UNVERIFIED name (tier T4,
-    # surfaced as status "best_effort"). False stops after the primary pass,
+    # escalated namer, which may return an OPSIN-UNVERIFIED name (engine
+    # tier `best_effort`, surfaced as status "best_effort"). False stops after
+    # the primary pass,
     # so an unverified name can never be produced and such a molecule comes
     # back as an honest abstain instead.
     best_effort: bool = True
