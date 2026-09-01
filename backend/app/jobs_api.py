@@ -363,6 +363,31 @@ def _require_complete_meta(job_id: str) -> dict[str, str]:
     return meta
 
 
+def _actual_status(job_id: str, meta: dict[str, str]) -> str:
+    """The rule tasks._close_job already enforces at WRITE time (an
+    assembled row count short of `total` means the job failed, never
+    "done"), applied again here at READ time.
+
+    stitch:job:{id}:rows (redis_store.job_rows_key) is TTL'd, and
+    docker-compose.yml runs `--maxmemory-policy volatile-lru`, which makes
+    every TTL'd key an eviction candidate at any moment regardless of its
+    remaining TTL -- so a job can close honestly as "done" and still have
+    its rows key evicted minutes later. Without this, job_status and
+    job_results_csv would go on reporting "done" over what is by then an
+    empty result list: a header-only CSV byte-indistinguishable from a
+    complete zero-row download, which is exactly the artefact the 409
+    running-job gate below exists to prevent (final review report, C4).
+
+    ONE function, called from both read endpoints, so the rule cannot
+    drift between them the way it drifted between _close_job and these two
+    in the first place.
+    """
+    status = meta["status"]
+    if status == "done" and redis_store.rows_length(job_id) < int(meta["total"]):
+        return "failed"
+    return status
+
+
 @router.get("/api/jobs/{job_id}", response_model=JobStatusResponse)
 def job_status(request: Request, job_id: str) -> JobStatusResponse:
     # Polling is the intended usage pattern (round 3 review, finding 4):
@@ -370,16 +395,17 @@ def job_status(request: Request, job_id: str) -> JobStatusResponse:
     # check_poll_allowed's docstring.
     check_poll_allowed(client_ip(request))
     meta = _require_complete_meta(job_id)
+    status = _actual_status(job_id, meta)
     response = JobStatusResponse(
         job_id=job_id,
-        status=meta["status"],
+        status=status,
         total=int(meta["total"]),
         done=int(meta["done"]),
         failed=int(meta["failed"]),
         created_at=int(meta["created"]),
         expires_at=int(meta["expires"]),
     )
-    if meta["status"] in ("done", "failed"):
+    if status in ("done", "failed"):
         # Release the slot once the job is finished, so a user is not held
         # to their concurrent-job cap by work that has already completed.
         release_job(meta.get("ip", "unknown"), job_id)
@@ -431,10 +457,16 @@ def job_results_csv(request: Request, job_id: str) -> StreamingResponse:
     artefact users keep -- so a job still queued or running is refused
     rather than served short. A `failed` job IS served, because its partial
     rows are real results, but the status header and the filename say so.
+
+    The same is true of a "done" job whose rows key was evicted after the
+    fact (see _actual_status): its rows are gone the same way a genuinely
+    failed job's are short, so it is served through the SAME -partial /
+    X-STITCH-Job-Status machinery rather than refused outright (final
+    review report, C4).
     """
     check_fast_allowed(client_ip(request))
     meta = _require_complete_meta(job_id)
-    status = meta["status"]
+    status = _actual_status(job_id, meta)
     if status not in ("done", "failed"):
         raise HTTPException(
             status_code=409,
