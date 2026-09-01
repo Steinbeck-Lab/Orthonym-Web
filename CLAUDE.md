@@ -37,6 +37,8 @@ cd backend && PYTHONPATH="$(pwd)" REDIS_URL=redis://localhost:6379/0 .venv-mac/b
 # frontend — from frontend/
 npm run dev      # vite dev server, proxies /api -> http://localhost:8000
 npm run build
+npm test         # node --test over src/**/*.test.js -- `node --test src/lib/` fails,
+                 # it globs non-test files too; use the script
 npx oxlint src/  # full-project `npm run lint` has pre-existing warnings in vendored public/standalone/ — out of scope
 
 # whole stack
