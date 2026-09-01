@@ -39,7 +39,7 @@ from app.schemas import (
     ParsePreviewResponse,
     ParsePreviewRow,
 )
-from app.tasks import dispatch_batch, translate_job_inline
+from app.tasks import dispatch_batch, mark_job_failed, translate_job_inline
 
 router = APIRouter()
 
@@ -209,8 +209,19 @@ def admit_and_dispatch(
     try:
         prepared = prepared_payload(molecules)
         if len(prepared) <= settings.FAST_PATH_MAX_MOLECULES:
+            # link_error, matching what dispatch_batch already wires onto
+            # every chord header AND its body (final review report, I5).
+            # This is the DEFAULT route -- every job at or under
+            # FAST_PATH_MAX_MOLECULES -- and write_chunk, bump_job_done and
+            # _close_job are all unguarded inside translate_job_inline, so a
+            # raise in any of them used to strand the job at "running" until
+            # the 24h TTL turned it into a 404 and permanently burn one of
+            # that IP's two concurrent slots. The batch path recovered from
+            # exactly that failure; the more-travelled path did not.
             translate_job_inline.apply_async(
-                args=[job_id, prepared, best_effort], queue="fast"
+                args=[job_id, prepared, best_effort],
+                queue="fast",
+                link_error=mark_job_failed.s(job_id),
             )
         else:
             dispatch_batch(job_id, prepared, best_effort, settings.BATCH_CHUNK_SIZE)
