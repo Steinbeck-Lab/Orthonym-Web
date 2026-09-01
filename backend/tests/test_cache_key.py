@@ -148,3 +148,66 @@ def test_error_rows_are_not_cached(redis_client):
         assert redis_client.exists(key) == 0
     finally:
         redis_client.delete(key)
+
+
+def test_the_cached_payload_carries_no_depiction(redis_client):
+    """I9: the picture was 94% of every cache entry, at a 7-day TTL.
+
+    Measured on ethanol, the smallest realistic molecule: 2839 bytes cached,
+    of which 2673 is depiction_svg. A 10,000-molecule job seeded ~28 MB of
+    7-day cache against a 2 GB volatile-lru limit -- almost all of it
+    pictures the batch path never draws, since BatchRow drops the SVG
+    deliberately (schemas.py, spec section 6.3: "at roughly 5 kB per row an
+    SVG would make a 5,000-row job 25-50 MB in Redis instead of 2-5 MB").
+    That made the cache the single largest source of the eviction pressure
+    behind the partial-results and 404-instead-of-410 failures.
+    """
+    from app import openstout_service
+
+    item = openstout_service.translate_one("CCO", best_effort=True)
+    assert item.depiction_svg is not None, "precondition: this row has a picture"
+
+    key = name_cache.cache_key(item.smiles, best_effort=True)
+    redis_client.delete(key)
+    try:
+        name_cache.put_cached(item, best_effort=True)
+        raw = redis_client.get(key)
+        assert raw is not None, "the row was not cached at all"
+        assert "depiction_svg" not in raw or '"depiction_svg":null' in raw, (
+            f"the depiction is still in the cached payload ({len(raw)} bytes)"
+        )
+        assert len(raw) < 600, (
+            f"cached entry is {len(raw)} bytes; the picture is still in there"
+        )
+    finally:
+        redis_client.delete(key)
+
+
+def test_a_cache_hit_still_comes_back_with_a_picture(redis_client):
+    """The other half, and the reason the redraw branch in tasks.py must NOT
+    be deleted as dead code.
+
+    It is dead only BECAUSE the picture is cached. Stop caching it and that
+    branch becomes the thing that keeps /api/translate's response shape
+    identical on a cache hit and a cache miss -- delete both together and the
+    fast path silently starts returning results with no structure image.
+    """
+    from app import openstout_service, tasks
+
+    item = openstout_service.translate_one("CCO", best_effort=True)
+    key = name_cache.cache_key("CCO", best_effort=True)
+    redis_client.delete(key)
+    try:
+        name_cache.put_cached(item, best_effort=True)
+        assert name_cache.get_cached("CCO", best_effort=True).depiction_svg is None
+
+        rows = tasks.translate_fast.run(
+            [{"index": 0, "raw_input": "CCO", "input_id": None, "smiles": "CCO", "error": None}],
+            True,
+        )
+        assert rows[0]["depiction_svg"], (
+            "a cache hit returned no picture; the response shape now differs "
+            "between a hit and a miss"
+        )
+    finally:
+        redis_client.delete(key)
