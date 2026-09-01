@@ -11,6 +11,19 @@ from pydantic import BaseModel
 
 
 Status = Literal["pin", "fallback", "best_effort", "abstain", "error"]
+
+
+# The two statuses that ASSERT an OPSIN round-trip actually happened.
+#
+# One definition, because it is one invariant: orthonym_service refuses to
+# SERVE such a row without proof, and name_cache refuses to PERSIST one. Those
+# were separate hand-copied sets, and adding a future verified tier to one and
+# not the other reproduces exactly the C3 bug the pair exists to close, in
+# whichever half was missed. schemas is the only module both already import.
+#
+# frontend/src/components/Tile.jsx keeps its own copy -- it cannot import
+# Python -- the same accepted cross-language mirror as NAMED_STATUSES there.
+VERIFIED_STATUSES = frozenset({"pin", "fallback"})
 # Orthonym's own tier labels, from Orthonym.name_tiered's docstring. The
 # earlier T1/T3/T4/T5 codes were replaced upstream by these names; there is
 # no T-code anywhere in the engine any more. `pin_unverified` is documented

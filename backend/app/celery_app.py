@@ -204,14 +204,26 @@ def _start_status_heartbeat(
     recurring per-child Celery signal to hang one on in prefork mode, so
     it has to be this thread.
 
-    This re-stamps the BOOT verdict, not a fresh self_check() -- calling
-    self_check() again would just return opsin_decompose._get_handles()'s
-    cached answer anyway. So this thread proves "this child process is
-    still alive," not "OPSIN still works in this child" -- a JVM that dies
-    mid-life keeps reporting healthy. That is the same exposure the code
-    already had (the stamp was always a boot verdict); it is not widened
-    by this fix, but it is why C3's cache guard is independently required
-    and not made redundant by this thread.
+    Each beat PROBES rather than replaying the boot verdict (C1-residual).
+    That paragraph used to say the opposite, and it was true when written:
+    the thread re-stamped the boot value, so a child whose JVM died without
+    the process dying kept reporting healthy and a name that should have read
+    "fallback" shipped labelled "pin".
+
+    Neither opsin_available() nor opsin_decompose.self_check() can serve as the
+    probe -- both cache per process (orthonym.jvm_bridge._ensure_jvm keys its
+    cached _STATE on the pid), so calling either per tick replays the boot
+    decision exactly like the code this replaced. Only a real call through the
+    JVM observes a JVM that has since died; _opsin_liveness_probe does one,
+    measured at 0.22 ms against a 40 s interval.
+
+    The boot verdict survives as a CEILING (`ok and probe()`), so the
+    inherited-JVM branch -- a child that can never own a JVM and is stamped
+    False deliberately -- cannot probe its way to healthy.
+
+    C3's cache guard remains independently required: this closes the window in
+    which a dead JVM is ADVERTISED as healthy, not the one in which a result
+    computed during that window gets cached.
 
     A child wedged inside a single naming call past _WORKER_STATUS_TTL
     (up to CHUNK_HARD_TIME_LIMIT = 900s) does NOT keep beating: RDKit's
@@ -299,39 +311,56 @@ def _opsin_can_verify() -> bool:
         return False
 
 
-def _stamp_without_raising(record, pid: int, *, ok: bool) -> None:
-    """Write this child's boot verdict, swallowing a Redis failure.
+def _stamp_and_beat(record, pid: int, *, ok: bool) -> None:
+    """Record this child's boot verdict and start its heartbeat, and let
+    NEITHER failure take the child down.
 
-    Final review report, C1-secondary. This one-shot stamp used to be a bare
-    call, and _start_status_heartbeat ran only AFTER it. A Redis error here --
+    Final review report, C1-secondary. The one-shot stamp used to be a bare
+    call with the heartbeat only reached afterwards, so a Redis error here --
     a `docker compose up` where Redis is still warming is the realistic case
-    -- therefore raised out of _start_child_jvm BEFORE the heartbeat existed.
-    Celery 5.6.3 catches that inside Signal.send and discards it (see
-    _assert_parent_has_no_jvm's note on the same mechanism), so the child
-    boots looking healthy while never stamping and never beating: invisible
-    to any_worker_has_opsin() for the life of the process. If every child
-    lands in that window, /api/health reports DEGRADED and every naming
-    endpoint 503s on a perfectly healthy deployment, with nothing to recover
-    it.
+    -- raised out of _start_child_jvm BEFORE the heartbeat existed. Celery
+    5.6.3 catches that inside Signal.send and discards it, so the child booted
+    looking healthy while never stamping and never beating: invisible to
+    any_worker_has_opsin() for the life of the process. If every child lands in
+    that window, /api/health reports DEGRADED and every naming endpoint 503s on
+    a perfectly healthy deployment, with nothing to recover it.
 
-    The heartbeat is exactly that recovery path -- it already tolerates a
-    failed write and retries every _WORKER_STATUS_TTL // 3 seconds -- which
-    is precisely why this call must never be able to skip it. Losing the
-    boot stamp costs at most one heartbeat interval of invisibility;
-    losing the heartbeat costs the child's whole life.
+    The heartbeat IS the recovery path -- it tolerates a failed write and
+    retries every _WORKER_STATUS_TTL // 3 seconds -- which is exactly why the
+    stamp must never be able to skip it. Losing the boot stamp costs at most
+    one heartbeat interval of invisibility; losing the heartbeat costs the
+    child's whole life.
 
-    Fail-closed either way: a child that cannot stamp is simply not counted
-    as having a JVM, so nothing serves names nobody verified.
+    Both branches of _start_child_jvm need this pair, so it lives here once
+    rather than as two near-identical try/except blocks with byte-identical
+    log messages.
+
+    Fail-closed either way: a child that cannot stamp is simply not counted as
+    having a usable OPSIN, so nothing serves names nobody verified.
     """
     try:
         record(pid, ok=ok)
     except Exception:
         logger.exception(
-            "Celery child %s: could not record its boot OPSIN status "
-            "(ok=%s). The heartbeat below will retry; this child stays "
-            "invisible to any_worker_has_opsin() until a beat lands.",
+            "Celery child %s: could not record its boot OPSIN status (ok=%s). "
+            "The heartbeat below will retry; this child stays invisible to "
+            "any_worker_has_opsin() until a beat lands.",
             pid,
             ok,
+        )
+    try:
+        _start_status_heartbeat(pid, ok=ok)
+    except Exception:
+        # "Never raise from here" (see _start_child_jvm): a thread that fails
+        # to start must not take the child down with it. Safe direction -- this
+        # child ages out of any_worker_has_opsin() after _WORKER_STATUS_TTL and
+        # stops being routed naming work, rather than serving names with nobody
+        # re-verifying its JVM stayed alive.
+        logger.exception(
+            "Celery child %s: failed to start the OPSIN status heartbeat; this "
+            "child will age out of any_worker_has_opsin() after "
+            "_WORKER_STATUS_TTL and stop serving.",
+            pid,
         )
 
 
@@ -350,7 +379,7 @@ def _start_child_jvm(**_kwargs) -> None:
     and returns it as a value the caller discards. So an escaping exception is
     not a crash loop -- it is worse in a quieter way: it is SWALLOWED, the
     child boots looking healthy, and whatever this function had left to do
-    never happened (audit item CC6-celery-docstring; see _stamp_without_raising
+    never happened (audit item CC6-celery-docstring; see _stamp_and_beat
     for the outage that caused).
 
     Either way the rule stands: os._exit is the only way to fail hard from
@@ -375,23 +404,7 @@ def _start_child_jvm(**_kwargs) -> None:
             "a JVM before forking -- see _assert_parent_has_no_jvm.",
             pid,
         )
-        _stamp_without_raising(record_worker_opsin_status, pid, ok=False)
-        try:
-            _start_status_heartbeat(pid, ok=False)
-        except Exception:
-            # "Never raise from here" (see the module docstring above): a
-            # thread that fails to start (e.g. threading.Thread.start()
-            # raising RuntimeError under resource pressure) must not take
-            # the child down with it. The safe direction: this child simply
-            # ages out of any_worker_has_opsin() after _WORKER_STATUS_TTL
-            # and stops being routed naming work, rather than serving
-            # names with nobody re-verifying its JVM stayed alive.
-            logger.exception(
-                "Celery child %s: failed to start the OPSIN status "
-                "heartbeat; this child will age out of any_worker_has_opsin() "
-                "after _WORKER_STATUS_TTL and stop serving.",
-                pid,
-            )
+        _stamp_and_beat(record_worker_opsin_status, pid, ok=False)
         return
 
     # Two DIFFERENT questions, deliberately answered separately (audit item
@@ -415,24 +428,10 @@ def _start_child_jvm(**_kwargs) -> None:
     # been false. Spec section 5's Failure A treated as Failure B.
     naming_ok = _opsin_can_verify()
     decompose_ok = opsin_decompose.self_check()
-    _stamp_without_raising(record_worker_opsin_status, pid, ok=naming_ok)
     logger.info(
         "Celery child %s: OPSIN name verification %s; name decomposition %s",
         pid,
         "available" if naming_ok else "UNAVAILABLE (naming will be refused)",
         "available" if decompose_ok else "DISABLED (/explain and /teach only)",
     )
-    try:
-        _start_status_heartbeat(pid, ok=naming_ok)
-    except Exception:
-        # Same "never raise from here" contract as the inherited-JVM branch
-        # above: a failure to start the heartbeat thread must not escape
-        # and take the child down with it. Fail-closed direction: this
-        # child ages out of any_worker_has_opsin() after
-        # _WORKER_STATUS_TTL and stops being routed naming work.
-        logger.exception(
-            "Celery child %s: failed to start the OPSIN status heartbeat; "
-            "this child will age out of any_worker_has_opsin() after "
-            "_WORKER_STATUS_TTL and stop serving.",
-            pid,
-        )
+    _stamp_and_beat(record_worker_opsin_status, pid, ok=naming_ok)

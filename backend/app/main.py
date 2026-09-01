@@ -225,15 +225,7 @@ def translate(request: Request, body: TranslateRequest):
         # used to live inside admit_and_dispatch, strictly after this).
         check_job_allowed(ip)
         molecules = _canonicalize(non_blank, settings.MAX_BATCH_SIZE)
-        job_id, owner_token = admit_and_dispatch(
-            ip, molecules, "smiles_list", body.best_effort
-        )
-        return JobEnvelope(
-            job_id=job_id,
-            molecule_count=len(molecules),
-            status="queued",
-            owner_token=owner_token,
-        )
+        return admit_and_dispatch(ip, molecules, "smiles_list", body.best_effort)
 
     # Crash-loop fix (final review): this branch used to hand raw,
     # unbounded user text straight to translate_fast -> translate_one ->
@@ -265,15 +257,7 @@ def translate(request: Request, body: TranslateRequest):
         # `molecules` is already canonicalized above -- no need to pay for
         # it twice.
         check_job_allowed(ip)
-        job_id, owner_token = admit_and_dispatch(
-            ip, molecules, "smiles_list", body.best_effort
-        )
-        return JobEnvelope(
-            job_id=job_id,
-            molecule_count=len(molecules),
-            status="queued",
-            owner_token=owner_token,
-        )
+        return admit_and_dispatch(ip, molecules, "smiles_list", body.best_effort)
     # Forget the backend entry. Celery's redis backend SETEXs every result for
     # JOB_RESULT_TTL_SECONDS (24 h) and .get() never removes it -- and
     # translate_fast's results are full ResultItems, depiction_svg included.

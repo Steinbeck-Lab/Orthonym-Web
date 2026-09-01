@@ -728,7 +728,11 @@ def test_an_uploaded_file_can_ask_for_verified_names_only(redis_client, monkeypa
 
     def _capture(ip, molecules, fmt, best_effort):
         seen["best_effort"] = best_effort
-        return "job-be-probe", "tok"
+        from app.schemas import JobEnvelope
+
+        return JobEnvelope(
+            job_id="job-be-probe", molecule_count=len(molecules), status="queued", owner_token="tok"
+        )
 
     monkeypatch.setattr(jobs_api, "admit_and_dispatch", _capture)
     c = TestClient(app)
@@ -754,7 +758,11 @@ def test_an_uploaded_file_still_defaults_to_best_effort(redis_client, monkeypatc
 
     def _capture(ip, molecules, fmt, best_effort):
         seen["best_effort"] = best_effort
-        return "job-be-probe-2", "tok"
+        from app.schemas import JobEnvelope
+
+        return JobEnvelope(
+            job_id="job-be-probe-2", molecule_count=len(molecules), status="queued", owner_token="tok"
+        )
 
     monkeypatch.setattr(jobs_api, "admit_and_dispatch", _capture)
     c = TestClient(app)

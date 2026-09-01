@@ -17,7 +17,7 @@ import orthonym
 
 from app.core.config import get_settings
 from app.redis_store import get_redis
-from app.schemas import ResultItem
+from app.schemas import VERIFIED_STATUSES, ResultItem
 
 # BUMP THIS whenever the vendored Orthonym snapshot is refreshed.
 #
@@ -81,10 +81,6 @@ _ENGINE_FINGERPRINT = _engine_fingerprint()
 # verdict: caching it would hide a later fix and spend memory on garbage.
 _CACHEABLE = {"pin", "fallback", "best_effort", "abstain"}
 
-# Tiers whose STATUS claims OPSIN verification. For these, and only these,
-# a null roundtrip_smiles is self-evidently a lie rather than an honest
-# "unverified" -- see put_cached below.
-_VERIFIED = {"pin", "fallback"}
 
 
 def cache_key(canonical_smiles: str, best_effort: bool) -> str:
@@ -110,7 +106,7 @@ def get_cached(canonical_smiles: str, best_effort: bool) -> ResultItem | None:
 def put_cached(item: ResultItem, best_effort: bool) -> None:
     if item.status not in _CACHEABLE:
         return
-    if item.status in _VERIFIED and item.roundtrip_smiles is None:
+    if item.status in VERIFIED_STATUSES and item.roundtrip_smiles is None:
         # This is the fingerprint of SELF-01 having failed open, not merely
         # a missing nicety. _roundtrip_check (orthonym_service.py) calls
         # the SAME opsin_parse() that Orthonym's internal SELF-01 gate
