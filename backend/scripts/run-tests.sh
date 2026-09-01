@@ -37,7 +37,14 @@ PYTEST_PID=$!
 # that had already passed -- a false hang, because -q suppresses the ===
 # rule the old regex anchored on. Found by a documentation audit that ran
 # the script rather than reading it.
-SUMMARY='^(=+ .*(passed|failed|error|no tests ran)|[0-9]+ (passed|failed|error)|no tests ran)'
+#
+# The outcome list must be COMPLETE, not just the common three: a -q run whose
+# summary is "1 xfailed in 0.01s" or "1 skipped in 0.00s" matched neither
+# alternative, so the waiter below burned the full ORTHONYM_TEST_WAIT and then
+# reported a hang on a suite that had finished in milliseconds. Third bug from
+# this one regex; add any outcome word pytest can print, never a subset.
+_OUTCOMES='passed|failed|error|errors|skipped|xfailed|xpassed|deselected|warning|warnings'
+SUMMARY="^(=+ .*($_OUTCOMES|no tests ran)|[0-9]+ ($_OUTCOMES)|no tests ran)"
 WAIT_SECONDS=${ORTHONYM_TEST_WAIT:-180}
 
 for _ in $(seq 1 "$WAIT_SECONDS"); do
@@ -57,9 +64,18 @@ if ! grep -qE "$SUMMARY" "$LOG"; then
 fi
 
 grep -E '^(FAILED|ERROR)' "$LOG" || true
-grep -E "$SUMMARY" "$LOG" | tail -1
+FINAL=$(grep -E "$SUMMARY" "$LOG" | tail -1)
+echo "$FINAL"
 
-if grep -qE '^=+ .*(failed|error)' "$LOG"; then
+# Decide from the summary LINE, not the whole log, and without anchoring on
+# the "===" banner: under -q pytest prints a bare "1 failed, 1 passed in
+# 0.09s" with no === rule, so the old banner-anchored regex exited 0 on a
+# failing run -- a green light on red tests, and the same regex-anchoring
+# mistake as the false hang above, pointing the other way.
+#
+# "[0-9]+ " prefix is load-bearing: a plain *failed* match would also fire
+# on "1 xfailed", failing a suite whose expected-failures all behaved.
+if printf '%s\n' "$FINAL" | grep -qE '[0-9]+ (failed|error)'; then
     exit 1
 fi
 exit 0
