@@ -53,6 +53,77 @@ def test_round_trip_through_redis(redis_client):
         redis_client.delete(key)
 
 
+def test_a_pin_produced_while_opsin_was_unreachable_is_not_cached(
+    redis_client, monkeypatch
+):
+    """C3: SELF-01 uses the same opsin_parse() as this visible round-trip
+    check, so a null roundtrip_smiles on a "pin" row can only mean OPSIN
+    itself was unreachable -- SELF-01 failed open and shipped the
+    candidate unverified, mislabelled as a verified PIN. Caching it would
+    persist that mislabel for a 7-day TTL.
+
+    Stubbing opsin_parse to None reproduces exactly that failure mode
+    without actually taking OPSIN down.
+    """
+    from app import openstout_service
+
+    monkeypatch.setattr(openstout_service, "opsin_parse", lambda name: None)
+    item = openstout_service.translate_one("CCO", best_effort=True)
+    assert item.status == "pin"
+    assert item.roundtrip_smiles is None
+
+    key = name_cache.cache_key(item.smiles, best_effort=True)
+    redis_client.delete(key)
+    try:
+        name_cache.put_cached(item, best_effort=True)
+        assert redis_client.exists(key) == 0, (
+            "a pin with no round-trip proof was cached anyway"
+        )
+    finally:
+        redis_client.delete(key)
+
+
+def test_a_genuinely_verified_pin_is_still_cached(redis_client):
+    """Vacuity guard for the fix above: a real round-trip proof must still
+    be cached, so the fix is not simply disabling the cache outright.
+    """
+    from app import openstout_service
+
+    item = openstout_service.translate_one("CCO", best_effort=True)
+    assert item.status == "pin"
+    assert item.roundtrip_smiles is not None
+
+    key = name_cache.cache_key(item.smiles, best_effort=True)
+    redis_client.delete(key)
+    try:
+        name_cache.put_cached(item, best_effort=True)
+        assert redis_client.exists(key) == 1
+    finally:
+        redis_client.delete(key)
+
+
+def test_a_best_effort_row_with_no_roundtrip_is_still_cached(redis_client):
+    """best_effort's whole point is "a real name, OPSIN-unverified" -- a
+    null roundtrip there is not evidence SELF-01 failed open, so the C3
+    guard (scoped to pin/fallback only) must not evict it too.
+    """
+    item = ResultItem(
+        smiles="CCO",
+        status="best_effort",
+        name="ethanol",
+        tier="best_effort",
+        roundtrip_smiles=None,
+        roundtrip_match=None,
+    )
+    key = name_cache.cache_key(item.smiles, best_effort=True)
+    redis_client.delete(key)
+    try:
+        name_cache.put_cached(item, best_effort=True)
+        assert redis_client.exists(key) == 1
+    finally:
+        redis_client.delete(key)
+
+
 def test_error_rows_are_not_cached(redis_client):
     item = ResultItem(
         smiles="bad", status="error", error="Could not parse this SMILES string"

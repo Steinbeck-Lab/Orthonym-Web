@@ -37,6 +37,11 @@ _ENGINE_VERSION = openstout.__version__
 # verdict: caching it would hide a later fix and spend memory on garbage.
 _CACHEABLE = {"pin", "fallback", "best_effort", "abstain"}
 
+# Tiers whose STATUS claims OPSIN verification. For these, and only these,
+# a null roundtrip_smiles is self-evidently a lie rather than an honest
+# "unverified" -- see put_cached below.
+_VERIFIED = {"pin", "fallback"}
+
 
 def cache_key(canonical_smiles: str, best_effort: bool) -> str:
     """`best_effort` is part of the key because it decides whether the
@@ -59,6 +64,24 @@ def get_cached(canonical_smiles: str, best_effort: bool) -> ResultItem | None:
 
 def put_cached(item: ResultItem, best_effort: bool) -> None:
     if item.status not in _CACHEABLE:
+        return
+    if item.status in _VERIFIED and item.roundtrip_smiles is None:
+        # This is the fingerprint of SELF-01 having failed open, not merely
+        # a missing nicety. _roundtrip_check (openstout_service.py) calls
+        # the SAME opsin_parse() that OpenSTOUT's internal SELF-01 gate
+        # uses, so for a tier that CLAIMS verification (pin_verified /
+        # systematic_verified -> "pin"/"fallback" here), "OPSIN is
+        # reachable but cannot interpret this name" cannot happen -- if it
+        # could interpret the PIN candidate, SELF-01 would have used that
+        # same answer to verify or suppress it. So roundtrip_smiles is
+        # None here if and only if OPSIN itself was unreachable, which
+        # means SELF-01 could not suppress a bogus PIN either and just
+        # shipped it, mislabelled as verified. Caching that row would
+        # persist the mislabel for NAME_CACHE_TTL_SECONDS (7 days) and keep
+        # serving it long after OPSIN is restored (final review report,
+        # C3). best_effort is exempt: a null round-trip there is exactly
+        # what "OPSIN-unverified" means, not a failure. abstain is exempt
+        # too: it claims no name at all.
         return
     settings = get_settings()
     get_redis().set(
