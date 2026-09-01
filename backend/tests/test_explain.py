@@ -147,11 +147,39 @@ def test_an_alcohol_is_never_described_as_a_carbonyl():
     assert "-OH" in suffixes[0]["explanation"]
 
 
+# Replaces `pytest.skip(f"OPSIN cannot parse {name}")` at the head of the
+# three parametrized invariant tests below (audit item
+# explain-tests-skip-silently).
+#
+# Those three tests are parametrized over all 10 GOLDEN_NAMES, so the skip
+# disarmed 30 assertions -- and it disarmed them precisely when name
+# decomposition broke, which is the only time they matter. run-tests.sh exits
+# 0 on "30 skipped", so the regression most likely to break /explain was also
+# the one guaranteed to go unnoticed. conftest.py states the opposite policy
+# in its own Redis comment: "a silently skipped integrity test is the same as
+# no test."
+#
+# What these three protect is not cosmetic: they are what stops /explain and
+# /teach highlighting the WRONG atoms for a part of a name -- a visibly
+# incorrect chemistry claim, on the feature that exists to prove the engine
+# is honest.
+#
+# All 10 names parse today (measured). If upstream ever legitimately drops
+# one, this fails loudly and the corpus gets edited on purpose -- which is
+# the review moment you want, not one to skip past.
+_CORPUS_MUST_PARSE = (
+    "GOLDEN_NAMES entry {name!r} no longer decomposes: {error}. "
+    "These names are the fixed corpus the /explain invariants are measured "
+    "against -- if OPSIN or the reflection shim genuinely changed, fix the "
+    "cause or edit the corpus deliberately. Do not skip: skipping here "
+    "disarms 30 assertions at exactly the moment they would have caught it."
+)
+
+
 @pytest.mark.parametrize("name", GOLDEN_NAMES)
 def test_owning_segments_partition_all_heavy_atoms(name):
     result = explain_name(name)
-    if result["error"]:
-        pytest.skip(f"OPSIN cannot parse {name}")
+    assert not result["error"], _CORPUS_MUST_PARSE.format(name=name, error=result["error"])
     covered = set()
     for segment in result["segments"]:
         if not segment["owns_atoms"]:
@@ -165,8 +193,7 @@ def test_owning_segments_partition_all_heavy_atoms(name):
 @pytest.mark.parametrize("name", GOLDEN_NAMES)
 def test_referential_segments_own_no_atoms(name):
     result = explain_name(name)
-    if result["error"]:
-        pytest.skip(f"OPSIN cannot parse {name}")
+    assert not result["error"], _CORPUS_MUST_PARSE.format(name=name, error=result["error"])
     for segment in result["segments"]:
         if not segment["owns_atoms"]:
             assert segment["atom_indices"] == []
@@ -175,8 +202,7 @@ def test_referential_segments_own_no_atoms(name):
 @pytest.mark.parametrize("name", GOLDEN_NAMES)
 def test_children_are_subsets_of_their_parent(name):
     result = explain_name(name)
-    if result["error"]:
-        pytest.skip(f"OPSIN cannot parse {name}")
+    assert not result["error"], _CORPUS_MUST_PARSE.format(name=name, error=result["error"])
     for segment in result["segments"]:
         owned = set(segment["atom_indices"])
         for child in segment["children"]:
@@ -286,3 +312,20 @@ def test_a_name_covering_only_part_of_the_molecule_maps_nothing():
     for segment in result["segments"]:
         assert segment["owns_atoms"] is False
         assert segment["atom_indices"] == []
+
+
+def test_every_golden_name_still_decomposes():
+    """Report a broken corpus ONCE, with the full list, instead of as ten
+    near-identical failures across three parametrized tests.
+
+    This is also the test that fails first and most legibly if the OPSIN
+    reflection shim breaks -- opsin_decompose reaches into OPSIN's
+    package-private parse tree, which is inherently version-fragile, and a
+    vendor refresh is exactly when that happens.
+    """
+    broken = {
+        name: explain_name(name)["error"]
+        for name in GOLDEN_NAMES
+        if explain_name(name)["error"]
+    }
+    assert not broken, f"{len(broken)} of {len(GOLDEN_NAMES)} golden names no longer decompose: {broken}"
