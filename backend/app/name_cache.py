@@ -86,6 +86,14 @@ def put_cached(item: ResultItem, best_effort: bool) -> None:
     settings = get_settings()
     get_redis().set(
         cache_key(item.smiles, best_effort),
-        item.model_dump_json(),
+        # exclude the picture: measured at 94% of the payload (2673 of 2839
+        # bytes on ethanol), for something the batch path never draws --
+        # BatchRow drops it deliberately and spec section 6.3 spells out why.
+        # A 10,000-molecule job seeded ~28 MB of 7-day cache; it now seeds
+        # ~1.7 MB. The fast path, which DOES want a picture, redraws it on a
+        # cache hit (tasks.translate_fast) -- that branch is what keeps the
+        # response shape identical on a hit and a miss, so it is load-bearing
+        # now rather than dead.
+        item.model_dump_json(exclude={"depiction_svg"}),
         ex=settings.NAME_CACHE_TTL_SECONDS,
     )
