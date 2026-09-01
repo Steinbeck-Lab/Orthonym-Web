@@ -4,6 +4,15 @@ One module owns the key strings so a rename is a single edit and no caller
 can invent a key that misses its TTL. Job results are deliberately
 transient: the no-database rule in CLAUDE.md means Redis is the only store,
 so an untagged key would grow without bound.
+
+ONE deliberate exception, stated here so nobody "fixes" it: the worker
+registry `orthonym:workers:opsin` carries NO key-level TTL at all
+(record_worker_opsin_status prunes stale FIELDS instead). That is correct and
+load-bearing -- Redis runs with volatile-lru, which can only evict keys that
+HAVE an expiry, so giving this one a TTL would make the worker registry
+evictable and recreate the outage where every naming endpoint 503s because no
+worker appears to exist. Audit item CC3-workers-key-ttl-docstring: the
+invariant above, read literally, invites exactly that change.
 """
 
 from __future__ import annotations

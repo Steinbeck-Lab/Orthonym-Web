@@ -7,13 +7,13 @@ Derivation logic (verified against the live orthonym package):
    general_fallback=True) namer's `name_tiered(smiles)` and classify it
    (see `classify` below).
 3. If the primary pass did NOT abstain, use its result as-is.
-4. If the primary pass DID abstain (tier T5), escalate: run the SAME
+4. If the primary pass DID abstain (tier `abstain`), escalate: run the SAME
    `name_tiered(smiles)` call against a SECOND, more aggressive namer --
    Orthonym(style="pin", general_fallback=True,
    general_fallback_unverified=True, allow_aromatic_general=True) -- and
    classify ITS result instead. This escalated pass may still land on a
-   verified fallback (T3), a genuinely OPSIN-unverified name (T4 ->
-   "best_effort"), or it may still abstain (T5) -- whichever it actually
+   verified fallback (`systematic_verified`), a genuinely OPSIN-unverified name (`best_effort` ->
+   "best_effort"), or it may still abstain -- whichever it actually
    produces is what ships.
 
 Tier -> status mapping used for BOTH namers (`classify`). The tier names are
@@ -32,14 +32,22 @@ Orthonym's own, from `Orthonym.name_tiered`'s docstring:
     systematic-PIN certification; an UNVERIFIED pin must never be shown as a
     verified one, so it degrades to the honest unverified status)
 
-These replaced an earlier T1/T3/T4/T5 scheme. No T-code exists in the engine
-any more, and `classify`'s final `raise` is what caught the rename.
+These replaced an earlier T1/T3/T4/T5 scheme. The T-codes are HISTORY: they
+do not exist in the engine, in any response, or in any comparison in this
+codebase, and the names above are the only vocabulary in use. Every remaining
+T-code in this repository is a historical reference in a comment explaining a
+past bug, and is marked as such -- writing a T-code as if it were live is a
+real hazard, not a stylistic one: it is what produced the hardcoded "T5" bug
+recorded further down this file, and it caught out a later reader again while
+these very comments were being corrected. `classify`'s final `raise` is what
+caught that rename, and is what will catch the next one.
 
 Note that "best_effort" is NOT what a molecule gets just because it needed
 the escalated/second-pass namer -- a molecule that abstains on the primary
-pass but round-trip-verifies on the escalated pass is a "fallback" (T3),
+pass but round-trip-verifies on the escalated pass is a "fallback"
+(`systematic_verified`),
 same as if the primary pass had found it directly. "best_effort" is
-reserved specifically for tier T4 on whichever pass produced the final
+reserved specifically for tier `best_effort` on whichever pass produced the final
 result.
 
 When the final status is "abstain" (both passes exhausted), formula/
@@ -80,7 +88,7 @@ from .schemas import ResultItem
 
 # Constructed once per process and reused across all requests. This is
 # REQUIRED for both correctness (general_fallback=True is what enables
-# fallback/T3/T4 results at all -- the bare default only ever produces
+# fallback/`systematic_verified`/`best_effort` results at all -- the bare default only ever produces
 # PIN-or-abstain) and performance (namer construction is not free).
 _namer = Orthonym(style="pin", general_fallback=True)
 
@@ -94,9 +102,9 @@ def get_primary_namer() -> Orthonym:
     return _namer
 
 # Second, more aggressive namer used ONLY to escalate molecules the primary
-# namer abstained on (tier T5). general_fallback_unverified=True lets the
+# namer abstained on (tier `abstain`). general_fallback_unverified=True lets the
 # general engine ship a name even when its own round-trip check fails
-# (tier T4, surfaced as "best_effort"); allow_aromatic_general=True widens
+# (tier `best_effort`, surfaced as "best_effort"); allow_aromatic_general=True widens
 # what the general engine will attempt on aromatic systems. Built once at
 # import time for the same reasons as `_namer`.
 _escalated_namer = Orthonym(
@@ -175,9 +183,9 @@ def translate_one(smiles: str, best_effort: bool = True) -> ResultItem:
 
     `best_effort` gates the escalation described in the module docstring.
     When False the escalated namer is never consulted, so no OPSIN-
-    unverified name (T4 / "best_effort") can ever be produced and a
+    unverified name ("best_effort") can ever be produced and a
     molecule the primary namer abstained on ships as an honest abstain.
-    Note that turning it off also forfeits the T3 fallbacks the escalated
+    Note that turning it off also forfeits the `systematic_verified` fallbacks the escalated
     pass would have round-trip-VERIFIED -- the escalation is one call, and
     its two possible good outcomes cannot be separated before it runs.
     """

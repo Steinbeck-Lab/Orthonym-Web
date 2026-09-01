@@ -343,10 +343,18 @@ def _start_child_jvm(**_kwargs) -> None:
     the inherited case itself rather than trusting that celeryd_init caught
     it.
 
-    Never raise from here. billiard invokes this initializer in after_fork(),
-    outside its own try/except, so an escaping exception exits the child
-    non-zero and the pool respawns it forever. os._exit is the only safe way
-    to fail hard.
+    Never raise from here -- but NOT for the reason this comment used to
+    give. It claimed billiard invokes the initializer outside its own
+    try/except; verified against the installed Celery 5.6.3, worker_process_init
+    goes through the same Signal.send as celeryd_init, which catches Exception
+    and returns it as a value the caller discards. So an escaping exception is
+    not a crash loop -- it is worse in a quieter way: it is SWALLOWED, the
+    child boots looking healthy, and whatever this function had left to do
+    never happened (audit item CC6-celery-docstring; see _stamp_without_raising
+    for the outage that caused).
+
+    Either way the rule stands: os._exit is the only way to fail hard from
+    here, because a raise does not fail at all.
     """
     # Imported INSIDE the function, not at module scope: importing
     # opsin_decompose (or orthonym.jvm_bridge through it) in the Celery
