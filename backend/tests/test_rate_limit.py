@@ -598,3 +598,71 @@ def test_results_csv_has_its_own_budget_not_the_naming_one(redis_client, monkeyp
     assert c.get(f"/api/jobs/{job_id}").status_code != 429, (
         "downloading results burned the caller's polling budget too"
     )
+
+
+@pytest.mark.parametrize(
+    "check,key_builder",
+    [
+        (ratelimit.check_fast_allowed, ratelimit._minute_key),
+        (ratelimit.check_depict_allowed, ratelimit._depict_minute_key),
+        (ratelimit.check_poll_allowed, ratelimit._poll_minute_key),
+        (ratelimit.check_download_allowed, ratelimit._download_minute_key),
+    ],
+    ids=["fast", "depict", "poll", "download"],
+)
+def test_a_counter_that_lost_its_expiry_gets_it_back(redis_client, check, key_builder):
+    """A counter with no TTL is a permanent per-IP lockout, not a slow one.
+
+    Under volatile-lru Redis never evicts a key with no expiry, and the old
+    `if count == 1: expire(...)` branch can never fire again once the counter
+    has moved past 1 -- so the window never resets and the 429's own text
+    reads "Resets in -1 seconds". Simulate the lost EXPIRE by incrementing
+    the key directly, then confirm the next real call repairs it rather than
+    inheriting it forever.
+    """
+    key = key_builder(IP)
+    redis_client.incr(key)  # the INCR landed; the separate EXPIRE did not
+    assert redis_client.ttl(key) == -1, "precondition: the key has no expiry"
+
+    check(IP)
+
+    ttl = redis_client.ttl(key)
+    assert ttl > 0, f"counter still has no expiry (ttl={ttl}); this IP is locked out forever"
+    assert ttl <= ratelimit._MINUTE
+
+
+def test_the_hourly_job_counter_that_lost_its_expiry_gets_it_back(redis_client):
+    """Same defect, separate function and separate window: check_job_allowed
+    is the one that owns _hour_key and _HOUR.
+
+    NOT check_and_register_job -- that is the atomic concurrent-slot
+    registration and never touches the hourly counter at all.
+    """
+    key = ratelimit._hour_key(IP)
+    redis_client.incr(key)
+    assert redis_client.ttl(key) == -1, "precondition: the key has no expiry"
+
+    ratelimit.check_job_allowed(IP)
+
+    ttl = redis_client.ttl(key)
+    assert ttl > 0, f"hourly counter still has no expiry (ttl={ttl})"
+    assert ttl <= ratelimit._HOUR
+
+
+def test_repairing_the_expiry_does_not_slide_the_window(redis_client):
+    """EXPIRE ... NX must not refresh a TTL that already exists -- doing so
+    on every hit would extend the window forever and the counter would never
+    reset, which is the reason the original `if count == 1` guard existed.
+
+    The good-case half of the fail-closed pair; it passes before and after
+    the fix, which is the point.
+    """
+    ratelimit.check_fast_allowed(IP)
+    key = ratelimit._minute_key(IP)
+    first = redis_client.ttl(key)
+    assert first > 0
+
+    redis_client.expire(key, 5)  # pretend the window is nearly over
+    ratelimit.check_fast_allowed(IP)
+
+    assert redis_client.ttl(key) <= 5, "the window slid forward; it must not"
