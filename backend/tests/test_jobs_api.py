@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from app import jobs_api, redis_store, tasks
 from app.celery_app import celery_app
+from app.core.config import get_settings
 from app.inputs import ParsedMolecule
 from app.main import app
 
@@ -737,3 +738,120 @@ def test_an_uploaded_file_still_defaults_to_best_effort(redis_client, monkeypatc
 
     assert r.status_code == 200, r.text
     assert seen.get("best_effort") is True, "the default changed for existing callers"
+
+
+# Hardcoded, NOT parametrized over jobs_api._FORMULA_LEADERS. Deriving the
+# cases from the tuple under test means narrowing that tuple silently narrows
+# the test matrix too: a mutation run that cut it to ("=",) left this test
+# "2 passed" instead of failing. The whole point is to notice a leader being
+# dropped, so the expectation has to live here.
+_EXPECTED_FORMULA_LEADERS = ("=", "+", "-", "@", "\t", "\r")
+
+
+@pytest.mark.parametrize("leader", _EXPECTED_FORMULA_LEADERS)
+@pytest.mark.parametrize("column", ["input", "error"])
+def test_every_formula_leader_is_neutralised_in_every_user_text_column(
+    redis_client, job_id, leader, column
+):
+    """csv-injection-partial-test: _FORMULA_LEADERS has six entries and only
+    "=" was ever exercised, on the "input" column only.
+
+    CSV injection: a spreadsheet treats a cell starting with any of these as
+    a formula, so untrusted text can execute when the user opens the file
+    they downloaded. Narrowing the tuple to "=", or dropping _csv_safe from
+    the "error" column -- which jobs_api names as the other verbatim
+    user-text field -- kept the whole suite green while leaving five vectors
+    live.
+
+    "-" and "@" matter most of the six: both occur naturally at the head of
+    chemical text, so they are the ones a reviewer is most tempted to drop as
+    false positives.
+    """
+    payload = leader + "cmd|' /c calc'!A1"
+    row = {"index": 0, "input": "CCO", "status": "error", "error": None}
+    row[column] = payload
+
+    redis_store.create_job(job_id, total=1, fmt="smiles_list", client_ip="::1")
+    redis_store.write_chunk(job_id, 0, [row])
+    redis_store.assemble_rows(job_id, n_chunks=1)
+    redis_store.set_job_status(job_id, "done")
+
+    body = TestClient(app).get(f"/api/jobs/{job_id}/results.csv").text
+
+    # Assert on the whole body, not body.splitlines()[1]: a leading "\r" is
+    # correctly escaped AND quoted by the csv writer, and the quoted CR then
+    # splits the "line" -- a first draft asserted on line 1 and reported a
+    # false failure for that one leader while the guard was working.
+    assert "'" + payload in body, (
+        f"{leader!r} reached the {column} column unescaped; a spreadsheet "
+        "would evaluate it as a formula when the user opens their download"
+    )
+
+
+def test_a_multipart_upload_with_no_file_part_is_a_400_not_a_500(redis_client):
+    """upload-branch-untested: `grep -rn "files=" backend/tests/` returned
+    ZERO hits before this. Every test posted JSON, so the entire
+    `if file is not None:` branch of _read_input -- the only user-facing
+    route into the batch pipeline -- never executed.
+
+    This case is named by hand in _read_input's own docstring: a multipart
+    request with no `file` part has already had its body stream consumed by
+    the time FastAPI resolves `file` to None, so falling through to
+    request.json() raises a bare RuntimeError("Stream consumed") that would
+    surface as a 500. The docstring says it is handled; nothing checked.
+    """
+    r = TestClient(app).post(
+        "/api/jobs", files={"notthefile": ("x.txt", b"CCO\n", "text/plain")}
+    )
+    assert r.status_code == 400, (
+        f"got {r.status_code}; a malformed request is the caller's mistake to "
+        "be told about, not the server's to crash on"
+    )
+
+
+def test_an_uploaded_file_over_the_size_limit_is_rejected(redis_client, monkeypatch):
+    """translate-body-size-untested: the two existing "limit" tests both
+    monkeypatch MAX_BATCH_SIZE, which is the molecule COUNT cap -- a
+    different thing. Every byte-limit site was uncovered, including this one,
+    so the guard could be deleted or mis-scoped with the suite green.
+    """
+    monkeypatch.setattr(get_settings(), "MAX_FILE_SIZE_MB", 1)
+    oversized = b"CCO\n" * 300_000  # ~1.2 MB
+
+    r = TestClient(app).post(
+        "/api/jobs", files={"file": ("big.smi", oversized, "text/plain")}
+    )
+    assert r.status_code == 413, f"got {r.status_code}; the size cap did not bind"
+
+
+def test_the_declared_size_and_the_actual_size_are_both_checked():
+    """Both halves of _read_input's size guard exist, and the test above
+    exercises only the first.
+
+    TestClient always sends a Content-Length, so the pre-read check fires and
+    the post-read one is never reached -- confirmed by mutation: deleting the
+    post-read check leaves that test passing. The post-read check exists for
+    the case Content-Length is absent (chunked transfer) or a lie, which
+    TestClient cannot produce, so this asserts the guard is present rather
+    than driving it. Honest coverage of a real gap beats a test that pretends
+    to close it.
+    """
+    import inspect
+
+    source = inspect.getsource(jobs_api._read_input)
+    assert source.count("max_file_size_bytes") >= 3, (
+        "one of _read_input's size checks is gone; a body with no "
+        "Content-Length, or a lying one, is now unbounded"
+    )
+
+
+def test_an_oversized_json_body_is_rejected_on_translate(monkeypatch):
+    """The other byte-limit site: the /api/translate request-size middleware.
+    It exists because "a single 100 MB SMILES string was accepted" -- and it
+    could be deleted, or its path prefix mis-scoped, with nothing failing.
+    """
+    monkeypatch.setattr(get_settings(), "MAX_FILE_SIZE_MB", 1)
+    r = TestClient(app).post(
+        "/api/translate", json={"smiles": ["C" * 2_000_000], "best_effort": True}
+    )
+    assert r.status_code == 413, f"got {r.status_code}; the middleware did not bind"
