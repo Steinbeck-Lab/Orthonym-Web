@@ -67,3 +67,19 @@ for jar in opsin-cli-2.9.0-jar-with-dependencies.jar centres-cli-1.5.jar; do
     echo "warning: $SRC/$jar not found -- SELF-01 round-trip verification will silently fail open without it" >&2
   fi
 done
+
+# --- cache invalidation -----------------------------------------------------
+# app/name_cache.py folds a digest of the INSTALLED OpenSTOUT source into every
+# cache key, so this refresh invalidates the shared name cache automatically
+# once the new snapshot is pip-installed. That is the mechanism; the reminder
+# below is the belt to its braces, because the digest is only computed where
+# the package can be read (a zipimport or a stripped image falls back to the
+# version string alone).
+echo
+echo "Snapshot refreshed. The name cache invalidates itself via the engine"
+echo "fingerprint in app/name_cache.py -- but re-install the package for that"
+echo "to take effect:"
+echo "    uv pip install -r backend/requirements.txt   (or rebuild the image)"
+echo
+echo "If naming behaviour changed in a way you want recorded explicitly, bump"
+echo "_KEY_VERSION in backend/app/name_cache.py and note why, as v2 does."
