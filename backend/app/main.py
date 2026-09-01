@@ -159,6 +159,12 @@ def _canonicalize(smiles_list: list[str], max_molecules: int):
     return parse_molecules(data, InputFormat.SMILES_LIST, max_molecules)
 
 
+# /api/health and /api/examples below are the ONLY two endpoints with no rate
+# limiter, and that is deliberate rather than an oversight (audit item NB-6).
+# Both are a single Redis read or a constant, they take no user input, and a
+# health check that can 429 is worse than useless to the thing monitoring it.
+# Every endpoint that costs anything -- naming, jobs, polling, depiction,
+# download -- is limited; see app/ratelimit.py.
 @app.get("/api/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     # Typed rather than a bare dict (round 1 review, Important: this had

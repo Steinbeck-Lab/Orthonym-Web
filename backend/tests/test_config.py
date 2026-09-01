@@ -4,7 +4,15 @@ from app.core.config import Settings, get_settings, load_profile
 
 
 def test_defaults_are_sized_for_the_documented_host():
-    settings = Settings()
+    """Constructed with _env_file=None so this reads the CODE defaults.
+
+    Settings() honours model_config's env_file=".env", so on a developer
+    machine that has one -- which is the documented local-dev setup -- this
+    test read their values and failed with no hint that their own environment
+    caused it (audit item NB-4). It asserts what the code ships, so it must
+    not depend on what any particular host happens to have lying next to it.
+    """
+    settings = Settings(_env_file=None)
     assert settings.CELERY_WORKERS_FAST == 2
     assert settings.CELERY_WORKERS_BATCH == 2
     assert settings.BATCH_CHUNK_SIZE == 25

@@ -5,3 +5,8 @@ REDIS_MAXMEMORY: 512mb
 BATCH_CHUNK_SIZE: 25
 MAX_BATCH_SIZE: 2000
 MAX_FILE_SIZE_MB: 20
+# 1200/min of /api/depict is ~1.12 s of GIL-held RDKit rendering per
+# wall-clock second at the 300-atom cap (measured; see core/config.py). A
+# 2-core box cannot absorb that and still serve anything else, so this
+# profile -- and only this profile -- lowers it.
+RATE_LIMIT_DEPICT_PER_MINUTE: 300

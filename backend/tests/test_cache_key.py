@@ -285,3 +285,49 @@ def test_the_fingerprint_falls_back_rather_than_raising(monkeypatch):
         name_cache.pathlib.Path, "rglob", lambda self, pat: (_ for _ in ()).throw(OSError("nope"))
     )
     assert name_cache._engine_fingerprint() == "nofingerprint"
+
+
+def test_the_fast_and_batch_paths_agree_on_the_cache_key(redis_client):
+    """untested-4: I3 is fixed -- main.py routes the fast path through
+    _canonicalize, so both paths key on the same canonical SMILES -- but
+    nothing asserted it.
+
+    Spec section 6.1's shared-cache promise is only true if the two paths
+    derive identical keys for the same molecule. They did not once already:
+    the fast path silently stopped canonicalizing, so "OCC" and "CCO" were
+    separate entries and a molecule named on one path was re-named on the
+    other. test_cache_key asserted nothing about canonicality, and
+    test_fast_path asserted call ORDER only.
+
+    Uses two spellings of ethanol that RDKit canonicalizes to one form. If a
+    path ever stops canonicalizing, its key changes and this fails.
+    """
+    from app.inputs import InputFormat, parse
+    from app.main import _canonicalize
+
+    spellings = ["CCO", "OCC", "C(O)C"]
+
+    # BOTH real entry points, not one helper called twice: /api/translate goes
+    # through main._canonicalize, and /api/jobs through inputs.parse. The
+    # defect being guarded is precisely the two disagreeing, so a test that
+    # only exercised one of them would prove nothing.
+    fast = {_canonicalize([s], 10)[0].smiles for s in spellings}
+    batch = {
+        parse(s.encode(), InputFormat.SMILES_LIST, 10)[0].smiles for s in spellings
+    }
+    assert fast == batch, (
+        f"the two paths canonicalize differently: fast={fast} batch={batch}"
+    )
+    canonical = fast | batch
+    assert len(canonical) == 1, (
+        f"canonicalization is not collapsing these spellings: {canonical}"
+    )
+
+    keys = {
+        name_cache.cache_key(_canonicalize([s], 10)[0].smiles, best_effort=True)
+        for s in spellings
+    }
+    assert len(keys) == 1, (
+        "the same molecule written three ways produces different cache keys, "
+        "so a name computed on one path cannot be reused by the other"
+    )

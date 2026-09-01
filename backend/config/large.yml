@@ -4,4 +4,9 @@ CELERY_WORKERS_BATCH: 6
 REDIS_MAXMEMORY: 4gb
 BATCH_CHUNK_SIZE: 50
 MAX_BATCH_SIZE: 50000
+# 200, against spec section 7's reasoning for 50. Deliberate for this profile
+# and NOT a spec violation: 50 MB was sized for a 2-4 GB box, and the binding
+# limit in front of it is nginx's client_max_body_size (210m in
+# frontend/nginx.conf), which was itself sized to accommodate this value. On a
+# 32 GB host the app cap is the intended one.
 MAX_FILE_SIZE_MB: 200
