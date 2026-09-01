@@ -481,3 +481,78 @@ def test_iupac_to_smiles_over_http_enforces_the_fast_per_minute_cap(
         client.get("/api/iupac-to-smiles", params={"name": "ethanol"}).status_code
         == 429
     )
+
+
+def test_one_bad_molecule_does_not_lose_the_whole_fast_request(monkeypatch):
+    """I4: translate_fast's loop called translate_one with no try/except, so
+    a raise on ONE molecule lost the entire request.
+
+    _name_prepared, which the batch path uses, wraps the same call and emits
+    an honest error row for that molecule while the rest survive
+    ("one bad molecule must not lose the other 24 in its chunk"). main.py
+    catches only CeleryTimeoutError, so on the fast path the raise reached
+    the client as a bare 500 with no detail -- on Home, the main product
+    surface.
+
+    This is not hypothetical: the last upstream tier rename made classify()
+    raise ValueError on live rows, and it will happen again on the next one.
+    """
+    from app import tasks
+
+    real = tasks.translate_one
+
+    def _explode_on_the_second(smiles, best_effort=True):
+        if smiles == "CCC":
+            raise ValueError("Unexpected name_tiered() row, cannot classify")
+        return real(smiles, best_effort=best_effort)
+
+    monkeypatch.setattr(tasks, "translate_one", _explode_on_the_second)
+    monkeypatch.setattr(tasks.name_cache, "get_cached", lambda *a, **k: None)
+    monkeypatch.setattr(tasks.name_cache, "put_cached", lambda *a, **k: None)
+
+    prepared = [
+        {"index": 0, "raw_input": "CCO", "input_id": None, "smiles": "CCO", "error": None},
+        {"index": 1, "raw_input": "CCC", "input_id": None, "smiles": "CCC", "error": None},
+        {"index": 2, "raw_input": "CCCC", "input_id": None, "smiles": "CCCC", "error": None},
+    ]
+
+    rows = tasks.translate_fast.run(prepared, True)
+
+    assert len(rows) == 3, "a single raising molecule lost the whole request"
+    assert rows[0]["name"], "the molecules that named fine must still be returned"
+    assert rows[1]["status"] == "error"
+    assert "cannot classify" in (rows[1]["error"] or "")
+    assert rows[2]["name"], "the molecules AFTER the failure must still be returned"
+
+
+def test_a_soft_time_limit_is_not_swallowed_by_the_per_molecule_guard(monkeypatch):
+    """The interaction that makes the guard above dangerous if written
+    naively: SoftTimeLimitExceeded subclasses Exception DIRECTLY, so a bare
+    `except Exception` per molecule swallows Celery's timeout, the loop runs
+    on past the limit, and the hard limit kills the worker mid-request with
+    nothing written.
+
+    _name_prepared already orders its handlers to avoid exactly this; the
+    fast path must not reintroduce it.
+    """
+    from celery.exceptions import SoftTimeLimitExceeded
+
+    from app import tasks
+
+    assert SoftTimeLimitExceeded.__mro__[1] is Exception, (
+        "SoftTimeLimitExceeded no longer subclasses Exception directly; "
+        "re-check every `except Exception` that must not swallow it"
+    )
+
+    def _timeout(smiles, best_effort=True):
+        raise SoftTimeLimitExceeded()
+
+    monkeypatch.setattr(tasks, "translate_one", _timeout)
+    monkeypatch.setattr(tasks.name_cache, "get_cached", lambda *a, **k: None)
+
+    prepared = [
+        {"index": 0, "raw_input": "CCO", "input_id": None, "smiles": "CCO", "error": None}
+    ]
+
+    with pytest.raises(SoftTimeLimitExceeded):
+        tasks.translate_fast.run(prepared, True)

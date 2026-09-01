@@ -393,12 +393,40 @@ def translate_fast(prepared: list[dict], best_effort: bool) -> list[dict]:
             continue
 
         smiles = item["smiles"]
-        cached = name_cache.get_cached(smiles, best_effort)
-        result_item = cached if cached is not None else translate_one(
-            smiles, best_effort=best_effort
-        )
-        if cached is None:
-            name_cache.put_cached(result_item, best_effort)
+        try:
+            cached = name_cache.get_cached(smiles, best_effort)
+            result_item = cached if cached is not None else translate_one(
+                smiles, best_effort=best_effort
+            )
+            if cached is None:
+                name_cache.put_cached(result_item, best_effort)
+        except SoftTimeLimitExceeded:
+            # MUST precede the broad handler: SoftTimeLimitExceeded subclasses
+            # Exception DIRECTLY, so `except Exception` would swallow Celery's
+            # timeout, this loop would run on past the limit, and the hard
+            # limit would kill the worker mid-request with nothing written.
+            # _name_prepared orders its handlers the same way for the same
+            # reason.
+            raise
+        except Exception as exc:  # noqa: BLE001 - one molecule, not the request
+            # Matches _name_prepared's contract on the batch path (final
+            # review report, I4): one molecule that raises must not lose the
+            # others. Without this the fast path had no guard at all, so a
+            # single raise reached the client as a bare 500 with no detail --
+            # main.py catches only CeleryTimeoutError -- on Home, the main
+            # product surface, while the batch path degraded honestly to a
+            # per-row error. The last upstream tier rename made classify()
+            # raise on live rows; the next one will too.
+            logger.exception("Naming failed for %s", smiles)
+            rows.append(
+                _error_row(
+                    item["index"],
+                    item["raw_input"],
+                    item["input_id"],
+                    f"Naming failed: {exc}",
+                )
+            )
+            continue
         if result_item.depiction_svg is None and result_item.status in (
             "pin",
             "fallback",
