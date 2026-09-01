@@ -1,3 +1,10 @@
+# THE DEFAULT PROFILE. 4 cores / 8-16 GB.
+#
+# These values are also the code defaults in app/core/config.py, deliberately:
+# with DEPLOYMENT_PROFILE unset, config.py applies NO profile at all rather
+# than falling back to medium, so the two must agree or an unset variable
+# silently means something different from DEPLOYMENT_PROFILE=medium. Change
+# one, change the other. docker-compose.yml sets it explicitly.
 CELERY_WORKERS_FAST: 2
 CELERY_WORKERS_BATCH: 2
 REDIS_MAXMEMORY: 2gb

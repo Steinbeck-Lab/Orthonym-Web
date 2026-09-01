@@ -43,6 +43,16 @@ class Settings(BaseSettings):
     RATE_LIMIT_MAX_CONCURRENT_JOBS: int = 2
     RATE_LIMIT_JOBS_PER_HOUR: int = 20
     RATE_LIMIT_FAST_PER_MINUTE: int = 60
+    # MEASURED, at the MAX_DEPICT_ATOMS=300 cap (audit item
+    # T7-open-q-depict-1200): a 300-atom fused system renders in 56 ms, a
+    # macrocycle 23 ms, a 300-carbon chain 16 ms. At 1200/min -- 20 req/s --
+    # the worst case is ~1.12 seconds of GIL-holding RDKit work per
+    # wall-clock second, so one compliant IP can saturate the web process.
+    # MAX_DEPICT_ATOMS already cut the worst case three orders of magnitude
+    # (from a measured 16.7 s for one 2,400-atom molecule); what this number
+    # still does NOT bound is aggregate cost. small.yml overrides it for that
+    # reason -- 2 cores cannot absorb it.
+    #
     # /api/depict is called once per visible row in a batch results table --
     # a legitimate 1,000-row view is 1,000 calls well within a minute, which
     # RATE_LIMIT_FAST_PER_MINUTE (sized for a single OPSIN lookup) would
