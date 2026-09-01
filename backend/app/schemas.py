@@ -215,6 +215,19 @@ class ParsePreviewRow(BaseModel):
 
 
 class ParsePreviewResponse(BaseModel):
+    """A count and a SAMPLE, not a validation.
+
+    `molecule_count` is structural and covers the whole input, but `sample`
+    and `errors` come from parsing only the first PREVIEW_SAMPLE records
+    (app.jobs_api). An empty `errors` therefore means "no errors in the first
+    few", NOT "this file is clean" -- a UI that presents it as the latter will
+    tell a user their file is fine and then fail on row 6.
+
+    Audit item parse-preview-partial-validation: README and the design spec
+    both described this endpoint as validating the upload, which it has never
+    done.
+    """
+
     format: str
     molecule_count: int
     # First 5 of each, so a 10,000-molecule paste does not return 10,000 rows

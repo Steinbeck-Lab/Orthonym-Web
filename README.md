@@ -108,7 +108,7 @@ There is **no frontend UI for this yet**; it is reachable over the API.
 | Endpoint | Purpose |
 |---|---|
 | `POST /api/jobs` | Upload `.sdf`, `.mol`, `.csv` (needs a `smiles` column), or a plain SMILES list |
-| `POST /api/parse-preview` | Count and validate an upload without dispatching it |
+| `POST /api/parse-preview` | Count an upload and sample-check its first few records, without dispatching it. Not a full validation — an empty `errors` means the sample was clean, not the file |
 | `GET /api/jobs/{id}` | Progress |
 | `GET /api/jobs/{id}/results` | Paged rows |
 | `GET /api/jobs/{id}/results.csv` | Streamed CSV of the whole job |
