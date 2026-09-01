@@ -283,6 +283,22 @@ async def create_job(
 ) -> JobEnvelope:
     settings = get_settings()
     ip = client_ip(request)
+    # check_fast_allowed BEFORE require_a_live_jvm (round 5 review, finding
+    # 1): moving require_a_live_jvm ahead of check_job_allowed (below) left
+    # it as the only gate reachable before EITHER limiter during a JVM
+    # outage, so a caller could hit it an unbounded number of times per
+    # second -- cheap (one Redis HGETALL, ~0.165 ms) but no longer capped
+    # at all. /api/translate already gates the same way (check_fast_allowed
+    # first, then require_a_live_jvm), so this matches that shape. Two
+    # different limiters now guard this one endpoint deliberately, not
+    # redundantly: check_fast_allowed (60/min) bounds the rate of ANY call
+    # here, including ones we are about to refuse for our own reasons
+    # (a JVM outage is not the caller's fault, so it must not cost them an
+    # hourly job-quota unit -- see check_job_allowed below); check_job_allowed
+    # (hourly) is the actual job-submission budget, charged only once a
+    # request has passed the JVM check and is genuinely trying to submit
+    # a batch.
+    check_fast_allowed(ip)
     # require_a_live_jvm BEFORE check_job_allowed (round 4 review, finding
     # 2): check_job_allowed increments the hourly counter unconditionally,
     # so a caller during a JVM outage would otherwise burn one of their 20
