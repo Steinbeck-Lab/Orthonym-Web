@@ -84,7 +84,7 @@ from openstout import OpenSTOUT
 from openstout.validation.opsin_roundtrip import opsin_parse
 
 from .depiction import mol_to_svg_data_uri
-from .schemas import ResultItem
+from .schemas import VERIFIED_STATUSES, ResultItem
 
 # Constructed once per process and reused across all requests. This is
 # REQUIRED for both correctness (general_fallback=True is what enables
@@ -113,13 +113,6 @@ _escalated_namer = OpenSTOUT(
     general_fallback_unverified=True,
     allow_aromatic_general=True,
 )
-
-
-# The two statuses that ASSERT an OPSIN round-trip actually happened. Kept
-# beside classify() because it is classify()'s output vocabulary, and mirrored
-# by name_cache._VERIFIED and the frontend's Tile.VERIFIED_STATUSES -- all
-# three answer the same question: "does this label claim a verification?"
-_VERIFIED_STATUSES = frozenset({"pin", "fallback"})
 
 
 def classify(row: dict) -> tuple[str, Optional[str], str]:
@@ -178,6 +171,33 @@ def _roundtrip_check(name: str, mol: Chem.Mol) -> tuple[Optional[str], Optional[
     return raw, original_canonical == roundtrip_canonical
 
 
+def _abstain_item(smiles: str, tier: str, row: dict) -> ResultItem:
+    """The honest "no name" result.
+
+    Built in two places -- the primary/escalated pass abstaining, and a
+    verified tier being downgraded for a caller who refused unverified names
+    -- and they must not drift: this is the bottom rung of the confidence
+    ladder, and the two differing would mean the same molecule reports
+    differently depending on which route reached the same conclusion.
+
+    `tier` comes from classify(), never a hardcoded constant. Hardcoding "T5"
+    here is what made every abstain 500 after the upstream tier rename, even
+    though classify() itself had been updated.
+    """
+    return ResultItem(
+        smiles=smiles,
+        status="abstain",
+        name=None,
+        tier=tier,
+        formula=row.get("formula"),
+        limit_code=row.get("limit_code"),
+        error=None,
+        depiction_svg=None,
+        roundtrip_smiles=None,
+        roundtrip_match=None,
+    )
+
+
 def translate_one(smiles: str, best_effort: bool = True) -> ResultItem:
     """Translate a single SMILES string into a ResultItem.
 
@@ -215,27 +235,13 @@ def translate_one(smiles: str, best_effort: bool = True) -> ResultItem:
         status, name, tier = classify(row)
 
     if status == "abstain":
-        return ResultItem(
-            smiles=smiles,
-            status="abstain",
-            name=None,
-            # `tier` from classify(), never a hardcoded constant: hardcoding
-            # "T5" here is what made every abstain 500 after the upstream
-            # tier rename, even though classify() itself had been updated.
-            tier=tier,
-            formula=row.get("formula"),
-            limit_code=row.get("limit_code"),
-            error=None,
-            depiction_svg=None,
-            roundtrip_smiles=None,
-            roundtrip_match=None,
-        )
+        return _abstain_item(smiles, tier, row)
 
     # status in ("pin", "fallback", "best_effort"): a real name shipped.
     depiction_svg = mol_to_svg_data_uri(mol)
     roundtrip_smiles, roundtrip_match = _roundtrip_check(name, mol)
 
-    if status in _VERIFIED_STATUSES and roundtrip_smiles is None:
+    if status in VERIFIED_STATUSES and roundtrip_smiles is None:
         # Final review report, C3, backend half. SELF-01 uses the same
         # opsin_parse() as the round-trip check above, so a null
         # roundtrip_smiles on a verified tier can only mean OPSIN was
@@ -253,18 +259,7 @@ def translate_one(smiles: str, best_effort: bool = True) -> ResultItem:
         # reintroduce through the back door exactly what the gate above
         # keeps out the front. For them the honest answer is abstain.
         if not best_effort:
-            return ResultItem(
-                smiles=smiles,
-                status="abstain",
-                name=None,
-                tier=tier,
-                formula=row.get("formula"),
-                limit_code=row.get("limit_code"),
-                error=None,
-                depiction_svg=None,
-                roundtrip_smiles=None,
-                roundtrip_match=None,
-            )
+            return _abstain_item(smiles, tier, row)
         status = "best_effort"
 
     return ResultItem(

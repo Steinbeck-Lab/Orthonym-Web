@@ -291,7 +291,7 @@ def prepared_payload(molecules) -> list[dict]:
 
 def admit_and_dispatch(
     ip: str, molecules, fmt: str, best_effort: bool
-) -> tuple[str, str]:
+) -> JobEnvelope:
     """Admit, register, and dispatch one batch job as a single unit.
 
     The ONLY place that creates and dispatches a batch job -- POST
@@ -364,7 +364,17 @@ def admit_and_dispatch(
         release_job(ip, job_id)
         redis_store.get_redis().delete(redis_store.job_meta_key(job_id))
         raise
-    return job_id, owner_token
+    # The envelope, not (job_id, token): this is the only place that knows all
+    # four fields, and returning the pieces meant three call sites rebuilt the
+    # identical five-line construction -- all three of which had to be edited
+    # in lockstep to thread owner_token through, which is the maintenance cost
+    # demonstrating itself.
+    return JobEnvelope(
+        job_id=job_id,
+        molecule_count=len(molecules),
+        status="queued",
+        owner_token=owner_token,
+    )
 
 
 @router.post("/api/parse-preview", response_model=ParsePreviewResponse)
@@ -477,13 +487,7 @@ async def create_job(
         _parse_or_400, data, settings.MAX_BATCH_SIZE
     )
 
-    job_id, owner_token = admit_and_dispatch(ip, molecules, fmt.value, best_effort)
-    return JobEnvelope(
-        job_id=job_id,
-        molecule_count=len(molecules),
-        status="queued",
-        owner_token=owner_token,
-    )
+    return admit_and_dispatch(ip, molecules, fmt.value, best_effort)
 
 
 # A job in one of these has stopped doing work and can be deleted. "cancelled"

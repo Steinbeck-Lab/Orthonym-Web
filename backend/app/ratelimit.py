@@ -279,23 +279,55 @@ def check_and_register_job(ip: str, job_id: str) -> None:
         )
 
 
-def check_fast_allowed(ip: str) -> None:
-    settings = get_settings()
+def _check_minute_counter(key: str, limit: int, what: str) -> None:
+    """Increment one per-minute counter and 429 past `limit`.
+
+    The four minute budgets (naming, depiction, polling, download) differ only
+    in their key, their number and a noun -- the MECHANISM was copy-pasted four
+    times, and the NX fix below had to be applied to each. The numbers keep
+    their own justifications on the public functions, which is what those
+    comments are actually for; this is the part no comment defended.
+
+    EXPIRE ... NX on EVERY call, not `expire()` once behind `if count == 1`.
+    That form needed two round trips to land; lose the second one -- a blip, a
+    failover, a restart between them -- and the key exists with no TTL, which
+    volatile-lru never evicts and the count==1 branch can no longer repair
+    because the counter has already moved past 1. A permanent per-IP lockout
+    whose own 429 reads "Resets in -1 seconds". NX preserves the original
+    reason intact: it sets an expiry only when there is none, so it repairs a
+    missing TTL without ever sliding a live window forward. Same call
+    _ADMIT_JOB_SCRIPT makes on the concurrent-job set.
+
+    One pipeline, not two round trips: EXPIRE does not depend on INCR's return
+    value, so pipelining recovers the whole cost the unconditional EXPIRE
+    added (measured 0.116 -> 0.218 -> 0.113 ms per check) with identical
+    semantics. transaction=False -- MULTI/EXEC buys nothing here, since INCR is
+    already atomic and NX makes the EXPIRE idempotent.
+    """
     client = get_redis()
-    key = _minute_key(ip)
-    count = client.incr(key)
-    # NX on every call, never `if count == 1` -- see check_job_allowed for
-    # why: a lost second round trip leaves a TTL-less key that volatile-lru
-    # cannot evict and the count==1 branch can no longer repair.
-    client.expire(key, _MINUTE, nx=True)
-    if count > settings.RATE_LIMIT_FAST_PER_MINUTE:
+    pipe = client.pipeline(transaction=False)
+    pipe.incr(key)
+    pipe.expire(key, _MINUTE, nx=True)
+    count = pipe.execute()[0]
+    if count > limit:
         raise HTTPException(
             status_code=429,
             detail=(
-                f"Limit of {settings.RATE_LIMIT_FAST_PER_MINUTE} requests per "
-                f"minute reached. Resets in {client.ttl(key)} seconds."
+                f"Limit of {limit} {what} per minute reached. "
+                f"Resets in {client.ttl(key)} seconds."
             ),
         )
+
+
+def check_fast_allowed(ip: str) -> None:
+    """The naming budget: 60/minute, sized for one OPSIN lookup -- roughly one
+    Redis GET plus a worker round trip. Every endpoint that names a molecule
+    shares it; the more expensive reads (depiction, polling, download) have
+    their own, because a count limiter cannot see cost.
+    """
+    _check_minute_counter(
+        _minute_key(ip), get_settings().RATE_LIMIT_FAST_PER_MINUTE, "requests"
+    )
 
 
 def check_depict_allowed(ip: str) -> None:
@@ -307,23 +339,9 @@ def check_depict_allowed(ip: str) -> None:
     request-count throttle, not a cost bound -- see jobs_api.MAX_DEPICT_ATOMS
     for the latter, which is what actually keeps one call cheap.
     """
-    settings = get_settings()
-    client = get_redis()
-    key = _depict_minute_key(ip)
-    count = client.incr(key)
-    # NX on every call, never `if count == 1` -- see check_job_allowed for
-    # why: a lost second round trip leaves a TTL-less key that volatile-lru
-    # cannot evict and the count==1 branch can no longer repair.
-    client.expire(key, _MINUTE, nx=True)
-    if count > settings.RATE_LIMIT_DEPICT_PER_MINUTE:
-        raise HTTPException(
-            status_code=429,
-            detail=(
-                f"Limit of {settings.RATE_LIMIT_DEPICT_PER_MINUTE} "
-                f"depictions per minute reached. Resets in "
-                f"{client.ttl(key)} seconds."
-            ),
-        )
+    _check_minute_counter(
+        _depict_minute_key(ip), get_settings().RATE_LIMIT_DEPICT_PER_MINUTE, "depictions"
+    )
 
 
 def check_poll_allowed(ip: str) -> None:
@@ -335,22 +353,9 @@ def check_poll_allowed(ip: str) -> None:
     budget instead (round 3 review, finding 4 -- these two endpoints had
     no limiter of any kind before this).
     """
-    settings = get_settings()
-    client = get_redis()
-    key = _poll_minute_key(ip)
-    count = client.incr(key)
-    # NX on every call, never `if count == 1` -- see check_job_allowed for
-    # why: a lost second round trip leaves a TTL-less key that volatile-lru
-    # cannot evict and the count==1 branch can no longer repair.
-    client.expire(key, _MINUTE, nx=True)
-    if count > settings.RATE_LIMIT_POLL_PER_MINUTE:
-        raise HTTPException(
-            status_code=429,
-            detail=(
-                f"Limit of {settings.RATE_LIMIT_POLL_PER_MINUTE} polls per "
-                f"minute reached. Resets in {client.ttl(key)} seconds."
-            ),
-        )
+    _check_minute_counter(
+        _poll_minute_key(ip), get_settings().RATE_LIMIT_POLL_PER_MINUTE, "polls"
+    )
 
 
 def check_download_allowed(ip: str) -> None:
@@ -368,21 +373,9 @@ def check_download_allowed(ip: str) -> None:
     10/minute is generous for the actual use: a person downloading their own
     results does it once, maybe twice.
     """
-    settings = get_settings()
-    client = get_redis()
-    key = _download_minute_key(ip)
-    count = client.incr(key)
-    client.expire(key, _MINUTE, nx=True)
-    if count > settings.RATE_LIMIT_DOWNLOAD_PER_MINUTE:
-        raise HTTPException(
-            status_code=429,
-            detail=(
-                f"Limit of {settings.RATE_LIMIT_DOWNLOAD_PER_MINUTE} result "
-                f"downloads per minute reached. Resets in {client.ttl(key)} "
-                "seconds."
-            ),
-        )
-
+    _check_minute_counter(
+        _download_minute_key(ip), get_settings().RATE_LIMIT_DOWNLOAD_PER_MINUTE, "result downloads"
+    )
 
 def release_job(ip: str, job_id: str) -> None:
     """HTTP-facing release. Delegates to app.redis_store's bare primitive
