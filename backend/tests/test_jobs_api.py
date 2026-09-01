@@ -9,7 +9,9 @@ test_celery_jvm_fork.py -- that is the one thing eager mode cannot test.
 import pytest
 from fastapi.testclient import TestClient
 
+from app import jobs_api, redis_store, tasks
 from app.celery_app import celery_app
+from app.inputs import ParsedMolecule
 from app.main import app
 
 client = TestClient(app)
@@ -595,3 +597,72 @@ def test_depict_reports_a_bad_smiles():
     body = client.get("/api/depict", params={"smiles": "not_a_smiles((("}).json()
     assert body["depiction_svg"] is None
     assert body["error"]
+
+
+def test_mark_job_failed_gives_a_blown_up_job_a_terminal_state(redis_client, job_id):
+    """I5: mark_job_failed had ZERO test coverage of any kind.
+
+    It is the only thing that turns a job that raised into a terminal state
+    and frees the submitter's concurrent-job slot. A previous round deferred
+    testing it on the reasoning that it "cannot be exercised under
+    task_eager_propagates=True" -- that is wrong. An errback is a plain
+    function; calling .run() with the three arguments Celery passes an
+    errback (request, exc, traceback) plus the bound job_id exercises the
+    real body, no worker and no broker needed.
+    """
+    ip = "203.0.113.55"
+    redis_store.create_job(job_id, total=3, fmt="smiles_list", client_ip=ip)
+    redis_store.set_job_status(job_id, "running")
+    redis_client.sadd(redis_store.ip_jobs_key(ip), job_id)
+
+    tasks.mark_job_failed.run(None, RuntimeError("boom"), None, job_id)
+
+    meta = redis_store.read_job_meta(job_id)
+    assert meta["status"] == "failed", (
+        "a job whose task raised is still 'running'; the caller polls a "
+        "progress bar that will not move until the 24h TTL turns it into a 404"
+    )
+    assert not redis_client.sismember(redis_store.ip_jobs_key(ip), job_id), (
+        "the failed job still holds one of this IP's 2 concurrent slots"
+    )
+
+
+def test_the_fast_job_path_attaches_an_errback_like_the_batch_path_does(
+    monkeypatch, redis_client
+):
+    """I5: translate_job_inline was dispatched with no errback at all, while
+    the chord path wires mark_job_failed on every header task AND the body
+    (tasks.dispatch_batch).
+
+    That is the DEFAULT route -- every job at or under
+    FAST_PATH_MAX_MOLECULES. write_chunk, bump_job_done and _close_job are
+    all unguarded inside translate_job_inline, so a raise in any of them
+    strands the job at 'running' for 24 hours and permanently burns one of
+    that IP's two concurrent slots. The batch path recovers from exactly the
+    same failure; the more-travelled path did not.
+
+    Asserts on the errback actually handed to Celery rather than on a
+    downstream side effect: under task_always_eager an errback is not
+    invoked the way a real worker invokes it, so a behavioural assertion
+    here would pass whether or not the errback was ever attached.
+    """
+    captured: dict = {}
+
+    def _fake_apply_async(*args, **kwargs):
+        captured.update(kwargs)
+        return None
+
+    monkeypatch.setattr(
+        tasks.translate_job_inline, "apply_async", _fake_apply_async
+    )
+    molecules = [
+        ParsedMolecule(index=0, raw_input="CCO", input_id=None, smiles="CCO", error=None)
+    ]
+    jobs_api.admit_and_dispatch("203.0.113.56", molecules, "smiles_list", True)
+
+    errback = captured.get("link_error")
+    assert errback is not None, (
+        "the fast job path dispatches with no errback; a raise inside "
+        "translate_job_inline leaves the job 'running' and its slot held"
+    )
+    assert errback.task == "app.tasks.mark_job_failed"
