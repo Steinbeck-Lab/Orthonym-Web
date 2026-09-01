@@ -213,6 +213,42 @@ def _start_status_heartbeat(
     return thread
 
 
+def _stamp_without_raising(record, pid: int, *, ok: bool) -> None:
+    """Write this child's boot verdict, swallowing a Redis failure.
+
+    Final review report, C1-secondary. This one-shot stamp used to be a bare
+    call, and _start_status_heartbeat ran only AFTER it. A Redis error here --
+    a `docker compose up` where Redis is still warming is the realistic case
+    -- therefore raised out of _start_child_jvm BEFORE the heartbeat existed.
+    Celery 5.6.3 catches that inside Signal.send and discards it (see
+    _assert_parent_has_no_jvm's note on the same mechanism), so the child
+    boots looking healthy while never stamping and never beating: invisible
+    to any_worker_has_opsin() for the life of the process. If every child
+    lands in that window, /api/health reports DEGRADED and every naming
+    endpoint 503s on a perfectly healthy deployment, with nothing to recover
+    it.
+
+    The heartbeat is exactly that recovery path -- it already tolerates a
+    failed write and retries every _WORKER_STATUS_TTL // 3 seconds -- which
+    is precisely why this call must never be able to skip it. Losing the
+    boot stamp costs at most one heartbeat interval of invisibility;
+    losing the heartbeat costs the child's whole life.
+
+    Fail-closed either way: a child that cannot stamp is simply not counted
+    as having a JVM, so nothing serves names nobody verified.
+    """
+    try:
+        record(pid, ok=ok)
+    except Exception:
+        logger.exception(
+            "Celery child %s: could not record its boot OPSIN status "
+            "(ok=%s). The heartbeat below will retry; this child stays "
+            "invisible to any_worker_has_opsin() until a beat lands.",
+            pid,
+            ok,
+        )
+
+
 @worker_process_init.connect
 def _start_child_jvm(**_kwargs) -> None:
     """Runs inside each forked CHILD. This is where its own JVM starts.
@@ -241,7 +277,7 @@ def _start_child_jvm(**_kwargs) -> None:
             "a JVM before forking -- see _assert_parent_has_no_jvm.",
             pid,
         )
-        record_worker_opsin_status(pid, ok=False)
+        _stamp_without_raising(record_worker_opsin_status, pid, ok=False)
         try:
             _start_status_heartbeat(pid, ok=False)
         except Exception:
@@ -261,7 +297,7 @@ def _start_child_jvm(**_kwargs) -> None:
         return
 
     decompose_ok = opsin_decompose.self_check()
-    record_worker_opsin_status(pid, ok=decompose_ok)
+    _stamp_without_raising(record_worker_opsin_status, pid, ok=decompose_ok)
     logger.info(
         "Celery child %s: OPSIN name decomposition %s",
         pid,
