@@ -348,17 +348,6 @@
   overflow-wrap: anywhere;
 }
 
-.tile__tier {
-  flex: none;
-  font-family: var(--font-mono);
-  font-size: var(--t-caption);
-  line-height: 1.5;
-  letter-spacing: var(--track-caption);
-  text-transform: uppercase;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
 .tile__patch {
   display: flex;
   flex-direction: column;
@@ -623,6 +612,19 @@
 }
 
 .tile__roundtrip-result--mismatch {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-style: wavy;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.25em;
+}
+
+/* A missing proof is not a colour-coded state either, and it deliberately
+   shares the mismatch treatment above: both mean the round-trip claim this
+   tier's rule makes is not backed by a confirmed match, just for different
+   reasons (one failed, one never ran). It must never look like the silence
+   of a tier that makes no such claim. */
+.tile__roundtrip-result--unavailable {
   color: var(--ink);
   text-decoration: underline;
   text-decoration-style: wavy;
