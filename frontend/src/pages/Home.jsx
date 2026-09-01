@@ -5,7 +5,7 @@ import SamplerGrid from '../components/SamplerGrid'
 import ConfidenceLegend from '../components/ConfidenceLegend'
 import Switch from '../components/Switch'
 import { fetchExamples, translateBatch, TranslateJobQueuedError } from '../lib/api'
-import { parseSmilesLines } from '../lib/parseSmiles'
+import { MAX_ROWS, parseSmilesLines } from '../lib/parseSmiles'
 import useReducedMotion from '../lib/useReducedMotion'
 import './Home.css'
 
@@ -143,7 +143,7 @@ function Home() {
       return
     }
     setValidationNote(
-      truncated ? `Only the first 50 of ${total} lines will be processed.` : null,
+      truncated ? `Only the first ${MAX_ROWS} of ${total} lines will be processed.` : null,
     )
     runTranslate(lines)
   }
@@ -181,7 +181,7 @@ function Home() {
           <form onSubmit={handleSubmit} noValidate>
             <div className="field">
               <label htmlFor="smiles-input" className="field__label">
-                SMILES &mdash; one per line, up to 50
+                SMILES &mdash; one per line, up to {MAX_ROWS}
               </label>
               <textarea
                 id="smiles-input"
