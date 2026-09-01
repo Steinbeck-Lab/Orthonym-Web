@@ -1,34 +1,5 @@
+import { NAMED_STATUSES, STATE_CLASS, STATE_LABEL, VERIFIED_STATUSES } from '../lib/statuses'
 import StitchedName from './StitchedName'
-
-const STATE_LABEL = {
-  pin: 'Preferred IUPAC Name (PIN)',
-  fallback: 'Not a verified PIN',
-  best_effort: 'Unverified best-effort name — could not round-trip check this',
-  abstain: 'Could not confidently name this',
-  error: null, // uses the literal API error message instead
-}
-
-// API status values use underscores (e.g. "best_effort"); CSS state
-// classes use hyphens (e.g. "tile--best-effort") per the existing
-// tile--pin / tile--fallback / tile--abstain / tile--error naming.
-const STATE_CLASS = {
-  pin: 'pin',
-  fallback: 'fallback',
-  best_effort: 'best-effort',
-  abstain: 'abstain',
-  error: 'error',
-}
-
-// Statuses that ship a real (if not always verified) name -- these three
-// share the same "name-block + supporting depiction" layout, distinguished
-// only by border/fill treatment per state (see Home.css).
-const NAMED_STATUSES = new Set(['pin', 'fallback', 'best_effort'])
-
-// Statuses whose confidence rule (double / dashed) claims an OPSIN
-// round-trip confirmed the name. best_effort makes no such claim -- its own
-// state label already says "could not round-trip check this" -- so only
-// these two need an explicit call-out when roundtrip_smiles is missing.
-const VERIFIED_STATUSES = new Set(['pin', 'fallback'])
 
 /**
  * One cell of the sampler grid.

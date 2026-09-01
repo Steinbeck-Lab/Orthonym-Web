@@ -474,3 +474,53 @@
     min-width: 0;
   }
 }
+
+/* The Ketcher frame on the Draw tab.
+   Moved here from Teach.css when /teach folded into this page. It had to
+   move, not just be left behind: Teach.css was imported by Teach.jsx, so
+   deleting that page unloaded the stylesheet and took .results and
+   .fetch-error with it -- both still used here. Vite only ships CSS some
+   module imports, and "some other page imports it" is not ownership. */
+.explain__editor {
+  display: block;
+  width: 100%;
+  min-height: 460px;
+  background: var(--canvas);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-card-sm);
+}
+
+/* From StructureToIupac.css, same reason. */
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-lg);
+}
+
+.fetch-error {
+  padding: var(--s-lg);
+  background: var(--surface-soft);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-card-sm);
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.fetch-error code {
+  padding: 0 0.25em;
+  background: var(--surface-card);
+  color: var(--ink);
+}
+
+/* Three input options now (name / SMILES / draw), and they must stay on one
+   row: wrapping made "Draw" look like a second, unrelated control rather than
+   the third tab. */
+.explain-mode {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 1.1rem;
+  row-gap: 0.35rem;
+}

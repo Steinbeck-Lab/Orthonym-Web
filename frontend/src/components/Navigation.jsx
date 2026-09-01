@@ -14,9 +14,11 @@ import { NavLink, useLocation } from 'react-router-dom'
 
 const NAV_LINKS = [
   { to: '/', label: 'Translate', end: true },
-  { to: '/structure', label: 'Structure → IUPAC' },
   { to: '/from-name', label: 'IUPAC → Structure' },
-  { to: '/teach', label: 'Learn' },
+  // One entry where there were three. /structure and /teach were the same
+  // capability reached two different ways -- both now redirect here, and the
+  // page's own Input tabs (name / SMILES / draw) are what used to be separate
+  // routes. See spec section 12.
   { to: '/explain', label: 'Explain' },
   { to: '/health', label: 'Health Check' },
   { to: '/about', label: 'About' },

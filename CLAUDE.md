@@ -155,12 +155,18 @@ version-fragile). **That check now runs in the Celery worker, not the web proces
 longer imports `opsin_decompose`, and `celery_app.py` calls `self_check()` when each forked child
 starts its JVM. A web process on its own never runs it.
 
-**Frontend routes share components deliberately, not by accident.** Home (`/`, "Translate") and
-Structure→IUPAC render results through the literal same `SamplerGrid`/`Tile` components. Every
+**Frontend routes share components deliberately, not by accident.** There are five routes, not
+seven: `/structure` and `/teach` are `<Navigate>` redirects to `/explain?input=draw`, because both
+were the same capability reached a different way. `/explain` now carries the input choice itself —
+**IUPAC name | SMILES | Draw** tabs in the input card — plus a **Learn/Expert** switch in the
+output card, Expert by default (PRODUCT.md principle 1: a proof you must hunt for a switch to see
+is not offered). Learn drops the SMILES tab entirely rather than mislabel it, per the teach-mode
+spec's rule against naming a format. Home (`/`, "Translate") renders results through
+`SamplerGrid`/`Tile`. Every
 route opens with the same `.page-head` card (a wide title+lede card) and closes on the same footer;
 the working part of each route is a **contained** `.workspace` card grid (two rounded cards, input
-| output, inside the 1600px column — Home's is named `.workbench`; Structure→IUPAC and Learn add
-`.workspace--draw`, which flips the split so the structure editor takes the wide cell). There is
+| output, inside the 1600px column — Home's is named `.workbench`; `/explain` adds
+`.workspace--draw` **on the Draw tab only**, which flips the split so the structure editor takes the wide cell — Ketcher is unusable in the narrow column). `useKetcher` takes an `enabled` flag for the same reason: its 20 s readiness clock must start when the iframe mounts, not when the page does, or picking Draw late finds the editor already declared broken. There is
 one `.workspace` definition in `App.css` — if you ever see two, the later one is a stale leftover
 and wins the cascade; delete it. `Explain.jsx` and `Teach.jsx` no longer carry independent copies of
 anything — a claim that was written one commit early and is now true: they shared **113

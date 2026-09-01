@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { explainMolecule, explainName } from '../lib/api'
+import ConfidenceReport from '../components/ConfidenceReport'
+import { explainMolecule, explainName, translateBatch } from '../lib/api'
 import { nameTargets, sliceName } from '../lib/nameTargets'
 import { segmentAtPath } from '../lib/svgHighlight'
 import { useAtomHighlight } from '../lib/useAtomHighlight'
+import { useKetcher } from '../lib/useKetcher'
 import './Explain.css'
 
 // Curated structures spanning what the decomposition really does now that
@@ -59,7 +61,13 @@ function SegmentNode({ segment, path, activePath, setHoveredPath, togglePath }) 
 // phase: 'idle' | 'loading' | 'success' | 'error' (mirrors IupacToSmiles.jsx)
 function Explain() {
   const [smilesInput, setSmilesInput] = useState('')
-  const [mode, setMode] = useState('name') // 'name' | 'smiles'
+  // 'name' | 'smiles' | 'draw'. Seeded from ?input= so the /structure and
+  // /teach redirects land on the Draw tab -- an old bookmark keeps its
+  // behaviour, not just its URL. Read once, at mount: this is an initial
+  // value, not a controlled binding, so changing tabs must not fight the URL.
+  const [mode, setMode] = useState(
+    () => (new URLSearchParams(window.location.search).get('input') === 'draw' ? 'draw' : 'name')
+  )
   const [phase, setPhase] = useState('idle')
   const [data, setData] = useState(null)
   const [apiError, setApiError] = useState(null)
@@ -67,9 +75,52 @@ function Explain() {
   const [validationNote, setValidationNote] = useState(null)
   const [hoveredPath, setHoveredPath] = useState(null)
   const [pinnedPath, setPinnedPath] = useState(null)
+  // The confidence tier for a molecule STITCH itself named. /api/explain does
+  // not return one, so it comes from /api/translate alongside -- see
+  // runExplain. Null in 'name' mode on purpose: the user supplied the name,
+  // so there is no STITCH verdict on it to report.
+  const [tierRow, setTierRow] = useState(null)
+  // Expert by DEFAULT, per spec section 12: PRODUCT.md principle 1 says
+  // determinism must be provable, and a proof you have to find a switch for is
+  // not offered, it is hidden. Learn is the opt-in.
+  const [level, setLevel] = useState('expert')
 
 
+  // enabled only on the Draw tab: the iframe does not exist otherwise, and an
+  // armed readiness clock would time out against nothing and report the editor
+  // broken before the user ever opened it.
+  const { iframeRef, editorState, handleFrameLoad, handleFrameError, getKetcher } =
+    useKetcher({ enabled: mode === 'draw' })
   const activePath = pinnedPath ?? hoveredPath
+
+  // Reads the drawing and hands the SMILES to the SAME runExplain the typed
+  // paths use, so a drawn molecule and a pasted one cannot diverge -- that
+  // divergence is what /teach was: a second page around the same endpoint.
+  async function handleDraw() {
+    if (phase === 'loading') return
+    setValidationNote(null)
+    const ketcher = getKetcher()
+    if (!ketcher) {
+      setValidationNote('The drawing area is still starting up. Give it a moment and try again.')
+      return
+    }
+    let structure = ''
+    try {
+      structure = (await ketcher.getSmiles()) || ''
+    } catch {
+      setValidationNote('Could not read your drawing. Try drawing it again.')
+      return
+    }
+    structure = structure.trim()
+    if (!structure) {
+      setValidationNote('Draw a molecule first, then press Explain.')
+      return
+    }
+    // 'smiles', not 'draw': a drawing IS a structure once Ketcher has given
+    // us its SMILES, and runExplain only distinguishes name-vs-structure.
+    setSmilesInput(structure)
+    runExplain(structure, 'smiles')
+  }
 
   function togglePath(path) {
     setPinnedPath((current) => (current === path ? null : path))
@@ -86,6 +137,23 @@ function Explain() {
     setHoveredPath(null)
 
     const request = requestMode === 'name' ? explainName(value) : explainMolecule(value)
+
+    // A drawn or typed STRUCTURE is something STITCH names itself, so its
+    // confidence tier is a real verdict and PRODUCT.md principle 3 requires it
+    // wherever that name appears. /api/explain carries no tier -- Teach.jsx
+    // used to note exactly that and simply show nothing -- so fetch it
+    // alongside rather than dropping it.
+    //
+    // Fired in parallel, not chained: the breakdown is the point of this page
+    // and must not wait on a second request. A tier that fails to arrive
+    // leaves tierRow null and the breakdown still renders; a breakdown is
+    // never blocked by the tier.
+    setTierRow(null)
+    if (requestMode !== 'name') {
+      translateBatch([value])
+        .then((rows) => setTierRow(rows?.[0] ?? null))
+        .catch(() => setTierRow(null))
+    }
 
     request
       .then((result) => {
@@ -142,6 +210,14 @@ function Explain() {
 
   const svgWrapperRef = useAtomHighlight(data, activePath)
 
+  function changeLevel(next) {
+    setLevel(next)
+    // Learn does not offer the SMILES tab, so a user switching to Learn while
+    // on it would otherwise be left on a tab that no longer exists -- a form
+    // with no visible input and a button that does nothing.
+    if (next === 'learn' && mode === 'smiles') setMode('draw')
+  }
+
   const isLoading = phase === 'loading'
   const name = data?.name
   const segments = data?.segments || []
@@ -173,20 +249,34 @@ function Explain() {
       <div className="page-head page-shell">
         <h1 className="page-head__title">Show the working</h1>
         <p className="page-head__lede">
-          STITCH doesn&rsquo;t just produce a name &mdash; on this page it shows its work. Enter
-          an IUPAC name or a SMILES string, then hover (or tap) any part of the decomposed name to
-          see exactly which atoms it refers to.
-        </p>
+            {level === 'learn'
+              ? 'STITCH does not just give a molecule a name — this page shows how it got there. Draw a molecule, or type a name you already have, then move your pointer across the name to see which atoms each part describes.'
+              : 'STITCH doesn’t just produce a name — on this page it shows its work. Enter an IUPAC name, a SMILES string, or draw a structure, then hover (or tap) any part of the decomposed name to see exactly which atoms it refers to.'}
+          </p>
       </div>
 
-      <main className="workspace" aria-label="Explain a name">
+      {/* workspace--draw flips the split so the structure editor takes the
+          wide cell (see CLAUDE.md) -- Ketcher is unusable in the narrow input
+          column, which is why /structure and /teach both used this modifier.
+          Applied per-tab here, since the same page is narrow-input on the
+          typed tabs and wide-input on Draw. */}
+      <main
+        className={`workspace${mode === 'draw' ? ' workspace--draw' : ''}`}
+        aria-label="Explain a name"
+      >
       <section className="explain-panel" aria-label="Explain a molecule">
         <form onSubmit={handleSubmit} noValidate>
           <fieldset className="explain-mode">
             <legend className="explain-mode__legend">Input</legend>
             {[
               { value: 'name', label: 'IUPAC name' },
-              { value: 'smiles', label: 'SMILES' },
+              // Learn mode may not name a format (teach-mode spec section 5:
+              // no SMILES, no InChI, no toolchain words), and there is no
+              // honest plain-English label for "paste a SMILES string" -- so
+              // rather than mislabel it, Learn simply does not offer it. Draw
+              // reaches the same endpoint with the same result.
+              ...(level === 'learn' ? [] : [{ value: 'smiles', label: 'SMILES' }]),
+              { value: 'draw', label: 'Draw' },
             ].map((option) => (
               <label key={option.value} className="explain-mode__option">
                 <input
@@ -203,22 +293,49 @@ function Explain() {
           </fieldset>
 
           <div className="field">
-            <label htmlFor="explain-smiles-input" className="field__label">
-              {mode === 'name' ? 'IUPAC name' : 'SMILES'}
-            </label>
-            <input
-              id="explain-smiles-input"
-              type="text"
-              className="field__control"
-              spellCheck={false}
-              autoCorrect="off"
-              autoCapitalize="off"
-              placeholder={mode === 'name' ? 'e.g. ethanol' : 'e.g. CCO'}
-              value={smilesInput}
-              onChange={(event) => setSmilesInput(event.target.value)}
-            />
+            {mode === 'draw' ? (
+              <>
+                <span className="field__label">Draw a molecule</span>
+                {editorState === 'error' ? (
+                  <p className="explain-panel__note" role="alert">
+                    The drawing area did not load. Reload the page to try again.
+                  </p>
+                ) : (
+                  <iframe
+                    ref={iframeRef}
+                    title="Molecule drawing area"
+                    className="explain__editor"
+                    src="/standalone/index.html"
+                    onLoad={handleFrameLoad}
+                    onError={handleFrameError}
+                  />
+                )}
+              </>
+            ) : (
+              <>
+                <label htmlFor="explain-smiles-input" className="field__label">
+                  {mode === 'name' ? 'IUPAC name' : 'SMILES'}
+                </label>
+                <input
+                  id="explain-smiles-input"
+                  type="text"
+                  className="field__control"
+                  spellCheck={false}
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  placeholder={mode === 'name' ? 'e.g. ethanol' : 'e.g. CCO'}
+                  value={smilesInput}
+                  onChange={(event) => setSmilesInput(event.target.value)}
+                />
+              </>
+            )}
             <div className="explain-panel__actions">
-              <button type="submit" className="btn" disabled={isLoading}>
+              <button
+                type={mode === 'draw' ? 'button' : 'submit'}
+                className="btn"
+                onClick={mode === 'draw' ? handleDraw : undefined}
+                disabled={isLoading || (mode === 'draw' && editorState !== 'ready')}
+              >
                 {isLoading ? 'Explaining…' : 'Explain'}
               </button>
               {validationNote && (
@@ -258,6 +375,25 @@ function Explain() {
       </section>
 
       <section className="explain-results" aria-label="Explanation">
+        <fieldset className="explain-level">
+          <legend className="explain-level__legend">Detail</legend>
+          {[
+            { value: 'learn', label: 'Learn' },
+            { value: 'expert', label: 'Expert' },
+          ].map((option) => (
+            <label key={option.value} className="explain-mode__option">
+              <input
+                type="radio"
+                name="explain-level"
+                value={option.value}
+                checked={level === option.value}
+                onChange={() => changeLevel(option.value)}
+              />
+              {option.label}
+            </label>
+          ))}
+        </fieldset>
+
         {fetchError && (
           <p className="explain-fetch-error" role="alert">
             Could not reach STITCH&rsquo;s backend ({fetchError}). Is it running on{' '}
@@ -269,8 +405,9 @@ function Explain() {
           {phase === 'idle' && (
             <div className="explain-patch explain-patch--idle">
               <p className="explain-patch__empty-note">
-                Nothing to explain yet &mdash; enter an IUPAC name or a SMILES string above, or
-                try one of the examples.
+                {level === 'learn'
+                  ? 'Nothing to explain yet — draw a molecule or type a name above, or try one of the examples.'
+                  : 'Nothing to explain yet — enter an IUPAC name or a SMILES string above, draw a structure, or try one of the examples.'}
               </p>
             </div>
           )}
@@ -353,19 +490,31 @@ function Explain() {
                       {name && renderAnnotatedName(name, segments, activePath)}
                     </p>
                   )}
-                  {/* /api/explain returns the name and its decomposition, but
-                      no confidence tier, so this page cannot show one. Saying
-                      that plainly is the honest option; inventing a tier mark
-                      here would misrepresent confidence, which the product
-                      forbids. Translate is where the tier lives. */}
-                  <p className="explain-tier-note">
-                    This page shows how the name breaks down. It does not check the
-                    name&rsquo;s confidence tier &mdash; run the same molecule through{' '}
-                    <Link to="/" className="about-link">
-                      Translate
-                    </Link>{' '}
-                    to see whether it is a verified PIN, a fallback, or a best effort.
-                  </p>
+                  {/* /api/explain returns the name and its decomposition but
+                      no confidence tier. For a STRUCTURE the tier is a real
+                      STITCH verdict, so runExplain fetches it from
+                      /api/translate alongside and it is shown here -- PRODUCT.md
+                      principle 3 requires it wherever a name appears.
+
+                      For a name the USER typed there is no verdict to report:
+                      STITCH did not produce that name, so it has no opinion on
+                      whether it is a PIN. Saying so plainly is the honest
+                      option; inventing a tier mark would misrepresent
+                      confidence, which the product forbids. */}
+                  {mode === 'name' ? (
+                    <p className="explain-tier-note">
+                      This breakdown is of the name <em>you</em> supplied, so there is no
+                      STITCH confidence tier for it. Draw or paste a structure instead, or
+                      run the molecule through{' '}
+                      <Link to="/" className="about-link">
+                        Translate
+                      </Link>
+                      , to see whether STITCH&rsquo;s own name for it is a verified PIN, a
+                      fallback, or a best effort.
+                    </p>
+                  ) : (
+                    <ConfidenceReport row={tierRow} level={level} />
+                  )}
                 </div>
 
                 {/* A partial result is a real case (see runExplain): the
