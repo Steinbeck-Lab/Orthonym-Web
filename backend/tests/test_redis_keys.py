@@ -180,9 +180,21 @@ def test_bump_job_done_is_idempotent_per_chunk(redis_client, job_id):
 
 
 def test_worker_opsin_status_round_trips(redis_client):
+    # Clear first, for the same reason its `is False` sibling below does
+    # (TEST-1). The autouse pretend_a_worker_has_opsin fixture in conftest
+    # writes a healthy pid before every test, so without this delete the
+    # `is True` assertion is satisfied by the FIXTURE, not by the write under
+    # test -- mutation showed 3 of the 4 tests for this function still passed
+    # with record_worker_opsin_status neutered.
+    redis_client.delete("stitch:workers:opsin")
+
     redis_store.record_worker_opsin_status(999001, ok=True)
     try:
         assert redis_store.any_worker_has_opsin() is True
+        assert redis_client.hget("stitch:workers:opsin", "999001") is not None, (
+            "any_worker_has_opsin() said yes but this pid's field is absent, "
+            "so something else answered for it"
+        )
     finally:
         redis_client.hdel("stitch:workers:opsin", "999001")
 
@@ -205,6 +217,15 @@ def test_a_failed_worker_does_not_count_as_having_opsin(redis_client):
         # and that function is what makes /api/health honest and what
         # decides whether naming is served at all.
         assert redis_store.any_worker_has_opsin() is False
+        # ...and the failure status was actually RECORDED (TEST-2). An empty
+        # hash satisfies `is False` identically, so without this the test
+        # cannot tell "the writer correctly stored a failure" from "the
+        # writer dropped failure statuses on the floor" -- and the second is
+        # a worker that silently never reports its own breakage.
+        assert redis_client.hget("stitch:workers:opsin", "999002") is not None, (
+            "the failure status was never written; any_worker_has_opsin() "
+            "returned False only because the hash is empty"
+        )
     finally:
         redis_client.hdel("stitch:workers:opsin", "999002")
 
