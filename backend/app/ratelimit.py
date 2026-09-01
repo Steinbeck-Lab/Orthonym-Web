@@ -221,10 +221,18 @@ def check_job_allowed(ip: str) -> None:
     client = get_redis()
     key = _hour_key(ip)
     count = client.incr(key)
-    if count == 1:
-        # Set the TTL only on creation: refreshing it on every hit would
-        # extend the window forever and never let the counter reset.
-        client.expire(key, _HOUR)
+    # EXPIRE ... NX on EVERY call, not `expire()` once behind `if count == 1`.
+    # The old form needed two round trips to land; lose the second one -- a
+    # blip, a failover, a restart between them -- and the key exists with no
+    # TTL at all. volatile-lru never evicts a key with no expiry, and the
+    # count==1 branch can never repair it because the counter has already
+    # moved past 1. That is a permanent per-IP lockout whose own 429 reads
+    # "Resets in -1 seconds" (this line interpolates client.ttl(key) below).
+    # NX preserves the original reason intact: it sets an expiry only when
+    # there is none, so it repairs a missing TTL without ever sliding a live
+    # window forward. Same call _ADMIT_JOB_SCRIPT already makes on the
+    # concurrent-job set: EXPIRE KEYS[1] ARGV[3] NX.
+    client.expire(key, _HOUR, nx=True)
     if count > settings.RATE_LIMIT_JOBS_PER_HOUR:
         raise HTTPException(
             status_code=429,
@@ -272,8 +280,10 @@ def check_fast_allowed(ip: str) -> None:
     client = get_redis()
     key = _minute_key(ip)
     count = client.incr(key)
-    if count == 1:
-        client.expire(key, _MINUTE)
+    # NX on every call, never `if count == 1` -- see check_job_allowed for
+    # why: a lost second round trip leaves a TTL-less key that volatile-lru
+    # cannot evict and the count==1 branch can no longer repair.
+    client.expire(key, _MINUTE, nx=True)
     if count > settings.RATE_LIMIT_FAST_PER_MINUTE:
         raise HTTPException(
             status_code=429,
@@ -297,8 +307,10 @@ def check_depict_allowed(ip: str) -> None:
     client = get_redis()
     key = _depict_minute_key(ip)
     count = client.incr(key)
-    if count == 1:
-        client.expire(key, _MINUTE)
+    # NX on every call, never `if count == 1` -- see check_job_allowed for
+    # why: a lost second round trip leaves a TTL-less key that volatile-lru
+    # cannot evict and the count==1 branch can no longer repair.
+    client.expire(key, _MINUTE, nx=True)
     if count > settings.RATE_LIMIT_DEPICT_PER_MINUTE:
         raise HTTPException(
             status_code=429,
@@ -323,8 +335,10 @@ def check_poll_allowed(ip: str) -> None:
     client = get_redis()
     key = _poll_minute_key(ip)
     count = client.incr(key)
-    if count == 1:
-        client.expire(key, _MINUTE)
+    # NX on every call, never `if count == 1` -- see check_job_allowed for
+    # why: a lost second round trip leaves a TTL-less key that volatile-lru
+    # cannot evict and the count==1 branch can no longer repair.
+    client.expire(key, _MINUTE, nx=True)
     if count > settings.RATE_LIMIT_POLL_PER_MINUTE:
         raise HTTPException(
             status_code=429,
