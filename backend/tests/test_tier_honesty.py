@@ -160,3 +160,83 @@ def test_a_best_effort_name_is_not_downgraded_for_lacking_proof(monkeypatch):
 
     assert item.status == "best_effort"
     assert item.name == "ethanol"
+
+
+# --- naming health vs /explain health are different questions --------------
+
+
+def test_a_broken_reflection_shim_does_not_take_naming_offline(monkeypatch):
+    """CC5: the worker stamped its health from opsin_decompose.self_check(),
+    which is the /explain REFLECTION-SHAPE probe, not the naming one.
+
+    _get_handles() returns None for two unrelated reasons: OPSIN itself is
+    unavailable (naming genuinely cannot be verified -- refuse), or OPSIN is
+    fine but its package-private parse-tree shape changed (only /explain and
+    /teach break -- naming is unaffected). Conflating them means a vendored
+    OPSIN bump that moves an internal class takes /api/translate,
+    /api/jobs and the three GET endpoints down site-wide with a 503 that says
+    "OPSIN cannot verify any name" -- which would be false.
+
+    That is spec section 5's Failure A being treated as Failure B, the exact
+    conflation the spec's own correction exists to prevent.
+    """
+    from app import celery_app as celery_mod
+
+    monkeypatch.setattr(celery_mod, "_jvm_is_started", lambda: False)
+    # OPSIN itself is healthy; only the reflection shim is broken.
+    monkeypatch.setattr(celery_mod, "_opsin_can_verify", lambda: True)
+    # celery_app imports opsin_decompose inside the function (it must not
+    # start a JVM in the pre-fork parent), so patch the source module.
+    from app import opsin_decompose
+
+    monkeypatch.setattr(opsin_decompose, "self_check", lambda: False)
+
+    stamped: dict = {}
+    from app import redis_store
+
+    monkeypatch.setattr(
+        redis_store, "record_worker_opsin_status", lambda pid, ok: stamped.update(ok=ok)
+    )
+    monkeypatch.setattr(
+        celery_mod, "_start_status_heartbeat", lambda pid, ok, stop_event=None: None
+    )
+
+    celery_mod._start_child_jvm()
+
+    assert stamped.get("ok") is True, (
+        "a broken /explain reflection shim marked this worker as having no "
+        "usable OPSIN, so every naming endpoint 503s site-wide even though "
+        "name verification works perfectly"
+    )
+
+
+def test_opsin_being_genuinely_unavailable_still_refuses(monkeypatch):
+    """The fail-closed half. Splitting the two signals must not turn the
+    naming gate into a rubber stamp: when OPSIN really cannot verify a name,
+    this worker must still report unhealthy so require_a_live_jvm() refuses
+    rather than shipping a fallback labelled pin.
+    """
+    from app import celery_app as celery_mod
+
+    monkeypatch.setattr(celery_mod, "_jvm_is_started", lambda: False)
+    monkeypatch.setattr(celery_mod, "_opsin_can_verify", lambda: False)
+    from app import opsin_decompose
+
+    monkeypatch.setattr(opsin_decompose, "self_check", lambda: True)
+
+    stamped: dict = {}
+    from app import redis_store
+
+    monkeypatch.setattr(
+        redis_store, "record_worker_opsin_status", lambda pid, ok: stamped.update(ok=ok)
+    )
+    monkeypatch.setattr(
+        celery_mod, "_start_status_heartbeat", lambda pid, ok, stop_event=None: None
+    )
+
+    celery_mod._start_child_jvm()
+
+    assert stamped.get("ok") is False, (
+        "OPSIN cannot verify names but this worker reported healthy; "
+        "require_a_live_jvm() would admit work nobody can verify"
+    )
