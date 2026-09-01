@@ -162,8 +162,12 @@ the working part of each route is a **contained** `.workspace` card grid (two ro
 `.workspace--draw`, which flips the split so the structure editor takes the wide cell). There is
 one `.workspace` definition in `App.css` — if you ever see two, the later one is a stale leftover
 and wins the cascade; delete it. `Explain.jsx` and `Teach.jsx` no longer carry independent copies of
-anything: both import `sanitizeSvg`/`atomRefsOf`/`ATOM_REF_RE` from `frontend/src/lib/svgHighlight.js`
-and both share `frontend/src/lib/useKetcher.js`'s Ketcher iframe-readiness handshake. `sanitizeSvg`'s
+anything — a claim that was written one commit early and is now true: they shared **113
+byte-identical lines** of SVG-injection and atom-highlight effects until those moved to
+`frontend/src/lib/useAtomHighlight.js`, whose pure half (`highlightTargets`, `shouldHighlight`) is
+the tested part. Both also import `sanitizeSvg`/`atomRefsOf`/`ATOM_REF_RE` from
+`frontend/src/lib/svgHighlight.js` and share `frontend/src/lib/useKetcher.js`'s Ketcher
+iframe-readiness handshake. `sanitizeSvg`'s
 DOMPurify config now lives in exactly one place, because two copies of a sanitiser config is exactly
 the kind of thing that drifts silently into an XSS hole.
 
