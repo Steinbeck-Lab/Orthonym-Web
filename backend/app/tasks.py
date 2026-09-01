@@ -254,7 +254,7 @@ def translate_job_inline(
     except _ChunkTimedOut as timeout:
         rows, failed = _timed_out_rows(timeout)
     redis_store.write_chunk(job_id, 0, rows)
-    redis_store.bump_job_done(job_id, done=len(rows), failed=failed)
+    redis_store.bump_job_done(job_id, index=0, done=len(rows), failed=failed)
     _close_job(job_id, n_chunks=1)
     return rows
 
@@ -263,15 +263,31 @@ def translate_job_inline(
 def run_chunk(
     job_id: str, index: int, prepared: list[dict], best_effort: bool
 ) -> int:
-    """One chunk of a batch job. Writes its own key and bumps the counter."""
-    redis_store.set_job_status(job_id, "running")
+    """One chunk of a batch job. Writes its own key and bumps the counter.
+
+    Two redelivery guards (task_acks_late=True makes redelivery real,
+    final review report I1): begin_chunk refuses to reopen a job that has
+    already reached "done"/"failed" (the chord body fires once and will
+    not fire again, so nothing else would ever close it a second time),
+    and bump_job_done's own per-chunk marker stops the SAME chunk being
+    counted twice even when begin_chunk's status check can't help -- e.g.
+    a redelivery that arrives BEFORE the job closes.
+    """
+    if not redis_store.begin_chunk(job_id):
+        logger.info(
+            "Job %s already terminal; ignoring redelivered chunk %s",
+            job_id,
+            index,
+        )
+        return 0
+
     try:
         rows, failed = _name_prepared(prepared, best_effort)
     except _ChunkTimedOut as timeout:
         rows, failed = _timed_out_rows(timeout)
 
     redis_store.write_chunk(job_id, index, rows)
-    redis_store.bump_job_done(job_id, done=len(rows), failed=failed)
+    redis_store.bump_job_done(job_id, index=index, done=len(rows), failed=failed)
     return len(rows)
 
 
