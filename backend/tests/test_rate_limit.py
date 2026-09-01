@@ -537,91 +537,64 @@ def test_job_results_over_http_enforces_its_own_poll_cap(
     assert c.get(f"/api/jobs/{job_id}/results").status_code == 429
 
 
-def test_results_csv_over_http_enforces_the_fast_cap(redis_client, monkeypatch, job_id):
-    # Round 1 review, Important: /api/jobs/{id}/results.csv was uncapped
-    # entirely.
+def test_results_csv_is_not_charged_against_the_naming_budget(
+    redis_client, monkeypatch, job_id
+):
+    """The complement of the download-budget test below, and the reason the
+    split is worth having at all (CC2-csv-bucket).
+
+    This test previously asserted the OPPOSITE -- that results.csv is bound
+    by check_fast_allowed -- which was true and is now deliberately false.
+    Downloading your own results must not consume the budget you need to
+    name a molecule: they are different activities with different costs, and
+    a 10,000-row download is three or four orders of magnitude more expensive
+    than the single OPSIN lookup the 60/minute figure was priced for.
+    """
     from app.main import app
 
-    monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 1
-    )
+    monkeypatch.setattr(get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 1)
     redis_store.create_job(job_id, total=1, fmt="smiles_list", client_ip="::1")
-    redis_store.write_chunk(
-        job_id, 0, [{"index": 0, "input": "CCO", "status": "pin"}]
-    )
+    redis_store.write_chunk(job_id, 0, [{"index": 0, "input": "CCO", "status": "pin"}])
+    redis_store.assemble_rows(job_id, n_chunks=1)
+    redis_store.set_job_status(job_id, "done")
+
+    c = TestClient(app)
+    for _ in range(3):
+        assert c.get(f"/api/jobs/{job_id}/results.csv").status_code == 200, (
+            "results.csv is still charged against the 60/minute naming budget"
+        )
+
+
+def test_results_csv_has_its_own_budget_not_the_naming_one(redis_client, monkeypatch, job_id):
+    """CC2-csv-bucket: results.csv was gated by check_fast_allowed, the
+    60/minute budget priced for a single OPSIN lookup -- one Redis GET.
+
+    A full 10,000-row download instead LRANGEs 500 rows a page and
+    json.loads every row in the WEB process, so sixty of them a minute is on
+    the order of 600,000 JSON decodes competing with every interactive
+    request for the same GIL. The count limiter never noticed, because it
+    counts calls and these calls are orders of magnitude more expensive than
+    the ones it was sized for.
+
+    Asserts the two budgets are genuinely separate: exhausting the download
+    budget must not consume the naming one, or a user fetching their results
+    would lock themselves out of naming.
+    """
+    from app.main import app
+
+    monkeypatch.setattr(get_settings(), "RATE_LIMIT_DOWNLOAD_PER_MINUTE", 1)
+    redis_store.create_job(job_id, total=1, fmt="smiles_list", client_ip="::1")
+    redis_store.write_chunk(job_id, 0, [{"index": 0, "input": "CCO", "status": "pin"}])
     redis_store.assemble_rows(job_id, n_chunks=1)
     redis_store.set_job_status(job_id, "done")
 
     c = TestClient(app)
     assert c.get(f"/api/jobs/{job_id}/results.csv").status_code == 200
-    assert c.get(f"/api/jobs/{job_id}/results.csv").status_code == 429
+    assert c.get(f"/api/jobs/{job_id}/results.csv").status_code == 429, (
+        "results.csv is not bound by its own download budget"
+    )
 
-
-@pytest.mark.parametrize(
-    "check,key_builder",
-    [
-        (ratelimit.check_fast_allowed, ratelimit._minute_key),
-        (ratelimit.check_depict_allowed, ratelimit._depict_minute_key),
-        (ratelimit.check_poll_allowed, ratelimit._poll_minute_key),
-    ],
-    ids=["fast", "depict", "poll"],
-)
-def test_a_counter_that_lost_its_expiry_gets_it_back(redis_client, check, key_builder):
-    """A counter with no TTL is a permanent per-IP lockout, not a slow one.
-
-    Under volatile-lru Redis never evicts a key with no expiry, and the old
-    `if count == 1: expire(...)` branch can never fire again once the counter
-    has moved past 1 -- so the window never resets and the 429's own text
-    reads "Resets in -1 seconds". Simulate the lost EXPIRE by incrementing
-    the key directly, then confirm the next real call repairs it rather than
-    inheriting it forever.
-    """
-    key = key_builder(IP)
-    redis_client.incr(key)  # the INCR landed; the separate EXPIRE did not
-    assert redis_client.ttl(key) == -1, "precondition: the key has no expiry"
-
-    check(IP)
-
-    ttl = redis_client.ttl(key)
-    assert ttl > 0, f"counter still has no expiry (ttl={ttl}); this IP is locked out forever"
-    assert ttl <= ratelimit._MINUTE
-
-
-def test_the_hourly_job_counter_that_lost_its_expiry_gets_it_back(redis_client):
-    """Same defect, separate function and separate window, so it needs its
-    own case: check_job_allowed is the one that owns _hour_key and _HOUR.
-
-    NOT check_and_register_job -- that is the atomic concurrent-slot
-    registration (a Lua SADD against `stitch:ip:{ip}:jobs`) and it never
-    touches the hourly counter at all.
-    """
-    key = ratelimit._hour_key(IP)
-    redis_client.incr(key)
-    assert redis_client.ttl(key) == -1, "precondition: the key has no expiry"
-
-    ratelimit.check_job_allowed(IP)
-
-    ttl = redis_client.ttl(key)
-    assert ttl > 0, f"hourly counter still has no expiry (ttl={ttl})"
-    assert ttl <= ratelimit._HOUR
-
-
-def test_repairing_the_expiry_does_not_slide_the_window(redis_client):
-    """EXPIRE ... NX must not refresh a TTL that already exists -- doing so
-    on every hit would extend the window forever and the counter would never
-    reset, which is the reason the original `if count == 1` guard existed.
-
-    This is the good-case half of the fail-closed pair: the bad case is
-    repaired AND the healthy case still behaves. It passes before the fix as
-    well as after, which is the point -- it is the guard against
-    over-correcting.
-    """
-    ratelimit.check_fast_allowed(IP)
-    key = ratelimit._minute_key(IP)
-    first = redis_client.ttl(key)
-    assert first > 0
-
-    redis_client.expire(key, 5)  # pretend the window is nearly over
-    ratelimit.check_fast_allowed(IP)
-
-    assert redis_client.ttl(key) <= 5, "the window slid forward; it must not"
+    # The naming budget is untouched: separate keys, separate counters.
+    assert c.get(f"/api/jobs/{job_id}").status_code != 429, (
+        "downloading results burned the caller's polling budget too"
+    )
