@@ -4,21 +4,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Orthonym is a public showcase web app for **Orthonym** (`~/Orthonym/Project`), a deterministic,
+Orthonym is a public showcase web app for **Orthonym** (upstream at `~/Orthonym/Project`, which is
+**not present on every dev machine** — `scripts/vendor-orthonym.sh` takes `ORTHONYM_SRC`), a deterministic,
 rule-based SMILES→IUPAC naming engine — as opposed to STOUT-V2, the neural model shown by the
 separate sibling repo `~/STOUT_WebApp` (Vue 3 stack, unrelated codebase).
 
-Stack: **React 19 + Vite** (frontend) / **FastAPI + RDKit + Orthonym + OPSIN (via JPype/a real
-JRE)** (backend). No database, no auth, no accounts.
+Stack: **React 19 + Vite** (frontend) / **FastAPI + Celery + Redis + RDKit + Orthonym + OPSIN
+(via JPype/a real JRE)** (backend). No database, no auth, no accounts — but the backend is **not a
+single process any more**: naming runs in Celery workers, and Redis carries the broker, the job
+results, the shared name cache and the per-IP rate-limit counters. See "The job layer" below.
 
 ## Commands
 
 ```bash
-# backend — from backend/
-.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8001   # NOT 8000, see below
-.venv/bin/python -m pytest                                             # full suite
-.venv/bin/python -m pytest tests/test_name_spans.py -k some_test       # single test
-PYTHONPATH=/home/kohulan/Orthonym-Web/backend .venv/bin/python <script.py>   # ad hoc scripts importing app.*
+# Redis first — everything below needs it (tests included).
+docker start orthonym-redis-dev        # localhost:6379, maxmemory-policy volatile-lru
+
+# tests — from the repo root. This script is the ONLY correct way to run them.
+backend/scripts/run-tests.sh                            # full suite
+backend/scripts/run-tests.sh tests/test_name_spans.py -v  # one file
+
+# backend — from backend/. Three processes, not one: uvicorn alone answers
+# /api/health with DEGRADED and 503s every naming endpoint, because no worker
+# has recorded a live JVM. Each command wants its own terminal.
+REDIS_URL=redis://localhost:6379/0 .venv-mac/bin/python -m uvicorn app.main:app --port 8001
+REDIS_URL=redis://localhost:6379/0 .venv-mac/bin/python -m celery -A app.celery_app worker -Q fast  -c 2 -n fast@%h
+REDIS_URL=redis://localhost:6379/0 .venv-mac/bin/python -m celery -A app.celery_app worker -Q batch -c 2 -n batch@%h
+
+# ad hoc scripts importing app.*
+cd backend && PYTHONPATH="$(pwd)" REDIS_URL=redis://localhost:6379/0 .venv-mac/bin/python <script.py>
 
 # frontend — from frontend/
 npm run dev      # vite dev server, proxies /api -> http://localhost:8000
@@ -26,28 +40,44 @@ npm run build
 npx oxlint src/  # full-project `npm run lint` has pre-existing warnings in vendored public/standalone/ — out of scope
 
 # whole stack
-docker compose up -d --build   # frontend :8080, backend :8000
+docker compose up -d --build
+# -> frontend :8080, backend 127.0.0.1:8000, plus redis, worker-fast, worker-batch
 ```
 
 **Gotchas that cost real time:**
-- **Port 8000 is usually a stale Docker container** (`orthonym-backend`) that doesn't have your
-  branch's changes. Run a fresh backend on **8001** for manual testing; `vite.config.js` proxies
-  `/api` to 8000, so temporarily repoint it at 8001 for a real browser check, then revert.
-- **pytest's own reported wall-clock/exit code lie.** The JVM (JPype, for OPSIN/centres) refuses
-  to let the process exit after the suite actually finishes in ~4–5s, so you'll see 120+s and exit
-  144 *after* the real (correct) summary line already printed. Redirect to a log file / run in the
-  background and grep for `passed`; never trust the wall-clock or exit code alone.
-- The backend venv has **no `pip`** and no console-script shims — always invoke
-  `.venv/bin/python -m <tool>`, never a bare script name.
-- Playwright (for manual UI verification) is available via `/home/kohulan/node_modules/playwright`,
-  not a local install; Chromium is already cached there.
+- **`backend/.venv` is a Linux venv and cannot run here.** Its `pyvenv.cfg` records
+  `/home/kohulan/Orthonym-Web/backend/.venv` and its `bin/python` is a dangling symlink to
+  `/usr/bin/python3.12`. Use **`backend/.venv-mac/bin/python`** on macOS. This trap defeated three
+  separate review agents; check the interpreter before you believe an import error.
+- **Never run a bare `pytest`; run `backend/scripts/run-tests.sh`.** JPype's JVM refuses to let the
+  process exit, so a bare `pytest` looks like a 10-minute hang ending in exit 144 *after* it has
+  already printed a correct summary. The script waits for pytest's own summary line, kills the
+  corpse, picks the right interpreter and points `REDIS_URL` at localhost. Its exit codes: `0` all
+  passed, `1` tests failed, `2` no summary appeared (a real hang).
+- **The suite needs Redis running** (`docker start orthonym-redis-dev`). `conftest.py` deliberately
+  `pytest.fail`s with instructions rather than skipping when it is missing.
+- **`REDIS_URL` defaults to `redis://redis:6379/0`**, the compose-internal hostname. Anything run
+  outside compose must override it to `redis://localhost:6379/0`.
+- **Port 8000 is held by an unrelated project's container** (`bchemxtractweb-backend-1`), and it
+  collides with Orthonym's own `127.0.0.1:8000` compose binding — so `:8000` may be a different
+  application's API entirely. Run a fresh backend on **8001** for manual testing; `vite.config.js`
+  proxies `/api` to 8000, so temporarily repoint it at 8001 for a real browser check, then revert.
+- **`.venv-mac` has no `pip`** — it was built with `uv venv --python 3.12`, so install into it with
+  `uv pip install -r requirements.txt`, not `pip install`. It *does* have working console-script
+  shims (`celery`, `pytest`, `uvicorn`, `orthonym`, ...), each with a correct absolute shebang, so
+  `.venv-mac/bin/celery --version` works; `.venv-mac/bin/python -m <tool>` is equally fine.
+- **Playwright is reachable as an MCP server**, not a local install. `/home/kohulan/node_modules/playwright`
+  does not exist on this machine.
+- **`.env` and `.env.*` are unreadable** — a user-global deny rule in `~/.claude/settings.json`
+  blocks them. Hand the text to the owner rather than narrowing the guard.
 
 ## Architecture
 
 **The Orthonym dependency is vendored, not live-pathed.** `backend/requirements.txt` installs
 `orthonym` from `backend/vendor/orthonym` (a snapshot), not from `~/Orthonym/Project` — Docker
 builds can't reach outside their build context, and this keeps the backend reproducible without
-assuming the sibling repo exists on the build host. Refresh the snapshot after upstream Orthonym
+assuming the sibling repo exists on the build host (on this machine it does not; point
+`ORTHONYM_SRC` at a clone). Refresh the snapshot after upstream Orthonym
 changes with `./scripts/vendor-orthonym.sh`, then re-check `backend/vendor/orthonym/README.md`
 for updated accuracy numbers before touching any copy that cites them (see below).
 
@@ -60,6 +90,49 @@ on every build/`pip install`. Don't strip either "to slim the image" without re-
 regression check in `README.md` first (a fused polycyclic SMILES must come back `"fallback"`,
 never `"pin"`).
 
+**The job layer: naming happens in workers, and the web process refuses when they are missing.**
+`POST /api/translate` still answers inline for **10 molecules or fewer** — it dispatches
+`translate_fast` to the `fast` queue and blocks for up to `FAST_PATH_TIMEOUT` (30 s). Above that
+limit, or when the fast path times out, it returns a `JobEnvelope` (`job_id`, `molecule_count`,
+`status`) and the caller polls `GET /api/jobs/{id}` and `.../results`, or streams
+`.../results.csv`. `POST /api/jobs` takes an uploaded `.sdf` / `.mol` / `.csv` (needs a `smiles`
+column) / plain SMILES list, up to `MAX_BATCH_SIZE` (10,000) molecules and `MAX_FILE_SIZE_MB`
+(50 MB); `frontend/nginx.conf` sets `client_max_body_size 210m`, and its default of 1 MB would
+otherwise silently cap the advertised limit. Work is chunked (`BATCH_CHUNK_SIZE`, 25) onto the
+`batch` queue so a long job cannot occupy the slot someone naming ethanol needs. **There is no
+frontend UI for this yet** — the whole job layer is API-only, and batch upload on Home is scoped
+but unstarted.
+
+Two consequences that bite immediately:
+
+- **`jvm_guard.require_a_live_jvm()` 503s every naming endpoint when no worker has a live JVM**,
+  including `POST /api/jobs`. That is deliberate — SELF-01 fails *open*, so dispatching work nobody
+  can verify would ship a fallback labelled `pin`. It means **uvicorn on its own is not a working
+  backend**: `/api/health` reports `DEGRADED` and naming returns 503 until a worker boots and writes
+  its status. Workers refresh that status on a heartbeat; a stale entry is treated as "no JVM".
+- **`backend/config/{small,medium,large}.yml` are deployment profiles**, selected by
+  `DEPLOYMENT_PROFILE` (default `medium`). Precedence is environment variable > profile > code
+  default, implemented explicitly in `core/config.py` because pydantic-settings' own order is the
+  opposite. Profiles must live under `backend/` — the Docker build context is `./backend`, so a
+  repo-root `config/` is unreachable.
+
+**Redis is load-bearing in four separate roles**, and `docker-compose.yml` runs it with
+`--maxmemory-policy volatile-lru`, *not* `allkeys-lru`: Celery broker messages carry no TTL, so
+`allkeys-lru` would evict queued work and silently lose jobs. The four roles are the Celery broker,
+job meta/chunks/rows (`JOB_RESULT_TTL_SECONDS`, 24 h), the shared name cache
+(`NAME_CACHE_TTL_SECONDS`, 7 days) and the per-IP rate-limit counters. **`name_cache._KEY_VERSION`
+must be bumped by hand on every `vendor-orthonym.sh` refresh** — upstream Orthonym develops on a
+static version `1.0.0`, so the version-keyed cache invalidation cannot fire on its own and a stale
+name would survive an engine change.
+
+**Rate limiting exists and is per-IP** (`ratelimit.py`): 60/min for the naming endpoints, 300/min
+for job polling, 1200/min for `/api/depict`, plus 2 concurrent jobs and 20 jobs/hour per IP. The
+backend's `127.0.0.1:8000` binding and `TRUST_PROXY_HEADERS=true` are a **pair, and neither is safe
+alone** — published on `0.0.0.0` while trusting the header, an attacker sets a fresh `X-Real-IP` per
+request and every cap is void; with the header untrusted behind nginx, the whole internet shares one
+bucket and a single script 429s the site. Read the comment block in `docker-compose.yml` before
+changing either.
+
 **Confidence tiers are the product's whole point, not an implementation detail.** Every naming
 result is one of: verified **PIN** → verified **fallback** (general engine, OPSIN round-trip
 confirmed) → **best-effort** (a real name, but OPSIN-unverified) → honest **abstain**. These tiers
@@ -67,8 +140,10 @@ must never be visually or textually conflated — see DESIGN.md's border/texture
 encodes exactly this state machine and nothing else. `orthonym_service.py` implements the
 escalation between tiers; `explain.py` / `opsin_decompose.py` / `name_spans.py` implement the
 `/explain` and `/teach` per-substituent breakdown (reflecting into OPSIN's package-private parse
-tree — `opsin_decompose.self_check()` verifies this still works at every startup, since it's
-inherently version-fragile).
+tree — `opsin_decompose.self_check()` verifies this still works, since it's inherently
+version-fragile). **That check now runs in the Celery worker, not the web process**: `main.py` no
+longer imports `opsin_decompose`, and `celery_app.py` calls `self_check()` when each forked child
+starts its JVM. A web process on its own never runs it.
 
 **Frontend routes share components deliberately, not by accident.** Home (`/`, "Translate") and
 Structure→IUPAC render results through the literal same `SamplerGrid`/`Tile` components. Every
