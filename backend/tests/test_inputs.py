@@ -186,3 +186,39 @@ def test_count_molecules_matches_parse_for_a_smiles_list():
     assert count_molecules(data, InputFormat.SMILES_LIST) == len(
         parse(data, InputFormat.SMILES_LIST, 100)
     )
+
+
+def test_count_molecules_matches_parse_for_an_sdf_with_dollars_mid_line_in_a_data_field():
+    """Round 5 review: SDMolSupplier only treats "$$$$" as a terminator
+    when it STARTS a line, so a bare substring count over-counts an SD
+    data field whose VALUE happens to contain the literal string mid-line
+    -- confirmed live: RDKit reads this as one record (the field's "Price:
+    $$$$ per unit" line is not a terminator; only the trailing "$$$$" that
+    actually opens its own line is), while a naive `.count("$$$$")` would
+    answer two.
+    """
+    data = (
+        ETHANOL_MOLBLOCK + "> <Note>\nPrice: $$$$ per unit\n\n$$$$\n"
+    ).encode("utf-8")
+    assert count_molecules(data, InputFormat.SDF) == len(
+        parse(data, InputFormat.SDF, 100)
+    )
+    assert count_molecules(data, InputFormat.SDF) == 1
+
+
+def test_count_molecules_matches_parse_for_a_multi_record_sdf_with_dollars_mid_line_in_a_field():
+    """Same shape as above, but inside a larger, otherwise-normal multi-
+    record file -- one spurious mid-line "$$$$" anywhere in a big upload
+    must not skew the count for the whole file, not just a single-record
+    one.
+    """
+    data = (
+        ETHANOL_MOLBLOCK
+        + "> <Note>\nPrice: $$$$ per unit\n\n$$$$\n"
+        + BENZENE_MOLBLOCK
+        + "$$$$\n"
+    ).encode("utf-8")
+    assert count_molecules(data, InputFormat.SDF) == len(
+        parse(data, InputFormat.SDF, 100)
+    )
+    assert count_molecules(data, InputFormat.SDF) == 2
