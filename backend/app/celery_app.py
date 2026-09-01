@@ -109,7 +109,18 @@ def _assert_parent_has_no_jvm(**_kwargs) -> None:
             "the import that calls into OPSIN at module scope -- most likely "
             "something app.tasks pulls in -- and make it lazy."
         )
-    logger.info("Celery parent: no JVM, safe to fork (pid %s)", os.getpid())
+    # print, not logger.info: celeryd_init fires BEFORE Celery calls
+    # setup_logging(), so a logger call here is silently dropped and never
+    # reaches `docker compose logs`. Task 8 found this by looking for the
+    # line and not finding it -- the guard was working, but its
+    # confirmation was unobservable, which for a boot-time safety check is
+    # most of its value. The failure path is already visible because
+    # SystemExit's message goes to stderr; this makes the success path
+    # visible too.
+    print(
+        f"Celery parent: no JVM, safe to fork (pid {os.getpid()})",
+        flush=True,
+    )
 
 
 @worker_process_init.connect
