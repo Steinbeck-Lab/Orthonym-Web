@@ -31,7 +31,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY scripts/place_opsin_resources.py ./scripts/place_opsin_resources.py
 RUN python scripts/place_opsin_resources.py
 
+COPY config/ ./config/
 COPY app/ ./app/
 
+# place_opsin_resources.py above only PLACES the jars. This proves they
+# work: Orthonym's SELF-01 gate fails OPEN without a live JVM, so an image
+# that lost default-jre-headless would build fine and then mislabel every
+# confidence tier. A fused polycyclic must come back "fallback", never
+# "pin". Fail the build here rather than discover it in production.
+COPY scripts/verify_opsin_live.py ./scripts/verify_opsin_live.py
+RUN PYTHONPATH=/code python scripts/verify_opsin_live.py
+
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]

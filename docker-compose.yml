@@ -1,11 +1,106 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: orthonym-redis
+    # volatile-lru, NOT allkeys-lru: Celery broker messages carry no TTL, so
+    # allkeys-lru would evict queued work and silently lose jobs. Only the
+    # TTL'd keys (results, cache, counters) are eligible for eviction.
+    command: >
+      redis-server
+      --maxmemory ${REDIS_MAXMEMORY:-2gb}
+      --maxmemory-policy volatile-lru
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - orthonym-network
+
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: orthonym-backend
     ports:
-      - "8000:8000"
+      # 127.0.0.1, NOT 0.0.0.0. This binding and TRUST_PROXY_HEADERS below
+      # are a PAIR and neither is safe alone -- an adversarial review of the
+      # rate limiter measured both halves:
+      #   * published on 0.0.0.0 with TRUST_PROXY_HEADERS=true, an attacker
+      #     talks to :8000 directly, bypasses nginx, and sets X-Real-IP to a
+      #     fresh value per request -> unlimited per-IP buckets -> every cap
+      #     in ratelimit.py is void.
+      #   * with TRUST_PROXY_HEADERS=false, request.client.host is the nginx
+      #     container's address for EVERY request, so the whole internet
+      #     shares one bucket: 2 concurrent jobs and 60 requests/min for all
+      #     visitors combined, and one script 429s the entire site.
+      # Loopback-only publishing makes nginx the only route in, which is what
+      # makes trusting its X-Real-IP correct (nginx.conf sets it from
+      # $remote_addr, overwriting any client-sent value).
+      - "127.0.0.1:8000:8000"
+    environment:
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - DEPLOYMENT_PROFILE=${DEPLOYMENT_PROFILE:-medium}
+      # true because nginx is the only way in (see the port binding above).
+      # Set it false ONLY if the backend is ever exposed directly, in which
+      # case per-IP limits stop working correctly -- read ratelimit.py first.
+      - TRUST_PROXY_HEADERS=${TRUST_PROXY_HEADERS:-true}
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - orthonym-network
+
+  # Interactive requests: single molecules, explain, name->SMILES. A
+  # dedicated worker is the only thing that guarantees a long batch cannot
+  # occupy the last slot someone naming ethanol needs.
+  worker-fast:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: orthonym-worker-fast
+    command: >
+      celery -A app.celery_app worker
+      --loglevel=${CELERY_LOG_LEVEL:-info}
+      --concurrency=${CELERY_WORKERS_FAST:-2}
+      -Q fast -n worker-fast@%h
+    environment:
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - DEPLOYMENT_PROFILE=${DEPLOYMENT_PROFILE:-medium}
+      # Each forked child holds its own JVM. 512 MB x concurrency, so this
+      # is a memory dial, not a performance one.
+      - ORTHONYM_JVM_XMX=${ORTHONYM_JVM_XMX:-512m}
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - orthonym-network
+
+  worker-batch:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: orthonym-worker-batch
+    command: >
+      celery -A app.celery_app worker
+      --loglevel=${CELERY_LOG_LEVEL:-info}
+      --concurrency=${CELERY_WORKERS_BATCH:-2}
+      -Q batch -n worker-batch@%h
+    environment:
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - DEPLOYMENT_PROFILE=${DEPLOYMENT_PROFILE:-medium}
+      - ORTHONYM_JVM_XMX=${ORTHONYM_JVM_XMX:-512m}
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - orthonym-network
