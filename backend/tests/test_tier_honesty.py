@@ -18,6 +18,7 @@ test:
 import pytest
 
 from app import openstout_service
+from app.main import EXAMPLES
 
 
 # --- best_effort=False: no unverified name may be produced -----------------
@@ -239,4 +240,35 @@ def test_opsin_being_genuinely_unavailable_still_refuses(monkeypatch):
     assert stamped.get("ok") is False, (
         "OPSIN cannot verify names but this worker reported healthy; "
         "require_a_live_jvm() would admit work nobody can verify"
+    )
+
+
+# --- the four examples Home advertises -------------------------------------
+
+
+@pytest.mark.parametrize("example", EXAMPLES, ids=lambda e: e["expected_status"])
+def test_every_advertised_example_still_produces_the_status_it_claims(example):
+    """CC1-examples: main.EXAMPLES hardcodes four expected_status claims and
+    NOTHING checked them -- `grep -rn "expected_status" backend/tests/
+    backend/scripts/` returned zero hits.
+
+    These four render as the example chips on Home, the site's most visible
+    surface, each labelled with the tier it is supposed to demonstrate. The
+    engine improving is enough to falsify one: the abstain example has
+    already been replaced TWICE for exactly that reason, both times because
+    OpenSTOUT got better and started naming a molecule that used to abstain.
+    So these are known to drift, and until now nothing failed when they did.
+
+    verify_opsin_live.py proved exactly one of the four, against its own
+    private copy of the SMILES rather than against EXAMPLES itself.
+    """
+    from app.openstout_service import translate_one
+
+    result = translate_one(example["smiles"], best_effort=True)
+
+    assert result.status == example["expected_status"], (
+        f"Home advertises {example['label']!r} as {example['expected_status']!r} "
+        f"but the engine now returns {result.status!r}. Either the engine "
+        "changed and the example must be replaced (it has happened twice "
+        "before), or something is wrong with the engine."
     )
