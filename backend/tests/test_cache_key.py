@@ -211,3 +211,37 @@ def test_a_cache_hit_still_comes_back_with_a_picture(redis_client):
         )
     finally:
         redis_client.delete(key)
+
+
+def test_an_abstain_is_cached(redis_client):
+    """deferred-4: _CACHEABLE includes "abstain" but the string appeared
+    nowhere in this file, so dropping it re-ran the full OPSIN pipeline on
+    every abstain request with the suite still green.
+
+    An abstain is expensive to reach -- it means both the primary and the
+    escalated namer ran and neither produced a name -- and it is a perfectly
+    stable answer, so it is exactly the result most worth caching.
+    """
+    item = ResultItem(
+        smiles="[Xe]",
+        status="abstain",
+        name=None,
+        tier="abstain",
+        formula="Xe",
+        limit_code=None,
+        error=None,
+        depiction_svg=None,
+        roundtrip_smiles=None,
+        roundtrip_match=None,
+    )
+    key = name_cache.cache_key(item.smiles, best_effort=True)
+    redis_client.delete(key)
+    try:
+        name_cache.put_cached(item, best_effort=True)
+        assert redis_client.exists(key) == 1, (
+            "an abstain was not cached, so every repeat request re-runs both "
+            "namers for an answer that cannot change"
+        )
+        assert name_cache.get_cached(item.smiles, best_effort=True).status == "abstain"
+    finally:
+        redis_client.delete(key)

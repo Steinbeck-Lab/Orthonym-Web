@@ -100,6 +100,18 @@ def test_chunk_order_is_preserved_across_multiple_chunks(redis_client, monkeypat
     rows = client.get(
         f"/api/jobs/{job_id}/results", params={"limit": 100}
     ).json()["rows"]
+    # Assert the job GENUINELY chunked before asserting on the order (TEST-3).
+    # Both knobs are monkeypatched above, but nothing checked they took
+    # effect: if either were ever reverted the job would take the single-task
+    # fast path, produce five correctly-ordered rows anyway, and this test
+    # would keep passing while exercising none of the chunking, chord or
+    # assembly-ordering code it is named for. That exact mistake shipped here
+    # once already.
+    expected_chunks = -(-len(smiles) // settings.BATCH_CHUNK_SIZE)  # ceil
+    assert expected_chunks > 1, "the fixture no longer produces multiple chunks"
+    assert settings.FAST_PATH_MAX_MOLECULES < len(smiles), (
+        "this job would take the single-task fast path and never chunk"
+    )
     assert [r["index"] for r in rows] == [0, 1, 2, 3, 4]
     assert [r["input"] for r in rows] == smiles
 
