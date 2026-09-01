@@ -157,6 +157,16 @@ def _start_status_heartbeat(
     by this fix, but it is why C3's cache guard is independently required
     and not made redundant by this thread.
 
+    A child wedged inside a single naming call past _WORKER_STATUS_TTL
+    (up to CHUNK_HARD_TIME_LIMIT = 900s) does NOT keep beating: RDKit's
+    Boost.Python wrappers do not release the GIL (see jobs_api.py's
+    MAX_DEPICT_SMILES comment), so this thread cannot be scheduled while
+    that call holds it, misses its beats, and the child correctly drops
+    out of any_worker_has_opsin(). That is transient and fail-closed --
+    the wedged child stops being routed new work while its siblings, an
+    ANY check, keep serving -- and self-corrects the moment the call
+    returns and the next beat lands.
+
     daemon=True so it can never block worker shutdown. The write itself is
     wrapped in try/except: a transient Redis blip must cost one missed
     beat, not the heartbeat itself -- an uncaught exception here would end
@@ -170,7 +180,10 @@ def _start_status_heartbeat(
     """
     from app.redis_store import _WORKER_STATUS_TTL, record_worker_opsin_status
 
-    interval = _WORKER_STATUS_TTL // 3
+    # max(1, ...): if _WORKER_STATUS_TTL is ever lowered below 3, a bare
+    # `// 3` is 0, which turns `event.wait(interval)` into a busy loop
+    # hammering Redis on every iteration instead of a periodic heartbeat.
+    interval = max(1, _WORKER_STATUS_TTL // 3)
     event = stop_event if stop_event is not None else threading.Event()
 
     def _beat() -> None:
@@ -229,7 +242,22 @@ def _start_child_jvm(**_kwargs) -> None:
             pid,
         )
         record_worker_opsin_status(pid, ok=False)
-        _start_status_heartbeat(pid, ok=False)
+        try:
+            _start_status_heartbeat(pid, ok=False)
+        except Exception:
+            # "Never raise from here" (see the module docstring above): a
+            # thread that fails to start (e.g. threading.Thread.start()
+            # raising RuntimeError under resource pressure) must not take
+            # the child down with it. The safe direction: this child simply
+            # ages out of any_worker_has_opsin() after _WORKER_STATUS_TTL
+            # and stops being routed naming work, rather than serving
+            # names with nobody re-verifying its JVM stayed alive.
+            logger.exception(
+                "Celery child %s: failed to start the OPSIN status "
+                "heartbeat; this child will age out of any_worker_has_opsin() "
+                "after _WORKER_STATUS_TTL and stop serving.",
+                pid,
+            )
         return
 
     decompose_ok = opsin_decompose.self_check()
@@ -239,4 +267,17 @@ def _start_child_jvm(**_kwargs) -> None:
         pid,
         "available" if decompose_ok else "DISABLED (see preceding log)",
     )
-    _start_status_heartbeat(pid, ok=decompose_ok)
+    try:
+        _start_status_heartbeat(pid, ok=decompose_ok)
+    except Exception:
+        # Same "never raise from here" contract as the inherited-JVM branch
+        # above: a failure to start the heartbeat thread must not escape
+        # and take the child down with it. Fail-closed direction: this
+        # child ages out of any_worker_has_opsin() after
+        # _WORKER_STATUS_TTL and stops being routed naming work.
+        logger.exception(
+            "Celery child %s: failed to start the OPSIN status heartbeat; "
+            "this child will age out of any_worker_has_opsin() after "
+            "_WORKER_STATUS_TTL and stop serving.",
+            pid,
+        )
