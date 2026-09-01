@@ -313,6 +313,11 @@ def test_delete_does_not_free_a_slot_for_a_job_still_running(
     monkeypatch.setattr(
         get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 2
     )
+    # With eager off there is no worker to parse the upload, so _parse_or_400
+    # would wait the full PARSE_TIMEOUT before falling back to the in-process
+    # parse -- per admitted job. This test is about concurrent slots, not
+    # parsing, so make the fallback immediate.
+    monkeypatch.setattr(get_settings(), "PARSE_TIMEOUT", 1)
     celery_app.conf.task_always_eager = False
     admitted = 0
     try:
@@ -430,6 +435,10 @@ def test_creating_jobs_over_http_enforces_the_concurrent_cap(
     monkeypatch.setattr(
         get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 1
     )
+    # Same reason as the slot test above: eager off means no worker answers
+    # _parse_or_400's dispatch, so it would wait the full PARSE_TIMEOUT before
+    # parsing in-process. This test is about the concurrent cap.
+    monkeypatch.setattr(get_settings(), "PARSE_TIMEOUT", 1)
     celery_app.conf.task_always_eager = False
     first_job_id = None
     try:

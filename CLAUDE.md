@@ -57,6 +57,10 @@ docker compose up -d --build
   already printed a correct summary. The script waits for pytest's own summary line, kills the
   corpse, picks the right interpreter and points `REDIS_URL` at localhost. Its exit codes: `0` all
   passed, `1` tests failed, `2` no summary appeared (a real hang).
+- **Kill every Celery worker before running the suite.** A worker left listening on
+  `stitch-redis-dev` CONSUMES the jobs the tests submit, which silently breaks the tests that
+  turn eager mode off on purpose — the concurrent cap reads as broken (10 admitted against a cap
+  of 2) on correct code. `pkill -9 -f "celery -A app.celery_app"`, then confirm with `pgrep -fl`.
 - **The suite needs Redis running** (`docker start stitch-redis-dev`). `conftest.py` deliberately
   `pytest.fail`s with instructions rather than skipping when it is missing.
 - **`REDIS_URL` defaults to `redis://redis:6379/0`**, the compose-internal hostname. Anything run

@@ -8,6 +8,7 @@ ten molecules would add a poll cycle for nothing, and a single task for
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 
 from celery import chord
@@ -494,3 +495,46 @@ def dispatch_batch(
     ]
     chord(header)(finalize_job.s(job_id, len(chunks)).on_error(errback))
     return len(chunks)
+
+@celery_app.task(name="app.tasks.parse_input")
+def parse_input(data: bytes, max_molecules: int) -> dict:
+    """Sniff and parse an uploaded body, in a WORKER rather than the web process.
+
+    Spec section 13a / audit item parse-cost-aggregate. Parsing is RDKit work,
+    and RDKit's Boost.Python wrappers do not release the GIL, so doing it in
+    the web process blocks every other request on that process for its whole
+    duration -- FastAPI's threadpool does not help.
+
+    MEASURED, which is what settled the design. Cost scales with molecule
+    SIZE, not count: 10,000 short SMILES parse in 0.14 s, while 1,000 at
+    MAX_MOLECULE_SMILES_LENGTH take 29.1 s -- so a full 10,000-molecule upload
+    of large molecules is roughly 290 s of GIL-held CPU from ONE request that
+    is entirely within its quota. The count caps never bounded this because
+    they count molecules.
+
+    The caller BLOCKS on this rather than being handed a job envelope, which
+    is what keeps the contract intact: a malformed file still returns a
+    synchronous 400 naming the problem, instead of being accepted and failing
+    asynchronously ten seconds later with no way to say why. The web process
+    waits on I/O, releasing the GIL, so what moves is the CPU and not the
+    user's experience.
+
+    Returns a plain dict rather than raising, because an HTTPException cannot
+    cross the broker: the web process re-raises the right status from `error`.
+    """
+    from app.inputs import TooManyMolecules, parse, sniff
+
+    fmt = sniff(data)
+    try:
+        molecules = parse(data, fmt, max_molecules)
+    except TooManyMolecules as exc:
+        return {"error": "too_many", "limit": exc.limit, "fmt": fmt.value}
+    except ValueError as exc:
+        return {"error": "unreadable", "detail": str(exc), "fmt": fmt.value}
+    if not molecules:
+        return {"error": "empty", "fmt": fmt.value}
+    return {
+        "error": None,
+        "fmt": fmt.value,
+        "molecules": [dataclasses.asdict(m) for m in molecules],
+    }
