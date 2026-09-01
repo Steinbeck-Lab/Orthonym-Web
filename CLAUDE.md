@@ -78,10 +78,11 @@ the working part of each route is a **contained** `.workspace` card grid (two ro
 | output, inside the 1600px column — Home's is named `.workbench`; Structure→IUPAC and Learn add
 `.workspace--draw`, which flips the split so the structure editor takes the wide cell). There is
 one `.workspace` definition in `App.css` — if you ever see two, the later one is a stale leftover
-and wins the cascade; delete it. `Explain.jsx` and `Teach.jsx` independently duplicate `sanitizeSvg`/`atomRefsOf`/`ATOM_REF_RE`
-(byte-identical, including the DOMPurify config) — extract to `frontend/src/lib/svgHighlight.js`
-only when a third page needs the atom-glow, not before (see `NEXT-SESSION.md`'s "documented
-follow-up" for the exact trigger condition).
+and wins the cascade; delete it. `Explain.jsx` and `Teach.jsx` no longer carry independent copies of
+anything: both import `sanitizeSvg`/`atomRefsOf`/`ATOM_REF_RE` from `frontend/src/lib/svgHighlight.js`
+and both share `frontend/src/lib/useKetcher.js`'s Ketcher iframe-readiness handshake. `sanitizeSvg`'s
+DOMPurify config now lives in exactly one place, because two copies of a sanitiser config is exactly
+the kind of thing that drifts silently into an XSS hole.
 
 **Read `DESIGN.md` before any visual change.** It's not aspirational — it documents the shipped
 system as of 2026-08-26, a **TechX-style card bento** (dribbble shot 23855252, user-pinned "like
