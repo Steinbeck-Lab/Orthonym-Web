@@ -247,8 +247,32 @@ def translate_job_inline(
     DEFAULT path for anything up to FAST_PATH_MAX_MOLECULES, so an
     unchecked "done" here would be the most-travelled route to a job that
     claims completeness over an incomplete result list.
+
+    Guarded by begin_chunk, same primitive as run_chunk (final review
+    report, I1 -- this task had the identical unconditional
+    set_job_status(job_id, "running") run_chunk had, on the DEFAULT path
+    for every job at or under FAST_PATH_MAX_MOLECULES). Without it, a
+    redelivered execution (task_acks_late=True makes this real) that dies
+    between that status flip and write_chunk would leave an ALREADY-done
+    job stuck at "running" forever: assemble_rows already deleted this
+    job's only chunk key on the first, successful close, so there is
+    nothing to rebuild from, _close_job never runs on the crashed
+    attempt, and "it self-heals via _close_job at the end" does not hold
+    for an attempt that never reaches its own end -- even though the
+    job's real rows are still sitting there, complete, in
+    orthonym:job:{id}:rows. begin_chunk closes this by never touching the
+    status at all once the job is genuinely terminal.
     """
-    redis_store.set_job_status(job_id, "running")
+    if not redis_store.begin_chunk(job_id):
+        logger.info(
+            "Job %s already terminal; ignoring redelivered fast-path task",
+            job_id,
+        )
+        # A caller polling .get() on this task should still see the real
+        # result, not an empty list: the job's actual rows are still in
+        # Redis, and the only reason this attempt exists at all is a
+        # redelivery of a task that already ran to completion once.
+        return list(redis_store.iter_all_rows(job_id))
     try:
         rows, failed = _name_prepared(prepared, best_effort)
     except _ChunkTimedOut as timeout:

@@ -265,6 +265,82 @@ def test_a_redelivered_chunk_does_not_uncomplete_a_finished_job(
     assert int(meta_after["done"]) <= int(meta_after["total"])
 
 
+def test_a_redelivered_fast_path_task_does_not_uncomplete_a_finished_job(
+    redis_client, job_id, monkeypatch
+):
+    """I1, concern raised on translate_job_inline specifically: this task
+    had the identical unconditional set_job_status(job_id, "running")
+    run_chunk had, on the DEFAULT path for every job at or under
+    FAST_PATH_MAX_MOLECULES. "It self-heals via _close_job at its own
+    end" only holds for a redelivery that actually reaches its own end --
+    one that crashes between the status flip and write_chunk (an OOM
+    kill, a hard-time-limit SIGKILL, a Redis blip) would leave an
+    already-done job stuck at "running" forever, because assemble_rows
+    already deleted the only chunk key on the first, successful close, so
+    there is nothing left to rebuild from and _close_job never runs on
+    the crashed attempt.
+
+    A test that just calls the whole function twice and checks the FINAL
+    state would pass via that self-heal even without the fix -- verified
+    empirically while writing this: the unguarded code, run to completion
+    twice with no interruption, always ends up back at "done" with
+    correct rows, because write_chunk unconditionally recreates the
+    (deleted) chunk key before _close_job ever looks for it. That is
+    exactly the "test does not test its name" shape this branch has hit
+    before, so this asserts on the MECHANISM instead: write_chunk must
+    never be re-entered at all for an already-done job. The chunk key is
+    also deleted explicitly first, the way assemble_rows already does on
+    a real close, to make explicit that nothing is left to rebuild from.
+    """
+    from app import redis_store, tasks
+
+    prepared = [
+        {
+            "index": i,
+            "raw_input": s,
+            "input_id": None,
+            "smiles": s,
+            "error": None,
+        }
+        for i, s in enumerate(["CCO", "CCC"])
+    ]
+    redis_store.create_job(job_id, total=2, fmt="smiles_list", client_ip="::1")
+
+    real_write_chunk = redis_store.write_chunk
+    calls = {"n": 0}
+
+    def _counting_write_chunk(*args, **kwargs):
+        calls["n"] += 1
+        return real_write_chunk(*args, **kwargs)
+
+    monkeypatch.setattr(tasks.redis_store, "write_chunk", _counting_write_chunk)
+
+    first = tasks.translate_job_inline(job_id, prepared, True)
+    assert calls["n"] == 1, "setup failed: the first run did not write a chunk"
+    meta = redis_store.read_job_meta(job_id)
+    assert meta["status"] == "done"
+
+    # assemble_rows already deleted chunk 0 as part of the first close;
+    # delete it again explicitly so nothing here relies on that
+    # implementation detail holding.
+    redis_client.delete(redis_store.job_chunk_key(job_id, 0))
+
+    # Redeliver: the same task fires again, exactly as task_acks_late
+    # would after a lost ack on an attempt that had already completed.
+    second = tasks.translate_job_inline(job_id, prepared, True)
+
+    assert calls["n"] == 1, (
+        "the redelivered call re-entered write_chunk instead of being "
+        "refused by begin_chunk -- this is exactly the window a crash "
+        "would leave the job stuck at 'running' in, forever"
+    )
+    meta_after = redis_store.read_job_meta(job_id)
+    assert meta_after["status"] == "done", "redelivery flipped a done job back"
+    assert second == first, (
+        "the redelivered call did not return the job's real, existing rows"
+    )
+
+
 def test_a_redelivered_close_does_not_destroy_a_finished_job(redis_client):
     """finalize_job must be idempotent.
 
