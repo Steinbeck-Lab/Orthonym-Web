@@ -338,6 +338,36 @@ def test_retrievable_is_short_of_total_on_a_failed_job(redis_client, job_id):
     assert body["retrievable"] == 1
 
 
+def test_a_done_jobs_status_and_csv_stop_claiming_completeness_if_rows_are_evicted(
+    redis_client,
+):
+    """C4: orthonym:job:{id}:rows is TTL'd, and volatile-lru makes every
+    TTL'd key an eviction candidate at any moment regardless of remaining
+    TTL -- so a job can close honestly as "done" and still have its rows
+    key evicted minutes later. Both read paths must catch that, not just
+    /results (which already had `retrievable` to fall back on).
+    """
+    from app import redis_store
+
+    job_id = _submit("CCO\nc1ccccc1\n")["job_id"]
+    before = client.get(f"/api/jobs/{job_id}").json()
+    assert before["status"] == "done"
+
+    redis_store.get_redis().delete(redis_store.job_rows_key(job_id))
+
+    status_after = client.get(f"/api/jobs/{job_id}").json()
+    assert status_after["status"] == "failed", (
+        "status endpoint kept claiming done over an empty result list"
+    )
+
+    csv_response = client.get(f"/api/jobs/{job_id}/results.csv")
+    assert csv_response.status_code == 200
+    assert csv_response.headers["X-Orthonym-Job-Status"] == "failed"
+    assert "-partial.csv" in csv_response.headers["content-disposition"]
+    lines = [line for line in csv_response.text.splitlines() if line.strip()]
+    assert len(lines) == 1, "CSV still served rows that no longer exist"
+
+
 def test_a_preview_row_carries_no_tier(redis_client):
     # A preview row has no status: "the engine refused" and "nothing was
     # attempted" must not share the one field the product forbids conflating.
