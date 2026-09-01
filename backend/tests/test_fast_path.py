@@ -41,7 +41,7 @@ def test_translate_above_the_fast_limit_returns_a_job_envelope(
     from app.core.config import get_settings
 
     monkeypatch.setattr(
-        get_settings(), "FAST_PATH_MAX_MOLECULES", 1, raising=False
+        get_settings(), "FAST_PATH_MAX_MOLECULES", 1
     )
     response = client.post("/api/translate", json={"smiles": ["CCO", "CCC"]})
     assert response.status_code == 200
@@ -111,6 +111,95 @@ def test_naming_endpoints_503_without_a_live_jvm(redis_client, no_worker_opsin):
     assert (
         client.post("/api/jobs", json={"text": "CCO\n"}).status_code == 503
     )
+
+
+def test_jobs_503_does_not_burn_the_hourly_quota(redis_client, no_worker_opsin):
+    """Round 4 review, finding 2: check_job_allowed used to run BEFORE
+    require_a_live_jvm in create_job, so every POST /api/jobs during a JVM
+    outage burned one of the caller's RATE_LIMIT_JOBS_PER_HOUR units
+    before returning 503 -- while /api/translate, which already gated on
+    the JVM first, cost its callers nothing for the same outage. A client
+    that retries during an outage could exhaust its hourly quota and stay
+    locked out of batch submission for up to an hour AFTER service
+    recovers -- punishing a user for the outage, not their own usage.
+    """
+    for key in redis_client.scan_iter(match="stitch:ip:testclient:hour:*"):
+        redis_client.delete(key)
+
+    response = client.post("/api/jobs", json={"text": "CCO\n"})
+    assert response.status_code == 503
+
+    hour_keys = list(
+        redis_client.scan_iter(match="stitch:ip:testclient:hour:*")
+    )
+    assert not hour_keys, (
+        "a 503 (no live JVM) must not touch the hourly job-submission "
+        "counter"
+    )
+
+
+def test_jobs_checks_the_job_cap_before_parsing(redis_client, monkeypatch):
+    """Round 4 review, note 3: nothing protected finding 1's ORDERING
+    claim itself -- a future refactor could silently move
+    check_job_allowed back to after the parse (its old, 46-second-parse-
+    before-429 position) without any test failing, since the eventual
+    outcome (a 429 or a 200) looks identical either way. Spies on the call
+    order directly, cheaply, rather than relying on a slow real parse to
+    prove which ran first.
+    """
+    import app.jobs_api as jobs_api_module
+
+    order: list[str] = []
+    real_check = jobs_api_module.check_job_allowed
+    real_parse = jobs_api_module._parse_or_400
+
+    def spy_check(ip):
+        order.append("check_job_allowed")
+        return real_check(ip)
+
+    def spy_parse(data, max_molecules):
+        order.append("_parse_or_400")
+        return real_parse(data, max_molecules)
+
+    monkeypatch.setattr(jobs_api_module, "check_job_allowed", spy_check)
+    monkeypatch.setattr(jobs_api_module, "_parse_or_400", spy_parse)
+
+    response = client.post("/api/jobs", json={"text": "CCO\n"})
+    assert response.status_code == 200, response.text
+    assert order == ["check_job_allowed", "_parse_or_400"], order
+
+
+def test_translate_checks_the_job_cap_before_canonicalizing(
+    redis_client, monkeypatch
+):
+    """Same ordering guarantee as above, for /api/translate's job-dispatch
+    branch -- check_job_allowed before _canonicalize, not after.
+    """
+    import app.main as main_module
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(
+        get_settings(), "FAST_PATH_MAX_MOLECULES", 1
+    )
+
+    order: list[str] = []
+    real_check = main_module.check_job_allowed
+    real_canonicalize = main_module._canonicalize
+
+    def spy_check(ip):
+        order.append("check_job_allowed")
+        return real_check(ip)
+
+    def spy_canonicalize(smiles_list, max_molecules):
+        order.append("_canonicalize")
+        return real_canonicalize(smiles_list, max_molecules)
+
+    monkeypatch.setattr(main_module, "check_job_allowed", spy_check)
+    monkeypatch.setattr(main_module, "_canonicalize", spy_canonicalize)
+
+    response = client.post("/api/translate", json={"smiles": ["CCO", "CCC"]})
+    assert response.status_code == 200, response.text
+    assert order == ["check_job_allowed", "_canonicalize"], order
 
 
 def test_importing_main_does_not_start_a_jvm():
@@ -248,7 +337,7 @@ def test_translate_blank_list_still_counts_against_the_fast_cap(
     from app.core.config import get_settings
 
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 1, raising=False
+        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 1
     )
     first = client.post("/api/translate", json={"smiles": ["   ", ""]})
     second = client.post("/api/translate", json={"smiles": ["  "]})
@@ -268,7 +357,7 @@ def test_translate_over_http_enforces_the_fast_per_minute_cap(
     from app.core.config import get_settings
 
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 2, raising=False
+        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 2
     )
     assert client.post("/api/translate", json={"smiles": ["CCO"]}).status_code == 200
     assert client.post("/api/translate", json={"smiles": ["CCC"]}).status_code == 200
@@ -283,7 +372,7 @@ def test_explain_over_http_enforces_the_fast_per_minute_cap(
     from app.core.config import get_settings
 
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 1, raising=False
+        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 1
     )
     assert client.get("/api/explain", params={"smiles": "CCO"}).status_code == 200
     assert client.get("/api/explain", params={"smiles": "CCC"}).status_code == 429
@@ -295,7 +384,7 @@ def test_explain_name_over_http_enforces_the_fast_per_minute_cap(
     from app.core.config import get_settings
 
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 1, raising=False
+        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 1
     )
     assert (
         client.get("/api/explain-name", params={"name": "ethanol"}).status_code
@@ -313,7 +402,7 @@ def test_iupac_to_smiles_over_http_enforces_the_fast_per_minute_cap(
     from app.core.config import get_settings
 
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 1, raising=False
+        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 1
     )
     assert (
         client.get("/api/iupac-to-smiles", params={"name": "ethanol"}).status_code

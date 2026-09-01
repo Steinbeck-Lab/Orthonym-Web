@@ -53,7 +53,7 @@ def _admit(ip: str, job_id: str) -> None:
 def test_client_ip_ignores_forwarded_header_by_default(monkeypatch):
     # X-Forwarded-For is attacker-controlled. Trusting it unconditionally
     # makes every per-IP cap bypassable with one header.
-    monkeypatch.setattr(get_settings(), "TRUST_PROXY_HEADERS", False, raising=False)
+    monkeypatch.setattr(get_settings(), "TRUST_PROXY_HEADERS", False)
     request = _request({"x-forwarded-for": "1.1.1.1"}, host="10.0.0.1")
     assert ratelimit.client_ip(request) == "10.0.0.1"
 
@@ -61,7 +61,7 @@ def test_client_ip_ignores_forwarded_header_by_default(monkeypatch):
 def test_client_ip_prefers_x_real_ip_when_trusted(monkeypatch):
     # nginx.conf sets X-Real-IP to $remote_addr verbatim -- the one header
     # here that carries no attacker-supplied prefix at all.
-    monkeypatch.setattr(get_settings(), "TRUST_PROXY_HEADERS", True, raising=False)
+    monkeypatch.setattr(get_settings(), "TRUST_PROXY_HEADERS", True)
     request = _request(
         {"x-real-ip": "9.9.9.9", "x-forwarded-for": "1.1.1.1, 10.0.0.2"}
     )
@@ -75,7 +75,7 @@ def test_client_ip_uses_the_rightmost_forwarded_hop_when_trusted(monkeypatch):
     # header a client cannot forge. The leftmost value is attacker text
     # (round 1 review, Critical 3 -- this test used to enshrine reading
     # the leftmost hop, which is exactly backwards).
-    monkeypatch.setattr(get_settings(), "TRUST_PROXY_HEADERS", True, raising=False)
+    monkeypatch.setattr(get_settings(), "TRUST_PROXY_HEADERS", True)
     request = _request({"x-forwarded-for": "1.1.1.1, 10.0.0.2"})
     assert ratelimit.client_ip(request) == "10.0.0.2"
 
@@ -84,7 +84,7 @@ def test_a_spoofed_multi_hop_header_cannot_pick_a_bucket(monkeypatch):
     # An attacker who controls X-Forwarded-For can pad it with as many fake
     # hops as they like; none of them may end up chosen over the
     # trustworthy value nginx itself appended on the right.
-    monkeypatch.setattr(get_settings(), "TRUST_PROXY_HEADERS", True, raising=False)
+    monkeypatch.setattr(get_settings(), "TRUST_PROXY_HEADERS", True)
     request = _request(
         {"x-forwarded-for": "9.9.9.9, 8.8.8.8, not-an-ip, 203.0.113.50"},
         host="10.0.0.9",
@@ -93,7 +93,7 @@ def test_a_spoofed_multi_hop_header_cannot_pick_a_bucket(monkeypatch):
 
 
 def test_an_unparseable_forwarded_header_falls_back_to_the_tcp_peer(monkeypatch):
-    monkeypatch.setattr(get_settings(), "TRUST_PROXY_HEADERS", True, raising=False)
+    monkeypatch.setattr(get_settings(), "TRUST_PROXY_HEADERS", True)
     request = _request({"x-forwarded-for": "not-an-ip-at-all"}, host="10.0.0.5")
     assert ratelimit.client_ip(request) == "10.0.0.5"
 
@@ -105,7 +105,7 @@ def test_an_unparseable_rightmost_hop_does_not_fall_through_leftward(monkeypatch
     # sitting to the left of the one hop nginx itself controls. If that one
     # hop does not parse, the honest fallback is the TCP peer, not more of
     # the client's own text.
-    monkeypatch.setattr(get_settings(), "TRUST_PROXY_HEADERS", True, raising=False)
+    monkeypatch.setattr(get_settings(), "TRUST_PROXY_HEADERS", True)
     request = _request(
         {"x-forwarded-for": "1.2.3.4, junk"}, host="10.0.0.6"
     )
@@ -115,7 +115,7 @@ def test_an_unparseable_rightmost_hop_does_not_fall_through_leftward(monkeypatch
 def test_ipv6_addresses_are_bucketed_by_slash_64(monkeypatch):
     # A routed /64 is a single allocation to one client; bucketing by /128
     # would give a rotating client 2**64 free buckets.
-    monkeypatch.setattr(get_settings(), "TRUST_PROXY_HEADERS", True, raising=False)
+    monkeypatch.setattr(get_settings(), "TRUST_PROXY_HEADERS", True)
     first = _request({"x-real-ip": "2001:db8:abcd:1234::1"})
     second = _request({"x-real-ip": "2001:db8:abcd:1234:ffff:ffff:ffff:ffff"})
     assert ratelimit.client_ip(first) == ratelimit.client_ip(second)
@@ -127,7 +127,7 @@ def test_ipv4_mapped_ipv6_addresses_are_not_collapsed_together(monkeypatch):
     # bucketed to '::', because /64 was applied to the mapped address
     # too -- its first 64 bits are the same fixed all-zero prefix as ::1's.
     # An IPv4-mapped address must normalise to its v4 form BEFORE bucketing.
-    monkeypatch.setattr(get_settings(), "TRUST_PROXY_HEADERS", True, raising=False)
+    monkeypatch.setattr(get_settings(), "TRUST_PROXY_HEADERS", True)
     mapped = _request({"x-real-ip": "::ffff:1.2.3.4"})
     loopback = _request({"x-real-ip": "::1"})
     other_mapped = _request({"x-real-ip": "::ffff:5.6.7.8"})
@@ -138,7 +138,7 @@ def test_ipv4_mapped_ipv6_addresses_are_not_collapsed_together(monkeypatch):
 
 def test_concurrent_job_cap(monkeypatch):
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 2, raising=False
+        get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 2
     )
     _admit(IP, "job-a")
     _admit(IP, "job-b")
@@ -177,7 +177,7 @@ def test_a_simultaneous_third_admission_still_cannot_pass_the_cap(monkeypatch):
     import threading
 
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 2, raising=False
+        get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 2
     )
     n = 40
     for i in range(n):
@@ -210,7 +210,7 @@ def test_a_simultaneous_third_admission_still_cannot_pass_the_cap(monkeypatch):
 
 def test_releasing_a_job_frees_the_slot(monkeypatch):
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 1, raising=False
+        get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 1
     )
     _admit(IP, "job-a")
     with pytest.raises(HTTPException):
@@ -229,7 +229,7 @@ def test_a_finished_jobs_meta_self_heals_the_slot_without_an_explicit_release(
     from app import redis_store
 
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 1, raising=False
+        get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 1
     )
     redis_store.create_job("stale-job", total=1, fmt="smiles_list", client_ip=IP)
     redis_client.sadd(f"stitch:ip:{IP}:jobs", "stale-job")
@@ -244,10 +244,10 @@ def test_a_finished_jobs_meta_self_heals_the_slot_without_an_explicit_release(
 
 def test_hourly_job_cap(monkeypatch):
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_JOBS_PER_HOUR", 3, raising=False
+        get_settings(), "RATE_LIMIT_JOBS_PER_HOUR", 3
     )
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 100, raising=False
+        get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 100
     )
     for i in range(3):
         ratelimit.check_job_allowed(IP)
@@ -273,13 +273,13 @@ def test_translate_envelope_path_enforces_the_hourly_job_cap(
     from app.main import app
 
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_JOBS_PER_HOUR", 2, raising=False
+        get_settings(), "RATE_LIMIT_JOBS_PER_HOUR", 2
     )
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 1000, raising=False
+        get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 1000
     )
     monkeypatch.setattr(
-        get_settings(), "FAST_PATH_MAX_MOLECULES", 1, raising=False
+        get_settings(), "FAST_PATH_MAX_MOLECULES", 1
     )
 
     c = TestClient(app)
@@ -311,7 +311,7 @@ def test_delete_does_not_free_a_slot_for_a_job_still_running(
     from app.main import app
 
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 2, raising=False
+        get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 2
     )
     celery_app.conf.task_always_eager = False
     admitted = 0
@@ -359,7 +359,7 @@ def test_fast_path_has_its_own_cap(monkeypatch):
     # The job caps do not cover /api/translate, so without this a script can
     # hammer the fast queue freely.
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 2, raising=False
+        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 2
     )
     ratelimit.check_fast_allowed(IP)
     ratelimit.check_fast_allowed(IP)
@@ -370,7 +370,7 @@ def test_fast_path_has_its_own_cap(monkeypatch):
 
 def test_counter_keys_carry_a_ttl(redis_client, monkeypatch):
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_JOBS_PER_HOUR", 100, raising=False
+        get_settings(), "RATE_LIMIT_JOBS_PER_HOUR", 100
     )
     ratelimit.check_job_allowed(IP)
     keys = list(redis_client.scan_iter(match=f"stitch:ip:{IP}:hour:*"))
@@ -386,9 +386,9 @@ def test_the_jobs_set_ttl_is_armed_once_not_refreshed_on_every_admission(
     # active user's own leaked members would never age out. The set's TTL
     # must be armed once, on first creation, and never pushed back out.
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 100, raising=False
+        get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 100
     )
-    monkeypatch.setattr(get_settings(), "JOB_RESULT_TTL_SECONDS", 1000, raising=False)
+    monkeypatch.setattr(get_settings(), "JOB_RESULT_TTL_SECONDS", 1000)
     _admit(IP, "job-a")
     key = f"stitch:ip:{IP}:jobs"
     ttl_after_first = redis_client.ttl(key)
@@ -422,7 +422,7 @@ def test_creating_jobs_over_http_enforces_the_concurrent_cap(
     from app.main import app
 
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 1, raising=False
+        get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 1
     )
     celery_app.conf.task_always_eager = False
     first_job_id = None
@@ -454,7 +454,7 @@ def test_submitting_and_finishing_a_job_over_http_frees_the_slot_without_polling
     from app.main import app
 
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 1, raising=False
+        get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 1
     )
     celery_app.conf.task_always_eager = True
     celery_app.conf.task_eager_propagates = True
@@ -479,7 +479,7 @@ def test_parse_preview_over_http_enforces_the_fast_cap(redis_client, monkeypatch
     from app.main import app
 
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 1, raising=False
+        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 1
     )
     c = TestClient(app)
     assert c.post("/api/parse-preview", json={"text": "CCO\n"}).status_code == 200
@@ -493,7 +493,7 @@ def test_depict_over_http_enforces_its_own_cap(redis_client, monkeypatch):
     from app.main import app
 
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_DEPICT_PER_MINUTE", 1, raising=False
+        get_settings(), "RATE_LIMIT_DEPICT_PER_MINUTE", 1
     )
     c = TestClient(app)
     assert c.get("/api/depict", params={"smiles": "CCO"}).status_code == 200
@@ -508,7 +508,7 @@ def test_job_status_over_http_enforces_its_own_poll_cap(
     from app.main import app
 
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_POLL_PER_MINUTE", 1, raising=False
+        get_settings(), "RATE_LIMIT_POLL_PER_MINUTE", 1
     )
     redis_store.create_job(job_id, total=1, fmt="smiles_list", client_ip="::1")
 
@@ -523,7 +523,7 @@ def test_job_results_over_http_enforces_its_own_poll_cap(
     from app.main import app
 
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_POLL_PER_MINUTE", 1, raising=False
+        get_settings(), "RATE_LIMIT_POLL_PER_MINUTE", 1
     )
     redis_store.create_job(job_id, total=1, fmt="smiles_list", client_ip="::1")
     redis_store.write_chunk(
@@ -543,7 +543,7 @@ def test_results_csv_over_http_enforces_the_fast_cap(redis_client, monkeypatch, 
     from app.main import app
 
     monkeypatch.setattr(
-        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 1, raising=False
+        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 1
     )
     redis_store.create_job(job_id, total=1, fmt="smiles_list", client_ip="::1")
     redis_store.write_chunk(
