@@ -24,6 +24,12 @@ const STATE_CLASS = {
 // only by border/fill treatment per state (see Home.css).
 const NAMED_STATUSES = new Set(['pin', 'fallback', 'best_effort'])
 
+// Statuses whose confidence rule (double / dashed) claims an OPSIN
+// round-trip confirmed the name. best_effort makes no such claim -- its own
+// state label already says "could not round-trip check this" -- so only
+// these two need an explicit call-out when roundtrip_smiles is missing.
+const VERIFIED_STATUSES = new Set(['pin', 'fallback'])
+
 /**
  * One cell of the sampler grid.
  *
@@ -31,7 +37,7 @@ const NAMED_STATUSES = new Set(['pin', 'fallback', 'best_effort'])
  *        resolving into place) | 'done' (settled, final state)
  */
 export default function Tile({ row, phase, reduceMotion }) {
-  const { smiles, status, name, tier, formula, error, depiction_svg, roundtrip_smiles, roundtrip_match } = row
+  const { smiles, status, name, formula, error, depiction_svg, roundtrip_smiles, roundtrip_match } = row
   const isPending = phase === 'pending'
   const isActive = phase === 'active'
   const animateName = isActive && !reduceMotion
@@ -52,7 +58,6 @@ export default function Tile({ row, phase, reduceMotion }) {
         <code className="tile__smiles" title={smiles}>
           {smiles}
         </code>
-        {!isPending && tier && <span className="tile__tier">{tier}</span>}
       </div>
 
       <div className="tile__patch">
@@ -101,6 +106,19 @@ export default function Tile({ row, phase, reduceMotion }) {
             >
               {roundtrip_match ? '— matches ✓' : '— does not match ✗'}
             </span>
+          </p>
+        )}
+        {/* This tier's rule (double/dashed) claims an OPSIN round-trip
+            confirmed the name, but no proof came back with this result.
+            The proof must never go missing silently -- an absent line here
+            would look identical to a tier that carries no such claim. */}
+        {!isPending && !roundtrip_smiles && VERIFIED_STATUSES.has(status) && (
+          <p className="tile__roundtrip">
+            round-trip check:{' '}
+            <span className="tile__roundtrip-result tile__roundtrip-result--unavailable">
+              unavailable
+            </span>{' '}
+            — could not confirm this result
           </p>
         )}
         {!isPending && status === 'abstain' && formula && (
