@@ -136,12 +136,56 @@ def _retag_if_untagged(pipe, key: str) -> None:
     pipe.expire(key, get_settings().JOB_RESULT_TTL_SECONDS, nx=True)
 
 
-def set_job_status(job_id: str, status: str) -> None:
-    key = job_meta_key(job_id)
-    pipe = get_redis().pipeline()
-    pipe.hset(key, "status", status)
-    _retag_if_untagged(pipe, key)
-    pipe.execute()
+# KEYS[1] = the job's meta hash. ARGV[1] = the new status. ARGV[2] = TTL.
+#
+# Compare-and-set, not a bare HSET, so a job that has reached a terminal state
+# can never be moved out of one. begin_chunk guards WORK STARTING; this guards
+# STATUS WRITING, and they are different questions with different callers.
+#
+# Without it, cancellation was cosmetic in the worst way. Celery skips a chord
+# BODY only when a header task FAILS -- a cancelled chunk returns 0 normally,
+# so the body still fires, _close_job still runs, and it wrote "failed" (or
+# "done", if every chunk happened to be in flight when the cancel landed)
+# straight over "cancelled". Measured: cancel -> begin_chunk correctly refuses
+# -> _close_job -> status is "failed". The user who cancelled saw a failure and
+# a -partial CSV.
+#
+# One round trip, matching _BEGIN_CHUNK_SCRIPT and ratelimit._ADMIT_JOB_SCRIPT,
+# so two writers racing cannot both read "not terminal" and both proceed.
+_SET_STATUS_SCRIPT = """
+local current = redis.call('HGET', KEYS[1], 'status')
+if current == 'done' or current == 'failed' or current == 'cancelled' then
+    return 0
+end
+redis.call('HSET', KEYS[1], 'status', ARGV[1])
+redis.call('EXPIRE', KEYS[1], ARGV[2], 'NX')
+return 1
+"""
+
+_set_status_script_obj = None
+
+
+def _set_status_script():
+    global _set_status_script_obj
+    if _set_status_script_obj is None:
+        _set_status_script_obj = get_redis().register_script(_SET_STATUS_SCRIPT)
+    return _set_status_script_obj
+
+
+def set_job_status(job_id: str, status: str) -> bool:
+    """Move a job to `status`, unless it is already terminal.
+
+    Returns whether the write happened. Callers that must know -- cancel --
+    check it; the close paths do not, because "this job already reached a
+    terminal state" is exactly the outcome they want either way.
+    """
+    settings = get_settings()
+    return bool(
+        _set_status_script()(
+            keys=[job_meta_key(job_id)],
+            args=[status, settings.JOB_RESULT_TTL_SECONDS],
+        )
+    )
 
 
 # KEYS[1] = the job's meta hash (job_meta_key).

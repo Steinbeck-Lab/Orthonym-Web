@@ -524,6 +524,17 @@ def test_one_bad_molecule_does_not_lose_the_whole_fast_request(monkeypatch):
     assert "cannot classify" in (rows[1]["error"] or "")
     assert rows[2]["name"], "the molecules AFTER the failure must still be returned"
 
+    # Validate exactly as main.py:274 does. Without this the test passes on an
+    # error row built as a BatchRow -- whose `smiles` is Optional -- and the
+    # request still 500s, just as a pydantic ValidationError instead of a
+    # naming one. That is precisely what happened: the first version of this
+    # guard called _error_row (BatchRow) and this test went green while
+    # /api/translate stayed broken.
+    from app.schemas import ResultItem
+
+    for row in rows:
+        ResultItem.model_validate(row)
+
 
 def test_a_soft_time_limit_is_not_swallowed_by_the_per_molecule_guard(monkeypatch):
     """The interaction that makes the guard above dangerous if written

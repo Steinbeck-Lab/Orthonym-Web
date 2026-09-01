@@ -957,11 +957,15 @@ def test_cancelling_frees_the_concurrent_slot(redis_client, job_id):
     neither stopped the work nor protected the cap.
     """
     ip = "203.0.113.77"
-    envelope = _submit("CCO\nCCC\n")
-    jid, token = envelope["job_id"], envelope["owner_token"]
+    # Built directly rather than through _submit: under eager Celery a
+    # submitted job runs to completion inside the request, and set_job_status
+    # now REFUSES to move a terminal job back to "running" -- which is the
+    # whole point of the compare-and-set. A test that needs a live job has to
+    # start with one.
+    jid, token = "job-cancel-slot", "owner-token-for-cancel"
+    redis_store.create_job(jid, total=100, fmt="smiles_list", client_ip=ip, owner_token=token)
     redis_store.set_job_status(jid, "running")
     redis_client.sadd(redis_store.ip_jobs_key(ip), jid)
-    redis_client.hset(redis_store.job_meta_key(jid), "ip", ip)
 
     r = client.post(f"/api/jobs/{jid}/cancel", params={"owner_token": token})
 
@@ -1077,17 +1081,84 @@ def test_the_parse_falls_back_in_process_when_no_worker_answers(monkeypatch, red
     Never worse, which is what makes it safe to ship without an operational
     prerequisite.
     """
-    from celery.exceptions import TimeoutError as CeleryTimeoutError
+    class _NeverPickedUp:
+        """A task nobody ever accepts: state stays PENDING forever.
 
-    class _NeverAnswers:
+        That -- not a completion timeout -- is what the fallback keys off.
+        Waiting for completion was tried and is wrong: at 30.7 ms/molecule the
+        crossover is ~977 molecules, so every upload above that timed out, was
+        re-parsed in the web process, AND left the abandoned worker parsing
+        the same bytes.
+        """
+
+        state = "PENDING"
+
         def get(self, timeout=None):
-            raise CeleryTimeoutError("no worker")
+            raise AssertionError("get() must not be called before a worker starts")
 
+        def revoke(self):
+            pass
+
+        def forget(self):
+            pass
+
+    monkeypatch.setattr(get_settings(), "PARSE_TIMEOUT", 1)
     monkeypatch.setattr(
-        tasks.parse_input, "apply_async", lambda *a, **k: _NeverAnswers()
+        tasks.parse_input, "apply_async", lambda *a, **k: _NeverPickedUp()
     )
 
     r = client.post("/api/jobs", json={"text": "CCO\nCCC\n"})
 
     assert r.status_code == 200, r.text
     assert r.json()["molecule_count"] == 2
+
+
+def test_a_cancelled_job_survives_the_close_that_follows_it(redis_client):
+    """The half of cancellation that begin_chunk does NOT cover, and which
+    shipped broken.
+
+    begin_chunk guards WORK STARTING. It does not guard STATUS WRITING, and
+    three writers bypass it: _close_job writes "done" or "failed", and
+    mark_job_failed writes "failed". Celery skips a chord BODY only when a
+    header task FAILS -- a cancelled chunk returns normally, so the body fires,
+    _close_job runs, and it wrote straight over "cancelled".
+
+    Measured before the fix: cancel -> begin_chunk correctly refuses ->
+    _close_job -> status "failed". The user who cancelled saw a failure and a
+    -partial CSV, and if every chunk had happened to be in flight when the
+    cancel landed, a resurrected "done".
+
+    set_job_status is now a compare-and-set that refuses to move a job out of
+    a terminal state, so all four writers inherit the rule.
+    """
+    jid = "job-cancel-survives"
+    redis_store.create_job(jid, total=2, fmt="smiles_list", client_ip="::1")
+    redis_store.write_chunk(jid, 0, [{"index": 0, "input": "CCO", "status": "pin"}])
+    redis_store.set_job_status(jid, "cancelled")
+
+    tasks._close_job(jid, n_chunks=1)
+    assert redis_store.read_job_meta(jid)["status"] == "cancelled", (
+        "_close_job overwrote the cancellation"
+    )
+
+    tasks.mark_job_failed.run(None, RuntimeError("boom"), None, jid)
+    assert redis_store.read_job_meta(jid)["status"] == "cancelled", (
+        "mark_job_failed overwrote the cancellation"
+    )
+
+
+def test_a_live_job_can_still_change_status(redis_client):
+    """The good-case half. A compare-and-set that refuses everything is not a
+    guard, it is a job that never progresses -- so a non-terminal job must
+    still move freely.
+    """
+    jid = "job-status-live"
+    redis_store.create_job(jid, total=1, fmt="smiles_list", client_ip="::1")
+
+    assert redis_store.set_job_status(jid, "running") is True
+    assert redis_store.read_job_meta(jid)["status"] == "running"
+    assert redis_store.set_job_status(jid, "done") is True
+    assert redis_store.read_job_meta(jid)["status"] == "done"
+    # ...and now it is terminal, so it stops moving.
+    assert redis_store.set_job_status(jid, "running") is False
+    assert redis_store.read_job_meta(jid)["status"] == "done"

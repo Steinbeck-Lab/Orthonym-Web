@@ -32,21 +32,24 @@ class Settings(BaseSettings):
 
     FAST_PATH_MAX_MOLECULES: int = 10
     FAST_PATH_TIMEOUT: int = 30
-    # How long POST /api/jobs waits for a worker to parse the upload before
-    # parsing it in the web process instead.
+    # How long POST /api/jobs waits for a worker to ACCEPT the upload -- not
+    # to finish it -- before parsing in the web process instead.
     #
-    # Deliberately SHORT, and matched to FAST_PATH_TIMEOUT. Sizing it above
-    # the measured worst case (~290 s for 10,000 molecules at
-    # MAX_MOLECULE_SMILES_LENGTH) was tried and is wrong: it holds a web
-    # thread for minutes whenever no worker is listening, which trades a GIL
-    # problem for a thread-exhaustion one. A timeout cannot distinguish "no
-    # worker" from "a genuinely slow parse", so it is tuned for the first --
-    # the case where waiting longer helps nobody.
+    # Waiting for COMPLETION was tried first and is actively harmful: parse
+    # cost is 30.7 ms per molecule at MAX_MOLECULE_SMILES_LENGTH, so the
+    # crossover against any sane timeout is ~977 molecules -- above that every
+    # upload timed out, got re-parsed in the web process anyway, AND left the
+    # abandoned worker task parsing the same bytes. Strictly worse than not
+    # offloading, in exactly the case the offload exists for.
     #
-    # Falling back therefore leaves a slow parse in the web process exactly as
-    # before. That is the honest limit of this change: it moves the CPU
-    # whenever a batch worker is available, and is never worse than the
-    # previous behaviour when one is not.
+    # So this bounds ACCEPTANCE. task_track_started is on, so a worker stamps
+    # STARTED the moment it picks the task up; a worker with a free slot does
+    # that in milliseconds, and only a fully saturated batch queue takes the
+    # whole window. Once accepted, we wait as long as the parse needs.
+    #
+    # Falling back still leaves a slow parse in the web process exactly as
+    # before -- the honest limit of the change: it moves the CPU whenever a
+    # batch worker is available, and is never worse when one is not.
     PARSE_TIMEOUT: int = 30
 
     BATCH_CHUNK_SIZE: int = 25
