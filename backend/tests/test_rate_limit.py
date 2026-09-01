@@ -323,8 +323,14 @@ def test_delete_does_not_free_a_slot_for_a_job_still_running(
                 continue
             assert submitted.status_code == 200, submitted.text
             admitted += 1
-            job_id = submitted.json()["job_id"]
-            deleted = c.delete(f"/api/jobs/{job_id}")
+            body = submitted.json()
+            job_id = body["job_id"]
+            # WITH the owner token, so this still tests what it is named for:
+            # that DELETE refuses a non-terminal job, not merely that an
+            # unauthorised caller is turned away (which is a different test).
+            deleted = c.delete(
+                f"/api/jobs/{job_id}", params={"owner_token": body["owner_token"]}
+            )
             # Still queued -- no worker ever consumes it in this test --
             # so DELETE must refuse rather than quietly free its slot.
             assert deleted.status_code == 409, deleted.text

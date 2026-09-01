@@ -8,7 +8,9 @@ single-molecule endpoints except the settings object.
 from __future__ import annotations
 
 import csv
+import hmac
 import io
+import secrets
 import uuid
 
 from fastapi import (
@@ -183,7 +185,7 @@ def prepared_payload(molecules) -> list[dict]:
 
 def admit_and_dispatch(
     ip: str, molecules, fmt: str, best_effort: bool
-) -> str:
+) -> tuple[str, str]:
     """Admit, register, and dispatch one batch job as a single unit.
 
     The ONLY place that creates and dispatches a batch job -- POST
@@ -217,7 +219,11 @@ def admit_and_dispatch(
     """
     settings = get_settings()
     job_id = uuid.uuid4().hex
-    redis_store.create_job(job_id, len(molecules), fmt, ip)
+    # secrets, not uuid4: this one is a capability, not an identifier, and the
+    # only thing standing between "you were shown a results link" and "you can
+    # delete this job" (audit item delete-no-ownership).
+    owner_token = secrets.token_urlsafe(32)
+    redis_store.create_job(job_id, len(molecules), fmt, ip, owner_token)
     try:
         check_and_register_job(ip, job_id)
     except HTTPException:
@@ -252,7 +258,7 @@ def admit_and_dispatch(
         release_job(ip, job_id)
         redis_store.get_redis().delete(redis_store.job_meta_key(job_id))
         raise
-    return job_id
+    return job_id, owner_token
 
 
 @router.post("/api/parse-preview", response_model=ParsePreviewResponse)
@@ -358,10 +364,58 @@ async def create_job(
     data, best_effort = await _read_input(request, file, best_effort)
     fmt, molecules = _parse_or_400(data, settings.MAX_BATCH_SIZE)
 
-    job_id = admit_and_dispatch(ip, molecules, fmt.value, best_effort)
+    job_id, owner_token = admit_and_dispatch(ip, molecules, fmt.value, best_effort)
     return JobEnvelope(
-        job_id=job_id, molecule_count=len(molecules), status="queued"
+        job_id=job_id,
+        molecule_count=len(molecules),
+        status="queued",
+        owner_token=owner_token,
     )
+
+
+# A job in one of these has stopped doing work and can be deleted. "cancelled"
+# is terminal in exactly the same sense as the other two -- redis_store's
+# begin_chunk refuses to start another chunk for any of them, which is what
+# makes cancellation actually stop the work rather than merely relabel it.
+_TERMINAL_STATUSES = ("done", "failed", "cancelled")
+
+
+def _status_response(
+    job_id: str, meta: dict[str, str], status: str
+) -> JobStatusResponse:
+    """One shape for a job's status, built in one place.
+
+    Shared by GET /api/jobs/{id} and POST .../cancel so the two can never
+    disagree -- and, more to the point, so neither can leak `owner`: this
+    lists the fields explicitly rather than splatting the meta hash, and the
+    owner token is not among them.
+    """
+    return JobStatusResponse(
+        job_id=job_id,
+        status=status,
+        total=int(meta["total"]),
+        done=int(meta["done"]),
+        failed=int(meta["failed"]),
+        created_at=int(meta["created"]),
+        expires_at=int(meta["expires"]),
+    )
+
+
+def _owns(meta: dict[str, str], token: str | None) -> bool:
+    """Constant-time check that `token` is this job's owner token.
+
+    hmac.compare_digest, not ==: the comparison is against a secret, and a
+    short-circuiting compare leaks its prefix a byte at a time to anyone who
+    can time the endpoint.
+
+    A job created before this field existed has an empty `owner`, and those
+    are refused rather than grandfathered in -- the fail-closed direction. In
+    practice the whole population turns over in JOB_RESULT_TTL_SECONDS (24 h).
+    """
+    stored = meta.get("owner") or ""
+    if not stored or not token:
+        return False
+    return hmac.compare_digest(stored, token)
 
 
 def _meta_or_error(job_id: str) -> dict[str, str]:
@@ -448,15 +502,7 @@ def job_status(request: Request, job_id: str) -> JobStatusResponse:
     check_poll_allowed(client_ip(request))
     meta = _require_complete_meta(job_id)
     status = _actual_status(job_id, meta)
-    response = JobStatusResponse(
-        job_id=job_id,
-        status=status,
-        total=int(meta["total"]),
-        done=int(meta["done"]),
-        failed=int(meta["failed"]),
-        created_at=int(meta["created"]),
-        expires_at=int(meta["expires"]),
-    )
+    response = _status_response(job_id, meta, status)
     if status in ("done", "failed"):
         # Release the slot once the job is finished, so a user is not held
         # to their concurrent-job cap by work that has already completed.
@@ -555,17 +601,92 @@ def job_results_csv(request: Request, job_id: str) -> StreamingResponse:
     )
 
 
+@router.post("/api/jobs/{job_id}/cancel", response_model=JobStatusResponse)
+def cancel_job(
+    request: Request,
+    job_id: str,
+    owner_token: str | None = Query(default=None),
+) -> JobStatusResponse:
+    """Stop a running job and free its concurrent slot.
+
+    Until now there was no way to. A user who submitted 10,000 molecules by
+    mistake held one of their two concurrent slots for the whole ~80-minute
+    run, and DELETE refused any non-terminal job outright -- correctly, since
+    deleting the meta while chunks kept running did not stop the work and did
+    not protect the cap either (round 2 review, finding 2, measured).
+
+    Cancellation is COOPERATIVE and needs no task-id tracking or Celery
+    revoke, both of which are unreliable for work already in flight. Writing
+    the terminal status "cancelled" is enough: redis_store.begin_chunk already
+    refuses to start another chunk for a terminal job, so every chunk still
+    queued returns without naming anything. A chunk already executing finishes
+    that chunk -- bounded by BATCH_CHUNK_SIZE, not by the rest of the job --
+    because nothing can interrupt a running task mid-molecule.
+
+    Idempotent, and refuses to resurrect: cancelling an already-done job
+    leaves it done rather than relabelling a completed result as cancelled.
+    """
+    check_fast_allowed(client_ip(request))
+    meta = _require_complete_meta(job_id)
+    if not _owns(meta, owner_token):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "This job's owner token is required to cancel it. It was "
+                "returned once, when the job was created."
+            ),
+        )
+
+    status = _actual_status(job_id, meta)
+    if status in _TERMINAL_STATUSES:
+        # Already finished, failed or cancelled. Report the truth rather than
+        # overwriting a real outcome with "cancelled".
+        return _status_response(job_id, meta, status)
+
+    redis_store.set_job_status(job_id, "cancelled")
+    redis_store.remove_ip_job(meta.get("ip", "unknown"), job_id)
+    meta = _require_complete_meta(job_id)
+    return _status_response(job_id, meta, "cancelled")
+
+
 @router.delete("/api/jobs/{job_id}")
-def delete_job(request: Request, job_id: str) -> dict[str, str]:
-    # No ownership check exists (or can, without accounts -- see
-    # ratelimit.py's module docstring): a job id appearing in a shared
-    # results.csv URL lets anyone holding it delete that job. A rate limit
-    # is the one thing available short of accounts (round 2 review,
-    # finding 2).
+def delete_job(
+    request: Request,
+    job_id: str,
+    owner_token: str | None = Query(default=None),
+) -> dict[str, str]:
+    """Delete a job. Requires the owner token issued when it was created.
+
+    Previously there was no ownership check at all, and the docstring said so:
+    "a job id appearing in a shared results.csv URL lets anyone holding it
+    delete that job". Sharing a results link silently handed over a delete
+    capability the sharer did not know they were granting (audit item
+    delete-no-ownership).
+
+    Accounts are ruled out by CLAUDE.md, so ownership here is possession of a
+    secret the server issued exactly once, in the JobEnvelope, to whoever
+    submitted the job. A results URL carries the job id and not the token, so
+    sharing results no longer shares control.
+
+    The rate limit stays -- it is what bounds guessing -- but it is no longer
+    the only thing standing in the way.
+    """
     check_fast_allowed(client_ip(request))
     meta = _meta_or_error(job_id)
+    if not _owns(meta, owner_token):
+        # 403, not 404: the caller demonstrably knows a real job id, so
+        # pretending it does not exist tells them nothing they did not
+        # already know and makes a legitimate owner with a mistyped token
+        # much harder to help.
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "This job's owner token is required to delete it. It was "
+                "returned once, when the job was created."
+            ),
+        )
     status = meta.get("status")
-    if status not in ("done", "failed"):
+    if status not in _TERMINAL_STATUSES:
         # Refuse outright, rather than deleting everything but skipping
         # just the slot release: this job's chunks are still running (or
         # queued) somewhere and keep consuming OPSIN regardless of this

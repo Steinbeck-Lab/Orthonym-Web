@@ -112,7 +112,17 @@ There is **no frontend UI for this yet**; it is reachable over the API.
 | `GET /api/jobs/{id}` | Progress |
 | `GET /api/jobs/{id}/results` | Paged rows |
 | `GET /api/jobs/{id}/results.csv` | Streamed CSV of the whole job |
-| `DELETE /api/jobs/{id}` | Discard early |
+| `POST /api/jobs/{id}/cancel` | Stop a running job and free its concurrent slot |
+| `DELETE /api/jobs/{id}` | Discard a finished job |
+
+**Cancel and delete need the job's `owner_token`**, returned once in the response that created
+the job. A results URL carries the job id but not the token, so sharing results does not hand over
+the ability to delete them. Pass it as a query parameter:
+`POST /api/jobs/{id}/cancel?owner_token=...`.
+
+Cancellation is cooperative: chunks not yet started stop immediately, and one already running
+finishes that chunk (at most `BATCH_CHUNK_SIZE` molecules) because a running task cannot be
+interrupted mid-molecule.
 
 Upload size and molecule count **are** profile-dependent: **2,000 molecules / 20 MB** (`small`),
 **10,000 / 50 MB** (`medium`, the default), **50,000 / 200 MB** (`large`).

@@ -88,7 +88,9 @@ def remove_ip_job(ip: str, job_id: str) -> None:
     get_redis().srem(ip_jobs_key(ip), job_id)
 
 
-def create_job(job_id: str, total: int, fmt: str, client_ip: str) -> None:
+def create_job(
+    job_id: str, total: int, fmt: str, client_ip: str, owner_token: str = ""
+) -> None:
     settings = get_settings()
     client = get_redis()
     key = job_meta_key(job_id)
@@ -105,6 +107,10 @@ def create_job(job_id: str, total: int, fmt: str, client_ip: str) -> None:
             "expires": now + settings.JOB_RESULT_TTL_SECONDS,
             "fmt": fmt,
             "ip": client_ip,
+            # Never returned by any read endpoint -- read_job_meta feeds
+            # GET /api/jobs/{id}, and this field must not travel with it.
+            # jobs_api strips it; the check is a constant-time compare there.
+            "owner": owner_token,
         },
     )
     pipe.expire(key, settings.JOB_RESULT_TTL_SECONDS)
@@ -149,7 +155,7 @@ def set_job_status(job_id: str, status: str) -> None:
 # proceed to reopen a job that a moment ago legitimately finished.
 _BEGIN_CHUNK_SCRIPT = """
 local status = redis.call('HGET', KEYS[1], 'status')
-if status == 'done' or status == 'failed' then
+if status == 'done' or status == 'failed' or status == 'cancelled' then
     return 0
 end
 redis.call('HSET', KEYS[1], 'status', 'running')
@@ -169,7 +175,16 @@ def _begin_chunk_script():
 
 def begin_chunk(job_id: str) -> bool:
     """Atomically move a job to "running" for one more chunk, UNLESS it is
-    already terminal ("done"/"failed").
+    already terminal ("done"/"failed"/"cancelled").
+
+    "cancelled" is how cancellation works, and it is why cancellation needed
+    no new machinery: DELETE writes that status, and every chunk that has not
+    yet started finds the job terminal here and returns without doing any
+    naming work. A chunk already running finishes the one it is on -- bounded
+    by BATCH_CHUNK_SIZE, not by the whole job -- because Celery cannot
+    interrupt a running task and revoking one is unreliable. Cooperative,
+    checked at the only point that matters, and it reuses the guard that
+    already existed for redelivery.
 
     task_acks_late=True (celery_app.py) makes chunk redelivery real: a
     chunk whose ack was lost after it finished, or whose worker died just
