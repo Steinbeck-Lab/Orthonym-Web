@@ -855,3 +855,43 @@ def test_an_oversized_json_body_is_rejected_on_translate(monkeypatch):
         "/api/translate", json={"smiles": ["C" * 2_000_000], "best_effort": True}
     )
     assert r.status_code == 413, f"got {r.status_code}; the middleware did not bind"
+
+
+def test_a_job_whose_meta_was_evicted_mid_flight_reports_gone_not_never_existed(
+    redis_client, job_id
+):
+    """CC3-preclose-meta-eviction: reproduced live.
+
+    Write chunk 0, evict the meta hash, then close. _close_job finds no meta,
+    logs "meta hash missing at close" and returns 0 WITHOUT calling
+    assemble_rows -- correctly, since the declared total is gone and
+    completeness cannot be verified. But the rows key is therefore never
+    created, and _meta_or_error's 410-vs-404 decision hinges on that key
+    existing. So the caller was told "No such job" about a job they
+    definitely submitted, while its chunk sat in Redis on a 24-hour TTL.
+
+    Spec section 10 promises 410 Gone, "distinct from never having existed",
+    precisely so a user can tell "your results aged out" from "you have the
+    wrong link". test_jobs_api's existing coverage only exercised eviction
+    AFTER a successful close.
+    """
+    redis_store.create_job(job_id, total=2, fmt="smiles_list", client_ip="::1")
+    redis_store.write_chunk(job_id, 0, [{"index": 0, "input": "CCO", "status": "pin"}])
+    redis_client.delete(redis_store.job_meta_key(job_id))
+
+    tasks._close_job(job_id, n_chunks=1)
+
+    r = TestClient(app).get(f"/api/jobs/{job_id}")
+    assert r.status_code == 410, (
+        f"got {r.status_code}; a job whose meta was evicted before it closed "
+        "is reported as never having existed"
+    )
+
+
+def test_a_job_id_that_never_existed_is_still_a_404(redis_client):
+    """The other half. Widening the 410 test must not turn every unknown id
+    into "expired" -- a user who mistypes a link needs to be told it is
+    wrong, not that their results aged out.
+    """
+    r = TestClient(app).get("/api/jobs/ffffffffffffffffffffffffffffffff")
+    assert r.status_code == 404, f"got {r.status_code}; an unknown id must be 404"

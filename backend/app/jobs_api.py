@@ -368,10 +368,31 @@ def _meta_or_error(job_id: str) -> dict[str, str]:
     meta = redis_store.read_job_meta(job_id)
     if meta is not None:
         return meta
-    # No meta. If rows survive, the meta key aged out: the job existed and
-    # is gone, which is 410, not 404. This is why there is no "expired"
-    # status value -- there is nothing left to report a status from.
-    if redis_store.get_redis().exists(redis_store.job_rows_key(job_id)):
+    # No meta. If any TRACE of the job survives, the meta key aged out: the
+    # job existed and is gone, which is 410, not 404. This is why there is no
+    # "expired" status value -- there is nothing left to report a status from.
+    #
+    # Chunk keys count as a trace, not just the assembled rows key (audit
+    # item CC3-preclose-meta-eviction). If meta is evicted BEFORE the job
+    # closes, _close_job cannot verify completeness and correctly declines to
+    # assemble, so the rows key is never created at all -- and a rows-only
+    # check then reported a job the caller definitely submitted as one that
+    # never existed, while its chunks sat in Redis on a 24-hour TTL. Spec
+    # section 10 promises 410 is "distinct from never having existed"
+    # precisely so a user can tell "your results aged out" from "you have the
+    # wrong link".
+    #
+    # Chunk 0 specifically, rather than a keyspace SCAN: this module never
+    # scans (round 3 review moved worker status off scan_iter for the same
+    # reason), and chunk 0 is written by the first chunk to complete on every
+    # path -- the fast path writes only chunk 0, and a batch always has one.
+    # A job whose chunk 0 alone was evicted while a later chunk survived
+    # still answers 404; that is a narrower window than the one being closed,
+    # and it fails in the same direction as before rather than a new one.
+    store = redis_store.get_redis()
+    if store.exists(redis_store.job_rows_key(job_id)) or store.exists(
+        redis_store.job_chunk_key(job_id, 0)
+    ):
         raise HTTPException(status_code=410, detail="This job has expired")
     raise HTTPException(status_code=404, detail="No such job")
 
