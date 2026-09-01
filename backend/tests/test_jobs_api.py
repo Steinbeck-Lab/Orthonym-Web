@@ -595,9 +595,36 @@ def test_oversize_input_is_413(monkeypatch):
 
 
 def test_delete_removes_the_job(redis_client):
-    job_id = _submit("CCO\n")["job_id"]
-    assert client.delete(f"/api/jobs/{job_id}").status_code == 200
+    envelope = _submit("CCO\n")
+    job_id = envelope["job_id"]
+    r = client.delete(
+        f"/api/jobs/{job_id}", params={"owner_token": envelope["owner_token"]}
+    )
+    assert r.status_code == 200, r.text
     assert client.get(f"/api/jobs/{job_id}").status_code in (404, 410)
+
+
+def test_delete_without_the_owner_token_is_refused(redis_client):
+    """delete-no-ownership: a job id appearing in a shared results.csv URL
+    used to let anyone holding it delete that job, and the endpoint's own
+    docstring said so. The sharer had no idea they were handing over a delete
+    capability.
+
+    Accounts are ruled out, so ownership is possession of a secret the server
+    issued exactly once, in the JobEnvelope, to whoever submitted the job. A
+    results URL carries the id and not the token.
+    """
+    job_id = _submit("CCO\n")["job_id"]
+
+    assert client.delete(f"/api/jobs/{job_id}").status_code == 403
+    assert (
+        client.delete(
+            f"/api/jobs/{job_id}", params={"owner_token": "wrong-token"}
+        ).status_code
+        == 403
+    )
+    # ...and the job is still there, not half-deleted by the refused attempt.
+    assert client.get(f"/api/jobs/{job_id}").status_code == 200
 
 
 def test_depict_returns_an_svg_for_one_molecule():
@@ -701,7 +728,7 @@ def test_an_uploaded_file_can_ask_for_verified_names_only(redis_client, monkeypa
 
     def _capture(ip, molecules, fmt, best_effort):
         seen["best_effort"] = best_effort
-        return "job-be-probe"
+        return "job-be-probe", "tok"
 
     monkeypatch.setattr(jobs_api, "admit_and_dispatch", _capture)
     c = TestClient(app)
@@ -727,7 +754,7 @@ def test_an_uploaded_file_still_defaults_to_best_effort(redis_client, monkeypatc
 
     def _capture(ip, molecules, fmt, best_effort):
         seen["best_effort"] = best_effort
-        return "job-be-probe-2"
+        return "job-be-probe-2", "tok"
 
     monkeypatch.setattr(jobs_api, "admit_and_dispatch", _capture)
     c = TestClient(app)
@@ -895,3 +922,91 @@ def test_a_job_id_that_never_existed_is_still_a_404(redis_client):
     """
     r = TestClient(app).get("/api/jobs/ffffffffffffffffffffffffffffffff")
     assert r.status_code == 404, f"got {r.status_code}; an unknown id must be 404"
+
+
+def test_cancelling_a_job_stops_queued_chunks_from_naming_anything(redis_client, job_id):
+    """job-cancellation: cancellation is cooperative and reuses begin_chunk.
+
+    Celery cannot interrupt a running task, and revoking one already in flight
+    is unreliable, so nothing tries. Writing the terminal status "cancelled"
+    is the whole mechanism: begin_chunk already refuses to start another chunk
+    for a terminal job, so every chunk still queued returns having named
+    nothing. A chunk already executing finishes that chunk -- bounded by
+    BATCH_CHUNK_SIZE, not by the rest of the job.
+
+    Drives redis_store.begin_chunk directly, because that IS the enforcement
+    point; asserting on a task's return value would test Celery's plumbing
+    instead.
+    """
+    redis_store.create_job(job_id, total=100, fmt="smiles_list", client_ip="::1")
+    assert redis_store.begin_chunk(job_id) is True, "a live job must accept chunks"
+
+    redis_store.set_job_status(job_id, "cancelled")
+
+    assert redis_store.begin_chunk(job_id) is False, (
+        "a cancelled job still accepts new chunks, so cancelling it does not "
+        "actually stop the work -- it only relabels it"
+    )
+
+
+def test_cancelling_frees_the_concurrent_slot(redis_client, job_id):
+    """The reason cancellation is worth having at all: a user who submits
+    10,000 molecules by mistake held one of their two concurrent slots for the
+    whole ~80-minute run, with no way out. DELETE refused a non-terminal job
+    outright, and correctly so -- deleting the meta while chunks kept running
+    neither stopped the work nor protected the cap.
+    """
+    ip = "203.0.113.77"
+    envelope = _submit("CCO\nCCC\n")
+    jid, token = envelope["job_id"], envelope["owner_token"]
+    redis_store.set_job_status(jid, "running")
+    redis_client.sadd(redis_store.ip_jobs_key(ip), jid)
+    redis_client.hset(redis_store.job_meta_key(jid), "ip", ip)
+
+    r = client.post(f"/api/jobs/{jid}/cancel", params={"owner_token": token})
+
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "cancelled"
+    assert not redis_client.sismember(redis_store.ip_jobs_key(ip), jid), (
+        "the cancelled job still holds one of this IP's concurrent slots"
+    )
+
+
+def test_cancelling_a_finished_job_does_not_relabel_it(redis_client):
+    """Idempotent, and it must not resurrect or rewrite a real outcome: a job
+    that genuinely completed stays done. Reporting "cancelled" over a
+    completed result would be a lie about what the engine produced.
+    """
+    envelope = _submit("CCO\n")
+    jid, token = envelope["job_id"], envelope["owner_token"]
+    assert client.get(f"/api/jobs/{jid}").json()["status"] == "done"
+
+    r = client.post(f"/api/jobs/{jid}/cancel", params={"owner_token": token})
+
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "done", "a completed job was relabelled cancelled"
+
+
+def test_cancelling_needs_the_owner_token(redis_client):
+    """Same capability as delete, same gate. Otherwise anyone shown a results
+    link could kill the job that produced it.
+    """
+    jid = _submit("CCO\n")["job_id"]
+    assert client.post(f"/api/jobs/{jid}/cancel").status_code == 403
+    assert (
+        client.post(f"/api/jobs/{jid}/cancel", params={"owner_token": "nope"}).status_code
+        == 403
+    )
+
+
+def test_the_status_endpoint_never_leaks_the_owner_token(redis_client):
+    """The token is a capability. It is returned exactly once, in the
+    JobEnvelope, and no read endpoint may hand it back -- otherwise anyone who
+    can poll a job id can delete it, and the ownership check is theatre.
+    """
+    envelope = _submit("CCO\n")
+    jid, token = envelope["job_id"], envelope["owner_token"]
+
+    body = client.get(f"/api/jobs/{jid}").json()
+    assert "owner" not in body and "owner_token" not in body
+    assert token not in str(body)

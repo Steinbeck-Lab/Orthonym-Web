@@ -97,7 +97,10 @@ never `"pin"`).
 `translate_fast` to the `fast` queue and blocks for up to `FAST_PATH_TIMEOUT` (30 s). Above that
 limit, or when the fast path times out, it returns a `JobEnvelope` (`job_id`, `molecule_count`,
 `status`) and the caller polls `GET /api/jobs/{id}` and `.../results`, or streams
-`.../results.csv`. `POST /api/jobs` takes an uploaded `.sdf` / `.mol` / `.csv` (needs a `smiles`
+`.../results.csv`. `POST .../cancel` stops a running job and `DELETE` discards a finished one;
+both require the `owner_token` the JobEnvelope returned once, since a shared results URL carries
+the id but not the token. Cancellation is cooperative — `redis_store.begin_chunk` already refuses
+a terminal job, so writing status `cancelled` is the entire mechanism and no task ids are tracked. `POST /api/jobs` takes an uploaded `.sdf` / `.mol` / `.csv` (needs a `smiles`
 column) / plain SMILES list, up to `MAX_BATCH_SIZE` (10,000) molecules and `MAX_FILE_SIZE_MB`
 (50 MB); `frontend/nginx.conf` sets `client_max_body_size 210m`, and its default of 1 MB would
 otherwise silently cap the advertised limit. Work is chunked (`BATCH_CHUNK_SIZE`, 25) onto the

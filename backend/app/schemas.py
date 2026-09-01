@@ -135,7 +135,11 @@ class ExplainResponse(BaseModel):
     error: Optional[str] = None
 
 
-JobState = Literal["queued", "running", "done", "failed"]
+# "cancelled" is terminal like done/failed: redis_store.begin_chunk refuses to
+# start another chunk for any of the three. There is still deliberately no
+# "expired" -- an expired job's meta key is gone, so there is nothing left to
+# report a status from (see section 10 of the design spec).
+JobState = Literal["queued", "running", "done", "failed", "cancelled"]
 
 
 class BatchRow(BaseModel):
@@ -168,6 +172,12 @@ class JobEnvelope(BaseModel):
     job_id: str
     molecule_count: int
     status: JobState
+    # The ONLY time this is ever returned. Whoever submitted the job holds it;
+    # anyone who is merely shown a results URL does not, which is the whole
+    # point (audit item delete-no-ownership). Without accounts this is the
+    # available notion of ownership: possession of a secret the server issued
+    # once, to the submitter, over the same response.
+    owner_token: str
 
 
 class JobStatusResponse(BaseModel):

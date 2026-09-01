@@ -223,11 +223,14 @@ def translate(request: Request, body: TranslateRequest):
         # used to live inside admit_and_dispatch, strictly after this).
         check_job_allowed(ip)
         molecules = _canonicalize(non_blank, settings.MAX_BATCH_SIZE)
-        job_id = admit_and_dispatch(
+        job_id, owner_token = admit_and_dispatch(
             ip, molecules, "smiles_list", body.best_effort
         )
         return JobEnvelope(
-            job_id=job_id, molecule_count=len(molecules), status="queued"
+            job_id=job_id,
+            molecule_count=len(molecules),
+            status="queued",
+            owner_token=owner_token,
         )
 
     # Crash-loop fix (final review): this branch used to hand raw,
@@ -259,11 +262,14 @@ def translate(request: Request, body: TranslateRequest):
         # `molecules` is already canonicalized above -- no need to pay for
         # it twice.
         check_job_allowed(ip)
-        job_id = admit_and_dispatch(
+        job_id, owner_token = admit_and_dispatch(
             ip, molecules, "smiles_list", body.best_effort
         )
         return JobEnvelope(
-            job_id=job_id, molecule_count=len(molecules), status="queued"
+            job_id=job_id,
+            molecule_count=len(molecules),
+            status="queued",
+            owner_token=owner_token,
         )
     return TranslateResponse(results=[ResultItem.model_validate(r) for r in results])
 
