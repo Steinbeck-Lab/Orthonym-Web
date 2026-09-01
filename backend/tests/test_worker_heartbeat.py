@@ -95,3 +95,81 @@ def test_heartbeat_survives_a_write_failure_and_keeps_beating(monkeypatch):
     finally:
         stop.set()
         thread.join(timeout=2)
+
+
+def test_a_redis_blip_at_boot_does_not_stop_the_heartbeat_from_starting(monkeypatch):
+    """C1-secondary: the boot stamp must never be able to prevent the
+    heartbeat that would heal it.
+
+    _start_child_jvm called record_worker_opsin_status() UNGUARDED and only
+    reached _start_status_heartbeat() afterwards. A Redis error at child boot
+    -- a `docker compose up` where Redis is still warming is the realistic
+    case -- therefore raised out of the initializer BEFORE the heartbeat
+    existed. Celery 5.6.3 catches that raise inside Signal.send and discards
+    it, so the child boots and looks fine, but it never stamps and never
+    beats: it is invisible to any_worker_has_opsin() forever. If every child
+    lands in that window, /api/health reports DEGRADED and every naming
+    endpoint 503s on a perfectly healthy deployment, with no self-recovery.
+
+    The heartbeat already tolerates a failed write and retries (see
+    test_heartbeat_survives_a_write_failure_and_keeps_beating), so starting
+    it is exactly the recovery path -- which is why the one-shot stamp must
+    not be able to skip it.
+    """
+    import app.celery_app as celery_app
+
+    calls: list[tuple[int, bool]] = []
+
+    def _boom(pid, ok):
+        calls.append((pid, ok))
+        raise ConnectionError("Redis is still warming up")
+
+    started: list[int] = []
+
+    def _fake_heartbeat(pid, ok, stop_event=None):
+        started.append(pid)
+        return threading.Thread(target=lambda: None)
+
+    monkeypatch.setattr(celery_app, "_jvm_is_started", lambda: False)
+    monkeypatch.setattr(redis_store, "record_worker_opsin_status", _boom)
+    monkeypatch.setattr(celery_app, "_start_status_heartbeat", _fake_heartbeat)
+
+    # Must not raise: "never raise from here" is the initializer's contract.
+    celery_app._start_child_jvm()
+
+    assert calls, "the boot stamp was never attempted"
+    assert started, (
+        "the heartbeat never started, so this child can never re-stamp and is "
+        "invisible to any_worker_has_opsin() for the life of the process"
+    )
+
+
+def test_a_redis_blip_at_boot_does_not_stop_the_heartbeat_in_the_inherited_jvm_branch(
+    monkeypatch,
+):
+    """Same defect, the other branch. _start_child_jvm has two paths that
+    stamp-then-start-a-heartbeat, and the inherited-JVM path returns early --
+    so a fix applied only to the healthy path leaves this one broken, and no
+    test that exercised only the healthy path would notice.
+    """
+    import app.celery_app as celery_app
+
+    def _boom(pid, ok):
+        raise ConnectionError("Redis is still warming up")
+
+    started: list[int] = []
+
+    def _fake_heartbeat(pid, ok, stop_event=None):
+        started.append(pid)
+        return threading.Thread(target=lambda: None)
+
+    monkeypatch.setattr(celery_app, "_jvm_is_started", lambda: True)
+    monkeypatch.setattr(redis_store, "record_worker_opsin_status", _boom)
+    monkeypatch.setattr(celery_app, "_start_status_heartbeat", _fake_heartbeat)
+
+    celery_app._start_child_jvm()
+
+    assert started, (
+        "the inherited-JVM branch skipped its heartbeat when the boot stamp "
+        "raised; that child is invisible to any_worker_has_opsin() forever"
+    )
