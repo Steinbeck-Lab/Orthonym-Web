@@ -124,6 +124,62 @@ def _assert_parent_has_no_jvm(**_kwargs) -> None:
     )
 
 
+# A name whose OPSIN answer is fixed, tiny and unambiguous. Measured at
+# 0.19 ms (mean over 200 calls), so probing every _WORKER_STATUS_TTL // 3
+# seconds costs nothing worth counting.
+_LIVENESS_NAME = "ethanol"
+_LIVENESS_EXPECTED = "CCO"
+
+
+def _opsin_liveness_probe() -> bool:
+    """Is OPSIN answering correctly RIGHT NOW, in this process?
+
+    Final review report, C1-residual. The heartbeat used to re-stamp the
+    verdict computed once at boot, so a child whose JVM died without the
+    process dying kept advertising health: any_worker_has_opsin() stayed True,
+    require_a_live_jvm() admitted the request, and a name that should have
+    read "fallback" shipped labelled "pin". C3's cache guard stops that
+    persisting for 7 days; it does not stop it being served.
+
+    Neither opsin_available() nor opsin_decompose.self_check() can substitute
+    here -- both cache their answer for the life of the process
+    (openstout.jvm_bridge._ensure_jvm keys its cached _STATE on the pid), so
+    calling either per tick replays the boot decision exactly like the old
+    code did. Only a real call through the JVM observes a JVM that has since
+    died.
+
+    Asserts on the ANSWER, not merely on the absence of an exception: a JVM
+    that responds with nonsense is dead for our purposes, because the
+    round-trip check it backs would then be comparing against garbage.
+    Canonicalised through RDKit before comparing so an equivalent-but-
+    differently-written SMILES (OPSIN returns "C(C)O" for ethanol) is not
+    mistaken for a failure.
+
+    Never raises: any failure means False, the fail-closed direction, since a
+    worker that cannot answer must not be counted as having a usable OPSIN.
+    """
+    try:
+        from rdkit import Chem
+
+        from app.openstout_service import opsin_parse
+
+        raw = opsin_parse(_LIVENESS_NAME)
+        if not raw:
+            return False
+        mol = Chem.MolFromSmiles(raw)
+        if mol is None:
+            return False
+        return Chem.MolToSmiles(mol) == Chem.MolToSmiles(
+            Chem.MolFromSmiles(_LIVENESS_EXPECTED)
+        )
+    except Exception:
+        logger.exception(
+            "Celery child: OPSIN liveness probe raised; treating this worker "
+            "as having no usable OPSIN."
+        )
+        return False
+
+
 def _start_status_heartbeat(
     pid: int, ok: bool, stop_event: threading.Event | None = None
 ) -> threading.Thread:
@@ -192,7 +248,13 @@ def _start_status_heartbeat(
         # and the loop exits -- a sleep that a test can cut short.
         while not event.wait(interval):
             try:
-                record_worker_opsin_status(pid, ok=ok)
+                # Probe, not replay. `ok` is the BOOT verdict and is used
+                # only as a ceiling: a child that never had a usable OPSIN
+                # (the inherited-JVM branch) must not probe its way to
+                # healthy. Everything else is decided live, so a JVM that
+                # dies mid-life is noticed within one interval instead of
+                # never (C1-residual).
+                record_worker_opsin_status(pid, ok=ok and _opsin_liveness_probe())
             except Exception:
                 logger.exception(
                     "Celery child %s: heartbeat failed to re-stamp its "
