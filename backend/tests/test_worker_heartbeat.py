@@ -173,3 +173,84 @@ def test_a_redis_blip_at_boot_does_not_stop_the_heartbeat_in_the_inherited_jvm_b
         "the inherited-JVM branch skipped its heartbeat when the boot stamp "
         "raised; that child is invisible to any_worker_has_opsin() forever"
     )
+
+
+def test_the_heartbeat_probes_opsin_rather_than_replaying_the_boot_verdict(monkeypatch):
+    """C1-residual: the heartbeat re-stamped the value computed at boot, so a
+    worker whose JVM died without the process dying kept advertising health.
+
+    any_worker_has_opsin() stayed True, require_a_live_jvm() admitted the
+    request, and a name that should have read "fallback" shipped labelled
+    "pin". C3's cache guard stops that persisting for 7 days; it does not
+    stop it being served once.
+
+    A real probe costs 0.19 ms (measured, mean over 200 calls), so running one
+    every _WORKER_STATUS_TTL // 3 seconds is free. opsin_available() cannot
+    substitute: orthonym.jvm_bridge._ensure_jvm caches its answer per
+    process, so it replays the boot decision exactly like the old code did.
+    """
+    import app.celery_app as celery_app
+
+    monkeypatch.setattr(redis_store, "_WORKER_STATUS_TTL", 3)
+    alive = {"ok": True}
+    monkeypatch.setattr(celery_app, "_opsin_liveness_probe", lambda: alive["ok"])
+
+    stamps: list[bool] = []
+    monkeypatch.setattr(
+        redis_store, "record_worker_opsin_status", lambda pid, ok: stamps.append(ok)
+    )
+
+    stop = threading.Event()
+    celery_app._start_status_heartbeat(999901, ok=True, stop_event=stop)
+    try:
+        deadline = time.time() + 6
+        while not stamps and time.time() < deadline:
+            time.sleep(0.05)
+        assert stamps, "the heartbeat never stamped at all"
+        assert stamps[-1] is True, "a healthy worker stopped reporting healthy"
+
+        alive["ok"] = False  # the JVM dies; the process does not
+        before = len(stamps)
+        deadline = time.time() + 6
+        while len(stamps) == before and time.time() < deadline:
+            time.sleep(0.05)
+    finally:
+        stop.set()
+
+    assert len(stamps) > before, "the heartbeat stopped beating"
+    assert stamps[-1] is False, (
+        "the heartbeat is still replaying its boot verdict; a worker whose JVM "
+        "died keeps advertising health and will serve an unverified name "
+        "labelled as a verified one"
+    )
+
+
+def test_the_liveness_probe_rejects_a_jvm_that_answers_wrongly(monkeypatch):
+    """A JVM that responds but returns nonsense is dead for our purposes: the
+    round-trip check it backs would compare against garbage. The probe must
+    assert on the ANSWER, not merely on the absence of an exception.
+    """
+    import app.celery_app as celery_app
+    from app import orthonym_service
+
+    monkeypatch.setattr(orthonym_service, "opsin_parse", lambda name: "not-a-smiles!!")
+    assert celery_app._opsin_liveness_probe() is False
+
+    monkeypatch.setattr(orthonym_service, "opsin_parse", lambda name: None)
+    assert celery_app._opsin_liveness_probe() is False
+
+    def _boom(name):
+        raise RuntimeError("JVM is gone")
+
+    monkeypatch.setattr(orthonym_service, "opsin_parse", _boom)
+    assert celery_app._opsin_liveness_probe() is False, "a raising probe must fail closed"
+
+
+def test_the_liveness_probe_passes_against_a_real_jvm():
+    """Vacuity guard: with OPSIN genuinely up the probe must return True, or
+    the fix above is just a permanent outage that happens to pass its own
+    negative tests.
+    """
+    import app.celery_app as celery_app
+
+    assert celery_app._opsin_liveness_probe() is True
