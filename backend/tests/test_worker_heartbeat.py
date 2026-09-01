@@ -41,11 +41,18 @@ def test_heartbeat_keeps_a_healthy_deployment_healthy_past_the_ttl(
     thread = _start_status_heartbeat(pid, ok=True, stop_event=stop)
     assert thread.daemon is True, "a non-daemon heartbeat could block worker shutdown"
     try:
-        # Longer than the shortened TTL (3s). Measured in the review
-        # against the real 120s TTL: any_worker_has_opsin() was True at
-        # 119s and False at 121s with nothing re-stamping it -- this is
-        # the same gap, scaled down.
-        time.sleep(3.5)
+        # Margin must exceed the TTL by MORE than one second, not just
+        # "longer than the TTL". Both the stamp and the read floor their
+        # timestamp with int(time.time()), so the integer difference
+        # between them is off by one depending purely on sub-second
+        # alignment -- a margin of TTL + 1 (e.g. sleep(3.5) against a
+        # TTL of 3) satisfies `<= TTL` about half the time and passes
+        # anyway, which is exactly how this test shipped green while
+        # guarding nothing (confirmed: neutering the heartbeat entirely
+        # still passed 7/12 jittered runs at that margin). TTL + 2 removes
+        # the truncation error instead of gambling on it. Do not tighten
+        # this back to "just over the TTL".
+        time.sleep(5)
 
         assert redis_store.any_worker_has_opsin() is True, (
             "the worker status aged out even though the heartbeat should "
