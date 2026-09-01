@@ -138,6 +138,30 @@ def test_jobs_503_does_not_burn_the_hourly_quota(redis_client, no_worker_opsin):
     )
 
 
+def test_jobs_over_http_enforces_the_fast_per_minute_cap(
+    redis_client, monkeypatch
+):
+    """Round 5 review, finding 1: round 4's fix moved require_a_live_jvm
+    ahead of check_job_allowed in create_job, which correctly stopped a
+    JVM outage from burning the caller's hourly job quota (see
+    test_jobs_503_does_not_burn_the_hourly_quota, above) -- but left
+    check_job_allowed as the only limiter on this endpoint at all, so
+    require_a_live_jvm became reachable an unbounded number of times per
+    minute. /api/translate already gates the same way (check_fast_allowed
+    first, then require_a_live_jvm) -- POST /api/jobs now matches that
+    shape, same as the three explain/iupac endpoints below.
+    """
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(
+        get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 1
+    )
+    first = client.post("/api/jobs", json={"text": "CCO\n"})
+    assert first.status_code == 200
+    second = client.post("/api/jobs", json={"text": "CCC\n"})
+    assert second.status_code == 429
+
+
 def test_jobs_checks_the_job_cap_before_parsing(redis_client, monkeypatch):
     """Round 4 review, note 3: nothing protected finding 1's ORDERING
     claim itself -- a future refactor could silently move
