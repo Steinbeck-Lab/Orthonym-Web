@@ -346,6 +346,34 @@ def mark_job_failed(request, exc, traceback, job_id: str) -> None:
         redis_store.remove_ip_job(meta.get("ip", "unknown"), job_id)
 
 
+def _fast_error_item(smiles: str, message: str) -> dict:
+    """An error row for the FAST path, shaped as a ResultItem.
+
+    NOT _error_row: that builds a BatchRow, whose `smiles` is Optional and
+    which carries none of ResultItem's fields. main.py validates every row
+    translate_fast returns with ResultItem.model_validate, so a BatchRow here
+    raises a pydantic ValidationError and 500s the whole request -- which is
+    exactly the failure the per-molecule guard exists to prevent, arriving by
+    a different route.
+
+    `smiles` echoes the input back rather than being None, matching what
+    translate_one itself does for an unparseable string and what this same
+    loop does for an already-failed parse.
+    """
+    return ResultItem(
+        smiles=smiles,
+        status="error",
+        name=None,
+        tier=None,
+        formula=None,
+        limit_code=None,
+        error=message,
+        depiction_svg=None,
+        roundtrip_smiles=None,
+        roundtrip_match=None,
+    ).model_dump()
+
+
 @celery_app.task(name="app.tasks.translate_fast")
 def translate_fast(prepared: list[dict], best_effort: bool) -> list[dict]:
     """The single-molecule path: full ResultItems, picture included.
@@ -419,14 +447,7 @@ def translate_fast(prepared: list[dict], best_effort: bool) -> list[dict]:
             # per-row error. The last upstream tier rename made classify()
             # raise on live rows; the next one will too.
             logger.exception("Naming failed for %s", smiles)
-            rows.append(
-                _error_row(
-                    item["index"],
-                    item["raw_input"],
-                    item["input_id"],
-                    f"Naming failed: {exc}",
-                )
-            )
+            rows.append(_fast_error_item(smiles, f"Naming failed: {exc}"))
             continue
         if result_item.depiction_svg is None and result_item.status in (
             "pin",

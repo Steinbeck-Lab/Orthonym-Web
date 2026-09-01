@@ -85,6 +85,8 @@ EXAMPLES = [
 # this same process.
 logging.basicConfig(level=logging.INFO)
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="Orthonym backend")
 
 app.add_middleware(
@@ -250,9 +252,10 @@ def translate(request: Request, body: TranslateRequest):
     molecules = _canonicalize(non_blank, settings.MAX_BATCH_SIZE)
     prepared = prepared_payload(molecules)
     try:
-        results = translate_fast.apply_async(
+        async_result = translate_fast.apply_async(
             args=[prepared, body.best_effort], queue="fast"
-        ).get(timeout=settings.FAST_PATH_TIMEOUT)
+        )
+        results = async_result.get(timeout=settings.FAST_PATH_TIMEOUT)
     except CeleryTimeoutError:
         # translate_fast itself is NOT revoked -- the caller polls the job
         # below instead (round 1 review, Critical 4). Its eventual result,
@@ -271,6 +274,17 @@ def translate(request: Request, body: TranslateRequest):
             status="queued",
             owner_token=owner_token,
         )
+    # Forget the backend entry. Celery's redis backend SETEXs every result for
+    # JOB_RESULT_TTL_SECONDS (24 h) and .get() never removes it -- and
+    # translate_fast's results are full ResultItems, depiction_svg included.
+    # Measured data-URI sizes are 11.6 KB (aspirin) to 46.4 KB (a taxane), so
+    # leaving them there quietly reinstates most of the 7-day cache bloat that
+    # excluding the picture from name_cache was meant to remove. Nobody reads a
+    # fast-path result twice: the caller is holding it.
+    try:
+        async_result.forget()
+    except Exception:  # noqa: BLE001 - cleanup must not fail a served request
+        logger.debug("Could not forget fast-path result", exc_info=True)
     return TranslateResponse(results=[ResultItem.model_validate(r) for r in results])
 
 

@@ -12,6 +12,7 @@ import hmac
 import io
 import logging
 import secrets
+import time
 import uuid
 
 from celery.exceptions import TimeoutError as CeleryTimeoutError
@@ -25,6 +26,7 @@ from fastapi import (
     Response,
     UploadFile,
 )
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from rdkit import Chem
@@ -68,6 +70,10 @@ from app.tasks import (
 )
 
 logger = logging.getLogger(__name__)
+
+# How often to ask whether a worker has picked the parse up. Small enough that
+# a listening worker is noticed almost immediately, large enough not to spin.
+_PARSE_POLL_SECONDS = 0.05
 
 router = APIRouter()
 
@@ -164,83 +170,109 @@ async def _read_input(
     return data, payload.best_effort
 
 
+def _raise_for_parse_outcome(outcome: dict) -> None:
+    """Turn parse_input's error code into the HTTP status it means.
+
+    ONE mapping, used by both the worker path and the in-process fallback --
+    they used to carry a copy each, with byte-identical detail strings, and an
+    unrecognised code fell through to `outcome["molecules"]` and 500'd instead
+    of returning a 4xx.
+    """
+    error = outcome["error"]
+    if error is None:
+        return
+    fmt = outcome["fmt"]
+    if error == "too_many":
+        raise HTTPException(
+            status_code=413,
+            detail=f"Input exceeds the {outcome['limit']}-molecule limit",
+        )
+    if error == "unreadable":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not read this {fmt}: {outcome['detail']}",
+        )
+    if error == "empty":
+        raise HTTPException(
+            status_code=400, detail=f"No molecules found in this {fmt} input"
+        )
+    # An error code this function does not know is a bug, not a bad upload --
+    # but the caller still gets an honest 4xx rather than a stack trace.
+    logger.error("parse_input returned an unknown error code %r", error)
+    raise HTTPException(status_code=400, detail=f"Could not read this {fmt}")
+
+
 def _parse_or_400(data: bytes, max_molecules: int):
     """Parse an uploaded body in a WORKER, but block for the answer.
 
     Spec section 13a / audit item parse-cost-aggregate. RDKit does not release
     the GIL, so parsing here froze every other request on this web process for
-    the duration. Measured: 10,000 short SMILES parse in 0.14 s, but 1,000 at
-    MAX_MOLECULE_SMILES_LENGTH take 29.1 s -- so a full 10,000-molecule upload
-    of large molecules is roughly 290 s of GIL-held CPU from a single request
-    well inside its quota. The molecule-count caps never bounded it, because
-    they count molecules and the cost is in their size.
+    the duration. Measured: 10,000 short SMILES parse in 0.14 s, but cost
+    scales with molecule SIZE -- at MAX_MOLECULE_SMILES_LENGTH it is 30.7 ms
+    EACH, so 10,000 of them is ~307 s of GIL-held CPU from a single request
+    well inside its quota. The molecule-count caps never bounded it.
 
     Blocking rather than returning a job envelope is the point: the contract
-    is unchanged, so a malformed file still gets a synchronous 400 that names
-    the problem, instead of being accepted and failing asynchronously with
-    nowhere to report why. The web process waits on I/O and releases the GIL;
-    only the CPU moves.
+    is unchanged, so a malformed file still gets a synchronous 400 naming the
+    problem instead of being accepted and failing asynchronously with nowhere
+    to report why.
 
-    Falls back to parsing in-process if no worker answers within
-    PARSE_TIMEOUT. That is the conservative direction -- a valid upload must
-    not 503 because the batch queue is idle -- and it is the honest limit of
-    this change: the CPU moves whenever a worker is available, and this is
-    never worse than the previous behaviour when one is not.
+    The timeout asks "is a worker LISTENING", not "has it finished". Waiting
+    on completion was tried and is wrong: at 30.7 ms/molecule the crossover is
+    ~977 molecules, so every upload above that timed out, got re-parsed in the
+    web process anyway, AND left the abandoned worker task parsing the same
+    bytes -- strictly worse than not offloading at all, in exactly the case
+    the offload exists for. task_track_started is already on, so the started
+    state is the signal; once a worker has it, we wait as long as it needs.
     """
     settings = get_settings()
+    async_result = parse_input.apply_async(args=[data, max_molecules], queue="batch")
     try:
-        outcome = parse_input.apply_async(
-            args=[data, max_molecules], queue="batch"
-        ).get(timeout=settings.PARSE_TIMEOUT)
-    except CeleryTimeoutError:
-        logger.warning(
-            "No worker parsed this upload within %ss; falling back to parsing "
-            "in the web process. This blocks other requests -- check the batch "
-            "queue.",
-            settings.PARSE_TIMEOUT,
-        )
-        return _parse_or_400_inline(data, max_molecules)
+        if not _worker_picked_it_up(async_result, settings.PARSE_TIMEOUT):
+            # Nobody is listening. Revoke so a worker that wakes later does
+            # not redo work we are about to do here, then parse in-process --
+            # today's behaviour, so this is never worse than before.
+            async_result.revoke()
+            logger.warning(
+                "No worker accepted this upload within %ss; parsing it in the "
+                "web process. This blocks other requests -- check the batch queue.",
+                settings.PARSE_TIMEOUT,
+            )
+            outcome = parse_input.run(data, max_molecules)
+        else:
+            outcome = async_result.get()
+    finally:
+        # Celery's redis backend SETEXs every result for JOB_RESULT_TTL_SECONDS
+        # (24 h) and .get() never removes it. Measured: 1.41 MB per realistic
+        # 10,000-molecule upload, 40.8 MB at max molecule length -- unread, in
+        # a 2 GB Redis, competing for eviction with job rows and the 7-day
+        # name cache. Nobody reads a parse result twice.
+        try:
+            async_result.forget()
+        except Exception:  # noqa: BLE001 - cleanup must not fail a good request
+            logger.debug("Could not forget parse result", exc_info=True)
 
-    fmt = InputFormat(outcome["fmt"])
-    if outcome["error"] == "too_many":
-        raise HTTPException(
-            status_code=413,
-            detail=f"Input exceeds the {outcome['limit']}-molecule limit",
-        )
-    if outcome["error"] == "unreadable":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Could not read this {fmt.value}: {outcome['detail']}",
-        )
-    if outcome["error"] == "empty":
-        raise HTTPException(
-            status_code=400,
-            detail=f"No molecules found in this {fmt.value} input",
-        )
-    return fmt, [ParsedMolecule(**m) for m in outcome["molecules"]]
+    _raise_for_parse_outcome(outcome)
+    return InputFormat(outcome["fmt"]), [
+        ParsedMolecule(**m) for m in outcome["molecules"]
+    ]
 
 
-def _parse_or_400_inline(data: bytes, max_molecules: int):
-    """The original in-process parse. Kept as the fallback above, and as the
-    single definition of what each failure maps to."""
-    fmt = sniff(data)
-    try:
-        molecules = parse(data, fmt, max_molecules)
-    except TooManyMolecules as exc:
-        raise HTTPException(
-            status_code=413,
-            detail=f"Input exceeds the {exc.limit}-molecule limit",
-        ) from exc
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400, detail=f"Could not read this {fmt.value}: {exc}"
-        ) from exc
-    if not molecules:
-        raise HTTPException(
-            status_code=400,
-            detail=f"No molecules found in this {fmt.value} input",
-        )
-    return fmt, molecules
+def _worker_picked_it_up(async_result, timeout: int) -> bool:
+    """Has a worker actually STARTED this task, within `timeout` seconds?
+
+    This is the question a completion timeout cannot answer, and getting it
+    wrong is what made the first version of the offload counter-productive
+    above ~977 molecules. celery_app sets task_track_started, so a worker
+    stamps STARTED when it picks the task up; SUCCESS covers a task that
+    finished before the first poll.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if async_result.state in ("STARTED", "SUCCESS", "FAILURE"):
+            return True
+        time.sleep(_PARSE_POLL_SECONDS)
+    return False
 
 
 def prepared_payload(molecules) -> list[dict]:
@@ -436,7 +468,14 @@ async def create_job(
     check_job_allowed(ip)
 
     data, best_effort = await _read_input(request, file, best_effort)
-    fmt, molecules = _parse_or_400(data, settings.MAX_BATCH_SIZE)
+    # run_in_threadpool: create_job is `async def`, so calling the blocking
+    # parse directly would hold the asyncio event loop for its whole duration
+    # -- nothing else on that loop runs, including uvicorn reading other
+    # request bodies. The wait is now I/O (a worker's answer) rather than
+    # GIL-held RDKit, but blocking the loop is just as total either way.
+    fmt, molecules = await run_in_threadpool(
+        _parse_or_400, data, settings.MAX_BATCH_SIZE
+    )
 
     job_id, owner_token = admit_and_dispatch(ip, molecules, fmt.value, best_effort)
     return JobEnvelope(
