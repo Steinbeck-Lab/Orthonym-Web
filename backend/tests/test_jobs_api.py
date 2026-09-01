@@ -666,3 +666,62 @@ def test_the_fast_job_path_attaches_an_errback_like_the_batch_path_does(
         "translate_job_inline leaves the job 'running' and its slot held"
     )
     assert errback.task == "app.tasks.mark_job_failed"
+
+
+def test_an_uploaded_file_can_ask_for_verified_names_only(redis_client, monkeypatch):
+    """upload-forces-best-effort: the file branch of _read_input returned a
+    hardcoded True, while the JSON branch honoured the caller.
+
+    best_effort=False is the caller saying "give me only names OPSIN
+    round-trip verified; abstain rather than guess". A file uploader could
+    not say it at all -- no multipart field existed -- so they silently got
+    OPSIN-unverified names in results.csv with nothing recording that their
+    request had been overridden. PRODUCT.md principle 3 ("PIN-vs-fallback-vs-
+    best-effort status must be visible wherever a name appears") failing at
+    the request level rather than the display level.
+
+    Asserts on what reaches admit_and_dispatch, because whether any
+    particular molecule then degrades to abstain depends on the engine, and
+    this is a plumbing defect, not an engine one.
+    """
+    seen: dict = {}
+
+    def _capture(ip, molecules, fmt, best_effort):
+        seen["best_effort"] = best_effort
+        return "job-be-probe"
+
+    monkeypatch.setattr(jobs_api, "admit_and_dispatch", _capture)
+    c = TestClient(app)
+    r = c.post(
+        "/api/jobs",
+        files={"file": ("in.smi", b"CCO\nCCC\n", "chemical/x-daylight-smiles")},
+        data={"best_effort": "false"},
+    )
+
+    assert r.status_code == 200, r.text
+    assert seen.get("best_effort") is False, (
+        "an uploaded file cannot ask for verified-only names; the file branch "
+        "forces best_effort=True regardless of what the caller sent"
+    )
+
+
+def test_an_uploaded_file_still_defaults_to_best_effort(redis_client, monkeypatch):
+    """The good-case half: adding the override must not change the default
+    for every existing caller, who sends no such field. TextPayload's own
+    default is True, so the two branches have to agree.
+    """
+    seen: dict = {}
+
+    def _capture(ip, molecules, fmt, best_effort):
+        seen["best_effort"] = best_effort
+        return "job-be-probe-2"
+
+    monkeypatch.setattr(jobs_api, "admit_and_dispatch", _capture)
+    c = TestClient(app)
+    r = c.post(
+        "/api/jobs",
+        files={"file": ("in.smi", b"CCO\n", "chemical/x-daylight-smiles")},
+    )
+
+    assert r.status_code == 200, r.text
+    assert seen.get("best_effort") is True, "the default changed for existing callers"
