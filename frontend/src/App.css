@@ -957,98 +957,153 @@ input.field__control {
   background: linear-gradient(90deg, transparent, var(--accent-line), transparent);
 }
 
+/* Three parts on one line: copyright, credit pill, back-to-top. The pill is
+   centred against the SHELL, not against whatever the copyright happens to
+   measure, so it does not drift when that text changes length. */
 .site-footer__inner {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-xl);
-  padding-block: clamp(var(--s-xl), 5vw, var(--s-xxl));
-}
-
-@media (min-width: 800px) {
-  .site-footer__inner {
-    grid-template-columns: minmax(0, 1.6fr) repeat(2, minmax(0, 1fr));
-    gap: var(--s-xxl);
-  }
-}
-
-.site-footer__brand {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-md);
-}
-
-.site-footer__tagline {
-  max-width: 42ch;
-  font-family: var(--font-body);
-  font-size: var(--t-body-sm);
-  line-height: 1.5;
-  color: var(--muted);
-}
-
-.site-footer__col {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-sm);
-}
-
-.site-footer__col-title {
-  font-family: var(--font-mono);
-  font-size: var(--t-caption);
-  line-height: 1.4;
-  letter-spacing: var(--track-caption);
-  text-transform: uppercase;
-  color: var(--muted-soft);
-}
-
-.site-footer__link {
-  width: fit-content;
-  font-family: var(--font-body);
-  font-size: var(--t-body-sm);
-  line-height: 1.5;
-  color: var(--body);
-  text-decoration: none;
-  transition: color 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.site-footer__link:hover {
-  color: var(--accent);
-}
-
-.site-footer__base {
-  display: flex;
-  flex-wrap: wrap;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--s-sm) var(--s-lg);
-  padding-block: var(--s-lg);
-  border-top: 1px solid var(--hairline);
+  gap: var(--gap);
+  padding-block: calc(var(--gap) * 1.5);
 }
 
-.site-footer__copy,
-.site-footer__credit {
+.site-footer__copyright {
+  margin: 0;
   font-family: var(--font-mono);
-  font-size: var(--t-caption);
-  line-height: 1.5;
-  letter-spacing: var(--track-caption);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
 }
 
-.site-footer__coffee {
-  width: 15px;
-  height: 15px;
+/* The credit, as a floating pill — the one place the footer lifts, matching
+   the header/footer glass treatment DESIGN.md already establishes. */
+.credit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.5ch;
+  margin: 0;
+  padding: 0.55rem 1.1rem;
+  border-radius: 999px;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--card-shadow);
+  font-size: 0.82rem;
+  color: var(--ink);
+}
+
+.credit__lead {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* The single accent in this footer, and the reason there is no other. */
+.credit__cup {
+  width: 1.05rem;
+  height: 1.05rem;
   color: var(--accent);
-  vertical-align: -0.22em;
+  flex: none;
 }
 
-.site-footer__credit a {
-  color: inherit;
+.credit__who {
+  font-weight: 700;
+  color: var(--ink);
   text-decoration: none;
-  border-bottom: 1px solid var(--hairline-strong);
+  border-bottom: 1px solid transparent;
 }
 
-.site-footer__credit a:hover {
+.credit__who:hover {
   color: var(--accent);
   border-bottom-color: var(--accent);
 }
 
+.credit__x {
+  color: var(--muted);
+  padding-inline: 0.15ch;
+}
+
+.to-top {
+  justify-self: end;
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 50%;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--card-shadow);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 120ms ease, transform 120ms ease;
+}
+
+.to-top svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.to-top:hover {
+  color: var(--accent);
+  transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .to-top {
+    transition: color 120ms ease;
+  }
+  .to-top:hover {
+    transform: none;
+  }
+}
+
+/* Below the shell's narrow breakpoint the three-column line stops fitting:
+   stack it and let the pill sit on its own row rather than squeezing. */
+@media (max-width: 720px) {
+  .site-footer__inner {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+  .to-top {
+    justify-self: center;
+  }
+}
+
+
+/* The Learn/Expert switch, in the output card's head. It sits apart from the
+   Input tabs deliberately: they control different cards (what goes in vs how
+   the result reads), and merging them would read as one four-way control. */
+.explain-level {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap);
+  border: 0;
+  margin: 0 0 var(--gap);
+  padding: 0;
+}
+
+.explain-level__legend {
+  float: left;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0;
+  margin-right: var(--gap);
+}
+
+/* The tier and its round-trip proof, shown under a decomposed name. Inherits
+   tile__state-label / tile__roundtrip so the confidence grammar is identical
+   to a Translate tile -- the same verdict must not look different here. */
+.confidence-report {
+  margin-top: var(--gap);
+  padding-top: var(--gap);
+  border-top: 1px solid var(--hairline);
+}

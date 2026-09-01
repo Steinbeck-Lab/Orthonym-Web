@@ -23,11 +23,27 @@ const READY_TIMEOUT_MS = 20000
  * "Translate"/"Name it" button click) -- it returns null/undefined if the
  * editor is not actually ready yet, which each page reports in its own words.
  */
-export function useKetcher() {
+export function useKetcher({ enabled = true } = {}) {
   const iframeRef = useRef(null)
   const [editorState, setEditorState] = useState('loading') // 'loading' | 'ready' | 'error'
 
+  // `enabled` gates the readiness clock, and it exists because the merged
+  // /explain page mounts the iframe only when the Draw tab is chosen. Armed
+  // unconditionally, the 20 s timeout starts when the PAGE mounts, so anyone
+  // who picks Draw more than 20 s after arriving finds the editor already
+  // declared broken -- with no iframe having ever existed to break. Seen in a
+  // real browser, not reasoned about: the panel read "The drawing area did
+  // not load" while /standalone/index.html was serving 200.
+  //
+  // Defaults true so a caller that always renders the iframe needs no change.
   useEffect(() => {
+    if (!enabled) {
+      // Back to 'loading' so re-entering the tab starts a fresh handshake
+      // rather than inheriting a verdict from a previous visit.
+      setEditorState('loading')
+      return undefined
+    }
+
     function handleMessage(event) {
       if (event.data && event.data.eventType === 'init') {
         setEditorState('ready')
@@ -43,7 +59,7 @@ export function useKetcher() {
       window.removeEventListener('message', handleMessage)
       clearTimeout(timeoutId)
     }
-  }, [])
+  }, [enabled])
 
   function handleFrameLoad() {
     // Belt-and-suspenders: if `ketcher` is already attached by the time the
