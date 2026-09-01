@@ -16,7 +16,7 @@ from celery.exceptions import SoftTimeLimitExceeded
 from app import name_cache, redis_store
 from app.celery_app import celery_app
 from app.orthonym_service import translate_one
-from app.schemas import BatchRow
+from app.schemas import BatchRow, ResultItem
 
 logger = logging.getLogger(__name__)
 
@@ -346,37 +346,72 @@ def mark_job_failed(request, exc, traceback, job_id: str) -> None:
 
 
 @celery_app.task(name="app.tasks.translate_fast")
-def translate_fast(smiles_list: list[str], best_effort: bool) -> list[dict]:
+def translate_fast(prepared: list[dict], best_effort: bool) -> list[dict]:
     """The single-molecule path: full ResultItems, picture included.
 
     Separate from the batch tasks because the response must stay
     byte-compatible with today's TranslateResponse, which includes
     depiction_svg -- the one thing batch rows deliberately omit.
+
+    `prepared` is app.jobs_api.prepared_payload's wire form (index,
+    raw_input, input_id, smiles, error) -- the SAME shape run_chunk and
+    translate_job_inline take -- not a bare list of raw strings. Final
+    review, crash-loop fix: this used to receive raw user text and hand it
+    straight to translate_one -> Chem.MolFromSmiles/MolToSmiles with no
+    length check, unlike every other path, which routes through
+    app.inputs._canonical_or_error (MAX_MOLECULE_SMILES_LENGTH) first.
+    Chem.MolToSmiles SIGSEGVs at roughly 30,000 atoms, and
+    task_reject_on_worker_lost=True requeues a SIGKILLed task, so one
+    oversized SMILES could crash-loop this queue forever. The caller
+    (app.main.translate) now canonicalizes with app.main._canonicalize
+    before dispatch, so an item with `smiles: None` here already failed
+    that check (or failed to parse) and must never reach RDKit at all.
     """
     from app.depiction import mol_to_svg_data_uri
     from rdkit import Chem
 
     rows = []
-    for smiles in smiles_list:
+    for item in prepared:
+        if item["smiles"] is None:
+            # Already-canonical-or-error, same convention translate_one
+            # itself uses for an unparseable string: echo the raw input
+            # back as `smiles`, no RDKit call.
+            rows.append(
+                ResultItem(
+                    smiles=item["raw_input"],
+                    status="error",
+                    name=None,
+                    tier=None,
+                    formula=None,
+                    limit_code=None,
+                    error=item["error"],
+                    depiction_svg=None,
+                    roundtrip_smiles=None,
+                    roundtrip_match=None,
+                ).model_dump()
+            )
+            continue
+
+        smiles = item["smiles"]
         cached = name_cache.get_cached(smiles, best_effort)
-        item = cached if cached is not None else translate_one(
+        result_item = cached if cached is not None else translate_one(
             smiles, best_effort=best_effort
         )
         if cached is None:
-            name_cache.put_cached(item, best_effort)
-        if item.depiction_svg is None and item.status in (
+            name_cache.put_cached(result_item, best_effort)
+        if result_item.depiction_svg is None and result_item.status in (
             "pin",
             "fallback",
             "best_effort",
         ):
             # A cached item was stored without its picture; redraw it here so
             # the response shape never varies by cache hit or miss.
-            mol = Chem.MolFromSmiles(item.smiles)
+            mol = Chem.MolFromSmiles(result_item.smiles)
             if mol is not None:
-                item = item.model_copy(
+                result_item = result_item.model_copy(
                     update={"depiction_svg": mol_to_svg_data_uri(mol)}
                 )
-        rows.append(item.model_dump())
+        rows.append(result_item.model_dump())
     return rows
 
 

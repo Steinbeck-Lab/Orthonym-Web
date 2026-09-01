@@ -20,7 +20,7 @@ from . import redis_store
 from .core.config import get_settings
 from .inputs import InputFormat
 from .inputs import parse as parse_molecules
-from .jobs_api import admit_and_dispatch
+from .jobs_api import admit_and_dispatch, prepared_payload
 from .jobs_api import router as jobs_router
 from .jvm_guard import require_a_live_jvm
 from .ratelimit import check_fast_allowed, check_job_allowed, client_ip
@@ -224,9 +224,25 @@ def translate(request: Request, body: TranslateRequest):
             job_id=job_id, molecule_count=len(molecules), status="queued"
         )
 
+    # Crash-loop fix (final review): this branch used to hand raw,
+    # unbounded user text straight to translate_fast -> translate_one ->
+    # Chem.MolFromSmiles/MolToSmiles with no length check at all, unlike
+    # the two job-dispatch branches above, which already route through
+    # _canonicalize. Chem.MolToSmiles SIGSEGVs RDKit's C++ stack at
+    # roughly 30,000 atoms (measured: clean at 20k, crash at 30k and
+    # 50k) -- and because task_acks_late=True and
+    # task_reject_on_worker_lost=True (celery_app.py), a SIGKILLed task
+    # is REQUEUED, so one oversized SMILES could crash-loop the fast
+    # queue forever. Canonicalizing here applies
+    # MAX_MOLECULE_SMILES_LENGTH (app.inputs) before any RDKit call, on
+    # every molecule, on every path -- closing this and, as a side
+    # effect, deferred item I3(c) (the fast path previously had no
+    # per-record length bound at all).
+    molecules = _canonicalize(non_blank, settings.MAX_BATCH_SIZE)
+    prepared = prepared_payload(molecules)
     try:
         results = translate_fast.apply_async(
-            args=[non_blank, body.best_effort], queue="fast"
+            args=[prepared, body.best_effort], queue="fast"
         ).get(timeout=settings.FAST_PATH_TIMEOUT)
     except CeleryTimeoutError:
         # translate_fast itself is NOT revoked -- the caller polls the job
@@ -234,10 +250,9 @@ def translate(request: Request, body: TranslateRequest):
         # if it ever finishes, is simply discarded once nothing is waiting
         # on it any more; this is the accepted "abandoned tasks are not
         # revoked" tradeoff, applied here rather than left unhandled.
-        # Same ordering fix as the branch above: check the job cap before
-        # paying for canonicalization, not after.
+        # `molecules` is already canonicalized above -- no need to pay for
+        # it twice.
         check_job_allowed(ip)
-        molecules = _canonicalize(non_blank, settings.MAX_BATCH_SIZE)
         job_id = admit_and_dispatch(
             ip, molecules, "smiles_list", body.best_effort
         )

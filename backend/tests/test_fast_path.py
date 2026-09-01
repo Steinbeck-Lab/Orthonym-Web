@@ -35,6 +35,51 @@ def test_translate_response_shape_is_unchanged(redis_client):
     assert item["roundtrip_match"] is True
 
 
+def test_an_oversized_smiles_on_the_fast_path_never_reaches_rdkit(
+    redis_client, monkeypatch
+):
+    """Final review, crash-loop fix: a 30,000-character SMILES SIGSEGVs
+    RDKit's Chem.MolToSmiles (measured: clean at 20k atoms, crash at 30k
+    and 50k). Because task_acks_late=True and
+    task_reject_on_worker_lost=True, a SIGKILLed task is requeued, so one
+    such request could crash-loop the fast queue forever. Before this
+    fix, translate_fast handed raw user text straight to
+    translate_one -> Chem.MolFromSmiles/MolToSmiles with no length check
+    at all, unlike every other input path.
+
+    This does NOT reproduce the segfault (that would crash the whole test
+    process) -- it proves the guard instead: monkeypatch translate_one to
+    raise if it is ever called with the oversized string, so the test
+    fails loudly if the length check is ever bypassed, rather than
+    silently letting an oversized molecule reach RDKit again.
+    """
+    import app.tasks as tasks_module
+
+    real_translate_one = tasks_module.translate_one
+    oversized = "C" * 30000
+
+    def guarded_translate_one(smiles, best_effort=True):
+        assert smiles != oversized, (
+            "the oversized SMILES reached translate_one -- "
+            "MAX_MOLECULE_SMILES_LENGTH did not gate it before RDKit"
+        )
+        return real_translate_one(smiles, best_effort=best_effort)
+
+    monkeypatch.setattr(tasks_module, "translate_one", guarded_translate_one)
+
+    response = client.post(
+        "/api/translate", json={"smiles": ["CCO", oversized, "CCC"]}
+    )
+    assert response.status_code == 200, response.text
+    results = response.json()["results"]
+    assert [r["status"] for r in results] == ["pin", "error", "pin"]
+    assert results[1]["error"] == "SMILES string exceeds 2000 characters"
+    # The response still echoes the caller's original text for the
+    # rejected row, same convention translate_one itself uses for an
+    # unparseable string.
+    assert results[1]["smiles"] == oversized
+
+
 def test_translate_above_the_fast_limit_returns_a_job_envelope(
     redis_client, monkeypatch
 ):
