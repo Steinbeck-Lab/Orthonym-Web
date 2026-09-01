@@ -22,9 +22,12 @@ def test_read_job_meta_returns_none_for_an_unknown_job(redis_client):
 
 
 def test_bump_job_done_accumulates(redis_client, job_id):
+    # Two DIFFERENT chunk indices -- accumulation across chunks is the
+    # property under test; the SAME index accumulating too would be the
+    # I1 double-count bug (covered separately below).
     redis_store.create_job(job_id, total=10, fmt="smiles_list", client_ip="::1")
-    redis_store.bump_job_done(job_id, done=4, failed=1)
-    redis_store.bump_job_done(job_id, done=3, failed=0)
+    redis_store.bump_job_done(job_id, index=0, done=4, failed=1)
+    redis_store.bump_job_done(job_id, index=1, done=3, failed=0)
     meta = redis_store.read_job_meta(job_id)
     assert meta["done"] == "7"
     assert meta["failed"] == "1"
@@ -108,7 +111,7 @@ def test_a_progress_write_retags_a_meta_key_that_lost_its_ttl(redis_client, job_
 
     redis_client.persist(key)  # stand in for the recreated, untagged key
     assert redis_client.ttl(key) == -1
-    redis_store.bump_job_done(job_id, done=1, failed=0)
+    redis_store.bump_job_done(job_id, index=0, done=1, failed=0)
     assert redis_client.ttl(key) > 0, "bump_job_done left the key untagged"
 
     redis_client.persist(key)
@@ -125,10 +128,53 @@ def test_a_progress_write_does_not_extend_a_live_ttl(redis_client, job_id):
     key = redis_store.job_meta_key(job_id)
     redis_client.expire(key, 50)
 
-    redis_store.bump_job_done(job_id, done=1, failed=0)
+    redis_store.bump_job_done(job_id, index=0, done=1, failed=0)
     redis_store.set_job_status(job_id, "running")
 
     assert 0 < redis_client.ttl(key) <= 50
+
+
+def test_begin_chunk_refuses_an_already_terminal_job(redis_client, job_id):
+    # I1: a chunk redelivered AFTER the job closed must not reopen it --
+    # the chord body has already fired once and will not fire again, so
+    # nothing would ever close it a second time.
+    redis_store.create_job(job_id, total=1, fmt="smiles_list", client_ip="::1")
+    redis_store.set_job_status(job_id, "done")
+
+    assert redis_store.begin_chunk(job_id) is False
+    assert redis_store.read_job_meta(job_id)["status"] == "done"
+
+
+def test_begin_chunk_also_refuses_a_failed_job(redis_client, job_id):
+    redis_store.create_job(job_id, total=1, fmt="smiles_list", client_ip="::1")
+    redis_store.set_job_status(job_id, "failed")
+
+    assert redis_store.begin_chunk(job_id) is False
+    assert redis_store.read_job_meta(job_id)["status"] == "failed"
+
+
+def test_begin_chunk_admits_a_non_terminal_job_and_marks_it_running(
+    redis_client, job_id
+):
+    redis_store.create_job(job_id, total=1, fmt="smiles_list", client_ip="::1")
+
+    assert redis_store.begin_chunk(job_id) is True
+    assert redis_store.read_job_meta(job_id)["status"] == "running"
+
+
+def test_bump_job_done_is_idempotent_per_chunk(redis_client, job_id):
+    # I1: a redelivered chunk (task_acks_late=True makes this real) must
+    # not double-count molecules the first delivery already counted.
+    redis_store.create_job(job_id, total=4, fmt="smiles_list", client_ip="::1")
+
+    redis_store.bump_job_done(job_id, index=0, done=2, failed=0)
+    redis_store.bump_job_done(job_id, index=0, done=2, failed=0)  # redelivered
+    meta = redis_store.read_job_meta(job_id)
+    assert meta["done"] == "2", "the same chunk index was counted twice"
+
+    redis_store.bump_job_done(job_id, index=1, done=2, failed=0)
+    meta = redis_store.read_job_meta(job_id)
+    assert meta["done"] == "4", "a genuinely different chunk was not counted"
 
 
 def test_worker_opsin_status_round_trips(redis_client):

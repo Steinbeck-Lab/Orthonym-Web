@@ -129,10 +129,76 @@ def set_job_status(job_id: str, status: str) -> None:
     pipe.execute()
 
 
-def bump_job_done(job_id: str, done: int, failed: int) -> None:
-    """Count molecules, not chunks, so progress moves smoothly."""
+# KEYS[1] = the job's meta hash (job_meta_key).
+# ARGV[1] = TTL seconds to arm on the hash -- only if it has none (NX), same
+#           reasoning as _retag_if_untagged: re-arming the full TTL on every
+#           chunk would push a busy job's expiry past what create_job
+#           recorded and reports as expires_at.
+#
+# Mirrors app.ratelimit._ADMIT_JOB_SCRIPT: one round trip, so a redelivered
+# chunk racing a real one cannot both read "not yet terminal" and both
+# proceed to reopen a job that a moment ago legitimately finished.
+_BEGIN_CHUNK_SCRIPT = """
+local status = redis.call('HGET', KEYS[1], 'status')
+if status == 'done' or status == 'failed' then
+    return 0
+end
+redis.call('HSET', KEYS[1], 'status', 'running')
+redis.call('EXPIRE', KEYS[1], ARGV[1], 'NX')
+return 1
+"""
+
+_begin_chunk_script_obj = None
+
+
+def _begin_chunk_script():
+    global _begin_chunk_script_obj
+    if _begin_chunk_script_obj is None:
+        _begin_chunk_script_obj = get_redis().register_script(_BEGIN_CHUNK_SCRIPT)
+    return _begin_chunk_script_obj
+
+
+def begin_chunk(job_id: str) -> bool:
+    """Atomically move a job to "running" for one more chunk, UNLESS it is
+    already terminal ("done"/"failed").
+
+    task_acks_late=True (celery_app.py) makes chunk redelivery real: a
+    chunk whose ack was lost after it finished, or whose worker died just
+    after finishing, comes back and runs again. Without this guard,
+    run_chunk's bare set_job_status(job_id, "running") would flip an
+    already-closed job back to "running" forever -- the chord body has
+    already fired once and Celery will not fire it again, so nothing would
+    ever close the job a second time (final review report, I1). Returning
+    False also lets run_chunk skip the pointless re-naming of a whole
+    chunk that already has rows.
+
+    This does not by itself stop the progress counter from double-counting
+    a chunk redelivered BEFORE the job closes -- see bump_job_done's own
+    per-chunk marker for that half.
+    """
+    key = job_meta_key(job_id)
+    settings = get_settings()
+    result = _begin_chunk_script()(
+        keys=[key], args=[settings.JOB_RESULT_TTL_SECONDS]
+    )
+    return bool(result)
+
+
+def bump_job_done(job_id: str, index: int, done: int, failed: int) -> None:
+    """Count molecules, not chunks, so progress moves smoothly.
+
+    Idempotent per chunk: HSETNX on a `bumped:{index}` marker field in the
+    same meta hash gates the HINCRBY calls below, so a chunk redelivered by
+    task_acks_late=True (celery_app.py) cannot double-count molecules it
+    already counted the first time it ran (final review report, I1;
+    measured there: one redelivered 25-molecule chunk of a 50-molecule job
+    pushed `done` to 75). HSETNX is atomic, so two concurrent redeliveries
+    of the SAME chunk cannot both win the race and both proceed.
+    """
     client = get_redis()
     key = job_meta_key(job_id)
+    if not client.hsetnx(key, f"bumped:{index}", 1):
+        return
     pipe = client.pipeline()
     if done:
         pipe.hincrby(key, "done", done)

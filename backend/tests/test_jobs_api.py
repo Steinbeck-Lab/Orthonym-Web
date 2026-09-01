@@ -232,6 +232,39 @@ def test_one_molecule_raising_does_not_lose_the_rest_of_the_chunk(
     assert "engine exploded" in rows[1]["error"]
 
 
+def test_a_redelivered_chunk_does_not_uncomplete_a_finished_job(
+    redis_client, job_id
+):
+    """I1: task_acks_late=True makes chunk redelivery real. A redelivered
+    chunk must not flip a finished job back to "running" (the chord body
+    has already fired once and will not fire again, so nothing would ever
+    close it a second time) or double-count its molecules past `total`.
+    """
+    from app import redis_store
+    from app.tasks import dispatch_batch, run_chunk
+
+    smiles = ["CCO", "CCC"]
+    prepared = [
+        {"index": i, "raw_input": s, "input_id": None, "smiles": s, "error": None}
+        for i, s in enumerate(smiles)
+    ]
+    redis_store.create_job(job_id, total=2, fmt="smiles_list", client_ip="::1")
+    assert dispatch_batch(job_id, prepared, True, 2) == 1  # one chunk
+
+    meta = redis_store.read_job_meta(job_id)
+    assert meta["status"] == "done"
+    assert meta["done"] == "2"
+
+    # Redeliver: run_chunk fires again for the SAME chunk, exactly as
+    # task_acks_late would after a lost ack post-completion.
+    result = run_chunk(job_id, 0, prepared, True)
+
+    meta_after = redis_store.read_job_meta(job_id)
+    assert result == 0, "the redelivered chunk should short-circuit, not re-run"
+    assert meta_after["status"] == "done", "redelivery flipped a done job back"
+    assert int(meta_after["done"]) <= int(meta_after["total"])
+
+
 def test_a_redelivered_close_does_not_destroy_a_finished_job(redis_client):
     """finalize_job must be idempotent.
 
