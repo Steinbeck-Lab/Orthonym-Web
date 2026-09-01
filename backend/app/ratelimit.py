@@ -168,6 +168,10 @@ def _poll_minute_key(ip: str) -> str:
     return f"orthonym:ip:{ip}:poll:{int(time.time()) // _MINUTE}"
 
 
+def _download_minute_key(ip: str) -> str:
+    return f"orthonym:ip:{ip}:download:{int(time.time()) // _MINUTE}"
+
+
 def _reject_if_concurrent_cap_exceeded(ip: str) -> None:
     settings = get_settings()
     active = _admit_job_script()(
@@ -345,6 +349,37 @@ def check_poll_allowed(ip: str) -> None:
             detail=(
                 f"Limit of {settings.RATE_LIMIT_POLL_PER_MINUTE} polls per "
                 f"minute reached. Resets in {client.ttl(key)} seconds."
+            ),
+        )
+
+
+def check_download_allowed(ip: str) -> None:
+    """GET /api/jobs/{id}/results.csv -- its own budget, far below the
+    naming one.
+
+    It shared check_fast_allowed's 60/minute, which is priced for a single
+    OPSIN lookup: one Redis GET. A full 10,000-row download instead LRANGEs
+    500 rows a page and json.loads every row in the WEB process, so sixty of
+    them a minute is on the order of 600,000 JSON decodes competing with
+    every interactive request for the same GIL. Nothing about the count
+    limiter noticed, because it counts calls and these calls are three or
+    four orders of magnitude more expensive than the ones it was sized for.
+
+    10/minute is generous for the actual use: a person downloading their own
+    results does it once, maybe twice.
+    """
+    settings = get_settings()
+    client = get_redis()
+    key = _download_minute_key(ip)
+    count = client.incr(key)
+    client.expire(key, _MINUTE, nx=True)
+    if count > settings.RATE_LIMIT_DOWNLOAD_PER_MINUTE:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Limit of {settings.RATE_LIMIT_DOWNLOAD_PER_MINUTE} result "
+                f"downloads per minute reached. Resets in {client.ttl(key)} "
+                "seconds."
             ),
         )
 

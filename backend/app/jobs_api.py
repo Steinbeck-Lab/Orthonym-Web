@@ -33,6 +33,7 @@ from app.jvm_guard import require_a_live_jvm
 from app.ratelimit import (
     check_and_register_job,
     check_depict_allowed,
+    check_download_allowed,
     check_fast_allowed,
     check_job_allowed,
     check_poll_allowed,
@@ -494,7 +495,7 @@ def job_results_csv(request: Request, job_id: str) -> StreamingResponse:
     X-Orthonym-Job-Status machinery rather than refused outright (final
     review report, C4).
     """
-    check_fast_allowed(client_ip(request))
+    check_download_allowed(client_ip(request))
     meta = _require_complete_meta(job_id)
     status = _actual_status(job_id, meta)
     if status not in ("done", "failed"):

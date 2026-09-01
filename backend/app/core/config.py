@@ -57,6 +57,15 @@ class Settings(BaseSettings):
     # polling, so this is its own, larger budget (round 3 review, finding
     # 4) -- still bounded, unlike having no limiter at all.
     RATE_LIMIT_POLL_PER_MINUTE: int = 300
+    # results.csv is by far the most expensive READ on the API and used to
+    # share check_fast_allowed's 60/minute budget -- the one sized for a
+    # single OPSIN lookup, i.e. one Redis GET. A full 10,000-row download
+    # LRANGEs 500 rows a page and json.loads every one of them IN THE WEB
+    # PROCESS, so 60 of those a minute is roughly 600,000 JSON decodes
+    # against a budget priced for 60 key reads. Its own, much smaller
+    # budget: a human downloading their results does it once or twice, not
+    # sixty times (audit item CC2-csv-bucket).
+    RATE_LIMIT_DOWNLOAD_PER_MINUTE: int = 10
 
     CHUNK_SOFT_TIME_LIMIT: int = 600
     CHUNK_HARD_TIME_LIMIT: int = 900
