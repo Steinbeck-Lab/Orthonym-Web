@@ -171,7 +171,10 @@
   flex-direction: column;
   gap: var(--s-xs);
   width: 100%;
-  max-width: 1600px;
+  /* the TOKEN, not a hardcoded 1600 -- this copy of the number is why the
+     floating header stayed narrow while the body widened, reading as a
+     detached bar rather than the same column. */
+  max-width: var(--shell-max);
   pointer-events: auto;
 }
 
@@ -1081,8 +1084,9 @@ input.field__control {
    the result reads), and merging them would read as one four-way control. */
 .explain-level {
   display: flex;
-  align-items: baseline;
-  gap: var(--gap);
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
   border: 0;
   margin: 0 0 var(--gap);
   padding: 0;

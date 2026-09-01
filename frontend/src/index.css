@@ -193,7 +193,14 @@
   /* -- width: Bugatti caps content at ~1280px. Widened here by explicit
      instruction to use the whole wide screen; bands still go fully
      edge-to-edge, as Bugatti's photo bands do. -- */
-  --shell-max: 1600px;
+  /* 2200px, up from 1600. The contained-1600 column left most of a modern
+     wide display as empty grey ground while the two workspace cards squeezed
+     -- worst on /explain, where the structure editor and the breakdown are
+     side by side and both want room. Still CONTAINED, not full-bleed: the
+     ground continues to frame the cards, which is the reference composition
+     (DESIGN.md). Changed on the owner's instruction; DESIGN.md and
+     .impeccable/design.json record it. */
+  --shell-max: 2200px;
   --shell-pad: var(--s-lg);
 
   color-scheme: light;
