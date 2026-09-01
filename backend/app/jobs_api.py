@@ -11,7 +11,16 @@ import csv
 import io
 import uuid
 
-from fastapi import APIRouter, File, HTTPException, Query, Request, Response, UploadFile
+from fastapi import (
+    APIRouter,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+)
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from rdkit import Chem
@@ -66,7 +75,7 @@ class TextPayload(BaseModel):
 
 
 async def _read_input(
-    request: Request, file: UploadFile | None
+    request: Request, file: UploadFile | None, best_effort: bool = True
 ) -> tuple[bytes, bool]:
     """Accept either a multipart file or a JSON {"text": ...} body.
 
@@ -108,7 +117,15 @@ async def _read_input(
                     f"File is larger than the {settings.MAX_FILE_SIZE_MB} MB limit"
                 ),
             )
-        return data, True
+        # best_effort comes from the multipart form, not a hardcoded True
+        # (audit item upload-forces-best-effort). best_effort=False is the
+        # caller saying "only names OPSIN round-trip verified; abstain rather
+        # than guess" -- the JSON branch below has always honoured it, and a
+        # file uploader could not say it at all, so they silently received
+        # OPSIN-unverified names with nothing recording that their request had
+        # been overridden. The default stays True, matching TextPayload's, so
+        # nothing changes for a caller who sends no field.
+        return data, best_effort
 
     try:
         body = await request.json()
@@ -290,7 +307,9 @@ async def parse_preview(
 
 @router.post("/api/jobs", response_model=JobEnvelope)
 async def create_job(
-    request: Request, file: UploadFile | None = File(default=None)
+    request: Request,
+    file: UploadFile | None = File(default=None),
+    best_effort: bool = Form(default=True),
 ) -> JobEnvelope:
     settings = get_settings()
     ip = client_ip(request)
@@ -335,7 +354,7 @@ async def create_job(
     # TOCTOU-safe registration now, since this already ran.
     check_job_allowed(ip)
 
-    data, best_effort = await _read_input(request, file)
+    data, best_effort = await _read_input(request, file, best_effort)
     fmt, molecules = _parse_or_400(data, settings.MAX_BATCH_SIZE)
 
     job_id = admit_and_dispatch(ip, molecules, fmt.value, best_effort)
