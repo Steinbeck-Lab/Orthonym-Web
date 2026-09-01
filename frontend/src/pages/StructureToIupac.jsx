@@ -1,19 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import SamplerGrid from '../components/SamplerGrid'
-import { translateBatch } from '../lib/api'
+import { translateBatch, TranslateJobQueuedError } from '../lib/api'
 import useReducedMotion from '../lib/useReducedMotion'
+import { useKetcher } from '../lib/useKetcher'
 import './StructureToIupac.css'
-
-// The bundled standalone Ketcher app posts window.parent a single
-// {eventType: "init"} message once its structure service has actually
-// finished initializing (see standalone/static/js/main.*.js, the
-// onInit callback passed to Ketcher.create) -- this fires meaningfully
-// later than the iframe's own `load` event, which only means the HTML
-// shell downloaded. Listening for this message is the real "editor is
-// interactive" signal; a bare onLoad handler races the WASM/service
-// startup and can grab `contentWindow.ketcher` before it exists.
-const READY_TIMEOUT_MS = 20000
 
 const EMPTY_SAMPLER_MESSAGE =
   "Nothing drawn yet. Sketch a structure above, then press Translate and it will be entered below."
@@ -32,32 +23,13 @@ function emptyRow(smiles) {
 }
 
 function StructureToIupac() {
-  const iframeRef = useRef(null)
+  const { iframeRef, editorState, handleFrameLoad, handleFrameError, getKetcher } = useKetcher()
   const timersRef = useRef([])
-  const [editorState, setEditorState] = useState('loading') // 'loading' | 'ready' | 'error'
   const [rows, setRows] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [note, setNote] = useState(null)
   const [fetchError, setFetchError] = useState(null)
   const reduceMotion = useReducedMotion()
-
-  useEffect(() => {
-    function handleMessage(event) {
-      if (event.data && event.data.eventType === 'init') {
-        setEditorState('ready')
-      }
-    }
-    window.addEventListener('message', handleMessage)
-
-    const timeoutId = setTimeout(() => {
-      setEditorState((current) => (current === 'loading' ? 'error' : current))
-    }, READY_TIMEOUT_MS)
-
-    return () => {
-      window.removeEventListener('message', handleMessage)
-      clearTimeout(timeoutId)
-    }
-  }, [])
 
   useEffect(() => {
     return () => clearTimers()
@@ -68,24 +40,11 @@ function StructureToIupac() {
     timersRef.current = []
   }
 
-  function handleFrameLoad() {
-    // Belt-and-suspenders: if `ketcher` is already attached by the time
-    // the iframe's load event fires (fast networks/warm caches can beat
-    // our message listener into place), don't wait on the postMessage.
-    if (iframeRef.current?.contentWindow?.ketcher) {
-      setEditorState('ready')
-    }
-  }
-
-  function handleFrameError() {
-    setEditorState('error')
-  }
-
   async function handleTranslate() {
     if (isSubmitting) return
     setNote(null)
 
-    const ketcher = iframeRef.current?.contentWindow?.ketcher
+    const ketcher = getKetcher()
     if (!ketcher) {
       setNote('The structure editor is not ready yet — wait a moment and try again.')
       return
@@ -141,6 +100,21 @@ function StructureToIupac() {
       })
       .catch((err) => {
         setIsSubmitting(false)
+        if (err instanceof TranslateJobQueuedError) {
+          // Not a failure -- real work is running on the server, just too
+          // slow for the synchronous fast path (a single structure rarely
+          // hits the molecule-count limit, but a slow one can still time
+          // out). Orthonym has no batch-job polling UI (a separate, larger
+          // project), so say that plainly rather than render an empty
+          // grid, which used to look identical to zero results.
+          setRows([])
+          setNote(
+            'This structure is running as a background job on the server instead of ' +
+              "returning immediately. This page cannot track a queued job's progress " +
+              '— try again in a moment.'
+          )
+          return
+        }
         setFetchError(err?.message || 'unknown network error')
         setRows([])
       })
