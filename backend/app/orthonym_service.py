@@ -107,6 +107,13 @@ _escalated_namer = Orthonym(
 )
 
 
+# The two statuses that ASSERT an OPSIN round-trip actually happened. Kept
+# beside classify() because it is classify()'s output vocabulary, and mirrored
+# by name_cache._VERIFIED and the frontend's Tile.VERIFIED_STATUSES -- all
+# three answer the same question: "does this label claim a verification?"
+_VERIFIED_STATUSES = frozenset({"pin", "fallback"})
+
+
 def classify(row: dict) -> tuple[str, Optional[str], str]:
     """Map one `name_tiered()` row to (status, name, tier).
 
@@ -219,6 +226,38 @@ def translate_one(smiles: str, best_effort: bool = True) -> ResultItem:
     # status in ("pin", "fallback", "best_effort"): a real name shipped.
     depiction_svg = mol_to_svg_data_uri(mol)
     roundtrip_smiles, roundtrip_match = _roundtrip_check(name, mol)
+
+    if status in _VERIFIED_STATUSES and roundtrip_smiles is None:
+        # Final review report, C3, backend half. SELF-01 uses the same
+        # opsin_parse() as the round-trip check above, so a null
+        # roundtrip_smiles on a verified tier can only mean OPSIN was
+        # unreachable: SELF-01 failed OPEN and let an unverified candidate
+        # through wearing a verified label. name_cache already refuses to
+        # PERSIST such a row for its 7-day TTL -- but declining to cache a
+        # lie is not the same as declining to tell it, and the frontend
+        # renders "pin" with the double rule that means round-trip
+        # confirmed.
+        #
+        # The name itself is real, so it survives; only the claim about it
+        # is corrected, down to the tier that claims no verification at all.
+        # Except for a caller who passed best_effort=False: they refused
+        # OPSIN-unverified names outright, and handing them one here would
+        # reintroduce through the back door exactly what the gate above
+        # keeps out the front. For them the honest answer is abstain.
+        if not best_effort:
+            return ResultItem(
+                smiles=smiles,
+                status="abstain",
+                name=None,
+                tier=tier,
+                formula=row.get("formula"),
+                limit_code=row.get("limit_code"),
+                error=None,
+                depiction_svg=None,
+                roundtrip_smiles=None,
+                roundtrip_match=None,
+            )
+        status = "best_effort"
 
     return ResultItem(
         smiles=smiles,
