@@ -283,6 +283,20 @@ async def create_job(
 ) -> JobEnvelope:
     settings = get_settings()
     ip = client_ip(request)
+    # require_a_live_jvm BEFORE check_job_allowed (round 4 review, finding
+    # 2): check_job_allowed increments the hourly counter unconditionally,
+    # so a caller during a JVM outage would otherwise burn one of their 20
+    # hourly units on every retry before ever reaching the 503 -- and
+    # since /api/translate already gated on the JVM first, the SAME outage
+    # cost /api/translate callers nothing while it locked /api/jobs callers
+    # out of batch submission for up to an hour after service recovered.
+    # This produces the artefact users keep (results.csv), same as any
+    # single-molecule naming endpoint -- it was the one naming path that
+    # never checked this at all (round 2 review, Also-fix). It is also
+    # cheap now (one HGETALL, round 3 review, finding 3), so checking it
+    # first costs nothing extra: a request we are going to refuse for our
+    # OWN reasons should not cost the caller quota.
+    require_a_live_jvm()
     # Before reading or parsing anything: a 429'd caller should not have
     # already made the server read up to 50 MB and RDKit-parse up to
     # 10,000 molecules first (round 1 review, Important; round 3 review,
@@ -293,10 +307,6 @@ async def create_job(
     # admission gate; admit_and_dispatch only does the atomic
     # TOCTOU-safe registration now, since this already ran.
     check_job_allowed(ip)
-    # This produces the artefact users keep (results.csv), same as any
-    # single-molecule naming endpoint -- it was the one naming path that
-    # never checked this at all (round 2 review, Also-fix).
-    require_a_live_jvm()
 
     data, best_effort = await _read_input(request, file)
     fmt, molecules = _parse_or_400(data, settings.MAX_BATCH_SIZE)
