@@ -291,11 +291,23 @@ def _count_sdf_records(data: bytes) -> int:
     anything after the LAST one is a real, non-blank record rather than
     trailing whitespace -- and if there are no terminators at all but the
     text is non-blank, that is one single unterminated record, not zero.
+
+    A terminator is a LINE that STARTS WITH "$$$$", not a bare substring
+    occurrence anywhere in the text (round 5 review: SDMolSupplier scans
+    line-by-line and only treats "$$$$" as a terminator when it opens a
+    line -- confirmed live that leading whitespace before it also defeats
+    that, e.g. "  $$$$" is not a terminator either -- so a `str.count`
+    over the whole blob over-counts an SD data field whose VALUE happens
+    to contain the literal string mid-line, e.g. "Price: $$$$ per unit".
+    A `$$$$` that IS alone at the start of its own line inside a field's
+    value is, confirmed live, still a real terminator to RDKit -- it ends
+    that record right there -- so this must keep counting it as one.
     """
-    text = _decode(data)
-    count = text.count("$$$$")
-    tail = text.rsplit("$$$$", 1)[-1] if count else text
-    if any(line.strip() for line in tail.splitlines()):
+    lines = _decode(data).splitlines()
+    terminator_indices = [i for i, line in enumerate(lines) if line.startswith("$$$$")]
+    count = len(terminator_indices)
+    tail_lines = lines[terminator_indices[-1] + 1 :] if terminator_indices else lines
+    if any(line.strip() for line in tail_lines):
         count += 1
     return count
 
