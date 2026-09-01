@@ -32,6 +32,22 @@ class Settings(BaseSettings):
 
     FAST_PATH_MAX_MOLECULES: int = 10
     FAST_PATH_TIMEOUT: int = 30
+    # How long POST /api/jobs waits for a worker to parse the upload before
+    # parsing it in the web process instead.
+    #
+    # Deliberately SHORT, and matched to FAST_PATH_TIMEOUT. Sizing it above
+    # the measured worst case (~290 s for 10,000 molecules at
+    # MAX_MOLECULE_SMILES_LENGTH) was tried and is wrong: it holds a web
+    # thread for minutes whenever no worker is listening, which trades a GIL
+    # problem for a thread-exhaustion one. A timeout cannot distinguish "no
+    # worker" from "a genuinely slow parse", so it is tuned for the first --
+    # the case where waiting longer helps nobody.
+    #
+    # Falling back therefore leaves a slow parse in the web process exactly as
+    # before. That is the honest limit of this change: it moves the CPU
+    # whenever a batch worker is available, and is never worse than the
+    # previous behaviour when one is not.
+    PARSE_TIMEOUT: int = 30
 
     BATCH_CHUNK_SIZE: int = 25
     MAX_BATCH_SIZE: int = 10000

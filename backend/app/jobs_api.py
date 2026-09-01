@@ -10,9 +10,11 @@ from __future__ import annotations
 import csv
 import hmac
 import io
+import logging
 import secrets
 import uuid
 
+from celery.exceptions import TimeoutError as CeleryTimeoutError
 from fastapi import (
     APIRouter,
     File,
@@ -30,7 +32,14 @@ from rdkit import Chem
 from app import redis_store
 from app.core.config import get_settings
 from app.depiction import mol_to_svg_data_uri
-from app.inputs import TooManyMolecules, parse, parse_preview_sample, sniff
+from app.inputs import (
+    InputFormat,
+    ParsedMolecule,
+    TooManyMolecules,
+    parse,
+    parse_preview_sample,
+    sniff,
+)
 from app.jvm_guard import require_a_live_jvm
 from app.ratelimit import (
     check_and_register_job,
@@ -51,7 +60,14 @@ from app.schemas import (
     ParsePreviewResponse,
     ParsePreviewRow,
 )
-from app.tasks import dispatch_batch, mark_job_failed, translate_job_inline
+from app.tasks import (
+    dispatch_batch,
+    mark_job_failed,
+    parse_input,
+    translate_job_inline,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -149,6 +165,64 @@ async def _read_input(
 
 
 def _parse_or_400(data: bytes, max_molecules: int):
+    """Parse an uploaded body in a WORKER, but block for the answer.
+
+    Spec section 13a / audit item parse-cost-aggregate. RDKit does not release
+    the GIL, so parsing here froze every other request on this web process for
+    the duration. Measured: 10,000 short SMILES parse in 0.14 s, but 1,000 at
+    MAX_MOLECULE_SMILES_LENGTH take 29.1 s -- so a full 10,000-molecule upload
+    of large molecules is roughly 290 s of GIL-held CPU from a single request
+    well inside its quota. The molecule-count caps never bounded it, because
+    they count molecules and the cost is in their size.
+
+    Blocking rather than returning a job envelope is the point: the contract
+    is unchanged, so a malformed file still gets a synchronous 400 that names
+    the problem, instead of being accepted and failing asynchronously with
+    nowhere to report why. The web process waits on I/O and releases the GIL;
+    only the CPU moves.
+
+    Falls back to parsing in-process if no worker answers within
+    PARSE_TIMEOUT. That is the conservative direction -- a valid upload must
+    not 503 because the batch queue is idle -- and it is the honest limit of
+    this change: the CPU moves whenever a worker is available, and this is
+    never worse than the previous behaviour when one is not.
+    """
+    settings = get_settings()
+    try:
+        outcome = parse_input.apply_async(
+            args=[data, max_molecules], queue="batch"
+        ).get(timeout=settings.PARSE_TIMEOUT)
+    except CeleryTimeoutError:
+        logger.warning(
+            "No worker parsed this upload within %ss; falling back to parsing "
+            "in the web process. This blocks other requests -- check the batch "
+            "queue.",
+            settings.PARSE_TIMEOUT,
+        )
+        return _parse_or_400_inline(data, max_molecules)
+
+    fmt = InputFormat(outcome["fmt"])
+    if outcome["error"] == "too_many":
+        raise HTTPException(
+            status_code=413,
+            detail=f"Input exceeds the {outcome['limit']}-molecule limit",
+        )
+    if outcome["error"] == "unreadable":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not read this {fmt.value}: {outcome['detail']}",
+        )
+    if outcome["error"] == "empty":
+        raise HTTPException(
+            status_code=400,
+            detail=f"No molecules found in this {fmt.value} input",
+        )
+    return fmt, [ParsedMolecule(**m) for m in outcome["molecules"]]
+
+
+def _parse_or_400_inline(data: bytes, max_molecules: int):
+    """The original in-process parse. Kept as the fallback above, and as the
+    single definition of what each failure maps to."""
     fmt = sniff(data)
     try:
         molecules = parse(data, fmt, max_molecules)

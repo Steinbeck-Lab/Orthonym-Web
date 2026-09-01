@@ -1010,3 +1010,84 @@ def test_the_status_endpoint_never_leaks_the_owner_token(redis_client):
     body = client.get(f"/api/jobs/{jid}").json()
     assert "owner" not in body and "owner_token" not in body
     assert token not in str(body)
+
+
+def test_the_upload_parse_is_dispatched_to_a_worker(monkeypatch, redis_client):
+    """Spec section 13a / parse-cost-aggregate: parsing an upload is RDKit
+    work, and RDKit's Boost.Python wrappers do not release the GIL, so doing
+    it in the web process blocks every other request there for its duration.
+    FastAPI's threadpool does not help.
+
+    Measured, which is what settled the design: cost scales with molecule SIZE
+    rather than count. 10,000 short SMILES parse in 0.14 s, but 1,000 at
+    MAX_MOLECULE_SMILES_LENGTH take 29.1 s -- so a full 10,000-molecule upload
+    of large molecules is roughly 290 s of GIL-held CPU from one request well
+    inside its quota. The molecule-count caps never bounded it, because they
+    count molecules.
+
+    Asserts the dispatch happens, not a downstream effect: under
+    task_always_eager the task runs inline in this very process, so any
+    behavioural assertion would pass whether or not anything was dispatched.
+    """
+    dispatched: dict = {}
+    real = tasks.parse_input.apply_async
+
+    def _spy(*args, **kwargs):
+        dispatched["queue"] = kwargs.get("queue")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(tasks.parse_input, "apply_async", _spy)
+
+    r = client.post("/api/jobs", json={"text": "CCO\nCCC\n"})
+
+    assert r.status_code == 200, r.text
+    assert dispatched.get("queue") == "batch", (
+        "the upload was parsed in the web process, holding the GIL against "
+        "every other request"
+    )
+
+
+def test_a_malformed_upload_still_fails_synchronously_with_a_reason(redis_client):
+    """The contract this change had to preserve, and the reason the caller
+    BLOCKS on the parse rather than being handed a job envelope.
+
+    A CSV with no smiles column must still come back as an immediate 400 that
+    names the problem. Accepting it and failing asynchronously ten seconds
+    later, with nowhere to report why, would have been a real regression
+    dressed up as an optimisation.
+    """
+    # A CSV whose header names no `smiles` column. Sniffed as CSV because the
+    # header contains "smiles" and a delimiter; rejected during the parse
+    # because "smiles_x" is not "smiles".
+    r = client.post("/api/jobs", json={"text": "smiles_x,id\nCCO,a\n"})
+
+    assert r.status_code == 400, r.text
+    assert "smiles" in r.text.lower()
+
+    # And an input that parses cleanly to nothing at all.
+    empty = client.post("/api/jobs", json={"text": "   \n  \n"})
+    assert empty.status_code == 400, empty.text
+
+
+def test_the_parse_falls_back_in_process_when_no_worker_answers(monkeypatch, redis_client):
+    """A valid upload must not 503 because the batch queue is idle.
+
+    This is the honest limit of the change: the CPU moves whenever a worker is
+    available, and when one is not, behaviour is exactly what it was before.
+    Never worse, which is what makes it safe to ship without an operational
+    prerequisite.
+    """
+    from celery.exceptions import TimeoutError as CeleryTimeoutError
+
+    class _NeverAnswers:
+        def get(self, timeout=None):
+            raise CeleryTimeoutError("no worker")
+
+    monkeypatch.setattr(
+        tasks.parse_input, "apply_async", lambda *a, **k: _NeverAnswers()
+    )
+
+    r = client.post("/api/jobs", json={"text": "CCO\nCCC\n"})
+
+    assert r.status_code == 200, r.text
+    assert r.json()["molecule_count"] == 2
