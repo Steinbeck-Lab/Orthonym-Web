@@ -1,26 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import DOMPurify from 'dompurify'
 import { explainMolecule, explainName } from '../lib/api'
 import { nameTargets, sliceName } from '../lib/nameTargets'
+import { sanitizeSvg, atomRefsOf, segmentAtPath } from '../lib/svgHighlight'
 import './Explain.css'
-
-// The SVG comes from STITCH's own backend (RDKit-generated structure
-// drawing, never raw user text echoed into markup), but it's injected
-// directly into the DOM (see the effect below) -- unlike an <img
-// src="data:..."> elsewhere in this app, inlined SVG becomes live DOM and
-// could execute embedded scripts/handlers if the backend or a future
-// change ever introduced one. Sanitize defensively regardless of the
-// current trusted source. `class`/`style` are explicitly kept: the
-// hover-highlighting mechanism below depends on both (atom-N/bond-N
-// classes to find elements, inline style to read/restore their original
-// stroke and fill colors).
-function sanitizeSvg(svg) {
-  return DOMPurify.sanitize(svg, {
-    USE_PROFILES: { svg: true, svgFilters: true },
-    ADD_ATTR: ['class', 'style'],
-  })
-}
 
 // Curated structures spanning what the decomposition really does now that
 // it comes from OPSIN's own parse tree rather than SMARTS rules: a simple
@@ -34,28 +17,6 @@ const EXAMPLES = [
   { label: 'ibuprofen', smiles: 'CC(C)Cc1ccc(cc1)C(C)C(=O)O' },
   { label: 'benzene', smiles: 'c1ccccc1' },
 ]
-
-// Matches a CSS class attribute like "bond-1 atom-1 atom-2" or "atom-2" --
-// pulls out every atom-N reference on that SVG element.
-const ATOM_REF_RE = /atom-(\d+)/g
-
-function atomRefsOf(classAttr) {
-  if (!classAttr) return []
-  return [...classAttr.matchAll(ATOM_REF_RE)].map((m) => Number(m[1]))
-}
-
-// Resolves a dotted path like "0.2" to its segment: top-level index 0, then
-// its child index 2. Returns null for a stale path, which happens normally
-// when `data` changes while something is still pinned.
-function segmentAtPath(segments, path) {
-  if (path === null || path === undefined) return null
-  const parts = String(path).split('.').map(Number)
-  let node = segments?.[parts[0]]
-  for (let i = 1; i < parts.length && node; i += 1) {
-    node = node.children?.[parts[i]]
-  }
-  return node || null
-}
 
 function SegmentNode({ segment, path, activePath, setHoveredPath, togglePath }) {
   const isActive = activePath === path
