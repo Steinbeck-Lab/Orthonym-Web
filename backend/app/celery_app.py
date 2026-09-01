@@ -213,6 +213,30 @@ def _start_status_heartbeat(
     return thread
 
 
+def _opsin_can_verify() -> bool:
+    """Can OPSIN verify a name in this process?
+
+    Deliberately NOT opsin_decompose.self_check(): that resolves the
+    package-private reflection handles /explain needs, and returns False when
+    OPSIN's internal shape changes even though name verification is fine.
+    This asks only the question require_a_live_jvm() actually refuses on.
+
+    Returns False rather than raising on any import or probe failure -- the
+    fail-closed direction, since a worker that cannot answer must not be
+    counted as having a usable OPSIN.
+    """
+    try:
+        from openstout.jvm_bridge import opsin_available
+
+        return bool(opsin_available())
+    except Exception:
+        logger.exception(
+            "Celery child: could not determine whether OPSIN can verify "
+            "names; treating this worker as having none."
+        )
+        return False
+
+
 def _stamp_without_raising(record, pid: int, *, ok: bool) -> None:
     """Write this child's boot verdict, swallowing a Redis failure.
 
@@ -262,6 +286,10 @@ def _start_child_jvm(**_kwargs) -> None:
     non-zero and the pool respawns it forever. os._exit is the only safe way
     to fail hard.
     """
+    # Imported INSIDE the function, not at module scope: importing
+    # opsin_decompose (or openstout.jvm_bridge through it) in the Celery
+    # PARENT risks starting a JVM before fork, which is the exact condition
+    # _assert_parent_has_no_jvm exists to prevent.
     from app import opsin_decompose
     from app.redis_store import record_worker_opsin_status
 
@@ -296,15 +324,36 @@ def _start_child_jvm(**_kwargs) -> None:
             )
         return
 
+    # Two DIFFERENT questions, deliberately answered separately (audit item
+    # CC5-jvm-overrefusal).
+    #
+    # `naming_ok` is the one that gates the site. It asks whether OPSIN can
+    # verify a name at all, which is what SELF-01 needs and therefore what
+    # require_a_live_jvm() must refuse on: SELF-01 fails OPEN, so serving
+    # names with nobody verifying them ships a fallback labelled pin.
+    #
+    # `decompose_ok` asks a narrower question -- whether OPSIN's
+    # package-private parse-tree shape is still what opsin_decompose reflects
+    # into. Only /explain and /teach need it, and they already degrade
+    # honestly on their own ("could not decompose" rather than a guess).
+    #
+    # These used to be the same call. opsin_decompose._get_handles() returns
+    # None for BOTH reasons, so a vendored OPSIN bump that moved an internal
+    # class -- leaving name verification working perfectly -- took
+    # /api/translate, /api/jobs and the three GET endpoints down site-wide
+    # with a 503 asserting "OPSIN cannot verify any name", which would have
+    # been false. Spec section 5's Failure A treated as Failure B.
+    naming_ok = _opsin_can_verify()
     decompose_ok = opsin_decompose.self_check()
-    _stamp_without_raising(record_worker_opsin_status, pid, ok=decompose_ok)
+    _stamp_without_raising(record_worker_opsin_status, pid, ok=naming_ok)
     logger.info(
-        "Celery child %s: OPSIN name decomposition %s",
+        "Celery child %s: OPSIN name verification %s; name decomposition %s",
         pid,
-        "available" if decompose_ok else "DISABLED (see preceding log)",
+        "available" if naming_ok else "UNAVAILABLE (naming will be refused)",
+        "available" if decompose_ok else "DISABLED (/explain and /teach only)",
     )
     try:
-        _start_status_heartbeat(pid, ok=decompose_ok)
+        _start_status_heartbeat(pid, ok=naming_ok)
     except Exception:
         # Same "never raise from here" contract as the inherited-JVM branch
         # above: a failure to start the heartbeat thread must not escape
