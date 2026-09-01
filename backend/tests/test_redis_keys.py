@@ -1,3 +1,5 @@
+import time
+
 from app import redis_store
 
 
@@ -243,3 +245,45 @@ def test_any_worker_has_opsin_ignores_an_aged_out_entry(
         assert redis_store.any_worker_has_opsin() is False
     finally:
         redis_client.hdel("orthonym:workers:opsin", "999005")
+
+
+def test_closing_a_job_does_not_push_its_expiry_past_what_it_promised(redis_client):
+    """deferred-3: assemble_rows re-armed the meta key with a PLAIN EXPIRE,
+    while _retag_if_untagged and the begin_chunk Lua both use NX for exactly
+    this reason.
+
+    create_job records an absolute `expires` field, and GET /api/jobs/{id}
+    reports it as expires_at. A plain EXPIRE at close restarts the full 24
+    hours from the moment the job finished, so the real expiry drifts past
+    the advertised one by roughly the job's runtime -- on a long batch, hours.
+
+    The elapsed time has to be simulated for the drift to be visible at all.
+    A first draft of this test created and closed the job in the same second,
+    where `now + TTL` and `created + TTL` are equal by construction and the
+    assertion passed with the bug still in place. Ageing the job by an hour
+    is what makes the two branches distinguishable.
+
+    It errs safe (data lives longer than promised, never shorter), which is
+    why it was deferred. Fixed anyway because leaving one half of an
+    NX/non-NX pair inconsistent inside a single file is how this bug class
+    comes back.
+    """
+    job_id = "job-ttl-drift-probe"
+    redis_store.create_job(job_id, total=1, fmt="smiles_list", client_ip="203.0.113.9")
+    meta_key = redis_store.job_meta_key(job_id)
+    try:
+        aged_by = 3600  # pretend the job was submitted an hour ago
+        promised = int(redis_client.hget(meta_key, "expires")) - aged_by
+        redis_client.hset(meta_key, "expires", promised)
+        redis_client.expire(meta_key, redis_client.ttl(meta_key) - aged_by)
+
+        redis_store.write_chunk(job_id, 0, [{"index": 0, "input": "CCO", "status": "pin"}])
+        redis_store.assemble_rows(job_id, n_chunks=1)
+
+        actual_expiry = int(time.time()) + redis_client.ttl(meta_key)
+        assert actual_expiry <= promised + 5, (
+            f"the key now expires {actual_expiry - promised}s after the "
+            "expires_at the API already reported to the caller"
+        )
+    finally:
+        redis_client.delete(meta_key, redis_store.job_rows_key(job_id))

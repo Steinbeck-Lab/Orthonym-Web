@@ -266,7 +266,14 @@ def assemble_rows(job_id: str, n_chunks: int) -> int:
         # reachable only through a caller bug -- but an exception here would
         # lose the rows already assembled above.
         client.delete(*(job_chunk_key(job_id, i) for i in range(n_chunks)))
-    client.expire(job_meta_key(job_id), settings.JOB_RESULT_TTL_SECONDS)
+    # nx=True, matching _retag_if_untagged and _BEGIN_CHUNK_SCRIPT (deferred
+    # item 3). A plain EXPIRE here restarted the 24 hours from the moment the
+    # job closed, so the real expiry drifted past the absolute `expires` that
+    # create_job recorded and GET /api/jobs/{id} already reported as
+    # expires_at -- by roughly the job's runtime, which on a long batch is
+    # hours. NX re-arms the key only if it somehow lost its TTL, which is the
+    # case this call exists for.
+    client.expire(job_meta_key(job_id), settings.JOB_RESULT_TTL_SECONDS, nx=True)
     return written
 
 
