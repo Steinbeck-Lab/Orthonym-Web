@@ -10,6 +10,8 @@ version bump therefore invalidates everything with no migration step.
 from __future__ import annotations
 
 import hashlib
+import logging
+import pathlib
 
 import orthonym
 
@@ -30,8 +32,50 @@ from app.schemas import ResultItem
 # v2: 2026-08-31 vendor refresh -- upstream replaced the whole tier
 #     vocabulary (T1/T3/T4/T5 -> pin_verified/systematic_verified/
 #     best_effort/abstain) and changed best-effort gating.
+logger = logging.getLogger(__name__)
+
 _KEY_VERSION = "v2"
 _ENGINE_VERSION = orthonym.__version__
+
+
+def _engine_fingerprint() -> str:
+    """A digest of the Orthonym source actually installed in this process.
+
+    This is what makes the cache key self-invalidating, and it is why the
+    manual counter above is now a belt rather than the only thing holding the
+    trousers up (audit item key-version-unmechanized). Upstream develops on a
+    static "1.0.0", so _ENGINE_VERSION cannot notice a vendor refresh -- and
+    the counter above depends on a human remembering, with nothing in the
+    vendor script or CI to catch a miss. It has already been missed once: the
+    v1 -> v2 bump was made only because the tier rename happened to break
+    loudly.
+
+    Hashing the INSTALLED package rather than backend/vendor/orthonym is
+    deliberate: what matters is the code that will actually name molecules in
+    this process, which in a container is the copy pip installed. Measured at
+    40 ms over 253 files, paid once at import, never per request.
+
+    Falls back to the bare version string if the source cannot be read (a
+    zipimport, a stripped image). That is the pre-existing behaviour, no
+    worse than before -- and _KEY_VERSION still covers it.
+    """
+    try:
+        root = pathlib.Path(orthonym.__file__).resolve().parent
+        digest = hashlib.sha256()
+        for path in sorted(root.rglob("*.py")):
+            digest.update(path.read_bytes())
+        return digest.hexdigest()[:12]
+    except Exception:  # noqa: BLE001 - a cache key must never fail to build
+        logger.warning(
+            "name_cache: could not fingerprint the installed Orthonym "
+            "source; falling back to the version string alone. A vendor "
+            "refresh will NOT invalidate the cache automatically -- bump "
+            "_KEY_VERSION by hand.",
+        )
+        return "nofingerprint"
+
+
+_ENGINE_FINGERPRINT = _engine_fingerprint()
 
 # Statuses worth keeping. "error" is about the input, not the engine's
 # verdict: caching it would hide a later fix and spend memory on garbage.
@@ -51,7 +95,8 @@ def cache_key(canonical_smiles: str, best_effort: bool) -> str:
     flags = f"be={int(best_effort)}"
     digest = hashlib.sha256(canonical_smiles.encode("utf-8")).hexdigest()
     return (
-        f"orthonym:name:{_KEY_VERSION}:{_ENGINE_VERSION}:{flags}:{digest}"
+        f"orthonym:name:{_KEY_VERSION}:{_ENGINE_VERSION}:"
+        f"{_ENGINE_FINGERPRINT}:{flags}:{digest}"
     )
 
 

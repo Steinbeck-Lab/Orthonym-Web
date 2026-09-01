@@ -245,3 +245,43 @@ def test_an_abstain_is_cached(redis_client):
         assert name_cache.get_cached(item.smiles, best_effort=True).status == "abstain"
     finally:
         redis_client.delete(key)
+
+
+def test_the_key_changes_when_the_engine_source_changes(monkeypatch):
+    """key-version-unmechanized: _ENGINE_VERSION cannot invalidate the cache,
+    because upstream Orthonym develops on a static "1.0.0" and does not bump
+    per change. A vendor refresh could therefore change naming behaviour while
+    the key stayed identical, serving names from the old engine beside tiers
+    computed by the new one -- the PRODUCT.md principle 2 violation the key
+    exists to prevent.
+
+    Until now the only defence was a hand-maintained counter with nothing in
+    the vendor script or CI to catch a miss, and it HAS been missed: the
+    v1 -> v2 bump happened only because that particular refresh broke loudly.
+
+    The key now carries a digest of the installed Orthonym source, so a
+    refresh invalidates it whether or not anyone remembers.
+    """
+    before = name_cache.cache_key("CCO", best_effort=True)
+    monkeypatch.setattr(name_cache, "_ENGINE_FINGERPRINT", "deadbeef1234")
+    assert name_cache.cache_key("CCO", best_effort=True) != before
+
+
+def test_the_fingerprint_is_stable_across_calls():
+    """The other half: it must not change per call, or every request is a
+    cache miss and the cache does nothing at all.
+    """
+    assert name_cache._engine_fingerprint() == name_cache._engine_fingerprint()
+    assert name_cache._ENGINE_FINGERPRINT == name_cache._engine_fingerprint()
+
+
+def test_the_fingerprint_falls_back_rather_than_raising(monkeypatch):
+    """A cache key must never fail to build. If the source cannot be read --
+    a zipimport, a stripped image -- degrade to the version string alone,
+    which is exactly the pre-existing behaviour, and say so loudly enough
+    that the manual counter is understood to be load-bearing again.
+    """
+    monkeypatch.setattr(
+        name_cache.pathlib.Path, "rglob", lambda self, pat: (_ for _ in ()).throw(OSError("nope"))
+    )
+    assert name_cache._engine_fingerprint() == "nofingerprint"
