@@ -70,15 +70,6 @@ _PARENTS = {
     "acet": "a two-carbon acetyl skeleton",
 }
 
-_MULTIPLIERS = {
-    "di": "two of them",
-    "tri": "three of them",
-    "tetra": "four of them",
-    "penta": "five of them",
-    "hexa": "six of them",
-}
-
-
 def _lookup(table: dict, text: str) -> str | None:
     key = text.strip("-").lower()
     if key in table:
@@ -181,7 +172,3 @@ def describe_locant(kind: str, locant: str, element: str | None = None) -> str:
             f"here. The other parts are unaffected."
         )
     return f"Position {locant}."
-
-
-def describe_multiplier(text: str) -> str | None:
-    return _lookup(_MULTIPLIERS, text)

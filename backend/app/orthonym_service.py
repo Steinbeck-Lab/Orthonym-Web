@@ -279,8 +279,3 @@ def translate_one(smiles: str, best_effort: bool = True) -> ResultItem:
         roundtrip_smiles=roundtrip_smiles,
         roundtrip_match=roundtrip_match,
     )
-
-
-def translate_many(smiles_list: list[str], best_effort: bool = True) -> list[ResultItem]:
-    """Translate each SMILES string, preserving input order."""
-    return [translate_one(s, best_effort=best_effort) for s in smiles_list]

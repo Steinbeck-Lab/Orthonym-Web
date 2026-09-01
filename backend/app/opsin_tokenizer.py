@@ -74,7 +74,6 @@ from __future__ import annotations
 
 import re
 import threading
-from pathlib import Path
 from typing import NamedTuple, Optional
 
 from orthonym.validation.opsin_roundtrip import PROJECT_ROOT
