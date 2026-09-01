@@ -31,7 +31,13 @@ PYTHONPATH="$(pwd)" \
   .venv-mac/bin/python -m pytest "$@" > "$LOG" 2>&1 &
 PYTEST_PID=$!
 
-SUMMARY='^=+ .*(passed|failed|error|no tests ran)'
+# Matches BOTH pytest's banner form ("==== 4 passed in 0.1s ====") and the
+# bare form -q prints ("4 passed in 0.1s"). The banner-only pattern made
+# `run-tests.sh <file> -q` report "NO PYTEST SUMMARY after 180s" on a suite
+# that had already passed -- a false hang, because -q suppresses the ===
+# rule the old regex anchored on. Found by a documentation audit that ran
+# the script rather than reading it.
+SUMMARY='^(=+ .*(passed|failed|error|no tests ran)|[0-9]+ (passed|failed|error)|no tests ran)'
 WAIT_SECONDS=${ORTHONYM_TEST_WAIT:-180}
 
 for _ in $(seq 1 "$WAIT_SECONDS"); do
