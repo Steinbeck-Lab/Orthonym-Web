@@ -23,6 +23,7 @@ OPSIN unavailable altogether, which Task 8's build-time check guards.
 
 import logging
 import os
+import threading
 
 from celery import Celery
 from celery.signals import celeryd_init, worker_process_init
@@ -123,6 +124,82 @@ def _assert_parent_has_no_jvm(**_kwargs) -> None:
     )
 
 
+def _start_status_heartbeat(
+    pid: int, ok: bool, stop_event: threading.Event | None = None
+) -> threading.Thread:
+    """Start a daemon thread that re-stamps this child's boot verdict every
+    `_WORKER_STATUS_TTL // 3` seconds, for as long as the process lives.
+
+    Final review report, C1: record_worker_opsin_status used to be called
+    exactly once per child, at worker_process_init, and nothing else ever
+    called it again -- no beat schedule, no task_prerun, no
+    worker_heartbeat. redis_store._WORKER_STATUS_TTL's own docstring rests
+    on "as long as at least one worker writes periodically"; nothing did,
+    so any_worker_has_opsin() went False ~120s after every worker's last
+    boot and stayed False forever, 503ing every naming endpoint on an
+    otherwise perfectly healthy deployment.
+
+    Re-stamping on the task path (task_prerun) was considered and
+    rejected: it deadlocks on an idle site. No traffic means no stamps,
+    the status ages out, require_a_live_jvm() 503s -- and a 503'd request
+    never reaches a worker, so nothing re-stamps. The gate would block the
+    very traffic that would refresh it. A timer that runs regardless of
+    traffic is the only thing that closes that loop, and there is no
+    recurring per-child Celery signal to hang one on in prefork mode, so
+    it has to be this thread.
+
+    This re-stamps the BOOT verdict, not a fresh self_check() -- calling
+    self_check() again would just return opsin_decompose._get_handles()'s
+    cached answer anyway. So this thread proves "this child process is
+    still alive," not "OPSIN still works in this child" -- a JVM that dies
+    mid-life keeps reporting healthy. That is the same exposure the code
+    already had (the stamp was always a boot verdict); it is not widened
+    by this fix, but it is why C3's cache guard is independently required
+    and not made redundant by this thread.
+
+    daemon=True so it can never block worker shutdown. The write itself is
+    wrapped in try/except: a transient Redis blip must cost one missed
+    beat, not the heartbeat itself -- an uncaught exception here would end
+    the thread silently (Python's default threading.excepthook logs and
+    moves on) and this child would never beat again.
+
+    `stop_event` is normally None (the thread simply runs until the
+    process exits); tests pass their own Event so they can shut the thread
+    down cleanly instead of leaking a background thread into the rest of
+    the suite.
+    """
+    from app.redis_store import _WORKER_STATUS_TTL, record_worker_opsin_status
+
+    interval = _WORKER_STATUS_TTL // 3
+    event = stop_event if stop_event is not None else threading.Event()
+
+    def _beat() -> None:
+        # event.wait(interval) sleeps for `interval` seconds UNLESS the
+        # event is set first, in which case it returns True immediately
+        # and the loop exits -- a sleep that a test can cut short.
+        while not event.wait(interval):
+            try:
+                record_worker_opsin_status(pid, ok=ok)
+            except Exception:
+                logger.exception(
+                    "Celery child %s: heartbeat failed to re-stamp its "
+                    "OPSIN status; will retry in %ss.",
+                    pid,
+                    interval,
+                )
+
+    thread = threading.Thread(
+        target=_beat, name=f"opsin-status-heartbeat-{pid}", daemon=True
+    )
+    thread.start()
+    logger.info(
+        "Celery child %s: started OPSIN status heartbeat (every %ss).",
+        pid,
+        interval,
+    )
+    return thread
+
+
 @worker_process_init.connect
 def _start_child_jvm(**_kwargs) -> None:
     """Runs inside each forked CHILD. This is where its own JVM starts.
@@ -152,6 +229,7 @@ def _start_child_jvm(**_kwargs) -> None:
             pid,
         )
         record_worker_opsin_status(pid, ok=False)
+        _start_status_heartbeat(pid, ok=False)
         return
 
     decompose_ok = opsin_decompose.self_check()
@@ -161,3 +239,4 @@ def _start_child_jvm(**_kwargs) -> None:
         pid,
         "available" if decompose_ok else "DISABLED (see preceding log)",
     )
+    _start_status_heartbeat(pid, ok=decompose_ok)
