@@ -491,27 +491,12 @@
   text-transform: uppercase;
   color: var(--muted);
   cursor: pointer;
-  transition:
-    color 200ms cubic-bezier(0.16, 1, 0.3, 1),
-    border-end-start-radius 260ms cubic-bezier(0.16, 1, 0.3, 1),
-    border-end-end-radius 260ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: color 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .info__notch:hover,
 .info--open .info__notch {
   color: var(--ink);
-}
-
-/* OPEN: the tab's bottom corners square off, because the panel is now welded
-   to its underside. A rounded bottom edge against a flat panel top leaves
-   two crescents of ground at the join -- which is exactly the gap that made
-   the panel read as a separate box floating below the tab. Squared, the white
-   runs card -> fillet -> tab -> panel with no seam in it, which is the whole
-   point of a tab. The radius is transitioned so the tab does not snap shape
-   under the drawer that is still opening. */
-.info--open .info__notch {
-  border-end-start-radius: 0;
-  border-end-end-radius: 0;
 }
 
 .info__notch:focus-visible {
@@ -627,16 +612,12 @@
   transition-delay: 0s;
 }
 
-/* WELDED to the tab's underside, not floating below it. The -1px is what
-   guarantees no hairline of ground survives between them at any zoom; the
-   tab carries z-index: 1 and an opaque fill, so it paints over that overlap
-   and over the sliver of the panel's shadow that reaches above its own top
-   edge (--card-shadow offsets both layers downward, by 1px and 12px, so
-   there is almost nothing up there to cover).
-   The panel keeps the full card radius: the tab is inset 72px from the right
-   edge, so the panel's own 22px corners are nowhere near it. */
+/* Its own lifted card, below the notch rather than welded to it. The
+   fillets already make the tab part of the input card; the panel is the
+   thing the tab reveals, so it gets the full card radius and its own
+   shadow, exactly like the mobile menu panel the header drops. */
 .info__panel {
-  margin-top: -1px;
+  margin-top: var(--gap);
   padding: var(--s-sm) clamp(var(--s-sm), 1.6vw, var(--s-md)) var(--s-md);
   background: var(--card);
   border: var(--card-border);
