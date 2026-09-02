@@ -59,6 +59,17 @@ class Settings(BaseSettings):
     JOB_RESULT_TTL_SECONDS: int = 86400
     NAME_CACHE_TTL_SECONDS: int = 604800
 
+    # The four per-minute budgets below are INDEPENDENT keys
+    # (ratelimit.py:160-172: :minute, :depict, :poll, :download), and nothing
+    # aggregates them. So the real per-IP ceiling is their sum --
+    # 60 + 1200 + 300 + 10 = 1,570 requests a minute -- which is stated
+    # nowhere else and is not what any single number here suggests (audit item
+    # CC2-independent-buckets). It is deliberate: the request COUNT is not the
+    # cost. Three of the four buckets are cheap (one Redis GET, or pure RDKit
+    # with no JVM behind it) and only RATE_LIMIT_FAST_PER_MINUTE spends a
+    # worker's OPSIN round trip, so the cost ceiling sits far below 1,570
+    # units of work. Adding a fifth bucket raises this sum -- price it before
+    # you do.
     RATE_LIMIT_MAX_CONCURRENT_JOBS: int = 2
     RATE_LIMIT_JOBS_PER_HOUR: int = 20
     RATE_LIMIT_FAST_PER_MINUTE: int = 60

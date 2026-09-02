@@ -51,7 +51,7 @@ equal `medium.yml`'s values — compose always sets it explicitly.
 You need **four** processes, not two. Redis first:
 
 ```bash
-docker start orthonym-redis-dev    # or: docker run -d --name orthonym-redis-dev -p 6379:6379 redis:7-alpine
+docker compose up -d redis    # service orthonym-redis, publishes localhost:6379
 ```
 
 ```bash
@@ -91,7 +91,7 @@ Two things that will bite:
 ## Tests
 
 ```bash
-docker start orthonym-redis-dev        # required — the suite fails with instructions without it
+docker compose up -d redis           # required — the suite fails with instructions without it
 backend/scripts/run-tests.sh         # whole suite
 backend/scripts/run-tests.sh tests/test_inputs.py -v
 ```
