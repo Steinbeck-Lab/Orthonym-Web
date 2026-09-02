@@ -9,7 +9,13 @@
 export const STATE_LABEL = {
   pin: 'Preferred IUPAC Name (PIN)',
   fallback: 'Not a verified PIN',
-  best_effort: 'Unverified best-effort name — could not round-trip check this',
+  // "did not confirm it" and not "could not round-trip check this": a
+  // best-effort result covers BOTH the case where OPSIN parsed the name and
+  // disagreed (roundtrip_smiles set, match false) and the case where OPSIN
+  // could not parse it at all (roundtrip_smiles null). The old wording was
+  // only true of the second, and claimed the check had not happened when it
+  // usually had. The tile prints the actual verdict underneath either way.
+  best_effort: 'Unverified best-effort name — OPSIN did not confirm it',
   abstain: 'Could not confidently name this',
   error: null, // uses the literal API error message instead
 }
