@@ -171,9 +171,16 @@ is not offered). Learn drops the SMILES tab entirely rather than mislabel it, pe
 spec's rule against naming a format. Home (`/`, "Translate") renders results through
 `SamplerGrid`/`Tile`. Four
 routes open with the same `.page-head` card (a wide title+lede card); **Home does not** — since
-2026-09-02 it opens with `.home-hero`, which is deliberately **not a card** (no fill, border or
-shadow — the owner asked for no white background there): the wordmark over a CSS crimson flare on
-the bare grey ground, plus a tagline, and its old title+lede card and its accuracy band were both removed at
+2026-09-02 it opens with `.home-hero`, which is deliberately **not a card** (no fill, border,
+shadow — or `isolation`; the owner asked for no white background there): the wordmark on the bare
+grey ground **lit by a real WebGPU flare** (`frontend/src/lib/flare/`, vendored from vgpu's
+`nextjs-flare` example, vercel-labs/vgpu, MIT — a 48-step ray walk in WGSL that rakes light along
+the letter outlines, with the live `<h1>` as its light source and the frame inverted into a crimson
+veil composited `multiply`, because light-on-light is invisible on grey). It is a dynamic import
+(180 kB chunk) behind `'gpu' in navigator` and `prefers-reduced-motion`; without those, no canvas
+mounts and the wordmark keeps a CSS halo. **Read DESIGN.md's `.home-hero` entry before touching
+it** — four of its choices are departures from upstream that look arbitrary and are not. Plus a
+tagline, and its old title+lede card and its accuracy band were both removed at
 the owner's request. Every route closes on the same footer.
 The working part of each route is a **contained** `.workspace` card grid (two rounded cards, input
 | output, inside the `--shell-max` column — Home's is named `.workbench`; `/explain` adds
