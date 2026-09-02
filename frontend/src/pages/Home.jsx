@@ -425,11 +425,16 @@ function Home() {
         </p>
       </section>
 
-      {/* --draw flips the split so the editor takes the wide cell, exactly as
-          /explain's .workspace--draw does: Ketcher is unusable in the narrow
-          column. */}
+      {/* ONE geometry per state, and the state is "is there anything to
+          show", never "which tab is open".
+          It used to flip to 8fr/4fr on the Draw tab so Ketcher got the wide
+          cell. Measured, that made the input card resize on every tab
+          switch -- 686x881 paste, 686x720 upload, 1372x1028 draw -- while
+          sitting at the left of an almost empty second column. Now: one
+          centred column until there are results, then an even split, and the
+          field area holds a fixed height so the tabs cannot move anything. */}
       <main
-        className={inputMode === 'draw' ? 'workbench workbench--draw' : 'workbench'}
+        className={job || hasResults ? 'workbench workbench--split' : 'workbench'}
         aria-label="Translate SMILES to IUPAC names"
       >
         {fetchError && (
