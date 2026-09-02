@@ -263,11 +263,16 @@
     padding-inline: 0;
   }
 
+  /* The island UNFOLDS rather than snapping open: the wordmark leads, the
+     hairlines follow, GitHub last. The delays live only on the open state,
+     so closing is immediate -- a nav that takes its time getting out of the
+     way is a nav that feels slow. */
   .notch--bar:hover .brand__word,
   .notch--bar:focus-within .brand__word {
     max-width: 12ch;
     margin-left: 10px;
     opacity: 1;
+    transition-delay: 0ms;
   }
 
   .notch--bar:hover .notch__rule,
@@ -275,6 +280,7 @@
     max-width: 1px;
     margin-inline: var(--s-md);
     opacity: 1;
+    transition-delay: 70ms;
   }
 
   .notch--bar:hover .site-head__ext,
@@ -283,6 +289,7 @@
     margin-left: var(--s-xs);
     padding-inline: 12px;
     opacity: 1;
+    transition-delay: 110ms;
   }
 
   /* A pointer that cannot hover never gets the reveal, so on those devices
@@ -509,6 +516,32 @@
   border-radius: 50%;
   background: var(--accent);
   flex: none;
+}
+
+/* Arriving somewhere. The pill slides to the new route and, for one beat, the
+   crimson dot is drawn out into a short dash and released -- a stitch pulled
+   tight. Same motif as the footer's self-sewing join, which is what makes it
+   a signature and not a trick. transform only, so it costs nothing, and the
+   dot keeps its own centre while it stretches. */
+.site-nav--arrived .site-nav__link--active::before {
+  animation: nav-stitch 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes nav-stitch {
+  0% {
+    transform: scaleX(3.4);
+    border-radius: 999px;
+  }
+  100% {
+    transform: scaleX(1);
+    border-radius: 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-nav--arrived .site-nav__link--active::before {
+    animation: none;
+  }
 }
 
 .site-head__ext {
