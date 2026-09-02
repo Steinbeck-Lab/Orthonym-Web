@@ -354,8 +354,31 @@ function Home() {
     setValidationNote(null)
   }
 
-  function handleExamplePick(example) {
+  async function handleExamplePick(example) {
     if (isSubmitting) return
+
+    // On the Draw tab an example DRAWS itself rather than naming itself.
+    // Translating it there would answer a question the tab is not asking and
+    // leave the canvas empty; loading it in means you can look at the
+    // structure, edit it, and then press Translate -- which is the whole
+    // point of picking an example while drawing.
+    if (inputMode === 'draw') {
+      const ketcher = getKetcher()
+      if (!ketcher) {
+        setValidationNote('The drawing area is still starting up. Give it a moment and try again.')
+        return
+      }
+      try {
+        await ketcher.setMolecule(example.smiles)
+      } catch {
+        setValidationNote('Could not load that structure into the editor.')
+        return
+      }
+      setSmilesText(example.smiles)
+      setValidationNote(null)
+      return
+    }
+
     setSmilesText(example.smiles)
     setValidationNote(null)
     runTranslate([example.smiles])
