@@ -211,9 +211,10 @@ The world **began** pinned by the user to the "Bugatti design analysis" template
 **ChemAudit-chrome + TechX-card-bento** hybrid. Recorded departures from the Bugatti source —
 each user-instructed or forced by product truth, do not "fix" them back: light inversion; substitute
 open-source faces; a sans body (Public Sans) in place of the source's Garamond serif; WCAG 2.2 AA
-contrast repairs; real hover states; the **ChemAudit floating-glass header/footer** (light-only,
-theme toggle dropped); the **one crimson chrome accent**; the **TechX card bento body** (grey
-ground, rounded lifted cards, contained 1600px, selective bold for stat figures) that replaced the
+contrast repairs; real hover states; the **ChemAudit chrome** (light-only, theme toggle dropped) —
+whose floating-glass header and footer band were themselves replaced on 2026-09-02 by a notch
+island and a bandless pill footer, also by instruction; the **one crimson chrome accent**; the **TechX card bento body** (grey
+ground, rounded lifted cards, contained `--shell-max`, selective bold) that replaced the
 flat 0-radius hairline-seam full-bleed body; and (load-bearing) **the chemical name is never
 uppercased**, because IUPAC case is semantic. DESIGN.md records each with its reason. Two earlier worlds are **historical, not current**: the warm ecru/dot-grid "Citation" system
 (Inter + Silkscreen, citation register, bracketed chips, citation-red margin rule) and the

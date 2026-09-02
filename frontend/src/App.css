@@ -148,13 +148,16 @@
   height: 100%;
 }
 
-/* -------------------- site header (floating glass bar) -------------------- */
-/* ChemAudit's signature: a rounded, blurred bar that floats over the canvas
-   and sticks to the top. Adapted toward Bugatti — Orthonym's own faces
-   (Saira wordmark, mono nav), the one crimson accent for the logo mark and
-   the active route, and no theme toggle (this build is light-only). This is
-   the ONE place the system allows a >0 radius and a soft shadow; the body
-   below it stays flat with hairline seams. Pure-CSS motion, no JS deps. */
+/* -------------------- site header (notch islands) -------------------- */
+/* Three white islands hang off the top edge of the window: brand at the
+   left, routes in the middle, GitHub at the right. Each is welded to the
+   edge by a pair of concave fillets (.notch__wing), so the row reads as
+   shapes CARVED OUT of the top of the page rather than a bar floating over
+   it. Ported by shape only from an adaptive-notch navigation component the
+   owner pinned on 2026-09-02; none of its code is here, and it replaced
+   ChemAudit's floating glass bar (which is why the glass tokens now have one
+   consumer left, the mobile menu panel). Pure CSS, no JS deps -- the only
+   script in the header is the measurement behind the sliding pill. */
 
 .site-head {
   position: sticky;
@@ -162,49 +165,199 @@
   z-index: 50;
   display: flex;
   justify-content: center;
-  padding: 12px clamp(12px, 3vw, 20px) 6px;
-  pointer-events: none; /* let the gutter beside the floating bar pass clicks */
+  padding-inline: clamp(12px, 3vw, 20px);
+  pointer-events: none; /* the gutter beside an island passes clicks through */
 }
 
 .site-head__inner {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-xs);
+  position: relative;
   width: 100%;
   /* the TOKEN, not a hardcoded 1600 -- this copy of the number is why the
-     floating header stayed narrow while the body widened, reading as a
-     detached bar rather than the same column. */
+     header stayed narrow once while the body widened. */
   max-width: var(--shell-max);
+  /* The islands are absolutely positioned, so this is what gives the header
+     its height and what keeps the mobile menu panel below them. */
+  padding-top: var(--notch-h);
+}
+
+.notch {
+  position: absolute;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s-md);
+  height: var(--notch-h);
+  padding-inline: var(--s-lg);
+  background: var(--card);
+  border-end-start-radius: var(--r-notch);
+  border-end-end-radius: var(--r-notch);
   pointer-events: auto;
 }
 
-.site-head__bar {
-  position: relative;
-  display: flex;
-  align-items: center;
+/* Below 960px the island is the whole width, holding the brand and the menu
+   button; above it, one centred island holds everything. Centred on the
+   SHELL rather than on its own content, so it does not drift when a label
+   changes length. */
+.notch--bar {
+  left: 0;
+  right: 0;
   justify-content: space-between;
-  gap: var(--s-lg);
-  min-height: 60px;
-  padding-inline: clamp(var(--s-md), 2vw, var(--s-lg));
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(16px) saturate(1.4);
-  backdrop-filter: blur(16px) saturate(1.4);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-panel);
-  box-shadow: var(--glass-shadow);
 }
 
-/* A faint crimson keyline along the bottom inset — the one accent, applied
-   as a hairline glow rather than a fill. */
-.site-head__bar::after {
-  content: '';
+@media (min-width: 960px) {
+  .notch--bar {
+    /* Centred by over-constraining both insets and letting auto margins do
+       the work, with an explicit max-content width. NOT `left: 50%` plus a
+       -50% transform: that leaves the island's width to shrink-to-fit inside
+       "containing block minus 50%", so on hover the extra content had nowhere
+       to go and flex squashed it -- measured, the GitHub label lost 26px and
+       its icon was crushed to zero width. */
+    left: 0;
+    right: 0;
+    width: max-content;
+    max-width: 100%;
+    margin-inline: auto;
+    transform: none;
+    justify-content: flex-start;
+    /* ZERO, deliberately: every gap in this island is a child's own margin,
+       so the collapsible parts take up no space at rest. A flex gap would
+       leave ~80px of dead air in the resting notch (two rules, the wordmark
+       and the GitHub link all still counting as flex items). */
+    gap: 0;
+    height: var(--notch-h-nav);
+    /* The island grows and shrinks with its contents; this is the transition
+       that makes that read as one movement rather than a jump. */
+    transition: padding-inline 0.34s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* --- the reveal ---------------------------------------------------
+     At rest: the mark and the five routes. On hover / focus-within: the
+     wordmark, a hairline on each side of the routes, and GitHub. Collapsed
+     parts keep their margins at 0 as well as their width, or the notch
+     carries their spacing while showing nothing. */
+  .brand {
+    gap: 0;
+  }
+
+  .brand__word,
+  .notch__rule,
+  .site-head__ext {
+    max-width: 0;
+    margin-inline: 0;
+    opacity: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    transition:
+      max-width 0.34s cubic-bezier(0.16, 1, 0.3, 1),
+      margin 0.34s cubic-bezier(0.16, 1, 0.3, 1),
+      padding 0.34s cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 0.2s ease;
+  }
+
+  .site-head__ext {
+    padding-inline: 0;
+  }
+
+  .notch--bar:hover .brand__word,
+  .notch--bar:focus-within .brand__word {
+    max-width: 12ch;
+    margin-left: 10px;
+    opacity: 1;
+  }
+
+  .notch--bar:hover .notch__rule,
+  .notch--bar:focus-within .notch__rule {
+    max-width: 1px;
+    margin-inline: var(--s-md);
+    opacity: 1;
+  }
+
+  .notch--bar:hover .site-head__ext,
+  .notch--bar:focus-within .site-head__ext {
+    max-width: 16ch;
+    margin-left: var(--s-xs);
+    padding-inline: 12px;
+    opacity: 1;
+  }
+
+  /* A pointer that cannot hover never gets the reveal, so on those devices
+     the notch simply stays open. */
+  @media (hover: none) {
+    .brand__word,
+    .notch__rule,
+    .site-head__ext {
+      max-width: none;
+      opacity: 1;
+      transition: none;
+    }
+
+    .brand__word {
+      margin-left: 10px;
+    }
+
+    .notch__rule {
+      max-width: 1px;
+      margin-inline: var(--s-md);
+    }
+
+    .site-head__ext {
+      padding-inline: 12px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .notch--bar,
+    .brand__word,
+    .notch__rule,
+    .site-head__ext {
+      transition: none;
+    }
+  }
+}
+
+/* The "|" between the brand and the routes, and between the routes and
+   GitHub. A 1px hairline, not a glyph: a typed pipe would inherit the mono
+   face's own weight and sit off-centre. */
+.notch__rule {
+  width: 1px;
+  height: 20px;
+  flex: none;
+  background: var(--hairline-strong);
+}
+
+/* The fillet. A square of card-white with a quarter-disc masked out of it,
+   which leaves a concave arc sweeping from the island's side up to the top
+   edge. The mask circle sits at the square's BOTTOM corner nearest the
+   island, so the white that survives hugs both the top edge and the island.
+   98%/100% rather than a hard stop: one soft pixel is what keeps the arc
+   from stair-stepping. */
+.notch__wing {
   position: absolute;
-  left: 12%;
-  right: 12%;
-  bottom: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--accent-line), transparent);
+  top: 0;
+  width: var(--notch-wing);
+  height: var(--notch-wing);
+  background: var(--card);
   pointer-events: none;
+}
+
+.notch__wing--left {
+  right: 100%;
+  -webkit-mask: radial-gradient(
+    circle var(--notch-wing) at 0 100%,
+    transparent 98%,
+    #000 100%
+  );
+  mask: radial-gradient(circle var(--notch-wing) at 0 100%, transparent 98%, #000 100%);
+}
+
+.notch__wing--right {
+  left: 100%;
+  -webkit-mask: radial-gradient(
+    circle var(--notch-wing) at 100% 100%,
+    transparent 98%,
+    #000 100%
+  );
+  mask: radial-gradient(circle var(--notch-wing) at 100% 100%, transparent 98%, #000 100%);
 }
 
 /* -------------------- brand -------------------- */
@@ -242,26 +395,60 @@
 }
 
 /* -------------------- desktop nav -------------------- */
+/* The nav lives inside the centre island, which is itself hidden below
+   960px, so this needs no breakpoint of its own. */
 
 .site-nav {
   display: none;
 }
 
-.site-head__aux {
+.site-head__ext {
   display: none;
 }
 
 @media (min-width: 960px) {
   .site-nav {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 2px;
+    /* Holds the routes off the brand mark at rest, when both hairlines are
+       collapsed to nothing. */
+    margin-inline: var(--s-sm);
   }
 
-  .site-head__aux {
-    display: flex;
-    align-items: center;
-    gap: var(--s-xs);
+  .site-head__ext {
+    display: inline-flex;
+  }
+}
+
+/* The active route's backing pill: ONE element for the whole nav, moved and
+   resized to the active link rather than a per-link background switching on
+   and off. Its geometry arrives from Navigation.jsx as --pill-x / --pill-w
+   because the labels are different widths and the mono face loads late; CSS
+   alone cannot know either. It gets its transition one frame after the first
+   measurement (--slides), so it does not slide in from the left on load. */
+.site-nav__pill {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  height: 34px;
+  width: var(--pill-w);
+  transform: translate(var(--pill-x), -50%);
+  border-radius: var(--r-pill);
+  background: var(--accent-wash);
+  pointer-events: none;
+}
+
+.site-nav__pill--slides {
+  transition:
+    transform 0.34s cubic-bezier(0.16, 1, 0.3, 1),
+    width 0.34s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-nav__pill--slides {
+    transition: none;
   }
 }
 
@@ -269,11 +456,14 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5ch;
-  padding: 8px 12px;
-  border-radius: 10px;
+  padding: 9px 14px;
+  border-radius: var(--r-pill);
   font-family: var(--font-mono);
-  font-size: var(--t-nav);
-  font-weight: 400;
+  /* Bigger and BOLD by instruction (2026-09-02). The system otherwise spends
+     weight 700 only on the big stat figures; the nav is the second place,
+     and DESIGN.md records it. */
+  font-size: var(--t-nav-lg);
+  font-weight: 700;
   line-height: 1;
   letter-spacing: var(--track-nav);
   text-transform: uppercase;
@@ -291,13 +481,20 @@
   text-decoration: none;
 }
 
-/* The active route is marked three ways: the crimson colour step, a faint
-   crimson pill behind it, and a crimson dot — plus aria-current from the
-   NavLink. The dot is decorative (empty content), never read aloud. */
+/* The active route is marked three ways: the crimson colour step, the faint
+   crimson pill sliding in behind it, and a crimson dot — plus aria-current
+   from the NavLink. The dot is decorative (empty content), never read aloud.
+   The link paints no background of its own any more; .site-nav__pill is the
+   background, and z-index keeps the label above it. */
+.site-nav__link {
+  position: relative;
+  z-index: 1;
+}
+
 .site-nav__link--active,
 .site-nav__link--active:hover {
   color: var(--accent);
-  background: var(--accent-wash);
+  background: transparent;
 }
 
 .site-nav__link--active::before {
@@ -309,21 +506,14 @@
   flex: none;
 }
 
-.site-head__divider {
-  width: 1px;
-  height: 20px;
-  background: var(--hairline-strong);
-  margin-inline: 2px;
-}
-
 .site-head__ext {
-  display: inline-flex;
   align-items: center;
   gap: 0.55ch;
-  padding: 7px 10px;
-  border-radius: 10px;
+  padding: 9px 12px;
+  border-radius: var(--r-pill);
   font-family: var(--font-mono);
-  font-size: var(--t-nav);
+  font-size: var(--t-nav-lg);
+  font-weight: 700;
   line-height: 1;
   letter-spacing: var(--track-nav);
   text-transform: uppercase;
@@ -341,8 +531,11 @@
 }
 
 .site-head__ext svg {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
+  /* A mark that shrinks is not a mark. If the island ever does run out of
+     room, the label may lose characters; the icon may not. */
+  flex: none;
 }
 
 /* -------------------- mobile toggle + panel -------------------- */
@@ -381,6 +574,10 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  /* .site-head passes clicks through so the gutter beside an island is not a
+     dead zone; every interactive descendant has to opt back in. */
+  pointer-events: auto;
+  margin-top: var(--s-xs);
   padding: var(--s-sm);
   background: var(--glass-bg-scrolled);
   -webkit-backdrop-filter: blur(16px) saturate(1.4);
@@ -998,7 +1195,10 @@ input.field__control {
   flex-wrap: wrap;
   gap: 0.5ch;
   margin: 0;
-  padding: 0.55rem 1.1rem;
+  /* Tighter block padding than the 0.55rem it had: the pill now contains a
+     2rem-tall wordmark, so the artwork sets the height and the padding only
+     has to clear it. */
+  padding: 0.4rem 1.1rem;
   border-radius: 999px;
   background: var(--card);
   border: 1px solid var(--hairline);

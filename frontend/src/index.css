@@ -103,7 +103,17 @@
   --glass-bg: color-mix(in srgb, #ffffff 74%, transparent);
   --glass-bg-scrolled: color-mix(in srgb, #ffffff 86%, transparent);
   --glass-shadow: 0 8px 32px rgba(26, 24, 21, 0.08), 0 2px 6px rgba(26, 24, 21, 0.04);
-  --r-panel: 16px; /* the header/footer-pill radius — ChemAudit's rounded-2xl, softened */
+  --r-panel: 16px; /* the mobile menu panel radius — ChemAudit's rounded-2xl, softened */
+
+  /* -- the notch header (2026-09-02) ----------------------------------
+     Three white islands hanging off the top edge of the window, each
+     welded to it by a pair of concave fillets. --notch-wing is BOTH the
+     fillet's size and its arc radius; they are the same number by
+     definition, which is why there is one token and not two. */
+  --notch-h: 52px; /* the brand and GitHub islands */
+  --notch-h-nav: 56px; /* the routes island, deliberately a touch deeper */
+  --r-notch: 24px; /* the islands' bottom corners */
+  --notch-wing: 20px;
 
   /* -- the bento world (TechX reference, dribbble 23855252) ------------
      A later instruction ("like this") replaced the flat, 0-radius,
@@ -164,6 +174,8 @@
   --t-button: 0.875rem; /* 14px */
   --t-wordmark: 0.875rem; /* 14px */
   --t-nav: 0.75rem; /* 12px */
+  --t-nav-lg: 0.875rem; /* 14px — the header's own step, bigger and bold by
+                           instruction on 2026-09-02 */
   --t-caption: 0.6875rem; /* 11px */
 
   --track-wordmark: 0.375rem; /* 6px — the widest in the system */
@@ -189,6 +201,11 @@
      would read "designed" rather than "engineered". -- */
   --r-none: 0px;
   --r-pill: 9999px;
+  /* Nav pills and the small chrome controls. DESIGN.md has documented this
+     token since the graded-radius pass; it was being USED (the nav pill, the
+     footer's logo link) before it was ever defined, which silently resolved
+     to a square corner. */
+  --r-chrome: 10px;
 
   /* -- width: Bugatti caps content at ~1280px. Widened here by explicit
      instruction to use the whole wide screen; bands still go fully
