@@ -8,11 +8,31 @@ import HealthCheck from './pages/HealthCheck'
 import About from './pages/About'
 import './App.css'
 
+// The page's ground. Three very large, very soft crimson-and-grey fields that
+// drift across each other, fixed behind everything, so the grey bench the
+// cards sit on is a gradient rather than a flat fill. Decorative and
+// aria-hidden.
+//
+// Why it is here in the shell and not in index.css: the drift is done with
+// transforms on separate layers, which the compositor can move without
+// repainting. Animating background-position on one full-viewport element
+// would repaint the whole page on every frame, all the time, on every route.
+function GradientGround() {
+  return (
+    <div className="ground" aria-hidden="true">
+      <span className="ground__field ground__field--a" />
+      <span className="ground__field ground__field--b" />
+      <span className="ground__field ground__field--c" />
+    </div>
+  )
+}
+
 // Shared shell for every route: the nav strip on top, the matched page's
 // own content in the middle, and the footer pinned beneath it.
 function Layout() {
   return (
     <div className="page">
+      <GradientGround />
       <Navigation />
       <Outlet />
       <Footer />
