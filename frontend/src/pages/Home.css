@@ -51,10 +51,13 @@
      a band of empty grey above and below the wordmark. The flare needs SOME
      room around the letters -- its rays are clipped to this box -- so the
      height is cut rather than removed. */
-  min-height: clamp(170px, 16vw, 250px);
+  /* A strip, not a band. The page has to fit one screen: at 800px tall the
+     content box gets 631px, and this was taking 230 of it for a wordmark and
+     one line. */
+  min-height: clamp(84px, 6vw, 112px);
   width: min(100% - 2 * var(--shell-pad), var(--shell-max));
   margin-inline: auto;
-  padding: var(--s-md) clamp(var(--s-lg), 3vw, var(--s-xl));
+  padding: var(--s-sm) clamp(var(--s-lg), 3vw, var(--s-xl));
 }
 
 /* The canvas covers the hero and keeps its pointer events: the flare's light
@@ -81,7 +84,7 @@
   z-index: 1;
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(3.25rem, 11vw, 9rem);
+  font-size: clamp(2rem, 4.6vw, 3.6rem);
   font-weight: 400;
   line-height: 0.95;
   letter-spacing: 0.14em;
@@ -195,6 +198,10 @@
   max-width: var(--shell-max);
   margin-inline: auto;
   padding-inline: var(--shell-pad);
+  /* The flexible row of the page: the hero and the key band are fixed, this
+     takes what is left of the one screen. */
+  flex: 1;
+  min-height: 0;
 }
 
 .workbench__alert {
@@ -219,9 +226,12 @@
 .workbench__input {
   display: flex;
   flex-direction: column;
-  gap: var(--s-lg);
+  /* --s-lg gaps and --s-xl padding spend 80px of vertical budget on air
+     inside one card. The page has to fit one screen; the card keeps generous
+     side padding and gives back the top and bottom. */
+  gap: var(--s-sm);
   min-width: 0;
-  padding: var(--s-xl);
+  padding: var(--s-md) var(--s-xl);
   background: var(--card);
   border-radius: var(--r-card);
   box-shadow: var(--card-shadow);
@@ -303,10 +313,42 @@
    plus its preview ~120px, the Ketcher iframe 460px, so without a floor the
    card jumped 161px between Upload and Paste and 147px again on Draw. The
    textarea stretches into the space instead of leaving it blank. */
+/* FLEXIBLE, not fixed. A 500px floor stopped the tabs resizing the card, but
+   it also made the card 1044px tall on a 631px budget. The card is now the
+   flexible row of the workbench and the field is the flexible part of the
+   card, so all three tabs still agree on the geometry -- the height is
+   whatever is left, which is the same for each of them. */
+.workbench__input {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.workbench__input form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: var(--s-sm);
+}
+
 .workbench__input .field:first-of-type {
   display: flex;
   flex-direction: column;
-  min-height: 500px;
+  flex: 1;
+  /* 0 and clipped, both deliberate. The slot is whatever the one-screen
+     layout leaves, and its tallest occupant (the Ketcher iframe) carries a
+     min-height of its own -- without these, that floor won an argument it
+     should not have been in and the editor drew straight over the switch and
+     the hint below it. */
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Home's editor takes the slot it is given. /explain keeps the 180px floor
+   from App.css, where the workspace can afford it. */
+.workbench__input .structure-editor {
+  min-height: 120px;
 }
 
 .workbench__input .field:first-of-type .field__control {
@@ -365,25 +407,29 @@
    crimson sits UNDER the band and the blur has something to bend. It is a
    sibling, not a child: backdrop-filter blurs what is behind an element, and
    a child would be in front of it. */
+/* The spill comes from BLUR INK, not from a bigger box.
+   The bloom used to reach -85% past this element so the light showed around
+   the panel. Measured, that put 121px of scrollable overflow on a page whose
+   children summed to exactly the viewport -- an absolutely positioned child
+   sticking out is scrollable overflow, and a scrollbar appeared on a layout
+   that fit perfectly. `overflow: clip` with a clip margin did not help: the
+   bloom sat INSIDE the 150px margin, so it was painted and still counted.
+   A filter's ink does not contribute to scrollable overflow at all, so the
+   box now stays inside its parent and a 76px blur throws the light out past
+   the edges for free. */
 .key-shell__bloom {
   position: absolute;
-  /* Reaching WELL past the band, which is the whole point. A bloom confined
-     under the panel is invisible: 72% white over 18% crimson is #f2eaed, and
-     the first attempt read as faintly warm off-white for the price of a
-     backdrop-filter. The light that sells it is the part OUTSIDE the glass,
-     spilling onto the grey ground at full strength, with the panel floating
-     in the middle of it. */
-  inset: -85% -8%;
+  inset: 4% 2%;
   z-index: 0;
   pointer-events: none;
   background: radial-gradient(
-    ellipse 62% 58% at 50% 52%,
-    color-mix(in srgb, var(--accent) 26%, transparent) 0%,
-    color-mix(in srgb, var(--accent) 12%, transparent) 42%,
-    color-mix(in srgb, var(--accent) 4%, transparent) 66%,
-    transparent 82%
+    ellipse 64% 60% at 50% 52%,
+    color-mix(in srgb, var(--accent) 30%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 14%, transparent) 44%,
+    color-mix(in srgb, var(--accent) 5%, transparent) 68%,
+    transparent 84%
   );
-  filter: blur(48px);
+  filter: blur(76px);
 }
 
 /* The glass. 72% white over an 18% crimson bloom was chosen by MEASURING the
@@ -394,7 +440,7 @@
 .key-band {
   position: relative;
   z-index: 1;
-  padding: var(--s-sm) clamp(var(--s-md), 2vw, var(--s-lg)) var(--s-md);
+  padding: 6px clamp(var(--s-sm), 1.6vw, var(--s-md)) var(--s-xs);
   background: color-mix(in srgb, #ffffff 72%, transparent);
   -webkit-backdrop-filter: blur(16px) saturate(1.15);
   backdrop-filter: blur(16px) saturate(1.15);
@@ -433,10 +479,10 @@
 }
 
 .key-band__caption {
-  margin: 0 0 var(--s-xs);
+  margin: 0 0 2px;
   font-family: var(--font-mono);
   font-size: var(--t-caption);
-  line-height: 1.4;
+  line-height: 1.3;
   letter-spacing: var(--track-caption);
   text-transform: uppercase;
   color: var(--muted);
@@ -501,7 +547,7 @@
   grid-area: specimen;
   display: block;
   width: 100%;
-  height: 16px;
+  height: 10px;
   color: var(--ink);
   overflow: visible;
 }
@@ -556,13 +602,13 @@
       'specimen'
       'name'
       'body';
-    row-gap: 2px;
-    padding: var(--s-xs) var(--s-md) var(--s-xs);
+    row-gap: 1px;
+    padding: 2px var(--s-md) 2px;
     /* THE DESCENT: each rung sits 9px lower than the one before it, so five
        equal cells become a staircase and the eye reads the order without a
        caption telling it there is one. 14px was clearer and cost 56px of
        height on a box that was already too tall. */
-    margin-top: calc(var(--i) * 9px);
+    margin-top: calc(var(--i) * 4px);
   }
 
   .rung:not(:first-child) {
@@ -641,20 +687,6 @@
   .rung:focus-within .rung__stroke {
     animation: none;
   }
-}
-
-/* The results cell says what will happen, in one line, now that the key has
-   moved out of it. */
-.workbench__empty {
-  display: flex;
-  align-items: center;
-  min-height: 180px;
-  max-width: 46ch;
-  margin: 0;
-  font-family: var(--font-body);
-  font-size: var(--t-body-sm);
-  line-height: 1.55;
-  color: var(--muted);
 }
 
 /* -------------------- one result cell -------------------- */

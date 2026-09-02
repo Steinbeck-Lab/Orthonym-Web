@@ -13,13 +13,36 @@
 .page {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  /* EXACTLY one screen, not "at least". dvh rather than vh so a mobile
+     browser's collapsing toolbar does not leave the footer a bar's height
+     below the fold -- which is the whole complaint this answers. */
+  height: 100dvh;
+  overflow: hidden;
   /* NO background. It used to paint --ground here, which is exactly what a
      flat ground wanted -- but this box is painted ABOVE the gradient layer's
      negative z-index (paint order: root background, negative-z descendants,
      then in-flow block backgrounds), so an opaque fill here covers the
      gradient completely. The floor now lives on `body` and on `.ground`
      itself, both of which sit below this box. */
+}
+
+/* The part that gives. min-height: 0 is load-bearing: without it a flex
+   child refuses to shrink below its content, the box grows past the viewport
+   and the footer goes back under the fold, which is exactly the bug this
+   layout exists to fix. */
+.page__content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Vertical rhythm inside the content box, matching what .page used to give
+   its children directly. */
+.page__content > * + *:not(.site-footer) {
+  margin-top: var(--gap);
 }
 
 /* The contained content column. The bento sits inside this rather than
@@ -1030,11 +1053,14 @@ input.field__control {
 /* The "try one" prompts. A tag is its own type: transparent, no fill, no
    border box, no pill. It gains an underline on hover, nothing else. */
 
+/* Tighter, because the chips carry molecule names now rather than sentences:
+   four long labels wrapped onto four lines and cost 87px on a page that has
+   to fit one screen. */
 .examples {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--s-sm) var(--s-md);
+  gap: var(--s-xs) var(--s-sm);
 }
 
 .examples__label {
@@ -1049,7 +1075,10 @@ input.field__control {
 .examples__list {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s-sm) var(--s-md);
+  gap: var(--s-xs) var(--s-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .chip {
@@ -1199,7 +1228,7 @@ input.field__control {
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: var(--gap);
-  padding-block: calc(var(--gap) * 2);
+  padding-block: var(--s-sm);
 }
 
 .site-footer__copyright {
@@ -1566,7 +1595,13 @@ input.field__control {
 .structure-editor {
   display: block;
   width: 100%;
-  min-height: 460px;
+  /* FILLS its slot rather than demanding 460px. On /explain the workspace can
+     afford that height; on Home the page must fit one screen, and a 460px
+     floor here silently blew the budget on the Draw tab no matter what the
+     flex layout said -- an iframe's min-height wins over a parent's wish to
+     shrink. 180px is the floor at which Ketcher's toolbars still work. */
+  flex: 1;
+  min-height: 180px;
   background: var(--canvas);
   border: 1px solid var(--hairline-strong);
   border-radius: var(--r-card-sm);

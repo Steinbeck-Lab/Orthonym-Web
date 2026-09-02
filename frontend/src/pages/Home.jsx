@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
 import ExampleChips from '../components/ExampleChips'
 import SamplerGrid from '../components/SamplerGrid'
 import ConfidenceLegend from '../components/ConfidenceLegend'
@@ -534,7 +533,11 @@ function Home() {
                 <textarea
                   id="smiles-input"
                   className="field__control"
-                  rows={8}
+                  /* 4, not 8: the field is flex: 1 inside a card that is
+                     itself the flexible row of a one-screen page, so this is
+                     a floor rather than a size -- it grows into whatever the
+                     viewport leaves. */
+                  rows={4}
                   spellCheck={false}
                   autoCorrect="off"
                   autoCapitalize="off"
@@ -542,13 +545,15 @@ function Home() {
                   value={smilesText}
                   onChange={(event) => setSmilesText(event.target.value)}
                 />
-                {/* Says what will happen before it happens: up to ten come
-                    back here, more than ten run as a job with a progress bar. */}
-                <p className="field__hint">
-                  {overFastPath
-                    ? `${pastedCount} molecules — runs as a background job you can watch, stop and download.`
-                    : `Up to ${MAX_ROWS} answer here directly. Paste more and STITCH runs them as a job.`}
-                </p>
+                {/* Only says anything once it MATTERS. The steady-state line
+                    ("up to 10 answer here directly") cost 21px on every visit
+                    to explain a rule nobody had hit yet, and the page has to
+                    fit one screen. */}
+                {overFastPath && (
+                  <p className="field__hint">
+                    {pastedCount} molecules — runs as a job you can watch, stop and download.
+                  </p>
+                )}
               </div>
             ) : (
               <div className="field">
@@ -604,10 +609,14 @@ function Home() {
               label="Best-effort mode"
               onWord="On"
               offWord="Off"
+              /* Short form. The three-line version cost 115px of a 631px
+                 budget; this keeps the fact that decides whether to flip the
+                 switch. The detail is on About, and an unverified RESULT now
+                 names this switch itself (Tile.jsx). */
               hint={
                 bestEffort
-                  ? 'A molecule the strict rules cannot name is retried with a looser pass. That can return a real name OPSIN could not confirm — always marked as unverified, never as a PIN.'
-                  : 'Strict. Only names the engine can verify are shown; anything else comes back as an honest abstain rather than an unverified guess.'
+                  ? 'Unnameable molecules get a looser pass, always marked unverified.'
+                  : 'Strict: only verified names, otherwise an honest abstain.'
               }
             />
 
@@ -635,29 +644,20 @@ function Home() {
             />
           </form>
 
-          <p className="page-about-note workbench__about">
-            Read how this works, and STITCH&rsquo;s measured accuracy, on the{' '}
-            <Link to="/about" className="about-link">
-              About
-            </Link>{' '}
-            page.
-          </p>
+          {/* 46px for a sentence pointing at a page the header nav already
+              links to, on a screen that has to hold everything. */}
         </section>
 
         {job ? (
           <BatchResults job={job} onForget={startAnother} />
         ) : hasResults ? (
           <SamplerGrid rows={rows} reduceMotion={reduceMotion} />
-        ) : (
-          /* The key used to live here, which meant it vanished the moment
-             there were results to read it against. It is a band at the foot
-             of the page now, so this cell only has to say what will happen. */
-          <p className="workbench__empty">
-            {inputMode === 'draw'
-              ? 'Draw a molecule, press Translate, and its name appears here with the mark that earned it.'
-              : 'Submit a molecule and each result appears here, carrying its own mark.'}
-          </p>
-        )}
+        ) : null /* Nothing at all until there is something to show. The key
+                     moved to the band at the foot of the page, and the line
+                     that replaced it ("submit a molecule and each result
+                     appears here") cost 214px to describe the button
+                     directly above it -- on a page that has to fit one
+                     screen, that space belongs to the working area. */}
       </main>
 
       <ConfidenceLegend />
