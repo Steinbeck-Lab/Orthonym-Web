@@ -172,8 +172,9 @@ is not offered). Learn drops the SMILES tab entirely rather than mislabel it, pe
 spec's rule against naming a format. Home (`/`, "Translate") renders results through
 `SamplerGrid`/`Tile`. Four
 routes open with the same `.page-head` card (a wide title+lede card); **Home does not** — since
-2026-09-02 it opens with `.home-hero`, the wordmark over a CSS crimson flare plus a tagline whose
-bold letters spell STITCH, and its old title+lede card and its accuracy band were both removed at
+2026-09-02 it opens with `.home-hero`, which is deliberately **not a card** (no fill, border or
+shadow — the owner asked for no white background there): the wordmark over a CSS crimson flare on
+the bare grey ground, plus a tagline whose bold letters spell STITCH, and its old title+lede card and its accuracy band were both removed at
 the owner's request. Every route closes on the same footer.
 The working part of each route is a **contained** `.workspace` card grid (two rounded cards, input
 | output, inside the `--shell-max` column — Home's is named `.workbench`; `/explain` adds
