@@ -115,7 +115,9 @@ column) / plain SMILES list, up to `MAX_BATCH_SIZE` (10,000) molecules and `MAX_
 (50 MB); `frontend/nginx.conf` sets `client_max_body_size 210m`, and its default of 1 MB would
 otherwise silently cap the advertised limit. Work is chunked (`BATCH_CHUNK_SIZE`, 25) onto the
 `batch` queue so a long job cannot occupy the slot someone naming ethanol needs. **Home drives all of this
-as of 2026-09-02** (it was API-only until then): the input card has **Paste | Upload file** tabs,
+as of 2026-09-02** (it was API-only until then): the input card has **Paste | Upload file | Draw**
+tabs (Draw embeds the same Ketcher iframe `/explain` uses, through the same `useKetcher` handshake,
+with `.workbench--draw` flipping the split so the editor gets the wide cell),
 pasting more than `FAST_PATH_MAX_MOLECULES` submits a job instead of refusing the eleventh line, a
 file gets a `parse-preview` count first, and `components/BatchResults.jsx` shows progress, a paged
 table, Stop, Delete and a per-row **Draw** (`/api/depict`, one molecule at a time — batch rows
@@ -210,7 +212,9 @@ byte-identical lines** of SVG-injection and atom-highlight effects until those m
 `frontend/src/lib/useAtomHighlight.js`, whose pure half (`highlightTargets`, `shouldHighlight`) is
 the tested part. Both also import `sanitizeSvg`/`atomRefsOf`/`ATOM_REF_RE` from
 `frontend/src/lib/svgHighlight.js` and share `frontend/src/lib/useKetcher.js`'s Ketcher
-iframe-readiness handshake. `sanitizeSvg`'s
+iframe-readiness handshake — which **Home's Draw tab now uses too**, along with the shared
+`.structure-editor` iframe frame in `App.css` (it was `.explain__editor`, promoted when Home
+gained a second embed of the same editor). `sanitizeSvg`'s
 DOMPurify config now lives in exactly one place, because two copies of a sanitiser config is exactly
 the kind of thing that drifts silently into an XSS hole.
 

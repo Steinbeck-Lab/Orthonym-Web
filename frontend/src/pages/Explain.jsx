@@ -304,7 +304,7 @@ function Explain() {
                   <iframe
                     ref={iframeRef}
                     title="Molecule drawing area"
-                    className="explain__editor"
+                    className="structure-editor"
                     src="/standalone/index.html"
                     onLoad={handleFrameLoad}
                     onError={handleFrameError}

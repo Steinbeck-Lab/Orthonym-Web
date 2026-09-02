@@ -1518,3 +1518,16 @@ input.field__control {
     animation: none;
   }
 }
+
+/* -------------------- the structure editor frame -------------------- */
+/* The bundled Ketcher iframe, embedded by BOTH /explain's Draw tab and
+   Home's. One definition, because two copies of an editor frame is how the
+   two pages end up disagreeing about how tall the drawing area is. */
+.structure-editor {
+  display: block;
+  width: 100%;
+  min-height: 460px;
+  background: var(--canvas);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-card-sm);
+}

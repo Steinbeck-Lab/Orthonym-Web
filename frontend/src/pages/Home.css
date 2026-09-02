@@ -293,6 +293,13 @@
     grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
   }
 
+  /* On the Draw tab the split flips: the editor takes the wide cell and the
+     results take the narrow one. Same reason /explain has .workspace--draw --
+     Ketcher's toolbars and canvas are unusable in a 4fr column. */
+  .workbench--draw {
+    grid-template-columns: minmax(0, 8fr) minmax(0, 4fr);
+  }
+
   .workbench__alert {
     grid-column: 1 / -1;
   }

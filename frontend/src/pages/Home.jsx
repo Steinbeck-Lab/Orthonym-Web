@@ -15,6 +15,7 @@ import {
 import { needsJob } from '../lib/batchJob'
 import { forgetJob, readJobs, rememberJob } from '../lib/jobStore'
 import { MAX_ROWS, parseSmilesLines } from '../lib/parseSmiles'
+import useKetcher from '../lib/useKetcher'
 import useReducedMotion from '../lib/useReducedMotion'
 import './Home.css'
 
@@ -121,6 +122,14 @@ function Home() {
   // server would have done anyway (POST /api/translate answers with an
   // envelope, not results, past that point).
   const [inputMode, setInputMode] = useState('paste')
+
+  // The drawing editor, on the Draw tab only. `enabled` gates its 20 s
+  // readiness clock: armed on page mount instead, anyone who picks Draw more
+  // than 20 s after arriving finds an editor already declared broken, with no
+  // iframe having ever existed to break. Same handshake /explain uses.
+  const { iframeRef, editorState, handleFrameLoad, handleFrameError, getKetcher } = useKetcher({
+    enabled: inputMode === 'draw',
+  })
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [job, setJob] = useState(null)
@@ -251,9 +260,39 @@ function Home() {
     }
   }
 
+  async function submitDrawing() {
+    const ketcher = getKetcher()
+    if (!ketcher) {
+      setValidationNote('The drawing area is still starting up. Give it a moment and try again.')
+      return
+    }
+    let structure = ''
+    try {
+      structure = (await ketcher.getSmiles()) || ''
+    } catch {
+      setValidationNote('Could not read your drawing. Try drawing it again.')
+      return
+    }
+    structure = structure.trim()
+    if (!structure) {
+      setValidationNote('Draw a molecule first, then press Translate.')
+      return
+    }
+    // One molecule, so it takes the inline path and lands in the tiles beside
+    // the editor -- no job, no progress bar.
+    setValidationNote(null)
+    setSmilesText(structure)
+    runTranslate([structure])
+  }
+
   function handleSubmit(event) {
     event.preventDefault()
     if (isSubmitting) return
+
+    if (inputMode === 'draw') {
+      void submitDrawing()
+      return
+    }
 
     if (inputMode === 'file') {
       if (!file) {
@@ -364,7 +403,13 @@ function Home() {
         </p>
       </section>
 
-      <main className="workbench" aria-label="Translate SMILES to IUPAC names">
+      {/* --draw flips the split so the editor takes the wide cell, exactly as
+          /explain's .workspace--draw does: Ketcher is unusable in the narrow
+          column. */}
+      <main
+        className={inputMode === 'draw' ? 'workbench workbench--draw' : 'workbench'}
+        aria-label="Translate SMILES to IUPAC names"
+      >
         {fetchError && (
           <p className="workbench__alert" role="alert">
             Could not reach STITCH&rsquo;s backend ({fetchError}). Is it running on{' '}
@@ -399,10 +444,39 @@ function Home() {
               />
               Upload file
             </label>
+            <label className={inputMode === 'draw' ? 'input-tab input-tab--on' : 'input-tab'}>
+              <input
+                type="radio"
+                name="input-mode"
+                value="draw"
+                checked={inputMode === 'draw'}
+                onChange={() => setInputMode('draw')}
+                disabled={isSubmitting}
+              />
+              Draw
+            </label>
           </div>
 
           <form onSubmit={handleSubmit} noValidate>
-            {inputMode === 'paste' ? (
+            {inputMode === 'draw' ? (
+              <div className="field">
+                <span className="field__label">Draw a molecule</span>
+                {editorState === 'error' ? (
+                  <p className="workbench__note" role="alert">
+                    The drawing area did not load. Reload the page to try again.
+                  </p>
+                ) : (
+                  <iframe
+                    ref={iframeRef}
+                    title="Molecule drawing area"
+                    className="structure-editor"
+                    src="/standalone/index.html"
+                    onLoad={handleFrameLoad}
+                    onError={handleFrameError}
+                  />
+                )}
+              </div>
+            ) : inputMode === 'paste' ? (
               <div className="field">
                 <label htmlFor="smiles-input" className="field__label">
                   SMILES &mdash; one per line
