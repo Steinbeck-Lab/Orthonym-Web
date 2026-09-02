@@ -107,7 +107,38 @@
 @supports (-webkit-text-stroke: 1px black) {
   .home-hero__word {
     color: transparent;
-    -webkit-text-stroke: max(1px, 0.013em) var(--ink);
+    -webkit-text-stroke: max(1px, 0.016em) var(--ink);
+  }
+}
+
+/* THE BREAKS. The Next.js mark is not a closed outline -- each of its two
+   strokes carries a gradient ending at stop-opacity 0, so the line stops
+   partway and the logo reads as fragments. Same idea here: the wireframe is
+   masked so it fades out and comes back along the diagonal, and the letters
+   are never fully closed.
+
+   The angle and the stops are DUPLICATED in src/lib/flare/wordmark-raster.ts
+   (BREAK_ANGLE_DEG / BREAK_STOPS), which punches the same holes out of the
+   raster the shader lights. They have to break in the same places or light
+   appears where no line is. Change one, change the other. */
+@supports (mask-image: linear-gradient(#000, #000)) or
+  (-webkit-mask-image: linear-gradient(#000, #000)) {
+  .home-hero__word {
+    /* ONE gap, the rest solid. Binary: a line is there at full weight or it
+       is gone -- graded stops turned the whole wordmark washed-out grey
+       instead of fragmentary. An earlier pass cut two gaps and dissolved the
+       tail, which cost legibility for no gain. */
+    --break-bands: linear-gradient(
+      168deg,
+      #000 0%,
+      #000 46%,
+      transparent 51%,
+      transparent 58%,
+      #000 63%,
+      #000 100%
+    );
+    -webkit-mask-image: var(--break-bands);
+    mask-image: var(--break-bands);
   }
 }
 

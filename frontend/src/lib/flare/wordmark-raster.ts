@@ -21,15 +21,50 @@
 
 const PAD = 3;
 
-// Where the gradient along each stroke goes from lit to nothing. Upstream's
-// SVG fades its two strokes with stops at offset 0.3 and 1.0; this is the
-// same idea expressed diagonally across the whole word, so the light appears
-// to rake from the top-left corner.
+// The rake: how bright the stroke is along the diagonal. Upstream's SVG fades
+// its two strokes to nothing with stops at offset 0.3 and 1.0, which is why
+// the "N" reads as lit on one side and gone on the other.
 const GRADIENT_STOPS: ReadonlyArray<readonly [number, number]> = [
   [0, 1],
   [0.34, 0.92],
   [0.72, 0.34],
   [1, 0.06],
+];
+
+// THE BREAKS, and the reason this file has two gradients instead of one.
+//
+// The Next.js mark is not a closed outline: each of its two strokes carries a
+// gradient that ends at stop-opacity 0, so the line physically stops partway
+// and you read the logo from fragments. That is the effect the owner asked to
+// keep ("close to the next N style, in between breaks on the text").
+//
+// So after the letters are stroked, these bands are punched back OUT of them
+// with destination-out. Angle and stops are duplicated in Home.css as a CSS
+// mask on the <h1>, because the visible wireframe and the shader's light
+// source have to break in the SAME places -- otherwise light appears where
+// there is no line. If you change one, change the other; they are named in
+// each other's comments for exactly that reason.
+// ONE gap, and the rest of the word solid.
+//
+// Two things were learned getting here and both are worth keeping:
+//   * Binary, not graded. A line is there at full weight or it is GONE. A
+//     first pass used mid-tones (0.3-0.6 erase) and the wordmark went washed
+//     grey all over instead of reading as fragments -- the "N" is crisp
+//     exactly where it exists, which is what makes the missing parts read as
+//     missing rather than faded.
+//   * One gap, not several. A pass with two gaps plus a dissolving tail left
+//     the word hard to read and the light scattered across three holes; the
+//     owner's call was a single clean break with everything else intact.
+// The 3-degree tilt is deliberate: a perfectly horizontal cut reads as a
+// printing error, a slight angle reads as a light band crossing the letters.
+const BREAK_ANGLE_DEG = 168;
+const BREAK_STOPS: ReadonlyArray<readonly [number, number]> = [
+  [0, 0],
+  [0.46, 0],
+  [0.51, 1],
+  [0.58, 1],
+  [0.63, 0],
+  [1, 0],
 ];
 
 export interface WordmarkMetrics {
@@ -152,8 +187,43 @@ export async function rasterizeWordmark(
     cursor += context.measureText(character).width + box.tracking;
   }
 
+  punchBreaks(context, canvas.width, canvas.height);
+
   abortIfNeeded();
   return canvas;
+}
+
+/**
+ * Erases the break bands out of whatever has been drawn, leaving the wireframe
+ * incomplete on purpose. destination-out with a gradient alpha, so the edges
+ * of each break are soft -- a hard edge reads as a mistake, a soft one reads
+ * as a line running out of light.
+ */
+function punchBreaks(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number
+): void {
+  const radians = (BREAK_ANGLE_DEG * Math.PI) / 180;
+  // The gradient line has to be long enough to cover the box at this angle,
+  // or the last stops land outside it and the final break never appears.
+  const span = Math.abs(width * Math.cos(radians)) + Math.abs(height * Math.sin(radians));
+  const halfX = (Math.cos(radians) * span) / 2;
+  const halfY = (Math.sin(radians) * span) / 2;
+  const gradient = context.createLinearGradient(
+    width / 2 - halfX,
+    height / 2 - halfY,
+    width / 2 + halfX,
+    height / 2 + halfY
+  );
+  for (const [offset, erase] of BREAK_STOPS) {
+    gradient.addColorStop(offset, `rgba(0, 0, 0, ${erase})`);
+  }
+  const previous = context.globalCompositeOperation;
+  context.globalCompositeOperation = 'destination-out';
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, width, height);
+  context.globalCompositeOperation = previous;
 }
 
 export { PAD as WORDMARK_RASTER_PAD };
