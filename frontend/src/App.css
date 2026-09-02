@@ -86,8 +86,13 @@
   }
 }
 
-/* Vertical rhythm between stacked sections/bands = the same gap. */
-.page > * + *:not(.site-footer) {
+/* Vertical rhythm between stacked sections/bands = the same gap.
+   `.ground` is excluded on BOTH sides of the combinator, and that is not
+   decoration: it is a fixed layer that takes no space, but it IS the page's
+   first child, so `* + *` promoted the header to "second child" and pushed
+   the notch 14px down off the top edge -- measured, after the gradient
+   landed. A layer that has no size must not create rhythm either. */
+.page > *:not(.ground) + *:not(.site-footer) {
   margin-top: var(--gap);
 }
 
@@ -1474,8 +1479,12 @@ input.field__control {
   width: 90vmax;
   height: 90vmax;
   border-radius: 50%;
-  filter: blur(90px);
-  will-change: transform;
+  /* 70px, not 90: three viewport-scale blurred layers are the one always-on
+     GPU cost on this site, paid on every route for as long as the tab is
+     open, and at this size the difference is not visible.
+     No `will-change` either -- it pinned three huge textures in VRAM for the
+     whole session to hint at a transform the compositor already handles. */
+  filter: blur(70px);
 }
 
 .ground__field--a {
@@ -1490,6 +1499,10 @@ input.field__control {
   animation: ground-drift-a 64s ease-in-out infinite alternate;
 }
 
+/* The counterweight does NOT drift. Three animated layers cost three times
+   one and read almost identically: with the crimson fields moving against a
+   fixed grey, the gradient still shifts, and a laptop reading a results table
+   pays a third less for it. */
 .ground__field--b {
   bottom: -40vmax;
   right: -22vmax;
@@ -1501,7 +1514,6 @@ input.field__control {
     color-mix(in srgb, var(--card-soft) 40%, transparent) 40%,
     transparent 72%
   );
-  animation: ground-drift-b 82s ease-in-out infinite alternate;
 }
 
 .ground__field--c {
@@ -1517,21 +1529,16 @@ input.field__control {
   animation: ground-drift-c 96s ease-in-out infinite alternate;
 }
 
+.ground__field--b {
+  transform: scale(1.06);
+}
+
 @keyframes ground-drift-a {
   from {
     transform: translate3d(0, 0, 0) scale(1);
   }
   to {
     transform: translate3d(12vmax, 8vmax, 0) scale(1.12);
-  }
-}
-
-@keyframes ground-drift-b {
-  from {
-    transform: translate3d(0, 0, 0) scale(1.06);
-  }
-  to {
-    transform: translate3d(-14vmax, -10vmax, 0) scale(1);
   }
 }
 
