@@ -19,7 +19,7 @@ results, the shared name cache and the per-IP rate-limit counters. See "The job 
 
 ```bash
 # Redis first — everything below needs it (tests included).
-docker start stitch-redis-dev        # localhost:6379, maxmemory-policy volatile-lru
+docker compose up -d redis           # container stitch-redis, localhost:6379, volatile-lru
 
 # tests — from the repo root. This script is the ONLY correct way to run them.
 backend/scripts/run-tests.sh                            # full suite
@@ -57,12 +57,17 @@ docker compose up -d --build
   already printed a correct summary. The script waits for pytest's own summary line, kills the
   corpse, picks the right interpreter and points `REDIS_URL` at localhost. Its exit codes: `0` all
   passed, `1` tests failed, `2` no summary appeared (a real hang).
-- **Kill every Celery worker before running the suite.** A worker left listening on
-  `stitch-redis-dev` CONSUMES the jobs the tests submit, which silently breaks the tests that
+- **Kill every Celery worker before running the suite.** A worker left listening on the same
+  Redis CONSUMES the jobs the tests submit, which silently breaks the tests that
   turn eager mode off on purpose — the concurrent cap reads as broken (10 admitted against a cap
   of 2) on correct code. `pkill -9 -f "celery -A app.celery_app"`, then confirm with `pgrep -fl`.
-- **The suite needs Redis running** (`docker start stitch-redis-dev`). `conftest.py` deliberately
-  `pytest.fail`s with instructions rather than skipping when it is missing.
+  **`pkill` does not reach a worker in a container**, and the compose stack publishes its Redis on
+  the same `localhost:6379` the suite uses — so if `docker compose up` is running, also
+  `docker stop stitch-worker-fast stitch-worker-batch` (check with `docker ps`).
+- **The suite needs Redis running** (`docker compose up -d redis`, which is what `conftest.py`
+  prints). There is no `stitch-redis-dev` container any more; the compose service is
+  `stitch-redis`. `conftest.py` deliberately `pytest.fail`s with instructions rather than
+  skipping when Redis is missing.
 - **`REDIS_URL` defaults to `redis://redis:6379/0`**, the compose-internal hostname. Anything run
   outside compose must override it to `redis://localhost:6379/0`.
 - **Port 8000 is held by an unrelated project's container** (`bchemxtractweb-backend-1`), and it
@@ -130,10 +135,13 @@ Two consequences that bite immediately:
 `--maxmemory-policy volatile-lru`, *not* `allkeys-lru`: Celery broker messages carry no TTL, so
 `allkeys-lru` would evict queued work and silently lose jobs. The four roles are the Celery broker,
 job meta/chunks/rows (`JOB_RESULT_TTL_SECONDS`, 24 h), the shared name cache
-(`NAME_CACHE_TTL_SECONDS`, 7 days) and the per-IP rate-limit counters. **`name_cache._KEY_VERSION`
-must be bumped by hand on every `vendor-openstout.sh` refresh** — upstream OpenSTOUT develops on a
-static version `1.0.0`, so the version-keyed cache invalidation cannot fire on its own and a stale
-name would survive an engine change.
+(`NAME_CACHE_TTL_SECONDS`, 7 days) and the per-IP rate-limit counters. **The name cache now
+invalidates itself on a vendor refresh** — `name_cache._engine_fingerprint()` hashes the OpenSTOUT
+source actually installed in the process (40 ms over 253 files, paid once at import) into the key,
+because upstream develops on a static version `1.0.0` and `_ENGINE_VERSION` therefore cannot
+notice a refresh. `_KEY_VERSION` survives as a manual belt for the fallback case (a zipimport or
+stripped image where the source cannot be read); bumping it by hand is no longer the only thing
+standing between a vendor refresh and a stale name.
 
 **Rate limiting exists and is per-IP** (`ratelimit.py`): 60/min for the naming endpoints, 300/min
 for job polling, 1200/min for `/api/depict`, plus 2 concurrent jobs and 20 jobs/hour per IP. The
