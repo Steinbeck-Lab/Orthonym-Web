@@ -35,10 +35,16 @@ const ACCEPTED_EXTENSIONS = ['sdf', 'mol', 'csv', 'smi', 'txt']
 const ACCEPT_ATTRIBUTE = ACCEPTED_EXTENSIONS.map((ext) => `.${ext}`).join(',')
 const ACCEPTED_FILE_RE = new RegExp(`\\.(${ACCEPTED_EXTENSIONS.join('|')})$`, 'i')
 
-/** ".sdf, .mol, .csv, .smi and .txt" — for a sentence, not a list. */
+/**
+ * ".sdf, .mol, .csv, .smi or .txt".
+ *
+ * OR, not "and". A file is one of these, and "and" read as a list of things
+ * you have to supply together. The rejection sentence keeps "or" for the
+ * same reason: it is telling you which single format to bring.
+ */
 function spellOutFormats() {
   const dotted = ACCEPTED_EXTENSIONS.map((ext) => `.${ext}`)
-  return `${dotted.slice(0, -1).join(', ')} and ${dotted[dotted.length - 1]}`
+  return `${dotted.slice(0, -1).join(', ')} or ${dotted[dotted.length - 1]}`
 }
 
 /**
@@ -289,7 +295,7 @@ export default function Dropzone({
               stops describing the target and starts describing what happens
               when you let go. */}
           <span className="dropzone__lead">
-            {dragging ? 'Release to read it' : 'Drop a file here'}
+            {dragging ? 'Release to read it' : 'Click to upload, or drop a file'}
           </span>
 
           {/* The accepted formats as a SENTENCE, from the same array the
@@ -319,7 +325,7 @@ export default function Dropzone({
           </span>
 
           <span className="dropzone__note">
-            A .csv needs a smiles column, or one SMILES per line.
+            In a .csv, name the column <code>smiles</code>. In a plain list, one SMILES per line.
           </span>
         </label>
       )}
