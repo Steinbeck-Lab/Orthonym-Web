@@ -79,6 +79,7 @@ each is built at module import time and reused across all requests/SMILES.
 from typing import Optional
 
 from rdkit import Chem
+from rdkit.Chem.inchi import MolToInchiKey
 
 from orthonym import Orthonym
 from orthonym.validation.opsin_roundtrip import opsin_parse
@@ -148,15 +149,42 @@ def classify(row: dict) -> tuple[str, Optional[str], str]:
 def _roundtrip_check(name: str, mol: Chem.Mol) -> tuple[Optional[str], Optional[bool]]:
     """Round-trip `name` back through OPSIN (via Orthonym's own opsin_parse,
     the same vendored jar/JVM as the internal SELF-01 gate) and compare the
-    result to `mol` (the already-parsed input molecule) via RDKit
-    canonicalization.
+    result to `mol` (the already-parsed input molecule) by FULL STANDARD
+    INCHIKEY.
+
+    The comparison used to be canonical SMILES, and it produced false
+    alarms on a very ordinary class of molecule. Measured: zwitterionic
+    glycine, `[NH3+]CC(=O)[O-]`, is named "glycine" -- correctly -- and OPSIN
+    reads that name back as the neutral `NCC(=O)O`. Two different canonical
+    SMILES, so the round trip was reported as a MISMATCH beside a name that
+    is right, on a result still labelled a verified PIN. It was the only
+    mismatch in 56 verified results over a set chosen to stress exactly this.
+
+    The full InChIKey is the comparison that answers the question actually
+    being asked ("did the name come back as this compound?"), and it is what
+    Orthonym's own SELF-01 uses for its stricter tiers. Measured on the
+    three cases that matter:
+
+        pair                          canonical SMILES   skeleton   full key
+        glycine zwitterion / neutral  differ (false)     same       SAME
+        acetone keto / enol           differ             differ     differ
+        (2S)- / (2R)-butan-2-ol       differ             SAME       differ
+
+    So canonical SMILES cries wolf, the InChIKey skeleton block alone would
+    MISS a stereo inversion (which is a naming error), and the full key
+    catches both real errors while accepting the protonation difference.
+    InChI normalises that difference because it is the same compound.
 
     Returns (roundtrip_smiles, roundtrip_match):
       - (None, None) if opsin_parse returned None (OPSIN could not
-        interpret the name, or the jar/JVM is unavailable).
-      - (raw_smiles, False) if OPSIN returned something but RDKit can't
-        parse it, or it doesn't canonically match the input.
-      - (raw_smiles, True) if it canonically matches the input.
+        interpret the name, or the jar/JVM is unavailable). This is the
+        state that downgrades a verified tier.
+      - (raw_smiles, False) if OPSIN returned something RDKit cannot parse,
+        an InChIKey cannot be computed for either side, or the keys differ.
+      - (raw_smiles, True) if the full InChIKeys agree.
+
+    The SMILES OPSIN produced is still what gets shown: the visible proof
+    has to be the thing OPSIN actually said, not a hash of it.
     """
     raw = opsin_parse(name)
     if not raw:
@@ -166,9 +194,31 @@ def _roundtrip_check(name: str, mol: Chem.Mol) -> tuple[Optional[str], Optional[
     if roundtrip_mol is None:
         return raw, False
 
-    original_canonical = Chem.MolToSmiles(mol, canonical=True)
-    roundtrip_canonical = Chem.MolToSmiles(roundtrip_mol, canonical=True)
-    return raw, original_canonical == roundtrip_canonical
+    original_key = _inchikey(mol)
+    roundtrip_key = _inchikey(roundtrip_mol)
+    if original_key is None or roundtrip_key is None:
+        # RDKit's InChI support can decline a molecule (unusual valences,
+        # some organometallics). Falling back to canonical SMILES keeps a
+        # verdict available rather than reporting None, which would read as
+        # "OPSIN was unreachable" and wrongly downgrade the tier.
+        return raw, Chem.MolToSmiles(mol, canonical=True) == Chem.MolToSmiles(
+            roundtrip_mol, canonical=True
+        )
+    return raw, original_key == roundtrip_key
+
+
+def _inchikey(mol: Chem.Mol) -> Optional[str]:
+    """The full standard InChIKey, or None if RDKit will not compute one.
+
+    RDKit logs and returns an empty string rather than raising for some
+    inputs, so an empty result is normalised to None here -- two empty
+    strings would otherwise compare equal and read as a passing round trip.
+    """
+    try:
+        key = MolToInchiKey(mol)
+    except Exception:  # noqa: BLE001 - a declined molecule is not an error
+        return None
+    return key or None
 
 
 def _abstain_item(smiles: str, tier: str, row: dict) -> ResultItem:

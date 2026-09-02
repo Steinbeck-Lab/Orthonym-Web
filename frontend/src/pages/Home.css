@@ -310,7 +310,7 @@
      to it and the band stayed 2200px wide. */
   width: min(100% - 2 * var(--shell-pad), 1400px);
   margin-inline: auto;
-  padding: var(--s-md) clamp(var(--s-md), 2vw, var(--s-lg)) var(--s-lg);
+  padding: var(--s-sm) clamp(var(--s-md), 2vw, var(--s-lg)) var(--s-md);
   background: var(--card);
   border-radius: var(--r-card);
   box-shadow: var(--card-shadow);
@@ -318,7 +318,7 @@
 }
 
 .key-band__caption {
-  margin: 0 0 var(--s-sm);
+  margin: 0 0 var(--s-xs);
   font-family: var(--font-mono);
   font-size: var(--t-caption);
   line-height: 1.4;
@@ -382,7 +382,7 @@
   grid-area: specimen;
   display: block;
   width: 100%;
-  height: 18px;
+  height: 16px;
   color: var(--ink);
   overflow: visible;
 }
@@ -411,21 +411,10 @@
   color: var(--ink);
 }
 
-.rung__code {
-  /* Rides on the name's row, at the end of it. */
-  grid-area: name;
-  justify-self: end;
-  align-self: center;
-  font-family: var(--font-mono);
-  font-size: var(--t-caption);
-  letter-spacing: var(--track-caption);
-  color: var(--muted-soft);
-}
-
 .rung__body {
   grid-area: body;
   margin: 0;
-  max-width: 46ch;
+  max-width: 40ch;
   font-family: var(--font-body);
   font-size: var(--t-body-sm);
   line-height: 1.5;
@@ -448,8 +437,8 @@
       'specimen'
       'name'
       'body';
-    row-gap: 3px;
-    padding: var(--s-sm) var(--s-md) var(--s-sm);
+    row-gap: 2px;
+    padding: var(--s-xs) var(--s-md) var(--s-xs);
     /* THE DESCENT: each rung sits 9px lower than the one before it, so five
        equal cells become a staircase and the eye reads the order without a
        caption telling it there is one. 14px was clearer and cost 56px of
@@ -461,11 +450,6 @@
     border-left: 1px solid var(--hairline);
   }
 
-  .rung__code {
-    grid-area: name;
-    justify-self: start;
-  }
-
   .rung__name {
     /* The code sits under the name at this width, so the name needs the row
        to itself. */
@@ -475,22 +459,6 @@
 }
 
 @media (min-width: 860px) {
-  /* The code gets its own line once the rungs are columns: side by side there
-     is no room to set it beside a two-word tier name. */
-  .rung {
-    grid-template-areas:
-      'ordinal'
-      'specimen'
-      'name'
-      'code'
-      'body';
-  }
-
-  .rung__code {
-    grid-area: code;
-  }
-}
-
 /* The reveal: each rung rises and fades in, 70ms after the one before it,
    the first time the band scrolls into view. `--in` never runs again -- a
    band that re-animates every time you scroll past is a nervous tic. */

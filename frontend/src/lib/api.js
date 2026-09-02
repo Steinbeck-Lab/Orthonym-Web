@@ -57,17 +57,19 @@ export async function fetchExamples() {
 
 /**
  * Thrown by translateBatch when the backend hands back a job envelope
- * (`{job_id, molecule_count, status}`, from POST /api/translate) instead of
- * finished results -- the submission didn't finish inside the server's
- * fast-path timeout (too many molecules, or a slow one), so the backend
- * queued it as a background job rather than blocking the request. Orthonym's
- * frontend has no batch-job polling UI (a separate, larger project), so
- * there is nothing useful this promise can resolve with; throwing lets the
- * caller tell this apart from "zero results" and say something true
- * instead of silently rendering an empty grid.
+ * (a full `JobEnvelope`, from POST /api/translate) instead of finished
+ * results -- the submission didn't finish inside the server's fast-path
+ * timeout, so the backend queued it as a background job rather than blocking
+ * the request.
+ *
+ * It carries the envelope's `owner_token`, which is the point: the token is
+ * issued exactly once, and Home now hands the whole job to the batch panel
+ * to watch, stop and download. Dropping it here (as this did while there was
+ * no batch UI) meant the queued job could never be cancelled by the person
+ * who started it.
  */
 export class TranslateJobQueuedError extends Error {
-  constructor(jobId, moleculeCount) {
+  constructor(jobId, moleculeCount, ownerToken) {
     super(
       `Submission queued as background job ${jobId} (${moleculeCount} molecule` +
         `${moleculeCount === 1 ? '' : 's'}) instead of returning immediately.`
@@ -75,6 +77,7 @@ export class TranslateJobQueuedError extends Error {
     this.name = 'TranslateJobQueuedError'
     this.jobId = jobId
     this.moleculeCount = moleculeCount
+    this.ownerToken = ownerToken ?? null
   }
 }
 
@@ -105,7 +108,7 @@ export async function translateBatch(smilesList, { bestEffort = true } = {}) {
   // set -- real work would be running on the server while the UI told the
   // user nothing at all.
   if (data?.job_id) {
-    throw new TranslateJobQueuedError(data.job_id, data.molecule_count)
+    throw new TranslateJobQueuedError(data.job_id, data.molecule_count, data.owner_token)
   }
   return Array.isArray(data?.results) ? data.results : []
 }
