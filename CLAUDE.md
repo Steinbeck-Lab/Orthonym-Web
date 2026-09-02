@@ -131,11 +131,16 @@ with `.workbench--draw` flipping the split so the editor gets the wide cell),
 pasting more than `FAST_PATH_MAX_MOLECULES` submits a job instead of refusing the eleventh line, a
 file gets a `parse-preview` count first, and `components/BatchResults.jsx` shows progress, a paged
 table, Stop, Delete and a per-row **Draw** (`/api/depict`, one molecule at a time — batch rows
-carry no picture on purpose). The Upload tab is a **drop zone**, not a bare `Choose File` button:
-the whole slot is the target, the native input stays in the markup (hidden, so the label, keyboard
-and platform picker still work), and the SVG seam around it runs its dashes while a file is over it
-and goes solid once one lands. A dropped file's extension is checked in the browser, because a drop
-never passes through the picker's `accept`.
+carry no picture on purpose). The Upload tab is a **drop zone**
+(`components/Dropzone.jsx`, its CSS in `App.css` beside Switch's and ExampleChips'), not a bare
+`Choose File` button: the whole slot is the target, the native input stays in the markup (hidden, so
+the label, keyboard and platform picker still work — one rule in `App.css` hides it and the
+input-tab radios, since both need the same `pointer-events: none` that `.sr-only` does not give),
+and the SVG seam around it runs its dashes while a file is over it and goes solid once one lands.
+A dropped file's extension is checked in the browser, because a drop never passes through the
+picker's `accept` — and **one `ACCEPTED_EXTENSIONS` array derives all four statements of that fact**
+(the `accept` attribute, the drop pattern, the format pills and the rejection sentence), which were
+four literals that had already drifted.
 
 `lib/jobStore.js` keeps `job_id` + `owner_token` in **localStorage**,
 because the token is issued once and a reload would otherwise lose the ability to stop a
@@ -144,7 +149,9 @@ because the token is issued once and a reload would otherwise lose the ability t
 finished job (v1's behaviour) restored the batch panel on every load and survived a hard reload —
 which cannot clear localStorage — so the panel could not be dismissed at all. The key is
 `orthonym.jobs.v2` and the bump is part of that fix: it retires every v1 entry rather than restoring
-one last stale panel. Entries prune at `expires_at`, or at `rememberedAt + 24 h` when the first
+one last stale panel. **`rememberJob` enforces that rule itself** — a terminal `status` deletes the
+entry instead of writing it — because leaving it to one caller meant the next caller to remember a
+job without checking would silently bring the bug back, and Home already calls it from two places. Entries prune at `expires_at`, or at `rememberedAt + 24 h` when the first
 status poll never landed and there is no `expires_at` to check.
 
 Three things about that UI were **measured against the running backend**, not assumed, and each

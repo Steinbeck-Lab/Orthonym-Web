@@ -175,7 +175,9 @@ function BatchResults({ job, onForget }) {
           // localStorage does, so comparing against it would rewrite the
           // entry on every single poll.
           storedExpiryRef.current = next.expires_at
-          rememberJob({ ...job, expiresAt: next.expires_at })
+          // The status goes with it: rememberJob refuses a terminal one, so
+          // this cannot resurrect an entry the branch above just forgot.
+          rememberJob({ ...job, expiresAt: next.expires_at, status: next.status })
         }
       } catch (err) {
         if (!liveRef.current) return

@@ -38,3 +38,6 @@ original-*.webp
 # equivalent, built from backend/vendor/orthonym so the pinned v1.0.0
 # snapshot is what tests actually exercise.
 .venv-mac/
+
+# Playwright MCP scratch output (browser snapshots/screenshots)
+.playwright-mcp/

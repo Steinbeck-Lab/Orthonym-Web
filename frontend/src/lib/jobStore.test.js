@@ -2,13 +2,16 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 
 import {
+  JOB_STORAGE_KEY,
   MAX_REMEMBERED,
   UNKNOWN_EXPIRY_MAX_AGE_SECONDS,
   pruneExpired,
+  readJobs,
+  rememberJob,
   withJob,
 } from './jobStore.js'
 
-// Only the pure halves are tested here: readJobs/rememberJob/forgetJob touch
+// Mostly the pure halves: readJobs/rememberJob/forgetJob touch
 // window.localStorage, which node:test has no business pretending to be. The
 // rules worth protecting -- what gets dropped, and what order things sit in --
 // live in these two functions precisely so they can be checked.
@@ -77,4 +80,50 @@ test('withJob caps the list, dropping the oldest', () => {
     false,
     'the oldest remembered job is the one that goes'
   )
+})
+
+// ...with one exception, at the bottom: the rule that a TERMINAL job is never
+// persisted is this module's headline fix, and it cannot be checked without a
+// store to write into. The stub is nine lines and covers exactly the four
+// methods jobStore calls.
+function stubStorage() {
+  const map = new Map()
+  globalThis.window = {
+    localStorage: {
+      getItem: (k) => (map.has(k) ? map.get(k) : null),
+      setItem: (k, v) => map.set(k, String(v)),
+      removeItem: (k) => map.delete(k),
+    },
+  }
+  return map
+}
+
+test('rememberJob refuses a terminal job, and drops one it already held', () => {
+  // Both directions matter. The bug this prevents is a FINISHED batch coming
+  // back on every reload -- and a guard that only refused NEW terminal writes
+  // while leaving an existing entry in place would not have fixed it.
+  stubStorage()
+  rememberJob({ jobId: 'j1', ownerToken: 't1', moleculeCount: 12, status: 'running' })
+  assert.equal(readJobs().length, 1, 'a running job is worth remembering')
+
+  for (const status of ['done', 'failed', 'cancelled']) {
+    rememberJob({ jobId: 'j1', ownerToken: 't1', moleculeCount: 12, status })
+    assert.deepEqual(readJobs(), [], `status ${status} must not stay in the store`)
+    rememberJob({ jobId: 'j1', ownerToken: 't1', moleculeCount: 12, status: 'running' })
+  }
+})
+
+test('rememberJob still keeps the jobs that might need stopping', () => {
+  // The other direction: a guard that refused everything would silently lose
+  // the owner token of a 10,000-molecule job, which is the one thing this
+  // module exists to hold on to.
+  const map = stubStorage()
+  for (const status of ['queued', 'running', null, undefined]) {
+    map.clear()
+    rememberJob({ jobId: 'j2', ownerToken: 'tok', moleculeCount: 9000, status })
+    const [entry] = readJobs()
+    assert.equal(entry?.jobId, 'j2', `status ${status} must be remembered`)
+    assert.equal(entry?.ownerToken, 'tok')
+  }
+  assert.ok(map.has(JOB_STORAGE_KEY), 'written under the current key')
 })
