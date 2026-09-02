@@ -34,7 +34,16 @@ function Layout() {
     <div className="page">
       <GradientGround />
       <Navigation />
-      <Outlet />
+      {/* The route's content lives in its own box so the FOOTER can be
+          pinned to the bottom of the viewport: the page is exactly one
+          screen tall and this is the part that gives, rather than the whole
+          document growing and pushing the footer below the fold.
+          Home is compressed to fit it outright; the long reading pages
+          (About, Explain) scroll inside here, with the header and footer
+          staying put. */}
+      <div className="page__content">
+        <Outlet />
+      </div>
       <Footer />
     </div>
   )
