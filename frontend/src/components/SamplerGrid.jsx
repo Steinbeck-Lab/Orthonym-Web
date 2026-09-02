@@ -19,6 +19,7 @@ export default function SamplerGrid({ rows, reduceMotion, emptyMessage = DEFAULT
           key={`${row.smiles}-${index}`}
           row={row}
           phase={row.phase}
+          index={index}
           reduceMotion={reduceMotion}
         />
       ))}

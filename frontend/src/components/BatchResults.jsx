@@ -152,6 +152,19 @@ function BatchResults({ job, onForget }) {
         const next = await fetchJobStatus(jobId)
         if (!liveRef.current) return
         setStatus(next)
+        setNow(Math.floor(Date.now() / 1000))
+        setError(null)
+        if (isTerminal(next.status)) {
+          // Finished, failed or stopped: the job will never need stopping
+          // again, so the one reason to keep its token in localStorage is
+          // spent. Forgetting it here is what makes a reload CLEAR the page.
+          // Kept, a finished batch came back on every load and survived a
+          // hard reload -- which cannot clear localStorage -- so the panel
+          // could not be dismissed at all. This session keeps its own copy
+          // in React state, so Delete results still works right here.
+          forgetJob(jobId)
+          return
+        }
         // The submission envelope carries no expires_at -- only this response
         // does -- so the remembered entry is completed here. Without this
         // write the stored expiry stays null forever and jobStore's pruning
@@ -164,9 +177,6 @@ function BatchResults({ job, onForget }) {
           storedExpiryRef.current = next.expires_at
           rememberJob({ ...job, expiresAt: next.expires_at })
         }
-        setNow(Math.floor(Date.now() / 1000))
-        setError(null)
-        if (isTerminal(next.status)) return
       } catch (err) {
         if (!liveRef.current) return
         if (err instanceof JobGoneError) {
