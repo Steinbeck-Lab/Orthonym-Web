@@ -114,6 +114,11 @@
   --notch-h-nav: 56px; /* the routes island, deliberately a touch deeper */
   --r-notch: 24px; /* the islands' bottom corners */
   --notch-wing: 20px;
+  /* A fourth island, and the only one not on the window: Home's INFO tab,
+     carved out of the BOTTOM of the input card with the same fillets. A
+     touch shallower than the header's, because it hangs off a card rather
+     than the whole page, and still a 40px target. */
+  --info-notch-h: 40px;
 
   /* -- the bento world (TechX reference, dribbble 23855252) ------------
      A later instruction ("like this") replaced the flat, 0-radius,
@@ -129,14 +134,6 @@
   --on-dark: #f5f6f8; /* text on a dark card (16.5:1 on --card-dark) */
   --muted-on-dark: #a9adb4; /* secondary text on a dark card (5.3:1) */
   --hairline-on-dark: rgba(255, 255, 255, 0.12);
-
-  /* The working column's own cap, and it has TWO consumers that must agree:
-     Home's input card while it is alone on the page, and the confidence key
-     band beneath it. The band used to carry its own 1400px, which made it
-     wider than the card it describes and offset from it -- the owner's note
-     was "keep the box width similar to the input box width". One token, so
-     the next change to either cannot separate them. */
-  --input-max: 1100px;
 
   --r-card: 22px; /* the card radius — matches the reference's generous round */
   --r-card-sm: 14px; /* inner tiles, small controls */

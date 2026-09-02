@@ -320,10 +320,7 @@
    the structure editor, which is what the old Draw-tab grid flip existed to
    do -- and that flip is gone, because it resized the card on every tab
    switch. */
-.workbench__input {
-  width: min(100%, var(--input-max));
-  margin-inline: auto;
-}
+/* Width and centring moved to .input-col, which now owns the grid cell. */
 
 /* The field area is a FIXED height across all three tabs. This is the actual
    "do not grow as I switch tabs" fix: the textarea is ~200px, the file field
@@ -384,7 +381,7 @@
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
-  .workbench--split .workbench__input {
+  .workbench--split .input-col {
     width: 100%;
     margin-inline: 0;
   }
@@ -400,110 +397,237 @@
    last row. Two columns also gives each result a larger, more legible
    depiction. The first result spans both as the feature cell. */
 
-/* -------------------- the confidence key, as a ladder -------------------- */
-/* The five tiers are ONE ORDERED LADDER, not five categories, so the band is
-   drawn as a descent: numbered rungs, each sitting lower than the one before
-   it, ending at the input that could not be read.
-   Confidence is monochrome in this system -- the crimson accent never touches
-   a tier -- so every bit of hierarchy here is scale, rhythm, weight or
-   motion. That constraint is why the specimens are SVG: a stroke can be
-   drawn, and a dashed rule drawing dash by dash explains "dashed" better
-   than any caption. */
+/* -------------------- the confidence key, behind an INFO notch --------------------
 
-/* The shell owns the width and holds the bloom the glass refracts.
-   Narrower than the working cards, and centred: a key is reference material,
-   not a work surface, and at the full 2200px column its five rungs sprawled.
-   It sizes itself rather than wearing `page-shell`, which caps at
-   --shell-max with equal specificity -- a max-width there lost the cascade
-   and the band stayed 2200px wide. */
-.key-shell {
-  position: relative;
-  /* THE CARD'S WIDTH, from the shared token. It was its own 1400px, which
-     made the key wider than the input card it describes and left the two
-     visibly out of line down the page. A key is reference material for that
-     card, so it measures the same as that card. */
-  width: min(100% - 2 * var(--shell-pad), var(--input-max));
+   The product's most important explanation, and the fourth shape it has
+   taken. The reasoning is in ConfidenceLegend.jsx; what matters here is the
+   two things this shape fixes. It cost 135px of a one-screen page at rest,
+   every visit, for a reference most people read once. And its width was its
+   own measure -- 1400px, centred, floating below the whole workbench -- so
+   it sat next to nothing it described.
+
+   Now it is part of the input card: a notch welded under the card's bottom
+   edge, and the key behind it, at the CARD's width because it is inside the
+   card's grid cell. 34px at rest.
+
+   Confidence is monochrome in this system (the crimson accent never touches
+   a tier), so every bit of hierarchy is scale, rhythm, weight or motion.
+   That constraint is why the specimens are SVG: a stroke can be DRAWN, and a
+   dashed rule drawing dash by dash explains "dashed" better than a caption.
+
+   The glass this box used to wear is gone, deliberately. backdrop-filter
+   needs something behind it worth refracting, and the panel now sits on the
+   white card it belongs to -- blurring white over white is decoration, which
+   is the one thing a blur may never be. */
+
+/* The input CELL: the card, with the notch and its drawer underneath. One
+   grid cell, so the notch cannot drift from the card's width. */
+.input-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  /* Centred and capped while it is alone on the page, exactly as the card
+     used to be; the split rule below hands it the whole column instead. */
+  width: min(100%, 1100px);
   margin-inline: auto;
 }
 
-/* The reason the glass is allowed to exist. A frosted panel with nothing
-   behind it is just murkier white for the price of a backdrop-filter, so the
-   crimson sits UNDER the band and the blur has something to bend. It is a
-   sibling, not a child: backdrop-filter blurs what is behind an element, and
-   a child would be in front of it. */
-/* The spill comes from BLUR INK, not from a bigger box.
-   The bloom used to reach -85% past this element so the light showed around
-   the panel. Measured, that put 121px of scrollable overflow on a page whose
-   children summed to exactly the viewport -- an absolutely positioned child
-   sticking out is scrollable overflow, and a scrollbar appeared on a layout
-   that fit perfectly. `overflow: clip` with a clip margin did not help: the
-   bloom sat INSIDE the 150px margin, so it was painted and still counted.
-   A filter's ink does not contribute to scrollable overflow at all, so the
-   box now stays inside its parent and a 76px blur throws the light out past
-   the edges for free. */
-.key-shell__bloom {
-  position: absolute;
-  inset: 4% 2%;
-  z-index: 0;
-  pointer-events: none;
-  background: radial-gradient(
-    ellipse 64% 60% at 50% 52%,
-    color-mix(in srgb, var(--accent) 30%, transparent) 0%,
-    color-mix(in srgb, var(--accent) 14%, transparent) 44%,
-    color-mix(in srgb, var(--accent) 5%, transparent) 68%,
-    transparent 84%
-  );
-  filter: blur(76px);
+/* The card is no longer a direct child of .workbench, so it takes over the
+   containment `.workbench > *` used to give it: it is the part of the cell
+   that flexes, and it clips rather than pushing the notch off the screen. */
+.input-col > .workbench__input {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
-/* The glass. 72% white over an 18% crimson bloom was chosen by MEASURING the
-   composite, not by eye: at those values --muted body text lands at 4.9:1 on
-   the effective background (#f2eaed-ish), clear of the 4.5:1 floor, while
-   --muted-soft failed at every combination tried -- which is why the rung
-   ordinals moved to --muted. */
-.key-band {
+/* --- the disclosure ------------------------------------------------- */
+
+/* Two rows: the notch, then a drawer that opens from 0fr to 1fr.
+   grid-template-rows is the one technique that animates TO the content's own
+   height. `height: auto` does not interpolate at all, and a scaleY transform
+   would squash the type it is revealing. */
+.info {
+  display: grid;
+  grid-template-rows: auto 0fr;
+  transition: grid-template-rows 360ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.info--open {
+  grid-template-rows: auto 1fr;
+}
+
+/* THE NOTCH. The header's shape, mirrored: App.css carves three white
+   islands out of the TOP of the window and welds each one to that edge with
+   a pair of concave fillets; this one is carved out of the BOTTOM of the
+   input card the same way. Same tokens, same mask trick, upside down. That
+   is why it reads as part of the card rather than a pill stuck under it.
+   Right-hand side, and inset by more than its own fillet plus the card's
+   22px corner so neither collides with the card's rounded end. */
+.info__notch {
+  position: relative;
+  justify-self: end;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 1.4ch;
+  height: var(--info-notch-h);
+  margin-top: -1px;
+  margin-right: clamp(var(--s-xl), 4vw, 72px);
+  /* Wide enough that --r-notch reads as two corners on a shelf rather than
+     as one lozenge: at 82px the two 24px arcs met in the middle and the tab
+     had no flat bottom edge at all. The header's island has the same radius
+     over a much longer run, which is why it reads as a shelf. */
+  padding-inline: var(--s-lg);
+  min-width: 148px;
+  justify-content: center;
+  background: var(--card);
+  border: 0;
+  border-end-start-radius: var(--r-notch);
+  border-end-end-radius: var(--r-notch);
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.info__notch:hover,
+.info--open .info__notch {
+  color: var(--ink);
+}
+
+.info__notch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.info__notch-label {
+  line-height: 1;
+}
+
+/* The fillets are .notch__wing from App.css, used as-is. See the note in
+   ConfidenceLegend.jsx: the header's islands and this one both hang downward
+   from their edge, so the concave sweep is identical and there is nothing to
+   mirror. .info__notch is position: relative so they anchor to it, which is
+   the only thing this surface has to provide.
+   Two consequences worth stating: --notch-wing is BOTH the fillet's size and
+   its arc radius (one token, by definition), so the tab must stay inset from
+   the card's right edge by more than 20px or the right fillet hangs off it. */
+
+/* --- the bulb ------------------------------------------------------- */
+
+/* A lamp, and it reports state rather than decorating: it breathes while
+   there is something here nobody has opened, and goes steady the moment it
+   has been. Crimson is legal on it because it is CHROME -- an attention
+   signal, the same job the active nav pill does -- and it never touches a
+   confidence tier.
+   Two elements, because the glow has to be a separate box: a filter on the
+   dot would blur the dot's own edge, and animating the dot's box-shadow
+   repaints instead of compositing. */
+.info__bulb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 8px;
+  height: 8px;
+  flex: none;
+}
+
+.info__bulb-dot {
   position: relative;
   z-index: 1;
-  padding: 6px clamp(var(--s-sm), 1.6vw, var(--s-md)) var(--s-xs);
-  background: color-mix(in srgb, #ffffff 72%, transparent);
-  -webkit-backdrop-filter: blur(16px) saturate(1.15);
-  backdrop-filter: blur(16px) saturate(1.15);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  transition: background-color 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.info__bulb-glow {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--accent) 46%, transparent) 0%,
+    transparent 68%
+  );
+  opacity: 0;
+  transform: scale(0.55);
+}
+
+/* Unopened: two and a half seconds of breath, slow enough to read as a
+   pulse rather than a blink. Opacity and transform only, so it runs on the
+   compositor and costs nothing while it sits there. */
+.info--unseen .info__bulb-glow {
+  animation: bulb-breathe 2600ms cubic-bezier(0.37, 0, 0.63, 1) infinite;
+}
+
+@keyframes bulb-breathe {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(0.55);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Opened: the lamp is ink, and still. It has done its job and it is now
+   just the tab's mark. */
+.info:not(.info--unseen) .info__bulb-dot {
+  background: var(--ink);
+}
+
+.info__notch:hover .info__bulb-glow {
+  opacity: 0.7;
+  transform: scale(1);
+  transition:
+    opacity 240ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* The clip the 0fr row needs, plus the thing a clip does NOT do.
+   overflow: hidden hides the closed panel and stops it being clicked, but it
+   leaves the content in the accessibility tree and in the tab order -- a
+   screen reader would read out five tiers nobody has opened. visibility
+   takes it out of both. The 0s transition DELAYED by the drawer's own
+   duration is what keeps it on screen while it closes; without the delay the
+   panel vanishes on the first frame and the drawer collapses over nothing. */
+.info__drawer {
+  overflow: hidden;
+  visibility: hidden;
+  transition: visibility 0s linear 360ms;
+}
+
+.info--open .info__drawer {
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+/* Its own lifted card, below the notch rather than welded to it. The
+   fillets already make the tab part of the input card; the panel is the
+   thing the tab reveals, so it gets the full card radius and its own
+   shadow, exactly like the mobile menu panel the header drops. */
+.info__panel {
+  margin-top: var(--gap);
+  padding: var(--s-sm) clamp(var(--s-sm), 1.6vw, var(--s-md)) var(--s-md);
+  background: var(--card);
+  border: var(--card-border);
   border-radius: var(--r-card);
-  box-shadow: var(--glass-shadow);
-  border: 1px solid color-mix(in srgb, #ffffff 55%, transparent);
+  box-shadow: var(--card-shadow);
 }
 
-/* Without backdrop-filter, a translucent panel over a crimson bloom is not
-   glass -- it is a pink smear. Both of these fall back to the plain card and
-   drop the bloom entirely. */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .key-band {
-    background: var(--card);
-    box-shadow: var(--card-shadow);
-    border: var(--card-border);
-  }
-
-  .key-shell__bloom {
-    display: none;
-  }
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  .key-band {
-    background: var(--card);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-    box-shadow: var(--card-shadow);
-    border: var(--card-border);
-  }
-
-  .key-shell__bloom {
-    display: none;
-  }
-}
-
-.key-band__caption {
-  margin: 0 0 2px;
+.info__caption {
+  margin: 0 0 var(--s-xs);
+  padding-left: var(--s-sm);
   font-family: var(--font-mono);
   font-size: var(--t-caption);
   line-height: 1.3;
@@ -512,31 +636,30 @@
   color: var(--muted);
 }
 
-.key-band__rungs {
+.info__rungs {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-md);
+  gap: 1px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-/* One rung. Its own little grid so the ordinal, the specimen, the name, the
-   code and the sentence each have a fixed place -- the alignment across five
-   rungs is what makes the ladder read as a ladder. */
+/* --- one rung ------------------------------------------------------- */
+
+/* A ROW, not a column. Five columns inside a card is 173px each, which is
+   narrower than "Verified, and the preferred name." reads at. Five rows also
+   make the descent real: the vertical order IS the ladder, so the staircase
+   offset the five-column version used to fake one is gone. */
 .rung {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-areas:
-    'ordinal specimen'
-    'ordinal name'
-    'ordinal body';
-  align-items: baseline;
+  /* 10ch fits UNVERIFIED, the longest label, so all five names align and the
+     marks start on one axis. */
+  grid-template-columns: auto 10ch minmax(56px, 1fr) minmax(0, 1.1fr);
+  align-items: center;
   column-gap: var(--s-md);
-  row-gap: 3px;
-  padding: var(--s-xs) var(--s-sm) var(--s-sm);
-  border-radius: var(--r-card-sm);
-  transition: background-color 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 5px var(--s-sm) 6px;
+  border-radius: var(--r-chrome);
+  transition: background-color 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .rung:hover,
@@ -545,18 +668,14 @@
 }
 
 .rung__ordinal {
-  grid-area: ordinal;
-  align-self: start;
   font-family: var(--font-mono);
   font-size: var(--t-caption);
   letter-spacing: var(--track-caption);
-  /* --muted, not --muted-soft. Measured over the glass: --muted-soft is
-     4.61:1 on pure white and fails 4.5:1 at EVERY bloom/glass combination
-     tried, because any tint eats its 0.11 of headroom. Its own token comment
-     says "CANVAS ONLY" for this reason. */
+  /* --muted, not --muted-soft: the latter is 4.61:1 on white and its own
+     token comment says "CANVAS ONLY". */
   color: var(--muted);
   font-variant-numeric: tabular-nums;
-  transition: color 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: color 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .rung:hover .rung__ordinal,
@@ -564,11 +683,21 @@
   color: var(--ink);
 }
 
-/* The specimen: full-width, so the mark is read as a MARK rather than a
-   swatch. preserveAspectRatio="none" plus non-scaling-stroke means it
-   stretches horizontally while the stroke weight stays exact. */
+.rung__name {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-nav);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: var(--track-nav);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* The specimen stretches, and its stroke weight does not: preserveAspect-
+   Ratio="none" plus non-scaling-stroke. It sits immediately after the name,
+   the way a real result carries its rule immediately under one. */
 .rung__specimen {
-  grid-area: specimen;
   display: block;
   width: 100%;
   height: 10px;
@@ -578,138 +707,126 @@
 
 .rung__stroke {
   stroke: currentColor;
+  stroke-dashoffset: 0;
 }
 
-/* The two weaker tiers are drawn in the muted ink, which is the same
-   distinction the result tiles make: a dotted best-effort rule and an
-   abstain's faint rule are quieter than a verified one. */
+/* The two weaker tiers are drawn in the muted ink, the same distinction the
+   result tiles make. */
 .rung--best-effort .rung__specimen,
 .rung--abstain .rung__specimen {
   color: var(--muted);
 }
 
-.rung__name {
-  grid-area: name;
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: var(--t-nav-lg);
-  font-weight: 700;
-  line-height: 1.3;
-  letter-spacing: var(--track-nav);
-  text-transform: uppercase;
-  color: var(--ink);
-}
-
 .rung__body {
-  grid-area: body;
   margin: 0;
-  max-width: 40ch;
   font-family: var(--font-body);
   font-size: var(--t-body-sm);
   line-height: 1.5;
   color: var(--muted);
 }
 
-/* --- the descent, and the entrance ----------------------------------
-   Both come from --i, the rung's index, so the ladder's shape and its
-   reveal are the same number expressed twice. */
-@media (min-width: 860px) {
-  .key-band__rungs {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 0;
-  }
-
+/* Narrow: the sentence takes its own line rather than squeezing the mark to
+   a stub. */
+@media (max-width: 700px) {
   .rung {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      'ordinal'
-      'specimen'
-      'name'
-      'body';
-    row-gap: 1px;
-    padding: 2px var(--s-md) 2px;
-    /* THE DESCENT: each rung sits 9px lower than the one before it, so five
-       equal cells become a staircase and the eye reads the order without a
-       caption telling it there is one. 14px was clearer and cost 56px of
-       height on a box that was already too tall. */
-    margin-top: calc(var(--i) * 4px);
+    grid-template-columns: auto 10ch minmax(40px, 1fr);
+    row-gap: 2px;
   }
 
-  .rung:not(:first-child) {
-    border-left: 1px solid var(--hairline);
-  }
-
-  .rung__name {
-    /* The code sits under the name at this width, so the name needs the row
-       to itself. */
-    grid-area: name;
-    align-self: start;
+  .rung__body {
+    grid-column: 2 / -1;
   }
 }
 
-@media (min-width: 860px) {
-/* The reveal: each rung rises and fades in, 70ms after the one before it,
-   the first time the band scrolls into view. `--in` never runs again -- a
-   band that re-animates every time you scroll past is a nervous tic. */
-.key-band .rung {
+/* --- the reveal -----------------------------------------------------
+   One orchestrated moment, and --i drives all of it: the rows arrive top to
+   bottom and each mark then DRAWS itself. Opacity, transform and clip-path
+   only, so the whole sequence runs on the compositor while the grid row is
+   the single layout property in play. */
+.info__rungs .rung {
   opacity: 0;
-  transform: translateY(10px);
 }
 
-.key-band--in .rung {
-  opacity: 1;
-  transform: translateY(0);
-  transition:
-    opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-  transition-delay: calc(var(--i) * 70ms);
+.info--open .rung {
+  animation: rung-in 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--i) * 45ms);
 }
 
-/* THE DELIGHT: hovering a rung draws its mark, left to right. The dash
-   patterns are the grammar itself, so watching a dashed rule assemble dash
-   by dash is the explanation. 1200 is comfortably longer than any stroke
-   here, so one dash covers the whole line before it retracts. */
-.rung__stroke {
-  stroke-dashoffset: 0;
+@keyframes rung-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -7px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
+/* The mark is sewn in behind its own row: 90ms after the row starts, so
+   the name is already legible when its rule appears under it. 1200 is
+   comfortably longer than any stroke here, so one dash covers the whole line
+   before it retracts. */
+.info--open .rung__stroke {
+  animation: rung-draw 560ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--i) * 45ms + 90ms);
+}
+
+.info--open .rung__stroke:nth-child(2) {
+  animation-delay: calc(var(--i) * 45ms + 150ms);
+}
+
+.info--open .rung__stroke:nth-child(3) {
+  animation-delay: calc(var(--i) * 45ms + 210ms);
+}
+
+/* ...and hovering a settled rung draws it again, which is how the grammar
+   answers a second look. */
 .rung:hover .rung__stroke,
 .rung:focus-within .rung__stroke {
-  animation: rung-draw 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.rung:hover .rung__stroke:nth-child(2),
-.rung:focus-within .rung__stroke:nth-child(2) {
-  animation-delay: 90ms;
-}
-
-.rung:hover .rung__stroke:nth-child(3),
-.rung:focus-within .rung__stroke:nth-child(3) {
-  animation-delay: 180ms;
+  animation: rung-draw 560ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes rung-draw {
   from {
     clip-path: inset(0 100% 0 0);
   }
+
   to {
     clip-path: inset(0 0 0 0);
   }
 }
 
-/* Reduced motion keeps every state and drops every transition: the ladder is
-   still a ladder, the marks are still drawn, nothing moves. */
+/* Reduced motion keeps every STATE and drops every transition: the drawer
+   still opens, the ladder is still a ladder, the marks are all present.
+   Nothing moves. */
 @media (prefers-reduced-motion: reduce) {
-  .key-band .rung,
-  .key-band--in .rung {
-    opacity: 1;
-    transform: none;
+  .info,
+  .info__notch,
+  .info__bulb-glow,
+  .rung,
+  .rung__ordinal {
     transition: none;
   }
 
+  .info__rungs .rung {
+    opacity: 1;
+  }
+
+  .info--open .rung,
+  .info--open .rung__stroke,
   .rung:hover .rung__stroke,
   .rung:focus-within .rung__stroke {
     animation: none;
+  }
+
+  /* The lamp stays LIT rather than going dark: it is a state signal, and
+     dropping it entirely would remove information, not motion. */
+  .info--unseen .info__bulb-glow {
+    animation: none;
+    opacity: 0.8;
+    transform: scale(1);
   }
 }
 
