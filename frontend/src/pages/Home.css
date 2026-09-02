@@ -468,9 +468,19 @@
    height. `height: auto` does not interpolate at all, and a scaleY transform
    would squash the type it is revealing. */
 .info {
+  /* ONE duration, three consumers: the drawer's row below, the tab's flip,
+     and the drawer's visibility delay. They must agree exactly, and the
+     visibility delay is the one that fails silently -- leave it short and
+     the panel blinks out before the drawer has finished closing.
+     520ms, up from 360: the flip reads as a movement rather than a state
+     change, and a 180-degree rotation at 360ms is over before the eye has
+     followed it. Still inside the 300-500ms band a layout change is allowed,
+     and the reveal inside it is deliberately slower still. */
+  --info-ms: 520ms;
+
   display: grid;
   grid-template-rows: auto 0fr;
-  transition: grid-template-rows 360ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: grid-template-rows var(--info-ms) cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .info--open {
@@ -511,7 +521,37 @@
   text-transform: uppercase;
   color: var(--muted);
   cursor: pointer;
-  transition: color 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    color 200ms cubic-bezier(0.16, 1, 0.3, 1),
+    /* Matched to the drawer's own duration so the tab lands exactly as the
+       panel finishes arriving. Ease-out-QUART rather than the expo the row
+       uses: expo front-loads almost the whole curve into the first 150ms,
+       which on a 180-degree rotation reads as a snap however long the
+       duration says it is. Quart spreads the spin across the movement. */
+    transform var(--info-ms) cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* THE FLIP. On open the tab lets go of the card and re-attaches to the
+   panel, upside down -- because a tab belongs to whatever it is attached to,
+   and the panel is the thing it just opened. An earlier version kept it
+   welded to the card while butting the panel underneath, which gave a tab
+   pointing the wrong way at the box it belonged to.
+   ONE declaration does all the geometry, and this is why the idea is good:
+     - the rounded corners are border-end-* (bottom); rotated, they paint at
+       the top, where an up-sticking island wants them;
+     - both .notch__wing fillets flip with it. The left wing (right: 100%,
+       top: 0, mask circle at its own bottom-left) lands to the RIGHT of the
+       tab, bottom-aligned, with its white now hugging its bottom edge and
+       the tab's flank -- exactly what an island welded to an edge BELOW it
+       needs. Hand-writing that mirrored mask is what produced a pair of ears
+       the first time; rotation cannot get it wrong.
+   The arithmetic: the tab's box is y -1..39 inside .info (--info-notch-h is
+   40px, less the 1px weld), the drawer starts at 39, and .info__panel
+   carries margin-top: var(--gap), so the panel's top edge is at 53.
+   translateY(14px) puts the tab at 13..53. It welds, and 14px of ground
+   opens above it. No margin anywhere has to change. */
+.info--open .info__notch {
+  transform: translateY(var(--gap)) rotate(180deg);
 }
 
 .info__notch:hover,
@@ -525,7 +565,28 @@
 }
 
 .info__notch-label {
+  /* inline-block, because a transform does nothing to an inline box, and
+     this label has to counter-rotate. */
+  display: inline-block;
   line-height: 1;
+  /* The same curve and duration as its parent, or the word visibly
+     counter-spins out of step with the tab carrying it. */
+  transition: transform var(--info-ms) cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Counter-rotated so the word stays upright inside a tab that is upside
+   down. Only the LABEL needs it: the bulb is a circle inside a circle and
+   is rotationally symmetric, and putting a transform on it would sit in the
+   way of the glow's own scale animation. */
+.info--open .info__notch-label {
+  transform: rotate(180deg);
+}
+
+/* ...and row-reverse restores the reading order. The parent's rotation
+   mirrors the flex axis, so without this the lamp jumps to the right of the
+   word for as long as the panel is open. */
+.info--open .info__notch {
+  flex-direction: row-reverse;
 }
 
 /* The fillets are .notch__wing from App.css, used as-is. See the note in
@@ -624,7 +685,7 @@
 .info__drawer {
   overflow: hidden;
   visibility: hidden;
-  transition: visibility 0s linear 360ms;
+  transition: visibility 0s linear var(--info-ms);
 }
 
 .info--open .info__drawer {
@@ -893,8 +954,12 @@
 }
 
 .info--open .rung {
-  animation: rung-in 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-delay: calc(var(--i) * 45ms);
+  animation: rung-in 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* 60ms apart, up from 45: at five rungs the whole ladder used to assemble
+     inside 180ms, which is quick enough that it read as one movement rather
+     than an order. The last rung now lands at 240ms, comfortably inside the
+     drawer's own 520. */
+  animation-delay: calc(var(--i) * 60ms);
 }
 
 @keyframes rung-in {
@@ -914,23 +979,23 @@
    comfortably longer than any stroke here, so one dash covers the whole line
    before it retracts. */
 .info--open .rung__stroke {
-  animation: rung-draw 560ms cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-delay: calc(var(--i) * 45ms + 90ms);
+  animation: rung-draw 660ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--i) * 60ms + 120ms);
 }
 
 .info--open .rung__stroke:nth-child(2) {
-  animation-delay: calc(var(--i) * 45ms + 150ms);
+  animation-delay: calc(var(--i) * 60ms + 190ms);
 }
 
 .info--open .rung__stroke:nth-child(3) {
-  animation-delay: calc(var(--i) * 45ms + 210ms);
+  animation-delay: calc(var(--i) * 60ms + 260ms);
 }
 
 /* ...and hovering a settled rung draws it again, which is how the grammar
    answers a second look. */
 .rung:hover .rung__stroke,
 .rung:focus-within .rung__stroke {
-  animation: rung-draw 560ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: rung-draw 660ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes rung-draw {
@@ -949,11 +1014,16 @@
 @media (prefers-reduced-motion: reduce) {
   .info,
   .info__notch,
+  .info__notch-label,
   .info__bulb-glow,
   .rung,
   .rung__ordinal {
     transition: none;
   }
+
+  /* The flip itself STAYS. It is not decoration: it is the statement of
+     which box the tab is attached to, and an upside-down tab welded to the
+     panel is information. Only the movement goes. */
 
   .info__rungs .rung {
     opacity: 1;
