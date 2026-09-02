@@ -48,10 +48,20 @@ const TIERS = [
     body: 'Verified, not the preferred one.',
   },
   {
+    // "Could not confirm" and NOT "verification did not run", because it did.
+    // openstout_service calls _roundtrip_check for every named result --
+    // pin, fallback and best_effort alike -- and best-effort mode has no
+    // bearing on whether OPSIN is consulted. What the mode changes is
+    // whether a name the check failed to confirm may be SHOWN at all; with
+    // it off, that molecule comes back as an abstain instead.
+    // A previous line here read "Best-effort mode only; unconfirmed.", which
+    // was read (reasonably) as "OPSIN verification doesn't run in this
+    // mode". The mode link belongs on a result, where Tile.jsx states it,
+    // not compressed into a tier definition where it changes its meaning.
     key: 'best-effort',
     ordinal: '03',
     label: 'UNVERIFIED',
-    body: 'Best-effort mode only; unconfirmed.',
+    body: 'OPSIN could not confirm it.',
   },
   {
     key: 'abstain',
