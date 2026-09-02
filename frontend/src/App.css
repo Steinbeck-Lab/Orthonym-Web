@@ -936,28 +936,19 @@ input.field__control {
   text-underline-offset: 0.25em;
 }
 
-/* -------------------- site footer (restrained) -------------------- */
+/* -------------------- site footer (pills on the ground) -------------------- */
 /* ChemAudit's footer is a full cinematic piece (giant wordmark, aurora,
-   coffee cup, marquee). By instruction STITCH keeps only its STRUCTURE —
-   a brand block, link columns, a credit line — flat and quiet, Bugatti
-   geometry with hairline seams. The one warmth is a crimson keyline at the
-   top edge and a crimson heart in the credit. */
+   coffee cup, marquee). STITCH keeps only its STRUCTURE — a copyright line,
+   a credit pill, a back-to-top button — and, by instruction, its lack of a
+   BAND: no background, no top hairline, no keyline gradient. The strip is
+   transparent and only the pill and the round button lift, so the footer
+   reads as two objects resting on the grey ground rather than a white bar
+   welded across the bottom of the page. Adding a `background` back here is
+   exactly the bar that was removed. */
 
 .site-footer {
   position: relative;
   margin-top: auto;
-  background: var(--surface-soft);
-  border-top: 1px solid var(--hairline);
-}
-
-.site-footer::before {
-  content: '';
-  position: absolute;
-  top: -1px;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--accent-line), transparent);
 }
 
 /* Three parts on one line: copyright, credit pill, back-to-top. The pill is
@@ -968,16 +959,34 @@ input.field__control {
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: var(--gap);
-  padding-block: calc(var(--gap) * 1.5);
+  padding-block: calc(var(--gap) * 2);
 }
 
 .site-footer__copyright {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.9rem;
   margin: 0;
   font-family: var(--font-mono);
   font-size: 0.7rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+/* The rights-holder mark. 2rem is a floor, not a preference — see the note in
+   Footer.jsx: the wordmark's caps are a quarter of the artwork's height. */
+.site-footer__org {
+  display: inline-flex;
+  flex: none;
+  border-radius: var(--r-chrome);
+}
+
+.site-footer__org img {
+  display: block;
+  height: 2rem;
+  width: auto;
 }
 
 /* The credit, as a floating pill — the one place the footer lifts, matching
