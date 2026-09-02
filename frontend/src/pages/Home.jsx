@@ -25,6 +25,70 @@ function emptyRow(smiles) {
   }
 }
 
+// WebGPU flare states: 'off' (unsupported, refused, or reduced motion -- no
+// canvas in the DOM at all), 'pending' (canvas mounted, GPU still starting),
+// 'live' (drawing). 'off' is also where a failure lands, so a broken driver
+// degrades to the plain wordmark instead of an empty box.
+function useWordmarkFlare(reduceMotion) {
+  const canvasRef = useRef(null)
+  const wordmarkRef = useRef(null)
+  // Three pieces of state, deliberately not one: `mounted` decides whether the
+  // canvas exists, and it is the ONLY thing the renderer effect may depend on.
+  // `live` and `failed` are results, and they must never re-run that effect --
+  // an earlier version kept a single 'off' | 'pending' | 'live' state and put
+  // it in the dependency array, so setting 'live' re-ran the effect, whose
+  // cleanup disposed the renderer it had just finished starting. It drew
+  // exactly one frame and then sat there, empty, with no error anywhere.
+  const [mounted, setMounted] = useState(false)
+  const [live, setLive] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    // Reduced motion is a refusal, not a downgrade: this thing is a moving
+    // light and there is no still version of it worth drawing.
+    setMounted(!reduceMotion && typeof navigator !== 'undefined' && 'gpu' in navigator)
+  }, [reduceMotion])
+
+  useEffect(() => {
+    if (!mounted) return
+    const canvas = canvasRef.current
+    const wordmark = wordmarkRef.current
+    if (!canvas || !wordmark) return
+
+    let cancelled = false
+    let renderer
+    // Imported here, not at module scope: vgpu is the single heaviest thing
+    // this app can load (a 180 kB chunk), and a visitor without WebGPU must
+    // never pay for it.
+    import('../lib/flare/renderer')
+      .then(({ createRenderer }) => {
+        if (cancelled) return undefined
+        renderer = createRenderer({ canvas, wordmark })
+        return renderer.ready
+      })
+      .then(() => {
+        if (!cancelled) setLive(true)
+      })
+      .catch((error) => {
+        // An adapter that refuses, a driver that dies, a shader that will not
+        // compile: all of it ends here, and the page keeps working.
+        if (import.meta.env.DEV) console.warn('flare unavailable:', error)
+        if (!cancelled) {
+          setFailed(true)
+          setLive(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+      renderer?.dispose()
+    }
+  }, [mounted])
+
+  const flare = failed || !mounted ? 'off' : live ? 'live' : 'pending'
+  return { flare, flareCanvasRef: canvasRef, wordmarkRef }
+}
+
 function Home() {
   const [smilesText, setSmilesText] = useState('')
   const [examples, setExamples] = useState([])
@@ -39,6 +103,7 @@ function Home() {
   const [validationNote, setValidationNote] = useState(null)
   const [fetchError, setFetchError] = useState(null)
   const reduceMotion = useReducedMotion()
+  const { flare, flareCanvasRef, wordmarkRef } = useWordmarkFlare(reduceMotion)
 
   const timersRef = useRef([])
 
@@ -160,20 +225,38 @@ function Home() {
   return (
     <>
       {/* The hero. It carried a title and a four-line lede until 2026-09-02,
-          when the owner replaced both with the wordmark over a crimson flare
-          and had the lede dropped outright (that copy still lives on About).
-          The flare is three CSS layers, not the canvas component that
-          inspired it -- that component's renderer file was never supplied,
-          and gradients plus two keyframes get the same picture with no
-          script, no dependency and nothing to pause when the tab hides. */}
+          when the owner replaced both with the wordmark and had the lede
+          dropped outright (that copy still lives on About).
+          The light is the real thing: vgpu's nextjs-flare (vercel-labs/vgpu,
+          MIT), vendored into src/lib/flare and pointed at STITCH's own
+          wordmark -- a 48-step ray walk jittered by blue noise over a
+          separable blur chain, raking light along the letter OUTLINES the way
+          Next's "N" is lit. Not a glow in the middle of the card; the
+          wordmark is the light source.
+          It only runs where WebGPU exists and motion is welcome. Everywhere
+          else the wordmark simply keeps its crimson text-shadow halo, which
+          is why there is no canvas in the markup until we know. */}
       <section className="home-hero page-shell" aria-label="Introduction">
-        <span className="flare" aria-hidden="true">
-          <span className="flare__core" />
-          <span className="flare__rays" />
-          <span className="flare__streak" />
-        </span>
+        {flare !== 'off' && (
+          <canvas
+            className="home-hero__flare"
+            ref={flareCanvasRef}
+            aria-hidden="true"
+          />
+        )}
 
-        <h1 className="home-hero__word">Stitch</h1>
+        {/* When the flare is live it draws these letters itself, lit. The
+            heading stays in the DOM at the same size -- it is what the flare
+            is measured against, and what a screen reader and a crawler read
+            -- but its ink goes transparent so the two do not double up. */}
+        <h1
+          className={
+            flare === 'live' ? 'home-hero__word home-hero__word--lit' : 'home-hero__word'
+          }
+          ref={wordmarkRef}
+        >
+          Stitch
+        </h1>
 
         {/* The bold letters spell STITCH: S-T-I-T-C-H. "Ch" keeps the word's
             real spelling rather than shouting CH to force the acronym --
