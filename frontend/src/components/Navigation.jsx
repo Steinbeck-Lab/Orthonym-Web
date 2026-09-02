@@ -115,6 +115,27 @@ function Navigation() {
   // transition one frame AFTER its first real measurement.
   const [slides, setSlides] = useState(false)
 
+  // The one moment a nav can honestly celebrate: arriving somewhere. On a
+  // route change the pill slides (below) and the crimson dot is pulled into a
+  // short dash and back, like a thread drawn tight -- the same motif as the
+  // footer's self-sewing join, which makes it a signature rather than a
+  // one-off trick. 380ms, and the class is removed afterwards so it can fire
+  // again on the next route.
+  const [justMoved, setJustMoved] = useState(false)
+  const firstRouteRef = useRef(true)
+
+  useEffect(() => {
+    // Not on first paint: nobody navigated to arrive here, and an animation
+    // that plays on load is decoration rather than feedback.
+    if (firstRouteRef.current) {
+      firstRouteRef.current = false
+      return undefined
+    }
+    setJustMoved(true)
+    const timer = window.setTimeout(() => setJustMoved(false), 420)
+    return () => window.clearTimeout(timer)
+  }, [location.pathname])
+
   const measurePill = useCallback(() => {
     const nav = navRef.current
     if (!nav) return
@@ -207,7 +228,11 @@ function Navigation() {
             )}
           </button>
 
-          <nav className="site-nav" aria-label="Main" ref={navRef}>
+          <nav
+            className={justMoved ? 'site-nav site-nav--arrived' : 'site-nav'}
+            aria-label="Main"
+            ref={navRef}
+          >
             {pill && (
               <span
                 className={slides ? 'site-nav__pill site-nav__pill--slides' : 'site-nav__pill'}
