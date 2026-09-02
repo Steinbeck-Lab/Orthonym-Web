@@ -194,15 +194,8 @@ export default function ConfidenceLegend() {
           setSeen(true)
         }}
       >
-        {/* The header's own fillets, reused rather than mirrored. Both
-            islands hang DOWNWARD from their edge -- the header's from the top
-            of the window, this one from the bottom of the card -- so the
-            concave sweep is the same shape, not a flipped one. An earlier
-            version flipped the mask circle to the wing's top corner on the
-            theory that a mirrored edge needs a mirrored mask; it welded the
-            white to the wrong side and the tab grew a pair of ears. */}
-        <span className="notch__wing notch__wing--left" aria-hidden="true" />
-        <span className="notch__wing notch__wing--right" aria-hidden="true" />
+        <span className="info__wing info__wing--left" aria-hidden="true" />
+        <span className="info__wing info__wing--right" aria-hidden="true" />
         {/* The bulb. A crimson lamp that breathes while there is something
             here you have not opened, and goes steady once you have. Crimson
             is legal on it precisely because it is chrome -- an attention
