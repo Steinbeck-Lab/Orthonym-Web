@@ -3,8 +3,17 @@ import { Link } from 'react-router-dom'
 import ExampleChips from '../components/ExampleChips'
 import SamplerGrid from '../components/SamplerGrid'
 import ConfidenceLegend from '../components/ConfidenceLegend'
+import BatchResults from '../components/BatchResults'
 import Switch from '../components/Switch'
-import { fetchExamples, translateBatch, TranslateJobQueuedError } from '../lib/api'
+import {
+  createJob,
+  fetchExamples,
+  parsePreview,
+  translateBatch,
+  TranslateJobQueuedError,
+} from '../lib/api'
+import { needsJob } from '../lib/batchJob'
+import { forgetJob, readJobs, rememberJob } from '../lib/jobStore'
 import { MAX_ROWS, parseSmilesLines } from '../lib/parseSmiles'
 import useReducedMotion from '../lib/useReducedMotion'
 import './Home.css'
@@ -105,6 +114,25 @@ function Home() {
   const reduceMotion = useReducedMotion()
   const { flare, flareCanvasRef, wordmarkRef } = useWordmarkFlare(reduceMotion)
 
+  // --- batch input ----------------------------------------------------
+  // Two ways in, one card: paste for a handful, a file for the rest. The
+  // paste box no longer refuses the eleventh line -- above the server's
+  // fast-path limit it submits a background JOB instead, which is what the
+  // server would have done anyway (POST /api/translate answers with an
+  // envelope, not results, past that point).
+  const [inputMode, setInputMode] = useState('paste')
+  const [file, setFile] = useState(null)
+  const [preview, setPreview] = useState(null)
+  const [job, setJob] = useState(null)
+
+  // A job submitted from this browser is picked back up on load: its owner
+  // token is in localStorage precisely so a reload does not lose the ability
+  // to watch, stop or delete it. Expired entries prune themselves.
+  useEffect(() => {
+    const [mostRecent] = readJobs()
+    if (mostRecent) setJob(mostRecent)
+  }, [])
+
   const timersRef = useRef([])
 
   useEffect(() => {
@@ -198,19 +226,82 @@ function Home() {
       })
   }
 
+  async function submitJob({ text = '', chosenFile = null, count = null }) {
+    setIsSubmitting(true)
+    setValidationNote(null)
+    setFetchError(null)
+    try {
+      const envelope = await createJob({ file: chosenFile, text, bestEffort })
+      // Remember it BEFORE anything else can fail: owner_token is returned
+      // exactly once, and losing it means the job can never be stopped.
+      const entry = {
+        jobId: envelope.job_id,
+        ownerToken: envelope.owner_token,
+        moleculeCount: envelope.molecule_count ?? count,
+      }
+      rememberJob(entry)
+      setJob(entry)
+      setRows([])
+    } catch (err) {
+      // The server's own sentence is the useful one here: over the size cap,
+      // no smiles column in the CSV, too many concurrent jobs.
+      setValidationNote(err?.message || 'Could not start the job.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   function handleSubmit(event) {
     event.preventDefault()
     if (isSubmitting) return
 
-    const { lines, total, truncated } = parseSmilesLines(smilesText)
+    if (inputMode === 'file') {
+      if (!file) {
+        setValidationNote('Choose a .sdf, .mol, .csv or .smi file first.')
+        return
+      }
+      void submitJob({ chosenFile: file, count: preview?.molecule_count ?? null })
+      return
+    }
+
+    const { lines, total } = parseSmilesLines(smilesText)
     if (!lines.length) {
       setValidationNote('Enter at least one SMILES string (one per line) before translating.')
       return
     }
-    setValidationNote(
-      truncated ? `Only the first ${MAX_ROWS} of ${total} lines will be processed.` : null,
-    )
+
+    if (needsJob(total, MAX_ROWS)) {
+      // The whole text goes up, not the truncated `lines`: the point of the
+      // job path is that nothing gets dropped.
+      void submitJob({ text: smilesText, count: total })
+      return
+    }
+
+    setValidationNote(null)
     runTranslate(lines)
+  }
+
+  async function handleFilePick(event) {
+    const chosen = event.target.files?.[0] ?? null
+    setFile(chosen)
+    setPreview(null)
+    setValidationNote(null)
+    if (!chosen) return
+    try {
+      setPreview(await parsePreview({ file: chosen, bestEffort }))
+    } catch (err) {
+      // A preview that fails is not a submission that fails; say so and let
+      // them try anyway.
+      setValidationNote(`Could not read that file: ${err?.message ?? 'unknown error'}`)
+    }
+  }
+
+  function startAnother() {
+    if (job) forgetJob(job.jobId)
+    setJob(null)
+    setFile(null)
+    setPreview(null)
+    setValidationNote(null)
   }
 
   function handleExamplePick(example) {
@@ -221,6 +312,9 @@ function Home() {
   }
 
   const hasResults = rows.length > 0
+  // Counted from the same parser the submit path uses, so the hint and the
+  // behaviour can never disagree.
+  const pastedCount = parseSmilesLines(smilesText).total
 
   return (
     <>
@@ -270,23 +364,104 @@ function Home() {
         )}
 
         <section className="workbench__input" aria-label="Translate a SMILES string">
-          <form onSubmit={handleSubmit} noValidate>
-            <div className="field">
-              <label htmlFor="smiles-input" className="field__label">
-                SMILES &mdash; one per line, up to {MAX_ROWS}
-              </label>
-              <textarea
-                id="smiles-input"
-                className="field__control"
-                rows={8}
-                spellCheck={false}
-                autoCorrect="off"
-                autoCapitalize="off"
-                placeholder={'CCO\nC[C@H](O)CC\nCC(C)(C)C1=CC2=C(C=C1)...'}
-                value={smilesText}
-                onChange={(event) => setSmilesText(event.target.value)}
+          {/* Two ways in, one card. The tabs are radios rather than buttons
+              so a keyboard gets arrow-key movement for free and the current
+              choice is announced. */}
+          <div className="input-tabs" role="radiogroup" aria-label="How to give Orthonym molecules">
+            <label className={inputMode === 'paste' ? 'input-tab input-tab--on' : 'input-tab'}>
+              <input
+                type="radio"
+                name="input-mode"
+                value="paste"
+                checked={inputMode === 'paste'}
+                onChange={() => setInputMode('paste')}
+                disabled={isSubmitting}
               />
-            </div>
+              Paste
+            </label>
+            <label className={inputMode === 'file' ? 'input-tab input-tab--on' : 'input-tab'}>
+              <input
+                type="radio"
+                name="input-mode"
+                value="file"
+                checked={inputMode === 'file'}
+                onChange={() => setInputMode('file')}
+                disabled={isSubmitting}
+              />
+              Upload file
+            </label>
+          </div>
+
+          <form onSubmit={handleSubmit} noValidate>
+            {inputMode === 'paste' ? (
+              <div className="field">
+                <label htmlFor="smiles-input" className="field__label">
+                  SMILES &mdash; one per line
+                </label>
+                <textarea
+                  id="smiles-input"
+                  className="field__control"
+                  rows={8}
+                  spellCheck={false}
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  placeholder={'CCO\nC[C@H](O)CC\nCC(C)(C)C1=CC2=C(C=C1)...'}
+                  value={smilesText}
+                  onChange={(event) => setSmilesText(event.target.value)}
+                />
+                {/* Says what will happen before it happens: up to ten come
+                    back here, more than ten run as a job with a progress bar. */}
+                <p className="field__hint">
+                  {pastedCount > MAX_ROWS
+                    ? `${pastedCount} molecules — runs as a background job you can watch, stop and download.`
+                    : `Up to ${MAX_ROWS} answer here directly. Paste more and Orthonym runs them as a job.`}
+                </p>
+              </div>
+            ) : (
+              <div className="field">
+                <label htmlFor="batch-file" className="field__label">
+                  A file of molecules
+                </label>
+                <input
+                  id="batch-file"
+                  className="field__file"
+                  type="file"
+                  accept=".sdf,.mol,.csv,.smi,.txt"
+                  onChange={handleFilePick}
+                  disabled={isSubmitting}
+                />
+                <p className="field__hint">
+                  <code>.sdf</code>, <code>.mol</code>, <code>.csv</code> (needs a{' '}
+                  <code>smiles</code> column) or one SMILES per line.
+                </p>
+
+                {preview && (
+                  <div className="preview">
+                    <p className="preview__count">
+                      {preview.molecule_count} molecule
+                      {preview.molecule_count === 1 ? '' : 's'} · read as{' '}
+                      <code>{preview.format}</code>
+                    </p>
+                    {preview.errors.length > 0 && (
+                      <ul className="preview__errors">
+                        {preview.errors.map((message) => (
+                          <li key={message}>{message}</li>
+                        ))}
+                      </ul>
+                    )}
+                    {/* This wording is deliberate and must not be softened to
+                        "no errors found". The server parses only the first few
+                        records, so a clean preview says nothing about row 6 --
+                        ParsePreviewResponse's own docstring calls out that
+                        this endpoint has never validated a whole file. */}
+                    <p className="preview__caveat">
+                      Checked the first {preview.sample.length} record
+                      {preview.sample.length === 1 ? '' : 's'} only — later rows may still fail.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             <Switch
               id="best-effort-mode"
@@ -305,8 +480,17 @@ function Home() {
 
             <div className="workbench__actions">
               <button type="submit" className="btn btn--accent" disabled={isSubmitting}>
-                {isSubmitting ? 'Translating…' : 'Translate'}
+                {isSubmitting
+                  ? 'Starting…'
+                  : inputMode === 'file' || pastedCount > MAX_ROWS
+                    ? 'Start job'
+                    : 'Translate'}
               </button>
+              {job && (
+                <button type="button" className="btn" onClick={startAnother}>
+                  New batch
+                </button>
+              )}
               {validationNote && (
                 <p className="workbench__note" role="status">
                   {validationNote}
@@ -331,7 +515,9 @@ function Home() {
           </p>
         </section>
 
-        {hasResults ? (
+        {job ? (
+          <BatchResults job={job} onForget={startAnother} />
+        ) : hasResults ? (
           <SamplerGrid rows={rows} reduceMotion={reduceMotion} />
         ) : (
           <ConfidenceLegend />
