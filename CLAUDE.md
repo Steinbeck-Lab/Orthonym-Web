@@ -281,7 +281,11 @@ abstain, two struck rules = error), at a constant `min(100%, 30ch)` — a measur
 The **key** to that vocabulary is no longer a band above the footer: it is a **fourth notch island**
 (`.info`, `components/ConfidenceLegend.jsx`) carved out of the BOTTOM of Home's input card with the
 same concave fillets the header uses, right-hand side, with a crimson **bulb** that breathes until
-the key has been opened once and then goes steady ink. Clicking it opens the five-row ladder on a
+the key has been opened once and then goes steady ink. Clicking it **flips the tab 180°** so it lets go of the card and rides on the
+panel's top edge instead — the rotation moves the rounded corners and flips both concave fillets
+for free, which is exactly the geometry that went wrong when it was hand-mirrored. `--info-ms`
+(520ms) is one duration with three consumers: the drawer row, the flip, and the drawer's
+`visibility` delay, which fails silently if it drifts short. It opens the five-row ladder on a
 `grid-template-rows: 0fr → 1fr` transition; each rung is a miniature of a real result (name over
 its rule), sewn onto a thread that fades where confidence runs out. It is the card's width by construction (`.input-col`
 holds the card and the notch as one grid cell), 40px at rest against the old band's 135, and the

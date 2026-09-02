@@ -41,3 +41,6 @@ original-*.webp
 
 # Playwright MCP scratch output (browser snapshots/screenshots)
 .playwright-mcp/
+
+# Stray screenshots from browser-driving agents
+/*.png
