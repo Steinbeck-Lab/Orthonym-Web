@@ -92,6 +92,20 @@ export default function Tile({ row, phase, reduceMotion }) {
             — could not confirm this result
           </p>
         )}
+        {/* The link back to the control that produced this tier. An
+            unverified name exists only because best-effort mode is on, and
+            without saying so the tier reads as a property of the molecule
+            rather than a consequence of a switch the reader can turn off.
+            The switch's own hint states the forward direction; this is the
+            reverse, in the one place it matters.
+            Not a "check again" button: the round trip already ran, and the
+            engine is deterministic, so a retry returns the same answer. */}
+        {!isPending && status === 'best_effort' && (
+          <span className="tile__origin">
+            Shown because best-effort mode is on. Turn it off for a verified name or an
+            honest abstain.
+          </span>
+        )}
         {!isPending && status === 'abstain' && formula && (
           <span className="tile__formula">Formula: {formula}</span>
         )}

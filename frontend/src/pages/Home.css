@@ -889,6 +889,17 @@
   text-underline-offset: 0.25em;
 }
 
+/* Why this tier, not what it is: sentence case in the body face, so it reads
+   as an aside rather than another mono data label competing with the state
+   line above it. */
+.tile__origin {
+  max-width: 52ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 .tile__formula {
   font-family: var(--font-mono);
   font-size: var(--t-caption);

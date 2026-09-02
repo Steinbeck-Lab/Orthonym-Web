@@ -51,7 +51,7 @@ const TIERS = [
     key: 'best-effort',
     ordinal: '03',
     label: 'UNVERIFIED',
-    body: 'OPSIN could not confirm it.',
+    body: 'Best-effort mode only; unconfirmed.',
   },
   {
     key: 'abstain',
