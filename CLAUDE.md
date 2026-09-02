@@ -278,6 +278,13 @@ panel. Confidence stays a **monochrome rule beneath the name**
 inside the white cards (double = PIN, dashed = fallback, dotted = best-effort, one faint rule =
 abstain, two struck rules = error), at a constant `min(100%, 30ch)` — a measure that belongs to the
 **mark** (drawn as an `::after`) and never to the name, which takes the full width of its card.
+The **key** to that vocabulary is no longer a band above the footer: it is a **fourth notch island**
+(`.info`, `components/ConfidenceLegend.jsx`) carved out of the BOTTOM of Home's input card with the
+same concave fillets the header uses, right-hand side, with a crimson **bulb** that breathes until
+the key has been opened once and then goes steady ink. Clicking it opens the five-row ladder on a
+`grid-template-rows: 0fr → 1fr` transition. It is the card's width by construction (`.input-col`
+holds the card and the notch as one grid cell), 40px at rest against the old band's 135, and the
+closed drawer takes `visibility: hidden` so a screen reader is not read five tiers nobody opened.
 Two structural facts still
 hold: every interactive page puts its input beside its own output (`.workspace`), and each page's
 "how this works" copy lives on the About page.
