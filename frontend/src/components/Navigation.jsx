@@ -1,16 +1,47 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 
-// The site header: a floating, blurred, rounded bar that sticks to the top —
-// ChemAudit's signature shell (github.com/Kohulan/ChemAudit), adapted toward
-// STITCH's own world. It keeps STITCH's faces (Saira wordmark, mono nav) and
-// uses the one crimson accent for the logo mark and the active route. There
-// is deliberately no theme toggle: this build is light-only.
+// The site header: ONE NOTCH ISLAND hanging off the top edge of the window,
+// centred, welded to the edge by a pair of concave fillets, so it reads as
+// carved out of the top of the page rather than floating over it. It was
+// briefly three separate islands; the owner asked for one ("I don't want 3
+// notches, move STITCH and github to center, keep single notch").
+//
+// AT REST it shows the crimson brand mark and the five route labels, and
+// nothing else. ON HOVER (or on focus, or on any pointer that cannot hover)
+// it GROWS OUTWARD from its centre to reveal the STITCH wordmark on the left
+// and GitHub on the right, each fenced off by a hairline "|". Confirmed with
+// the owner before building: the mark stays put at rest, so the site is
+// never logo-less, and only the wordmark slides in.
+//
+// Three details that are load-bearing rather than decorative:
+//   * The reveal is CSS only -- max-width plus opacity on the three
+//     collapsible parts. Animating a layout property is normally the wrong
+//     answer, but the notch must PHYSICALLY grow here, which is a layout
+//     change by definition; it is one small flex row, and it is off under
+//     prefers-reduced-motion.
+//   * The island's gap is ZERO and every gap is a child's own margin. With a
+//     flex gap, the collapsed parts would still be separated by it and the
+//     resting notch would carry ~80px of dead air.
+//   * :focus-within reveals too, and nothing is display:none or
+//     visibility:hidden, so a keyboard reaches GitHub -- tabbing to it opens
+//     the notch. A touch device (hover: none) simply stays open. That shape
+// replaced ChemAudit's floating glass bar on 2026-09-02 at the owner's
+// instruction ("use this for header but keep our white and crimson style",
+// pointing at an adaptive-notch navigation component). The component itself
+// could not be used: it is TSX + Tailwind + framer-motion + lucide-react on a
+// codebase that has none of those, and it owns the whole page as a fixed
+// full-screen shell. The SHAPE was ported; none of its code was.
+//
+// STITCH's own world is otherwise unchanged: the Saira wordmark, the mono
+// nav, white cards on the grey ground, the one crimson accent, and no theme
+// toggle (this build is light-only).
 //
 // The active route is marked three ways at once, and colour is only one of
 // them: aria-current (assistive tech), a crimson text step, and a crimson
-// dot + faint pill. Below 960px the seven routes collapse behind a single
-// menu button instead of wrapping onto three lines.
+// dot — now riding a single faint pill that SLIDES between routes instead of
+// one pill per link blinking on and off. Below 960px the five routes collapse
+// behind a single menu button instead of wrapping onto three lines.
 
 const NAV_LINKS = [
   { to: '/', label: 'Translate', end: true },
@@ -55,9 +86,75 @@ function GitHubMark() {
   )
 }
 
+// One fillet. Two of these flank every island: a square of card-white with a
+// quarter-disc masked out of it, which leaves a concave arc sweeping from the
+// island's side up to the top edge of the window. Pure CSS mask, no SVG and
+// no image, so it inherits --card and cannot drift out of sync with the
+// island it belongs to.
+function NotchWings() {
+  return (
+    <>
+      <span className="notch__wing notch__wing--left" aria-hidden="true" />
+      <span className="notch__wing notch__wing--right" aria-hidden="true" />
+    </>
+  )
+}
+
 function Navigation() {
   const [open, setOpen] = useState(false)
   const location = useLocation()
+
+  // The sliding pill behind the active route. Its geometry has to be
+  // MEASURED, not derived: the labels are different widths, the mono face
+  // loads late, and the nav re-flows with the viewport. `null` means "no
+  // active route in this nav" (an unknown path), in which case no pill is
+  // drawn at all rather than a stray 0-width one.
+  const navRef = useRef(null)
+  const [pill, setPill] = useState(null)
+  // The pill must not slide in from the left edge on first paint. It gets its
+  // transition one frame AFTER its first real measurement.
+  const [slides, setSlides] = useState(false)
+
+  const measurePill = useCallback(() => {
+    const nav = navRef.current
+    if (!nav) return
+    const active = nav.querySelector('.site-nav__link--active')
+    if (!active) {
+      setPill(null)
+      return
+    }
+    const navBox = nav.getBoundingClientRect()
+    const box = active.getBoundingClientRect()
+    setPill({ x: box.left - navBox.left, w: box.width })
+  }, [])
+
+  // useLayoutEffect, not useEffect: measure and paint in the same frame, or
+  // the pill is visibly wrong for one frame on every route change.
+  useLayoutEffect(() => {
+    measurePill()
+    const frame = requestAnimationFrame(() => setSlides(true))
+    return () => cancelAnimationFrame(frame)
+  }, [measurePill, location.pathname])
+
+  useEffect(() => {
+    const nav = navRef.current
+    if (!nav) return
+    // Two triggers, and both are real: the viewport resizing (ResizeObserver
+    // on the nav itself, which also fires when a label re-wraps), and the
+    // mono face arriving after first paint, which changes every label's
+    // width. Without the second the pill sits a few pixels off until the
+    // first route change.
+    const observer = new ResizeObserver(measurePill)
+    observer.observe(nav)
+    let cancelled = false
+    document.fonts?.ready.then(() => {
+      if (!cancelled) measurePill()
+    })
+    return () => {
+      cancelled = true
+      observer.disconnect()
+    }
+  }, [measurePill])
 
   // Close the mobile menu whenever the route changes.
   useEffect(() => {
@@ -77,39 +174,17 @@ function Navigation() {
   return (
     <header className="site-head">
       <div className="site-head__inner">
-        <div className="site-head__bar">
+        {/* The island. Below 960px it stretches the full width and keeps
+            only the brand and the menu button; the routes and the outbound
+            link move into the panel below. */}
+        <div className="notch notch--bar">
+          <NotchWings />
           <NavLink to="/" end className="brand" aria-label="STITCH — home">
             <BrandMark />
             <span className="brand__word">Stitch</span>
           </NavLink>
 
-          <nav className="site-nav" aria-label="Main">
-            {NAV_LINKS.map((link) => (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                end={link.end}
-                className={({ isActive }) =>
-                  isActive ? 'site-nav__link site-nav__link--active' : 'site-nav__link'
-                }
-              >
-                {link.label}
-              </NavLink>
-            ))}
-          </nav>
-
-          <div className="site-head__aux">
-            <span className="site-head__divider" aria-hidden="true" />
-            <a
-              className="site-head__ext"
-              href={GITHUB_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <GitHubMark />
-              GitHub
-            </a>
-          </div>
+          <span className="notch__rule" aria-hidden="true" />
 
           <button
             type="button"
@@ -131,6 +206,40 @@ function Navigation() {
               </svg>
             )}
           </button>
+
+          <nav className="site-nav" aria-label="Main" ref={navRef}>
+            {pill && (
+              <span
+                className={slides ? 'site-nav__pill site-nav__pill--slides' : 'site-nav__pill'}
+                aria-hidden="true"
+                style={{ '--pill-x': `${pill.x}px`, '--pill-w': `${pill.w}px` }}
+              />
+            )}
+            {NAV_LINKS.map((link) => (
+              <NavLink
+                key={link.to}
+                to={link.to}
+                end={link.end}
+                className={({ isActive }) =>
+                  isActive ? 'site-nav__link site-nav__link--active' : 'site-nav__link'
+                }
+              >
+                {link.label}
+              </NavLink>
+            ))}
+          </nav>
+
+          <span className="notch__rule" aria-hidden="true" />
+
+          <a
+            className="site-head__ext"
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <GitHubMark />
+            GitHub
+          </a>
         </div>
 
         {open && (
