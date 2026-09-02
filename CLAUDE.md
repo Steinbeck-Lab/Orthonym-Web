@@ -4,8 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-STITCH is a public showcase web app for **OpenSTOUT** (upstream at `~/OpenSTOUT/Project`, which is
-**not present on every dev machine** — `scripts/vendor-openstout.sh` takes `OPENSTOUT_SRC`), a deterministic,
+STITCH is a public showcase web app for **OpenSTOUT** (private upstream `github.com/Kohulan/OpenSTOUT`;
+`scripts/vendor-openstout.sh` takes `OPENSTOUT_SRC`. **Clone it fresh rather than pointing at a local
+checkout** — see the refresh warning below), a deterministic,
 rule-based SMILES→IUPAC naming engine — as opposed to STOUT-V2, the neural model shown by the
 separate sibling repo `~/STOUT_WebApp` (Vue 3 stack, unrelated codebase). **The two repos are easy
 to confuse; a shell may open in `~/STOUT_WebApp` by mistake — `cd`/verify the path before editing.**
@@ -86,12 +87,22 @@ docker compose up -d --build
 ## Architecture
 
 **The OpenSTOUT dependency is vendored, not live-pathed.** `backend/requirements.txt` installs
-`openstout` from `backend/vendor/openstout` (a snapshot), not from `~/OpenSTOUT/Project` — Docker
+`openstout` from `backend/vendor/openstout` (a snapshot), not from a live checkout — Docker
 builds can't reach outside their build context, and this keeps the backend reproducible without
 assuming the sibling repo exists on the build host (on this machine it does not; point
 `OPENSTOUT_SRC` at a clone). Refresh the snapshot after upstream OpenSTOUT
 changes with `./scripts/vendor-openstout.sh`, then re-check `backend/vendor/openstout/README.md`
 for updated accuracy numbers before touching any copy that cites them (see below).
+
+**Refreshing: clone fresh, and check the version before you vendor anything.** Verified 2026-09-02:
+the snapshot is already byte-identical to upstream `main` at `52f7afe` (2026-08-31) — 253 files,
+same tree digest, same README, pyproject, NOTICE, LICENSE and both jars (`opsin-cli-2.9.0`,
+`centres-cli-1.5`) — and the installed copies in `backend/.venv-mac` and inside the running
+`stitch-worker-*` containers match it too. **The local checkout on this machine is a trap**: it lives
+at `/Volumes/Data_Drive/My_Projects/2026/OpenSTOUT/Project` (not `~/OpenSTOUT/Project`, which does not
+exist), sits on `main` at 2026-05-19, carries uncommitted work, and reports `__version__ = "0.1.0"` —
+vendoring from it would **downgrade** the engine from 1.0.0. `gh` is authenticated with `repo` scope,
+so `gh repo clone Kohulan/OpenSTOUT <dir> -- --depth 1` is the reliable source.
 
 **SELF-01 needs a real JVM, or it silently fails open.** OpenSTOUT's self-consistency gate (does a
 candidate name round-trip back through OPSIN to the same structure?) requires JPype + a real JRE +
@@ -275,7 +286,7 @@ shown on **About** (Home's accuracy band was removed on the owner's instruction 
 Home now links to About for it, and About states the version, the benchmark and the metric's own
 definition, which is what PRODUCT.md principle 2 requires) — **94.8% round-trip exact match**, **0 wrong structures emitted**, over a
 **1,500-molecule** ChEBI+PubChem set — are OpenSTOUT **v1.0.0**'s published numbers
-(`~/OpenSTOUT/Project/README.md` § Accuracy). v1.0.0 publishes no per-corpus breakdown, so the
+(`backend/vendor/openstout/README.md` § Accuracy, which matches upstream). v1.0.0 publishes no per-corpus breakdown, so the
 site shows none; the earlier four-figure v21.0 split (~30.4% / 29.6% / 16.9% / 92.2%, 7,500
 compounds) is **superseded and must not be restored**.
 When OpenSTOUT ships a new milestone, verify the vendored snapshot and the frontend copy in
