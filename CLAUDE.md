@@ -267,7 +267,18 @@ a generic `.card` and `.bento` primitive live in `App.css`. Hairline seams survi
 for the big stat figures (`.spec__value`, up to 2.75rem) and the header's route labels (the
 latter by direct instruction, 2026-09-02). The
 rendered chemical name stays 400 — IUPAC weight and case are semantic.
-The **one crimson accent** (`--accent: #c41e3a`) is confined to chrome — active nav, the logo mark,
+**Buttons are all crimson and all glossy as of 2026-09-02**, by three owner instructions, which
+supersedes the one-crimson-action rule *for buttons*: secondary = pale frosted crimson pill,
+primary = filled crimson glass, `/explain` = filled dark-orange glass (`--accent-amber: #9c4109`,
+the system's only second accent, dressing one button and nothing else). The gloss is **one
+mechanism** on `.btn` with two per-variant dials (`--gloss`, `--sheen`); icons come from
+**lucide-react** via `components/Icon.jsx`. **Every fill is a measured contrast decision and has to
+clear AA twice** — at the fill, and again with the `::before` highlight over the label's cap
+heights. The amber's first value passed the first check and failed the second at 4.44:1. Re-measure
+in a browser before touching any alpha, and parse `color(srgb …)` properly when you do: a probe that
+read those fractional channels as 0-255 reported 17.45:1 for a crimson button.
+
+Otherwise the **one crimson accent** (`--accent: #c41e3a`) is confined to chrome — active nav, the logo mark,
 inline links, the focus ring, the one primary button per surface, the sliding active-route pill, the hero's flare
 and the footer's self-sewing join — and **never touches a confidence tier or the round-trip
 verdict**. The **header is one white notch island** cut into the top edge of the window (flush at
