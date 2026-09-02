@@ -341,7 +341,7 @@
    do -- and that flip is gone, because it resized the card on every tab
    switch. */
 .workbench__input {
-  width: min(100%, 1100px);
+  width: min(100%, var(--input-max));
   margin-inline: auto;
 }
 
@@ -438,7 +438,11 @@
    and the band stayed 2200px wide. */
 .key-shell {
   position: relative;
-  width: min(100% - 2 * var(--shell-pad), 1400px);
+  /* THE CARD'S WIDTH, from the shared token. It was its own 1400px, which
+     made the key wider than the input card it describes and left the two
+     visibly out of line down the page. A key is reference material for that
+     card, so it measures the same as that card. */
+  width: min(100% - 2 * var(--shell-pad), var(--input-max));
   margin-inline: auto;
 }
 

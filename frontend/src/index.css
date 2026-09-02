@@ -130,6 +130,14 @@
   --muted-on-dark: #a9adb4; /* secondary text on a dark card (5.3:1) */
   --hairline-on-dark: rgba(255, 255, 255, 0.12);
 
+  /* The working column's own cap, and it has TWO consumers that must agree:
+     Home's input card while it is alone on the page, and the confidence key
+     band beneath it. The band used to carry its own 1400px, which made it
+     wider than the card it describes and offset from it -- the owner's note
+     was "keep the box width similar to the input box width". One token, so
+     the next change to either cannot separate them. */
+  --input-max: 1100px;
+
   --r-card: 22px; /* the card radius — matches the reference's generous round */
   --r-card-sm: 14px; /* inner tiles, small controls */
   --gap: 14px; /* the bento gap — modest, per "minimum gap, no whitespace" */
