@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ExampleChips from '../components/ExampleChips'
 import SamplerGrid from '../components/SamplerGrid'
@@ -310,6 +310,10 @@ function Home() {
     }
 
     if (needsJob(total, MAX_ROWS)) {
+      // Recomputed from the freshly parsed `total` rather than reading
+      // `overFastPath`: the render-time count and the submit-time text are
+      // the same in practice, and this keeps the decision next to the data
+      // it was taken from.
       // The whole text goes up, not the truncated `lines`: the point of the
       // job path is that nothing gets dropped.
       void submitJob({ text: smilesText, count: total })
@@ -353,7 +357,18 @@ function Home() {
   const hasResults = rows.length > 0
   // Counted from the same parser the submit path uses, so the hint and the
   // behaviour can never disagree.
-  const pastedCount = parseSmilesLines(smilesText).total
+  // Memoised on the text, not recomputed per render: every state change in
+  // this page (typing, the flare going live, a poll landing) would otherwise
+  // re-split and re-trim the whole textarea, which can hold up to the job
+  // layer's 10,000-molecule cap.
+  const pastedCount = useMemo(() => parseSmilesLines(smilesText).total, [smilesText])
+  // ONE spelling of "this submission will not answer inline". It was written
+  // three ways (needsJob() in the handler, `pastedCount > MAX_ROWS` in the
+  // hint, and again in the button label), which agreed only because needsJob
+  // happens to be that comparison today.
+  const overFastPath = needsJob(pastedCount, MAX_ROWS)
+  const willStartJob = inputMode === 'file' || overFastPath
+  const submitLabel = isSubmitting ? 'Starting…' : willStartJob ? 'Start job' : 'Translate'
 
   return (
     <>
@@ -486,7 +501,7 @@ function Home() {
                 {/* Says what will happen before it happens: up to ten come
                     back here, more than ten run as a job with a progress bar. */}
                 <p className="field__hint">
-                  {pastedCount > MAX_ROWS
+                  {overFastPath
                     ? `${pastedCount} molecules — runs as a background job you can watch, stop and download.`
                     : `Up to ${MAX_ROWS} answer here directly. Paste more and Orthonym runs them as a job.`}
                 </p>
@@ -554,11 +569,7 @@ function Home() {
 
             <div className="workbench__actions">
               <button type="submit" className="btn btn--accent" disabled={isSubmitting}>
-                {isSubmitting
-                  ? 'Starting…'
-                  : inputMode === 'file' || pastedCount > MAX_ROWS
-                    ? 'Start job'
-                    : 'Translate'}
+                {submitLabel}
               </button>
               {job && (
                 <button type="button" className="btn" onClick={startAnother}>
@@ -594,9 +605,18 @@ function Home() {
         ) : hasResults ? (
           <SamplerGrid rows={rows} reduceMotion={reduceMotion} />
         ) : (
-          <ConfidenceLegend />
+          /* The key used to live here, which meant it vanished the moment
+             there were results to read it against. It is a band at the foot
+             of the page now, so this cell only has to say what will happen. */
+          <p className="workbench__empty">
+            {inputMode === 'draw'
+              ? 'Draw a molecule, press Translate, and its name appears here with the mark that earned it.'
+              : 'Submit a molecule and each result appears here, carrying its own mark.'}
+          </p>
         )}
       </main>
+
+      <ConfidenceLegend />
 
     </>
   )

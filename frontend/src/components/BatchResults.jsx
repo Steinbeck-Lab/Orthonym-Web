@@ -18,7 +18,7 @@ import {
   stateLabel,
 } from '../lib/batchJob'
 import { forgetJob, rememberJob } from '../lib/jobStore'
-import { STATE_CLASS, STATE_LABEL } from '../lib/statuses'
+import { STATE_CLASS, STATE_LABEL, VERIFIED_STATUSES } from '../lib/statuses'
 
 // One submitted batch: its progress while it runs, then its rows.
 //
@@ -87,7 +87,7 @@ function NameCell({ row }) {
   // would therefore be empty on every named row, which measured out as 12
   // dashes in 13 rows the first time this shipped.
   return (
-    <div className={`batch__name batch__name--${stateClass} batch__name--empty`}>
+    <div className={`batch__name batch__name--${stateClass}`}>
       <span className="batch__name-text batch__name-text--muted">
         {row.status === 'error' ? (row.error ?? 'Could not read this input') : label}
         {row.formula ? ` · ${row.formula}` : ''}
@@ -104,9 +104,13 @@ function RoundTripCell({ row }) {
       </span>
     )
   }
-  if (row.status === 'pin' || row.status === 'fallback') {
+  if (VERIFIED_STATUSES.has(row.status)) {
     // A verified tier with no round-trip recorded: say so rather than let the
-    // rule under the name imply a check that did not happen.
+    // rule under the name imply a check that did not happen. The tier list
+    // comes from statuses.js, whose own header warns that two copies of
+    // "which tiers claim a round-trip" is how a tier ends up displayed as
+    // more confident than it is -- Tile.jsx asks the same question the same
+    // way.
     return <span className="batch__rt batch__rt--unavailable">unavailable</span>
   }
   return <span className="batch__rt batch__rt--none">—</span>

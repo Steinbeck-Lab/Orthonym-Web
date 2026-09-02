@@ -291,26 +291,34 @@
    last row. Two columns also gives each result a larger, more legible
    depiction. The first result spans both as the feature cell. */
 
-/* -------------------- confidence legend (empty results state) -------------------- */
-/* Fills what used to be a blank right-hand cell with the one thing a new
-   visitor needs: what the five marks under a name mean. Each swatch is the
-   exact rule a real result carries, so the legend and the results share a
-   vocabulary. Monochrome only — confidence is never the crimson accent. */
+/* -------------------- the confidence key, as a ladder -------------------- */
+/* The five tiers are ONE ORDERED LADDER, not five categories, so the band is
+   drawn as a descent: numbered rungs, each sitting lower than the one before
+   it, ending at the input that could not be read.
+   Confidence is monochrome in this system -- the crimson accent never touches
+   a tier -- so every bit of hierarchy here is scale, rhythm, weight or
+   motion. That constraint is why the specimens are SVG: a stroke can be
+   drawn, and a dashed rule drawing dash by dash explains "dashed" better
+   than any caption. */
 
-.home-legend {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: var(--s-lg);
-  min-width: 0;
-  padding: var(--s-xl);
+.key-band {
+  /* Narrower than the working cards, and centred. A key is reference material,
+     not a work surface: at the full 2200px column its five rungs sprawled and
+     it read as another panel of the app rather than a legend under it.
+     It sizes ITSELF rather than wearing `page-shell`, which caps at
+     --shell-max with equal specificity -- a max-width here lost the cascade
+     to it and the band stayed 2200px wide. */
+  width: min(100% - 2 * var(--shell-pad), 1400px);
+  margin-inline: auto;
+  padding: var(--s-md) clamp(var(--s-md), 2vw, var(--s-lg)) var(--s-lg);
   background: var(--card);
   border-radius: var(--r-card);
   box-shadow: var(--card-shadow);
   border: var(--card-border);
 }
 
-.home-legend__title {
+.key-band__caption {
+  margin: 0 0 var(--s-sm);
   font-family: var(--font-mono);
   font-size: var(--t-caption);
   line-height: 1.4;
@@ -319,101 +327,246 @@
   color: var(--muted);
 }
 
-.home-legend__list {
-  display: flex;
-  flex-direction: column;
-  border-top: 1px solid var(--hairline);
-}
-
-.home-legend__row {
+.key-band__rungs {
   display: grid;
-  grid-template-columns: 56px minmax(0, 1fr);
-  align-items: center;
-  gap: var(--s-lg);
-  padding-block: var(--s-md);
-  border-bottom: 1px solid var(--hairline);
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-md);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.home-legend__mark {
-  position: relative;
-  display: block;
-  width: 56px;
-  height: 20px;
+/* One rung. Its own little grid so the ordinal, the specimen, the name, the
+   code and the sentence each have a fixed place -- the alignment across five
+   rungs is what makes the ladder read as a ladder. */
+.rung {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    'ordinal specimen'
+    'ordinal name'
+    'ordinal body';
+  align-items: baseline;
+  column-gap: var(--s-md);
+  row-gap: 3px;
+  padding: var(--s-xs) var(--s-sm) var(--s-sm);
+  border-radius: var(--r-card-sm);
+  transition: background-color 0.24s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.home-legend__mark::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 9px;
+.rung:hover,
+.rung:focus-within {
+  background: var(--card-soft);
 }
 
-.home-legend__mark--pin::before {
-  top: 8px;
-  height: 3px;
-  border-top: 3px double var(--ink);
-}
-
-.home-legend__mark--fallback::before {
-  border-top: 1px dashed var(--ink);
-}
-
-.home-legend__mark--best-effort::before {
-  border-top: 1px dotted var(--muted);
-}
-
-.home-legend__mark--abstain::before {
-  border-top: 1px solid var(--hairline-strong);
-}
-
-.home-legend__mark--error::before {
-  top: 7px;
-  border-top: 1px solid var(--ink);
-}
-
-.home-legend__mark--error::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 12px;
-  border-top: 1px solid var(--ink);
-}
-
-.home-legend__text {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-
-.home-legend__name {
+.rung__ordinal {
+  grid-area: ordinal;
+  align-self: start;
   font-family: var(--font-mono);
   font-size: var(--t-caption);
-  line-height: 1.4;
   letter-spacing: var(--track-caption);
+  color: var(--muted-soft);
+  font-variant-numeric: tabular-nums;
+  transition: color 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.rung:hover .rung__ordinal,
+.rung:focus-within .rung__ordinal {
+  color: var(--ink);
+}
+
+/* The specimen: full-width, so the mark is read as a MARK rather than a
+   swatch. preserveAspectRatio="none" plus non-scaling-stroke means it
+   stretches horizontally while the stroke weight stays exact. */
+.rung__specimen {
+  grid-area: specimen;
+  display: block;
+  width: 100%;
+  height: 18px;
+  color: var(--ink);
+  overflow: visible;
+}
+
+.rung__stroke {
+  stroke: currentColor;
+}
+
+/* The two weaker tiers are drawn in the muted ink, which is the same
+   distinction the result tiles make: a dotted best-effort rule and an
+   abstain's faint rule are quieter than a verified one. */
+.rung--best-effort .rung__specimen,
+.rung--abstain .rung__specimen {
+  color: var(--muted);
+}
+
+.rung__name {
+  grid-area: name;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-nav-lg);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: var(--track-nav);
   text-transform: uppercase;
   color: var(--ink);
 }
 
-.home-legend__code {
+.rung__code {
+  /* Rides on the name's row, at the end of it. */
+  grid-area: name;
+  justify-self: end;
+  align-self: center;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
   color: var(--muted-soft);
 }
 
-.home-legend__body {
-  max-width: 66ch;
+.rung__body {
+  grid-area: body;
+  margin: 0;
+  max-width: 46ch;
   font-family: var(--font-body);
   font-size: var(--t-body-sm);
   line-height: 1.5;
   color: var(--muted);
 }
 
-.home-legend__foot {
-  max-width: 66ch;
+/* --- the descent, and the entrance ----------------------------------
+   Both come from --i, the rung's index, so the ladder's shape and its
+   reveal are the same number expressed twice. */
+@media (min-width: 860px) {
+  .key-band__rungs {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0;
+  }
+
+  .rung {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'ordinal'
+      'specimen'
+      'name'
+      'body';
+    row-gap: 3px;
+    padding: var(--s-sm) var(--s-md) var(--s-sm);
+    /* THE DESCENT: each rung sits 9px lower than the one before it, so five
+       equal cells become a staircase and the eye reads the order without a
+       caption telling it there is one. 14px was clearer and cost 56px of
+       height on a box that was already too tall. */
+    margin-top: calc(var(--i) * 9px);
+  }
+
+  .rung:not(:first-child) {
+    border-left: 1px solid var(--hairline);
+  }
+
+  .rung__code {
+    grid-area: name;
+    justify-self: start;
+  }
+
+  .rung__name {
+    /* The code sits under the name at this width, so the name needs the row
+       to itself. */
+    grid-area: name;
+    align-self: start;
+  }
+}
+
+@media (min-width: 860px) {
+  /* The code gets its own line once the rungs are columns: side by side there
+     is no room to set it beside a two-word tier name. */
+  .rung {
+    grid-template-areas:
+      'ordinal'
+      'specimen'
+      'name'
+      'code'
+      'body';
+  }
+
+  .rung__code {
+    grid-area: code;
+  }
+}
+
+/* The reveal: each rung rises and fades in, 70ms after the one before it,
+   the first time the band scrolls into view. `--in` never runs again -- a
+   band that re-animates every time you scroll past is a nervous tic. */
+.key-band .rung {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.key-band--in .rung {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: calc(var(--i) * 70ms);
+}
+
+/* THE DELIGHT: hovering a rung draws its mark, left to right. The dash
+   patterns are the grammar itself, so watching a dashed rule assemble dash
+   by dash is the explanation. 1200 is comfortably longer than any stroke
+   here, so one dash covers the whole line before it retracts. */
+.rung__stroke {
+  stroke-dashoffset: 0;
+}
+
+.rung:hover .rung__stroke,
+.rung:focus-within .rung__stroke {
+  animation: rung-draw 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.rung:hover .rung__stroke:nth-child(2),
+.rung:focus-within .rung__stroke:nth-child(2) {
+  animation-delay: 90ms;
+}
+
+.rung:hover .rung__stroke:nth-child(3),
+.rung:focus-within .rung__stroke:nth-child(3) {
+  animation-delay: 180ms;
+}
+
+@keyframes rung-draw {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* Reduced motion keeps every state and drops every transition: the ladder is
+   still a ladder, the marks are still drawn, nothing moves. */
+@media (prefers-reduced-motion: reduce) {
+  .key-band .rung,
+  .key-band--in .rung {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .rung:hover .rung__stroke,
+  .rung:focus-within .rung__stroke {
+    animation: none;
+  }
+}
+
+/* The results cell says what will happen, in one line, now that the key has
+   moved out of it. */
+.workbench__empty {
+  display: flex;
+  align-items: center;
+  min-height: 180px;
+  max-width: 46ch;
+  margin: 0;
   font-family: var(--font-body);
   font-size: var(--t-body-sm);
-  line-height: 1.5;
+  line-height: 1.55;
   color: var(--muted);
 }
 
