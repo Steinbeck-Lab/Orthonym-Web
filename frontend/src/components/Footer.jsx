@@ -1,18 +1,23 @@
 // Site-wide footer — appears once, beneath every page, via the router shell.
 //
-// Three parts and nothing else: copyright, a credit pill, a back-to-top
-// button. It replaced a brand block plus two columns of link duplicates —
-// every one of which already sits in the header nav, two of which
-// (/structure, /teach) had just become redirects, so the footer was carrying
-// stale copies of a list it did not own.
+// Three parts and nothing else: copyright + the rights-holder mark, a credit
+// pill, a back-to-top button. It replaced a brand block plus two columns of
+// link duplicates — every one of which already sits in the header nav, two of
+// which (/structure, /teach) had just become redirects, so the footer was
+// carrying stale copies of a list it did not own.
+//
+// There is no footer BAND: the whole strip is transparent and only the credit
+// pill and the round back-to-top button lift off the grey ground, matching
+// ChemAudit's footer (user instruction: "I don't need a whole white bar at the
+// bottom, use pill style similar to chemaudit"). Restoring a background here
+// re-creates the bar that was removed on purpose.
 //
 // The crimson is the coffee cup and nothing else, which keeps the one-accent
 // rule DESIGN.md sets: accent lives in chrome, never on a confidence tier.
 
 // A coffee cup, inline rather than an asset: one glyph, no network request,
 // no file to lose, and it inherits currentColor so the accent rule holds
-// wherever the footer is themed. Placeholder for the bchemxtractweb mark —
-// swapping it is a change to this one component.
+// wherever the footer is themed.
 function CoffeeMark() {
   return (
     <svg
@@ -52,7 +57,31 @@ function Footer() {
     <footer className="site-footer">
       <div className="site-footer__inner page-shell">
         <p className="site-footer__copyright">
-          &copy; {year} Orthonym. All rights reserved.
+          <span>&copy; {year} Orthonym. All rights reserved.</span>
+          {/* The rights holder named by its mark, as bchemxtractweb's footer
+              does. Two notes carried over from that implementation, both
+              measured there and still true of this artwork:
+                - The wordmark's caps are a QUARTER of the artwork's height,
+                  so 2rem is the floor at which the lettering stays readable;
+                  do not shrink it to match the 0.7rem mono beside it.
+                - The SVG's own viewBox is "0 48 876 202" -- already tightened
+                  to its ink, so no gap opens after the copyright text. The
+                  artwork itself is untouched.
+              Its crimson is BRAND artwork, not the chrome accent, so the
+              one-accent rule is unaffected (DESIGN.md records this). */}
+          <a
+            className="site-footer__org"
+            href="https://www.beilstein-institut.de/en/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <img
+              src="/Logo_Beilstein_schmal_RGB.svg"
+              alt="Beilstein-Institut"
+              width={876}
+              height={202}
+            />
+          </a>
         </p>
 
         <p className="credit">
