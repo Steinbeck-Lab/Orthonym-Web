@@ -1660,6 +1660,14 @@ input.field__control {
     transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* A TARGET wants area; a DOCUMENT does not. Empty, the zone takes the slot
+   (up to its 380px cap) because a drop target has to be worth aiming at.
+   Loaded, it hugs the manifest -- flex: 1 against that cap left a hole
+   between the last row and the caveat, which was pinned to the bottom. */
+.dropzone--loaded {
+  flex: 0 0 auto;
+}
+
 .dropzone--armed {
   background: color-mix(in srgb, var(--accent) 5%, var(--card-soft));
   transform: scale(1.006);
@@ -1727,7 +1735,11 @@ input.field__control {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  /* Air, deliberately. This face had been squeezed to a 6px rhythm chasing
+     vertical budget, and five lines 6px apart read as a paragraph rather
+     than a composition. The plate, the lead and the button each get their
+     own space; the two quiet lines stay close to what they qualify. */
+  gap: var(--s-xs);
   min-width: 0;
   padding: var(--s-lg);
   text-align: center;
@@ -1740,43 +1752,72 @@ input.field__control {
   border-radius: var(--r-card-sm);
 }
 
-/* Three stitches, stacked. Not a cloud-with-an-arrow: this system's marks
-   are rules, and a stack of them reading down is the same figure the
-   confidence ladder uses. They spread apart under a file. */
-.dropzone__mark {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: var(--s-md);
-}
-
-.dropzone__mark-stroke {
-  display: block;
-  height: 3px;
-  background: var(--ink);
+/* THE PLATE. A stack of three rounded plates -- this one, plus two drawn
+   behind it by pseudo-elements, each a little wider and fainter -- holding
+   STITCH's own two-atom bond mark. It replaced three thin stacked rules,
+   which were the system's vocabulary but far too quiet to be the one thing
+   the eye lands on in a 380px box.
+   The stack is what says "a FILE of these", and it is the same figure the
+   reference uses; the mark inside it is what says "of these", and that part
+   is ours. */
+.dropzone__plate {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 46px;
+  margin-bottom: var(--s-sm);
+  background: var(--card);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 13px;
+  color: var(--ink);
   transition:
-    width 0.32s cubic-bezier(0.16, 1, 0.3, 1),
-    background-color 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    transform 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 280ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.dropzone__mark-stroke:nth-child(1) {
-  width: 72px;
-}
-
-.dropzone__mark-stroke:nth-child(2) {
-  width: 46px;
-}
-
-.dropzone__mark-stroke:nth-child(3) {
+.dropzone__plate svg {
+  display: block;
   width: 22px;
+  height: 22px;
 }
 
-/* Armed: the stack squares up into a landing pad, in the accent, because
-   this is chrome -- an interaction affordance -- and never a tier. */
-.dropzone--armed .dropzone__mark-stroke {
-  width: 72px;
-  background: var(--accent);
+/* The two plates behind. Scaled OUT rather than offset, so the stack reads
+   as depth from any angle instead of as a shadow leaning one way -- and both
+   are pointer-events: none by virtue of being pseudo-elements. */
+.dropzone__plate::before,
+.dropzone__plate::after {
+  content: '';
+  position: absolute;
+  border: 1px solid var(--hairline);
+  border-radius: 15px;
+  transition: transform 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dropzone__plate::before {
+  inset: -5px -7px;
+  opacity: 0.85;
+}
+
+.dropzone__plate::after {
+  inset: -10px -14px;
+  border-radius: 18px;
+  opacity: 0.5;
+}
+
+/* Under a file the stack OPENS: the front plate lifts and the two behind it
+   spread, which is a file being received rather than a decoration playing. */
+.dropzone--armed .dropzone__plate {
+  transform: translateY(-3px);
+  border-color: var(--accent);
+}
+
+.dropzone--armed .dropzone__plate::before {
+  transform: translateY(3px) scale(1.03);
+}
+
+.dropzone--armed .dropzone__plate::after {
+  transform: translateY(6px) scale(1.05);
 }
 
 .dropzone__lead {
@@ -1791,19 +1832,19 @@ input.field__control {
   overflow-wrap: anywhere;
 }
 
-/* ONE LINE of mono, not five pills. Five bordered objects for five file
-   extensions made the accepted-formats list the busiest thing in the card;
-   as a single tracked line it is read once and then ignored, which is all a
-   format list has ever needed to be. */
+/* A SENTENCE, in the body face. It has been five bordered pills (five
+   objects competing with the lead) and then one tracked mono line (data the
+   reader had to parse). It is a list of file extensions; it should read like
+   one being mentioned in passing. */
 .dropzone__formats {
-  font-family: var(--font-mono);
-  font-size: var(--t-caption);
-  letter-spacing: var(--track-caption);
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
   color: var(--muted);
-  white-space: nowrap;
 }
 
 .dropzone__note {
+  margin-top: var(--s-xs);
   max-width: 48ch;
   font-family: var(--font-body);
   font-size: var(--t-body-sm);
@@ -1811,11 +1852,230 @@ input.field__control {
   color: var(--muted);
 }
 
+/* An explicit control, because "the whole area is clickable" is a thing you
+   have to already know. Quiet, not primary: DESIGN.md allows one primary
+   button per surface and this card's is Start job. It is a <span> inside the
+   label (see the note in Dropzone.jsx), so it borrows the pill shape by hand
+   rather than wearing .btn, which would drag a button's own reset in. */
+.dropzone__browse {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9ch;
+  margin-top: var(--s-sm);
+  padding: 8px 20px;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-pill);
+  transition:
+    background-color 200ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Drawn from three strokes, like every other mark in this system: the shaft,
+   the head, and the line it is going into. */
+.dropzone__browse-icon {
+  display: block;
+  width: 13px;
+  height: 13px;
+}
+
+.dropzone__face:hover .dropzone__browse {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--on-primary);
+}
+
+/* -------------------- the manifest -------------------- */
+
+/* What replaced "a filename in the middle of an empty rectangle". A landed
+   file reports itself and then shows the molecules back, each beside what
+   the parser made of it. Top-aligned and left-aligned: this is a document
+   now, not a target with a label floating in it. */
+.dropzone__manifest {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: var(--s-xs);
+  padding: var(--s-md) clamp(var(--s-md), 1.6vw, var(--s-lg));
+  text-align: left;
+}
+
+.dropzone__manifest-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.9ch var(--s-md);
+  padding-bottom: var(--s-xs);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.dropzone__file-name {
+  font-family: var(--font-mono);
+  font-size: var(--t-nav);
+  font-weight: 700;
+  letter-spacing: var(--track-nav);
+  color: var(--ink);
+  /* A filename can be anything at all. */
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dropzone__file-meta {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Pushed to the far end of the head row, so the two destructive-ish controls
+   are nowhere near the filename you might be reading. */
+.dropzone__manifest-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-xs);
+  margin-left: auto;
+}
+
+.dropzone__action {
+  padding: 4px 11px;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  transition:
+    color 200ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dropzone__action:hover {
+  color: var(--ink);
+  border-color: var(--hairline-strong);
+}
+
+.dropzone__action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The rows. Four columns: the record number, the line as it arrived, an
+   arrow, and what came back. The arrow is the point of the whole panel. */
+.dropzone__rows {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.dropzone__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 2.4ch minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: var(--s-sm);
+}
+
+.dropzone__row-n {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  color: var(--muted);
+}
+
+.dropzone__row-in,
+.dropzone__row-out {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  line-height: 1.6;
+  letter-spacing: 0;
+  /* One line each. A 200-character SMILES must not turn this preview into a
+     wall of wrapped mono -- the title attribute carries the whole thing. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropzone__row-in {
+  color: var(--muted);
+}
+
+.dropzone__row-out {
+  color: var(--ink);
+}
+
+/* A failed record says so in words, and in the SAME quiet grey the input
+   column uses. It deliberately borrows nothing from the confidence grammar:
+   a preview row has no tier, and a rule here would claim a judgement that
+   has not happened. */
+.dropzone__row-out--failed {
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-style: italic;
+}
+
+/* The arrow is two rules, not a glyph: an arrowhead drawn from a stroke and
+   a shorter stroke, which is the same figure the footer's join and the nav's
+   arrival are built from. */
+.dropzone__row-arrow {
+  position: relative;
+  align-self: center;
+  display: block;
+  height: 1px;
+  background: var(--hairline-strong);
+}
+
+.dropzone__row-arrow::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: 0;
+  width: 5px;
+  height: 5px;
+  border-top: 1px solid var(--hairline-strong);
+  border-right: 1px solid var(--hairline-strong);
+  transform: rotate(45deg);
+}
+
+.dropzone__errors {
+  margin: var(--s-xs) 0 0;
+  padding-left: 1.2em;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  color: var(--body-strong);
+}
+
+/* The one sentence that keeps this honest: the server parses only the first
+   few records, so a clean preview says nothing about row 6. */
+.dropzone__caveat {
+  margin: 0;
+  padding-top: var(--s-xs);
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  color: var(--muted);
+}
+
 /* The zone is legible without any of the above: motion off, states stay. */
 @media (prefers-reduced-motion: reduce) {
   .dropzone,
   .dropzone__seam-line,
-  .dropzone__mark-stroke {
+  .dropzone__plate,
+  .dropzone__plate::before,
+  .dropzone__plate::after,
+  .dropzone__browse,
+  .dropzone__action {
     transition: none;
   }
 

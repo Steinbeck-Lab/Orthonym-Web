@@ -1536,36 +1536,6 @@
   color: var(--muted);
 }
 
-.preview {
-  margin-top: var(--s-md);
-  padding-top: var(--s-sm);
-  border-top: 1px solid var(--hairline);
-}
-
-.preview__count {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: var(--t-caption);
-  letter-spacing: var(--track-caption);
-  text-transform: uppercase;
-  color: var(--ink);
-}
-
-.preview__errors {
-  margin: var(--s-xs) 0 0;
-  padding-left: 1.2em;
-  font-size: var(--t-body-sm);
-  color: var(--body-strong);
-}
-
-/* The one sentence that keeps this honest: the server parses only the first
-   few records, so a clean preview says nothing about row 6. */
-.preview__caveat {
-  margin: var(--s-xs) 0 0;
-  font-size: var(--t-body-sm);
-  color: var(--muted);
-}
-
 /* -------------------- batch results -------------------- */
 
 /* A cell of the workbench, in the output column beside the input — NOT

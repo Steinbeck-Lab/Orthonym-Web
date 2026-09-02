@@ -352,6 +352,13 @@ function Home() {
     }
   }
 
+  /** Remove, on the drop zone's manifest. acceptFile(null) already IS this
+   *  reset -- it is the path a cancelled picker takes -- so Remove is that
+   *  call under a name rather than a second copy of it. */
+  function clearFile() {
+    void acceptFile(null)
+  }
+
   function startAnother() {
     if (job) forgetJob(job.jobId)
     setJob(null)
@@ -570,39 +577,21 @@ function Home() {
             ) : (
               <div className="field">
                 <span className="field__label">A file of molecules</span>
+                {/* The preview lives INSIDE the zone now. It used to be a
+                    second block below it, so a landed file was described in
+                    two places -- the filename in the zone, the count and the
+                    caveat under it -- while the zone itself sat there as a
+                    big empty rectangle with a filename in the middle of it.
+                    The zone IS the manifest. */}
                 <Dropzone
                   inputId="batch-file"
                   file={file}
+                  preview={preview}
                   onFile={(chosen) => void acceptFile(chosen)}
+                  onRemove={clearFile}
                   onReject={setValidationNote}
                   disabled={isSubmitting}
                 />
-
-                {preview && (
-                  <div className="preview">
-                    <p className="preview__count">
-                      {preview.molecule_count} molecule
-                      {preview.molecule_count === 1 ? '' : 's'} · read as{' '}
-                      <code>{preview.format}</code>
-                    </p>
-                    {preview.errors.length > 0 && (
-                      <ul className="preview__errors">
-                        {preview.errors.map((message) => (
-                          <li key={message}>{message}</li>
-                        ))}
-                      </ul>
-                    )}
-                    {/* This wording is deliberate and must not be softened to
-                        "no errors found". The server parses only the first few
-                        records, so a clean preview says nothing about row 6 --
-                        ParsePreviewResponse's own docstring calls out that
-                        this endpoint has never validated a whole file. */}
-                    <p className="preview__caveat">
-                      Checked the first {preview.sample.length} record
-                      {preview.sample.length === 1 ? '' : 's'} only — later rows may still fail.
-                    </p>
-                  </div>
-                )}
               </div>
             )}
 
