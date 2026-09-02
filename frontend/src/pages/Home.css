@@ -770,3 +770,377 @@
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* -------------------- batch input -------------------- */
+/* Two ways into one card. Radios, not buttons: a keyboard gets arrow-key
+   movement for free and the current choice is announced. The visual is the
+   same pill language the header nav uses. */
+
+.input-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: var(--s-md);
+}
+
+.input-tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: var(--r-pill);
+  font-family: var(--font-mono);
+  font-size: var(--t-nav);
+  font-weight: 700;
+  letter-spacing: var(--track-nav);
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.input-tab:hover {
+  color: var(--ink);
+  background: var(--surface-soft);
+}
+
+.input-tab--on,
+.input-tab--on:hover {
+  color: var(--accent);
+  background: var(--accent-wash);
+}
+
+/* The radio itself is invisible but still focusable and still the thing that
+   receives the click -- never display: none, which would take it out of the
+   tab order and off the keyboard entirely. */
+.input-tab input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.input-tab:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.field__file {
+  width: 100%;
+  padding: var(--s-sm) 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  color: var(--body-strong);
+}
+
+.field__hint {
+  margin: var(--s-xs) 0 0;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.preview {
+  margin-top: var(--s-md);
+  padding-top: var(--s-sm);
+  border-top: 1px solid var(--hairline);
+}
+
+.preview__count {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.preview__errors {
+  margin: var(--s-xs) 0 0;
+  padding-left: 1.2em;
+  font-size: var(--t-body-sm);
+  color: var(--body-strong);
+}
+
+/* The one sentence that keeps this honest: the server parses only the first
+   few records, so a clean preview says nothing about row 6. */
+.preview__caveat {
+  margin: var(--s-xs) 0 0;
+  font-size: var(--t-body-sm);
+  color: var(--muted);
+}
+
+/* -------------------- batch results -------------------- */
+
+.batch {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-md);
+  padding: clamp(var(--s-md), 2vw, var(--s-xl));
+  background: var(--card);
+  border-radius: var(--r-card);
+  box-shadow: var(--card-shadow);
+  border: var(--card-border);
+}
+
+.batch__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-sm);
+}
+
+.batch__state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.75ch;
+}
+
+.batch__state-word {
+  font-family: var(--font-display);
+  font-size: var(--t-title-sm);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.batch__counts,
+.batch__note,
+.batch__page-count {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.batch__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-xs);
+}
+
+/* Monochrome, like every other measurement in this system: the bar reports
+   progress, not a state, so it must not borrow the accent. */
+.batch__progress {
+  position: relative;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--surface-soft);
+  overflow: hidden;
+}
+
+.batch__progress-fill {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+  transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .batch__progress-fill {
+    transition: none;
+  }
+}
+
+.batch__error,
+.batch__gone {
+  margin: 0;
+  font-size: var(--t-body-sm);
+  color: var(--body-strong);
+}
+
+.batch__downloads {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-sm);
+}
+
+.batch__csv {
+  font-family: var(--font-mono);
+  font-size: var(--t-nav);
+  font-weight: 700;
+  letter-spacing: var(--track-nav);
+  text-transform: uppercase;
+  color: var(--link);
+}
+
+/* Never let a results link read as permanent (design spec section 14). */
+.batch__expiry {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.batch__table-wrap {
+  overflow-x: auto;
+}
+
+.batch__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-body-sm);
+}
+
+.batch__table th {
+  padding: var(--s-xs) var(--s-sm) var(--s-xs) 0;
+  border-bottom: 1px solid var(--hairline-strong);
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  font-weight: 400;
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.batch__table td {
+  padding: var(--s-sm) var(--s-sm) var(--s-sm) 0;
+  border-bottom: 1px solid var(--hairline);
+  vertical-align: baseline;
+}
+
+.batch__index {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.batch__input code {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  color: var(--body-strong);
+  word-break: break-all;
+}
+
+/* THE CONFIDENCE GRAMMAR, in a table. Same marks as the result tiles, at the
+   same 30ch measure: double = verified PIN, dashed = verified fallback,
+   dotted + muted = unverified best effort, one faint rule = honest abstain,
+   two struck rules = error. PRODUCT.md principle 3 -- the tier is visible
+   wherever a name appears, and a table is exactly where it would be tempting
+   to reduce it to a word in a column. Never colour. */
+.batch__name {
+  display: block;
+  width: min(100%, 30ch);
+  padding-bottom: 2px;
+}
+
+.batch__name-text {
+  font-family: var(--font-body);
+  color: var(--ink);
+}
+
+.batch__name-text--muted {
+  color: var(--muted);
+}
+
+.batch__name--pin {
+  border-bottom: 3px double var(--ink);
+}
+
+.batch__name--fallback {
+  border-bottom: 1px dashed var(--ink);
+}
+
+.batch__name--best-effort {
+  border-bottom: 1px dotted var(--muted);
+}
+
+.batch__name--abstain {
+  border-bottom: 1px solid var(--hairline-strong);
+}
+
+.batch__name--error {
+  border-top: 1px solid var(--muted);
+  border-bottom: 1px solid var(--muted);
+}
+
+.batch__name--error .batch__name-text {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.batch__rt {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  color: var(--body-strong);
+  white-space: nowrap;
+}
+
+.batch__rt--mismatch,
+.batch__rt--unavailable {
+  color: var(--muted);
+}
+
+.batch__rt--none {
+  color: var(--hairline-strong);
+}
+
+.batch__draw {
+  padding: 4px 10px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-pill);
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.batch__draw:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.batch__drawn-row td {
+  padding-block: var(--s-sm);
+  background: var(--card-soft);
+}
+
+.batch__drawn {
+  display: block;
+  width: min(100%, 260px);
+  height: auto;
+}
+
+.batch__pager {
+  display: flex;
+  align-items: center;
+  gap: var(--s-sm);
+}
+
+/* What a job that kept nothing says for itself. A stopped job assembles no
+   row list at all (its results.csv answers 409), so this sentence replaces
+   the download and the table rather than sitting beside them. */
+.batch__outcome {
+  margin: 0;
+  max-width: 70ch;
+  font-size: var(--t-body-sm);
+  line-height: 1.55;
+  color: var(--body-strong);
+}
+
+/* "Check again", inside the outcome sentence: a text button, because it is
+   part of a sentence rather than a control in its own right. */
+.batch__retry {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}

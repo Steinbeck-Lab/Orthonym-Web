@@ -114,9 +114,26 @@ a terminal job, so writing status `cancelled` is the entire mechanism and no tas
 column) / plain SMILES list, up to `MAX_BATCH_SIZE` (10,000) molecules and `MAX_FILE_SIZE_MB`
 (50 MB); `frontend/nginx.conf` sets `client_max_body_size 210m`, and its default of 1 MB would
 otherwise silently cap the advertised limit. Work is chunked (`BATCH_CHUNK_SIZE`, 25) onto the
-`batch` queue so a long job cannot occupy the slot someone naming ethanol needs. **There is no
-frontend UI for this yet** — the whole job layer is API-only, and batch upload on Home is scoped
-but unstarted.
+`batch` queue so a long job cannot occupy the slot someone naming ethanol needs. **Home drives all of this
+as of 2026-09-02** (it was API-only until then): the input card has **Paste | Upload file** tabs,
+pasting more than `FAST_PATH_MAX_MOLECULES` submits a job instead of refusing the eleventh line, a
+file gets a `parse-preview` count first, and `components/BatchResults.jsx` shows progress, a paged
+table, Stop, Delete and a per-row **Draw** (`/api/depict`, one molecule at a time — batch rows
+carry no picture on purpose). `lib/jobStore.js` keeps `job_id` + `owner_token` in **localStorage**,
+because the token is issued once and a reload would otherwise lose the ability to stop a
+10,000-molecule job; entries prune themselves at `expires_at`.
+
+Three things about that UI were **measured against the running backend**, not assumed, and each
+would be easy to "simplify" back into a lie:
+- **A cancelled job's rows do not exist immediately.** For as long as its in-flight chunks take to
+  finish, `/results` answers `retrievable: 0` and `results.csv` answers **409**. Two measured
+  cancels took over 13 s to produce 125 and 100 rows. So the panel waits (20 × 3 s), never offers
+  the CSV link in that window, and when the wait is spent it says "no rows have appeared yet" with
+  a **Check again** — it cannot know the job is empty.
+- **`formula` is only ever set on an abstain** (`openstout_service.py`), so it rides inside the
+  name cell rather than in a column that would be blank on every named row.
+- **Every row carries its confidence rule** (double / dashed / dotted / faint / struck), because a
+  table is exactly where PRODUCT.md principle 3 would be tempting to reduce to a word in a column.
 
 Two consequences that bite immediately:
 
