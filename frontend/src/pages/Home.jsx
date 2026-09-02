@@ -217,16 +217,23 @@ function Home() {
       .catch((err) => {
         setIsSubmitting(false)
         if (err instanceof TranslateJobQueuedError) {
-          // Not a failure -- real work is running on the server, just too
-          // large or slow for the synchronous fast path. STITCH has no
-          // batch-job polling UI (a separate, larger project), so the
-          // honest thing is to say that plainly rather than render an
-          // empty grid, which used to look identical to zero results.
+          // Not a failure: the work is running on the server, it just did not
+          // finish inside the fast-path timeout. This used to say "this page
+          // cannot track a queued job's progress -- try a smaller batch",
+          // which was true when there was no batch UI and became FALSE the
+          // moment there was one. It hands the job to the batch panel now,
+          // which is what the panel is for.
+          const entry = {
+            jobId: err.jobId,
+            ownerToken: err.ownerToken,
+            moleculeCount: err.moleculeCount,
+          }
+          rememberJob(entry)
+          setJob(entry)
           setRows([])
           setValidationNote(
-            `This batch (${err.moleculeCount} molecules) is running as a background job on ` +
-              'the server instead of returning immediately. This page cannot track a queued ' +
-              "job's progress — try a smaller batch for an immediate result."
+            `That took longer than the fast path allows, so it is running as a job you can ` +
+              `watch, stop and download below.`
           )
           return
         }

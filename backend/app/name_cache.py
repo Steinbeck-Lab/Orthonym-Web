@@ -34,7 +34,13 @@ from app.schemas import VERIFIED_STATUSES, ResultItem
 #     best_effort/abstain) and changed best-effort gating.
 logger = logging.getLogger(__name__)
 
-_KEY_VERSION = "v2"
+# v3 (2026-09-02): the visible round-trip check changed from comparing
+# canonical SMILES to comparing full standard InChIKeys, so every cached
+# roundtrip_match computed under v2 may carry the old verdict -- zwitterionic
+# glycine was cached as a MISMATCH on a correct PIN. The engine fingerprint
+# below cannot see a change in THIS app's code, which is exactly what this
+# manual counter is for.
+_KEY_VERSION = "v3"
 _ENGINE_VERSION = openstout.__version__
 
 

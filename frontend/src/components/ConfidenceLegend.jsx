@@ -25,40 +25,49 @@ import { useEffect, useRef, useState } from 'react'
 // result carries.
 
 const TIERS = [
+  // `label` is the word the interface actually uses next to a name, so it is
+  // the label here too -- a key should teach the vocabulary you will meet,
+  // not a second longer one. The full tier names live on the result tiles.
+  //
+  // One line each, deliberately, and every one measured at the real column
+  // width -- the tallest rung sets the band's height, so a single sentence
+  // wrapping to two lines costs the whole band 20px. The bodies were three
+  // lines apiece (259px); these say no less. Progressive disclosure was the other option and it
+  // is worse here: it would put reference text behind a hover, which is not
+  // reachable by touch and reserves space it may never use.
   {
     key: 'pin',
     ordinal: '01',
-    name: 'Preferred IUPAC Name',
-    code: 'PIN',
-    body: 'Verified. OPSIN parses the name back to your exact structure, and it meets the strict preferred-name rules.',
+    label: 'PIN',
+    body: 'Verified, and the preferred name.',
   },
   {
     key: 'fallback',
     ordinal: '02',
-    name: 'Verified fallback',
-    code: 'FALLBACK',
-    body: 'Round-trips correctly, but is a valid systematic name rather than the single preferred one.',
+    label: 'FALLBACK',
+    body: 'Verified, not the preferred one.',
   },
   {
     key: 'best-effort',
     ordinal: '03',
-    name: 'Best effort',
-    code: 'UNVERIFIED',
-    body: 'A real name OPSIN could not confirm. Shown only with best-effort mode on, and never as a PIN.',
+    label: 'UNVERIFIED',
+    body: 'OPSIN could not confirm it.',
   },
   {
     key: 'abstain',
     ordinal: '04',
-    name: 'Honest abstain',
-    code: 'NO NAME',
-    body: 'No confident name. The engine refuses rather than guess.',
+    label: 'NO NAME',
+    body: 'The engine refused to guess.',
   },
   {
+    // Not only an unreadable SMILES: RDKit failing to parse gives this status
+    // (openstout_service.py), and so does a naming exception on a batch row
+    // ("Naming failed: ...", tasks.py). The old line said "The SMILES could
+    // not be read", which was false for the second case.
     key: 'error',
     ordinal: '05',
-    name: 'Parse error',
-    code: 'BAD INPUT',
-    body: 'The SMILES string could not be read.',
+    label: 'BAD INPUT',
+    body: 'Unreadable input, or naming failed.',
   },
 ]
 
@@ -163,7 +172,7 @@ export default function ConfidenceLegend() {
           made this box 434px tall to say five short things -- a key earns its
           space by being scannable, not by announcing itself. */}
       <p className="key-band__caption">
-        What the mark under each name means, strongest first
+        The mark under every name, strongest first
       </p>
 
       <ol className="key-band__rungs">
@@ -177,8 +186,7 @@ export default function ConfidenceLegend() {
           >
             <span className="rung__ordinal">{tier.ordinal}</span>
             <Specimen tier={tier.key} />
-            <h3 className="rung__name">{tier.name}</h3>
-            <span className="rung__code">{tier.code}</span>
+            <h3 className="rung__name">{tier.label}</h3>
             <p className="rung__body">{tier.body}</p>
           </li>
         ))}
