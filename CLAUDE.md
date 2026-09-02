@@ -283,7 +283,8 @@ The **key** to that vocabulary is no longer a band above the footer: it is a **f
 (`.info`, `components/ConfidenceLegend.jsx`) carved out of the BOTTOM of Home's input card with the
 same concave fillets the header uses, right-hand side, with a crimson **bulb** that breathes until
 the key has been opened once and then goes steady ink. Clicking it opens the five-row ladder on a
-`grid-template-rows: 0fr → 1fr` transition. It is the card's width by construction (`.input-col`
+`grid-template-rows: 0fr → 1fr` transition; each rung is a miniature of a real result (name over
+its rule), stitched onto a thread that fades where confidence runs out. It is the card's width by construction (`.input-col`
 holds the card and the notch as one grid cell), 40px at rest against the old band's 135, and the
 closed drawer takes `visibility: hidden` so a screen reader is not read five tiers nobody opened.
 Two structural facts still

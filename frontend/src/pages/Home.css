@@ -638,7 +638,7 @@
    shadow, exactly like the mobile menu panel the header drops. */
 .info__panel {
   margin-top: var(--gap);
-  padding: var(--s-sm) clamp(var(--s-sm), 1.6vw, var(--s-md)) var(--s-md);
+  padding: var(--s-xs) clamp(var(--s-sm), 1.6vw, var(--s-md)) var(--s-sm);
   background: var(--card);
   border: var(--card-border);
   border-radius: var(--r-card);
@@ -646,8 +646,12 @@
 }
 
 .info__caption {
-  margin: 0 0 var(--s-xs);
-  padding-left: var(--s-sm);
+  margin: 0 0 2px;
+  /* Aligned over the ordinals, not to the panel's own padding: the head of a
+     column belongs on that column's axis. 30px is the thread's gutter and
+     --s-sm is the rung's own padding, so this is the same sum the ordinals
+     resolve to rather than a number that happens to match today. */
+  padding-left: calc(30px + var(--s-sm));
   font-family: var(--font-mono);
   font-size: var(--t-caption);
   line-height: 1.3;
@@ -656,30 +660,88 @@
   color: var(--muted);
 }
 
+/* --- the thread ----------------------------------------------------- */
+
+/* FIVE STITCHES ON ONE THREAD, and this is the panel's whole idea. The
+   ladder used to be five rows whose only claim to being ordered was that
+   they were printed in order. Now a single thread runs down the left and
+   each rung is stitched onto it, which is the same motif as the footer's
+   self-sewing join, the nav's arriving dot, the drop zone's running seam and
+   the marks that draw themselves inside these very rungs -- the system's
+   signature, applied to the thing the signature is about.
+   The thread FADES over its last stretch. That is not a flourish: the fifth
+   rung is where confidence runs out, and a line that stops being a line says
+   so without a caption. */
 .info__rungs {
+  position: relative;
   display: grid;
-  gap: 1px;
   margin: 0;
-  padding: 0;
+  /* 30px of gutter for the thread, and 0 elsewhere: an <ol> arrives with UA
+     padding that would otherwise indent the whole ladder. */
+  padding: 0 0 0 30px;
   list-style: none;
+}
+
+.info__rungs::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  bottom: 9px;
+  left: 6px;
+  width: 1px;
+  background: linear-gradient(
+    to bottom,
+    var(--hairline-strong) 0%,
+    var(--hairline-strong) 74%,
+    transparent 100%
+  );
 }
 
 /* --- one rung ------------------------------------------------------- */
 
-/* A ROW, not a column. Five columns inside a card is 173px each, which is
-   narrower than "Verified, and the preferred name." reads at. Five rows also
-   make the descent real: the vertical order IS the ladder, so the staircase
-   offset the five-column version used to fake one is gone. */
+/* A MINIATURE OF A REAL RESULT, not a row of a table. The name sits above
+   its rule at a constant measure, which is exactly the relationship a result
+   tile has (DESIGN.md's constant-measure rule) -- so what this key teaches is
+   the shape you will actually meet. The mark used to float BESIDE the name as
+   a long thin line in the middle of the row, which taught a relationship the
+   product does not have. */
 .rung {
+  position: relative;
   display: grid;
-  /* 10ch fits UNVERIFIED, the longest label, so all five names align and the
-     marks start on one axis. */
-  grid-template-columns: auto 10ch minmax(56px, 1fr) minmax(0, 1.1fr);
+  /* A FIXED measure for the sentence and the rest to the mark. Two things
+     this gets right that the obvious answers do not: 1.05fr left roughly a
+     third of the panel empty on the right while the mark stopped short in
+     the middle, and max-content sized each column to its OWN sentence --
+     every rung is a separate grid, so the five marks and five sentences
+     ended up on five different axes. 34ch fits the longest line
+     ("Unreadable input, or naming failed.") so all five agree, and the mark
+     takes everything left over. */
+  grid-template-columns: auto minmax(140px, 1fr) 34ch;
+  grid-template-areas:
+    'ordinal name body'
+    'ordinal mark body';
   align-items: center;
   column-gap: var(--s-md);
-  padding: 5px var(--s-sm) 6px;
+  row-gap: 2px;
+  padding: 4px var(--s-sm) 5px;
   border-radius: var(--r-chrome);
   transition: background-color 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* The stitch: a short tick reaching back to the thread. It grows on hover,
+   which is the whole hover state this row needs -- the rung is being pulled
+   a little tighter. */
+.rung::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -24px;
+  width: 15px;
+  height: 1px;
+  background: var(--hairline-strong);
+  transition:
+    width 240ms cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 240ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .rung:hover,
@@ -687,13 +749,34 @@
   background: var(--card-soft);
 }
 
+.rung:hover::before,
+.rung:focus-within::before {
+  width: 21px;
+  background: var(--ink);
+}
+
+/* The ordinal is a DISPLAY numeral now, not an 11px mono caption. Five of
+   them down the left edge give the panel a spine to hang from, and the
+   display face at 1.5rem is the same figure treatment the bento gives its
+   stat cells. */
 .rung__ordinal {
-  font-family: var(--font-mono);
-  font-size: var(--t-caption);
-  letter-spacing: var(--track-caption);
+  grid-area: ordinal;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.06em;
   /* --muted, not --muted-soft: the latter is 4.61:1 on white and its own
      token comment says "CANVAS ONLY". */
   color: var(--muted);
+  /* A FIXED width, right-aligned, and font-variant-numeric is not enough on
+     its own: Saira Condensed ships no `tnum` feature, so the property is
+     honoured and does nothing -- measured, "01" is 21.1px and "04" is
+     25.7px, which pushed all five names and marks onto five different axes.
+     Right-aligned so the digits hang on one edge against the names, which is
+     how a numbered list should set anyway. */
+  width: 30px;
+  text-align: right;
   font-variant-numeric: tabular-nums;
   transition: color 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -704,20 +787,38 @@
 }
 
 .rung__name {
+  grid-area: name;
+  align-self: end;
   margin: 0;
   font-family: var(--font-mono);
   font-size: var(--t-nav);
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.2;
   letter-spacing: var(--track-nav);
   text-transform: uppercase;
   color: var(--ink);
 }
 
-/* The specimen stretches, and its stroke weight does not: preserveAspect-
-   Ratio="none" plus non-scaling-stroke. It sits immediately after the name,
-   the way a real result carries its rule immediately under one. */
+/* THE INK DESCENDS. Five tiers, stepping down from ink to muted, which is
+   the only hierarchy available in a system where confidence may never be
+   coloured -- and it is the same distinction the result tiles already make,
+   where a dotted best-effort rule and an abstain's faint rule are drawn
+   quieter than a verified one. The names now follow their own marks. */
+.rung--best-effort .rung__name {
+  color: var(--body);
+}
+
+.rung--abstain .rung__name,
+.rung--error .rung__name {
+  color: var(--muted);
+}
+
+/* The specimen sits UNDER its name, at the name column's width, so each rung
+   is the same figure a result carries. preserveAspectRatio="none" plus
+   non-scaling-stroke stretches it at an exact stroke weight. */
 .rung__specimen {
+  grid-area: mark;
+  align-self: start;
   display: block;
   width: 100%;
   height: 10px;
@@ -730,14 +831,13 @@
   stroke-dashoffset: 0;
 }
 
-/* The two weaker tiers are drawn in the muted ink, the same distinction the
-   result tiles make. */
 .rung--best-effort .rung__specimen,
 .rung--abstain .rung__specimen {
   color: var(--muted);
 }
 
 .rung__body {
+  grid-area: body;
   margin: 0;
   font-family: var(--font-body);
   font-size: var(--t-body-sm);
@@ -746,15 +846,23 @@
 }
 
 /* Narrow: the sentence takes its own line rather than squeezing the mark to
-   a stub. */
+   a stub, and the thread comes in tighter. */
 @media (max-width: 700px) {
-  .rung {
-    grid-template-columns: auto 10ch minmax(40px, 1fr);
-    row-gap: 2px;
+  .info__rungs {
+    padding-left: 22px;
   }
 
-  .rung__body {
-    grid-column: 2 / -1;
+  .rung {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'ordinal name'
+      'ordinal mark'
+      'ordinal body';
+  }
+
+  .rung::before {
+    left: -18px;
+    width: 11px;
   }
 }
 

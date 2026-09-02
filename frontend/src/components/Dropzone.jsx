@@ -137,18 +137,20 @@ export default function Dropzone({ inputId, file, onFile, onReject, disabled = f
           <span className="dropzone__mark-stroke" />
           <span className="dropzone__mark-stroke" />
         </span>
+        {/* Three lines, down from five. The face carried a display-size lead,
+            a second line saying the area was clickable, five format pills and
+            a two-line footnote -- for one instruction. What went: "or click to
+            choose one" (the whole area is a label, the cursor and the hover
+            state say so), and the pills, which turned five file extensions
+            into five bordered objects competing with the lead. */}
         <span className="dropzone__lead">{file ? file.name : 'Drop a file here'}</span>
-        <span className="dropzone__sub">
-          {file ? 'Drop another to replace it' : 'or click to choose one'}
-        </span>
         <span className="dropzone__formats">
-          {ACCEPTED_EXTENSIONS.map((ext) => (
-            <code key={ext}>.{ext}</code>
-          ))}
+          {ACCEPTED_EXTENSIONS.map((ext) => `.${ext}`).join('  ·  ')}
         </span>
         <span className="dropzone__note">
-          A <code>.csv</code> needs a <code>smiles</code> column; a plain list wants one SMILES
-          per line.
+          {file
+            ? 'Drop another to replace it'
+            : 'A .csv needs a smiles column, or one SMILES per line.'}
         </span>
       </label>
     </div>
