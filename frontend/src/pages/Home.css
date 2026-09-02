@@ -28,7 +28,12 @@
 
 .home-hero {
   position: relative;
-  isolation: isolate; /* keeps the flare's multiply blend inside this card */
+  /* Contains the flare's blend, and nothing else: the hero is NOT a card any
+     more. No fill, no border, no shadow, no radius -- the wordmark and its
+     flare sit straight on the grey ground, by instruction ("no white
+     background"). overflow: hidden stays, so the streak and the ray fan
+     cannot spill onto the header above or the workbench below. */
+  isolation: isolate;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -39,10 +44,6 @@
   width: min(100% - 2 * var(--shell-pad), var(--shell-max));
   margin-inline: auto;
   padding: clamp(var(--s-lg), 3vw, var(--s-xl));
-  background: var(--card);
-  border-radius: var(--r-card);
-  box-shadow: var(--card-shadow);
-  border: var(--card-border);
 }
 
 .flare {
@@ -67,9 +68,9 @@
   transform: translate(-50%, -50%);
   background: radial-gradient(
     circle,
-    color-mix(in srgb, var(--accent) 26%, transparent) 0%,
-    color-mix(in srgb, var(--accent) 9%, transparent) 22%,
-    transparent 48%
+    color-mix(in srgb, var(--accent) 34%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 12%, transparent) 22%,
+    transparent 50%
   );
   animation: flare-breathe 9s ease-in-out infinite;
 }
@@ -88,7 +89,7 @@
   width: min(120%, 1100px);
   aspect-ratio: 1;
   transform: translate(-50%, -50%);
-  opacity: 0.22;
+  opacity: 0.26;
   background: repeating-conic-gradient(
     from 0deg,
     color-mix(in srgb, var(--accent) 30%, transparent) 0deg 1.1deg,
@@ -174,6 +175,13 @@
   text-align: center;
   color: var(--ink);
   margin-right: -0.14em; /* pull back the trailing tracking */
+  /* Lit by the flare behind it: two crimson halos, wide and soft, so the
+     letters read as standing in the light rather than wearing a drop
+     shadow. Solid ink, never a gradient fill -- the wordmark has to stay
+     legible at every size. */
+  text-shadow:
+    0 0 18px color-mix(in srgb, var(--accent) 26%, transparent),
+    0 0 54px color-mix(in srgb, var(--accent) 38%, transparent);
 }
 
 .home-hero__tagline {
