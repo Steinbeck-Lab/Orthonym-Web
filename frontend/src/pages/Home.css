@@ -20,146 +20,60 @@
    beside it. Deliberately short vertical padding — the old hero left a tall
    empty band above the workbench, which read as wasted space. */
 
-/* The hero: the wordmark over a crimson flare, on one white card.
-   The flare is CSS only -- a radial core, a masked ray fan and a horizontal
-   streak, all multiplied into the paper so it stays crimson-on-white rather
-   than turning the card into a light box. Every layer is decorative and
-   aria-hidden; the wordmark and the tagline sit above them on z-index. */
+/* The hero: the wordmark, lit. Not a card -- no fill, no border, no shadow,
+   no radius; the wordmark and its light sit straight on the grey ground, by
+   instruction ("no white background").
+
+   The light itself is a WebGPU canvas (src/lib/flare, vendored from vgpu's
+   nextjs-flare example) that rakes along the letter OUTLINES, so there is no
+   CSS flare here any more -- the three gradient layers that used to bloom in
+   the middle of the hero were exactly the "flare in the middle" the owner
+   rejected. Where WebGPU is missing or motion is unwelcome, no canvas is
+   mounted and the wordmark keeps only its crimson halo. */
 
 .home-hero {
   position: relative;
-  /* Contains the flare's blend, and nothing else: the hero is NOT a card any
-     more. No fill, no border, no shadow, no radius -- the wordmark and its
-     flare sit straight on the grey ground, by instruction ("no white
-     background"). overflow: hidden stays, so the streak and the ray fan
-     cannot spill onto the header above or the workbench below. */
-  isolation: isolate;
+  /* NO isolation here, deliberately. The flare canvas blends with
+     mix-blend-mode: multiply and its backdrop has to be the PAGE GROUND. With
+     isolation: isolate this element became its own stacking context, the
+     canvas multiplied against an empty backdrop, and the white parts of the
+     veil painted over the grey -- the hero turned into a white box with a
+     crimson smudge in it. Nothing else in this element blends, so there is
+     nothing to contain. */
   overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--s-md);
-  min-height: clamp(260px, 27vw, 400px);
+  gap: var(--s-sm);
+  /* Tightened on instruction ("reduce unnecessary gap on top and bottom").
+     It was clamp(260px, 27vw, 400px) with 40px of block padding, which left
+     a band of empty grey above and below the wordmark. The flare needs SOME
+     room around the letters -- its rays are clipped to this box -- so the
+     height is cut rather than removed. */
+  min-height: clamp(170px, 16vw, 250px);
   width: min(100% - 2 * var(--shell-pad), var(--shell-max));
   margin-inline: auto;
-  padding: clamp(var(--s-lg), 3vw, var(--s-xl));
+  padding: var(--s-md) clamp(var(--s-lg), 3vw, var(--s-xl));
 }
 
-.flare {
+/* The canvas covers the hero and keeps its pointer events: the flare's light
+   follows the pointer, which is the effect's one interaction. It sits behind
+   the type on z-index, and the surface is premultiplied so the grey ground
+   shows through everywhere the shader does not put light. */
+.home-hero__flare {
   position: absolute;
   inset: 0;
   z-index: 0;
-  border-radius: inherit;
-  overflow: hidden;
-  pointer-events: none;
-  /* multiply, not screen: on a white card, crimson light has to DARKEN the
-     paper or it disappears entirely. */
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  /* The shader emits a crimson VEIL on white, not light on black (see the
+     long note in composite.wgsl). Multiply is what turns that veil back into
+     light: white leaves the ground alone, crimson darkens it along the rays.
+     .home-hero carries isolation: isolate so this cannot reach the page. */
   mix-blend-mode: multiply;
-}
-
-/* The core: one soft crimson bloom behind the wordmark, breathing slowly. */
-.flare__core {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: min(135%, 1000px);
-  aspect-ratio: 1;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--accent) 34%, transparent) 0%,
-    color-mix(in srgb, var(--accent) 12%, transparent) 22%,
-    transparent 50%
-  );
-  animation: flare-breathe 9s ease-in-out infinite;
-}
-
-/* The rays: a repeating conic fan, masked to fade out well before the card's
-   edge so it reads as light rather than as a wheel. */
-/* Few, thin, and dying well inside the card. A first pass at 33 wedges and
-   0.5 opacity turned the hero into a sunburst poster: the rays reached the
-   card's corners and the white paper disappeared. The mask radius is the
-   control that matters -- this element is 120% of the card wide, so a fade
-   ending at 34% of ITS width is roughly 40% of the card. */
-.flare__rays {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: min(120%, 1100px);
-  aspect-ratio: 1;
-  transform: translate(-50%, -50%);
-  opacity: 0.26;
-  background: repeating-conic-gradient(
-    from 0deg,
-    color-mix(in srgb, var(--accent) 30%, transparent) 0deg 1.1deg,
-    transparent 1.1deg 20deg
-  );
-  filter: blur(0.6px);
-  -webkit-mask: radial-gradient(circle, #000 0%, transparent 34%);
-  mask: radial-gradient(circle, #000 0%, transparent 34%);
-  animation: flare-spin 80s linear infinite;
-}
-
-/* The streak: the one hard-edged element, blurred just enough to read as a
-   lens artefact instead of a rule. */
-.flare__streak {
-  position: absolute;
-  left: -10%;
-  right: -10%;
-  top: 50%;
-  height: 2px;
-  transform: translateY(-50%);
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--accent) 30%, transparent) 32%,
-    color-mix(in srgb, var(--accent) 52%, transparent) 50%,
-    color-mix(in srgb, var(--accent) 30%, transparent) 68%,
-    transparent
-  );
-  filter: blur(1.5px);
-  animation: flare-drift 12s ease-in-out infinite;
-}
-
-@keyframes flare-breathe {
-  0%,
-  100% {
-    opacity: 0.82;
-    transform: translate(-50%, -50%) scale(1);
-  }
-  50% {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1.07);
-  }
-}
-
-@keyframes flare-spin {
-  to {
-    transform: translate(-50%, -50%) rotate(360deg);
-  }
-}
-
-@keyframes flare-drift {
-  0%,
-  100% {
-    opacity: 0.5;
-    transform: translateY(-50%) scaleX(0.92);
-  }
-  50% {
-    opacity: 0.9;
-    transform: translateY(-50%) scaleX(1.04);
-  }
-}
-
-/* A still flare is still a flare: reduced motion keeps the picture and drops
-   every animation. */
-@media (prefers-reduced-motion: reduce) {
-  .flare__core,
-  .flare__rays,
-  .flare__streak {
-    animation: none;
-  }
 }
 
 .home-hero__word {
@@ -175,13 +89,36 @@
   text-align: center;
   color: var(--ink);
   margin-right: -0.14em; /* pull back the trailing tracking */
-  /* Lit by the flare behind it: two crimson halos, wide and soft, so the
-     letters read as standing in the light rather than wearing a drop
-     shadow. Solid ink, never a gradient fill -- the wordmark has to stay
-     legible at every size. */
+  /* The fallback's own light: two wide, soft crimson halos, for the visitors
+     who get no canvas (no WebGPU, or reduced motion). */
   text-shadow:
     0 0 18px color-mix(in srgb, var(--accent) 26%, transparent),
     0 0 54px color-mix(in srgb, var(--accent) 38%, transparent);
+}
+
+/* WIREFRAME. The wordmark is drawn as outlines, matching the line art the
+   flare actually lights -- wordmark-raster.ts strokes these same letters for
+   the shader, so the visible type and the light source are now the same
+   drawing rather than a solid word with a lit ghost behind it.
+   Guarded by @supports, and this is not pedantry: the rule sets `color:
+   transparent`, so in an engine without -webkit-text-stroke the whole
+   wordmark would simply disappear. The stroke is in `em` so it holds its
+   weight across the clamp()ed type scale. */
+@supports (-webkit-text-stroke: 1px black) {
+  .home-hero__word {
+    color: transparent;
+    -webkit-text-stroke: max(1px, 0.013em) var(--ink);
+  }
+}
+
+/* Lit by the canvas. The heading keeps its ink -- it is the real wordmark,
+   selectable and readable, and the flare only lights it -- but it drops the
+   CSS halo, because the canvas is now drawing a better one. An earlier
+   version made the ink transparent and let the shader paint the letters too;
+   premultiplied over grey that came out as a second, darker set of letters
+   behind the real ones. */
+.home-hero__word--lit {
+  text-shadow: none;
 }
 
 .home-hero__tagline {
