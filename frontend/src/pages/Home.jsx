@@ -159,14 +159,23 @@ function Home() {
 
   return (
     <>
+      {/* The hero. It carried a title and a four-line lede until 2026-09-02,
+          when the owner replaced both with the wordmark over a crimson flare
+          and had the lede dropped outright (that copy still lives on About).
+          The flare is three CSS layers, not the canvas component that
+          inspired it -- that component's renderer file was never supplied,
+          and gradients plus two keyframes get the same picture with no
+          script, no dependency and nothing to pause when the tab hides. */}
       <section className="home-hero page-shell" aria-label="Introduction">
-        <h1 className="home-hero__title">A name you can check</h1>
-        <p className="home-hero__lede">
-          Orthonym translates SMILES into IUPAC names with a deterministic, rule-based engine
-          &mdash; not a language model. Every result carries the rule that earned it, so you can
-          see whether it is a verified Preferred IUPAC Name, a verified fallback, an unverified
-          best effort, or an honest refusal.
-        </p>
+        <span className="flare" aria-hidden="true">
+          <span className="flare__core" />
+          <span className="flare__rays" />
+          <span className="flare__streak" />
+        </span>
+
+        <h1 className="home-hero__word">Orthonym</h1>
+
+        <p className="home-hero__tagline">Verified IUPAC names for Chemical Structures</p>
       </section>
 
       <main className="workbench" aria-label="Translate SMILES to IUPAC names">
@@ -246,39 +255,6 @@ function Home() {
         )}
       </main>
 
-      {/* The accuracy band, on the page where people submit molecules rather
-          than only on About. One edge-to-edge bento: an intro cell welded to
-          the three figures, so the width carries real content instead of a
-          void. These are Orthonym v1.0.0's published figures (its README
-          § Accuracy), the same ones About cites — never rounded up, and never
-          split per-corpus, because v1.0.0 publishes no per-corpus breakdown. */}
-      <section className="home-accuracy" aria-label="Measured accuracy">
-        <div className="home-accuracy__intro">
-          <h2 className="home-accuracy__title">How accurate is it?</h2>
-          <p className="home-accuracy__note">
-            Deterministic, so the same input always gives the same output. Its stated priority is
-            never to emit a name for the wrong molecule &mdash; a refusal counts as a failure
-            here, so the figure is not flattered by abstentions.
-          </p>
-          <p className="home-accuracy__source">
-            Orthonym v1.0.0 &middot; 1,500-molecule round-trip benchmark (ChEBI + PubChem)
-          </p>
-        </div>
-        <div className="home-accuracy__stats">
-          <div className="home-accuracy__cell">
-            <span className="spec__value">94.8%</span>
-            <span className="spec__label">Round-trip exact match</span>
-          </div>
-          <div className="home-accuracy__cell">
-            <span className="spec__value">0</span>
-            <span className="spec__label">Wrong structures emitted</span>
-          </div>
-          <div className="home-accuracy__cell">
-            <span className="spec__value">1,500</span>
-            <span className="spec__label">Molecules benchmarked</span>
-          </div>
-        </div>
-      </section>
     </>
   )
 }
