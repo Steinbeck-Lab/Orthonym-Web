@@ -173,19 +173,25 @@ export default function ConfidenceLegend() {
   }, [])
 
   return (
-    <aside
-      ref={bandRef}
-      className={revealed ? 'key-band key-band--in' : 'key-band'}
-      aria-label="What the confidence marks mean"
-    >
-      {/* A caption, not a headline. A display-size title plus a two-line lede
+    /* The shell exists so the band has something to refract. backdrop-filter
+       blurs what is BEHIND an element, so the bloom cannot be a child of the
+       glass -- it is a sibling underneath it. The shell also owns the width,
+       because the band is now the translucent layer and nothing more. */
+    <div className="key-shell">
+      <span className="key-shell__bloom" aria-hidden="true" />
+      <aside
+        ref={bandRef}
+        className={revealed ? 'key-band key-band--in' : 'key-band'}
+        aria-label="What the confidence marks mean"
+      >
+        {/* A caption, not a headline. A display-size title plus a two-line lede
           made this box 434px tall to say five short things -- a key earns its
           space by being scannable, not by announcing itself. */}
-      <p className="key-band__caption">
-        The mark under every name, strongest first
-      </p>
+        <p className="key-band__caption">
+          The mark under every name, strongest first
+        </p>
 
-      <ol className="key-band__rungs">
+        <ol className="key-band__rungs">
         {TIERS.map((tier, index) => (
           <li
             className={`rung rung--${tier.key}`}
@@ -200,7 +206,8 @@ export default function ConfidenceLegend() {
             <p className="rung__body">{tier.body}</p>
           </li>
         ))}
-      </ol>
-    </aside>
+        </ol>
+      </aside>
+    </div>
   )
 }

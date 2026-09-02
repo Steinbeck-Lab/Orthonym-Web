@@ -268,16 +268,43 @@
 
 /* Every result card is the same width — a uniform 2-up grid, no wider
    feature cell. */
+/* Nothing to show yet: ONE centred column, generous, rather than a narrow
+   card pinned to the left of an empty 1372px cell. This width also carries
+   the structure editor, which is what the old Draw-tab grid flip existed to
+   do -- and that flip is gone, because it resized the card on every tab
+   switch. */
+.workbench__input {
+  width: min(100%, 1100px);
+  margin-inline: auto;
+}
+
+/* The field area is a FIXED height across all three tabs. This is the actual
+   "do not grow as I switch tabs" fix: the textarea is ~200px, the file field
+   plus its preview ~120px, the Ketcher iframe 460px, so without a floor the
+   card jumped 161px between Upload and Paste and 147px again on Draw. The
+   textarea stretches into the space instead of leaving it blank. */
+.workbench__input .field:first-of-type {
+  display: flex;
+  flex-direction: column;
+  min-height: 500px;
+}
+
+.workbench__input .field:first-of-type .field__control {
+  flex: 1;
+  min-height: 0;
+}
+
 @media (min-width: 1000px) {
-  .workbench {
-    grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+  /* Results exist, so the workspace splits. Evenly, not 4fr/8fr: the input
+     side has to keep enough width for the structure editor, which is why the
+     old layout had to flip the grid for Draw. */
+  .workbench--split {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
-  /* On the Draw tab the split flips: the editor takes the wide cell and the
-     results take the narrow one. Same reason /explain has .workspace--draw --
-     Ketcher's toolbars and canvas are unusable in a 4fr column. */
-  .workbench--draw {
-    grid-template-columns: minmax(0, 8fr) minmax(0, 4fr);
+  .workbench--split .workbench__input {
+    width: 100%;
+    margin-inline: 0;
   }
 
   .workbench__alert {
@@ -301,20 +328,88 @@
    drawn, and a dashed rule drawing dash by dash explains "dashed" better
    than any caption. */
 
-.key-band {
-  /* Narrower than the working cards, and centred. A key is reference material,
-     not a work surface: at the full 2200px column its five rungs sprawled and
-     it read as another panel of the app rather than a legend under it.
-     It sizes ITSELF rather than wearing `page-shell`, which caps at
-     --shell-max with equal specificity -- a max-width here lost the cascade
-     to it and the band stayed 2200px wide. */
+/* The shell owns the width and holds the bloom the glass refracts.
+   Narrower than the working cards, and centred: a key is reference material,
+   not a work surface, and at the full 2200px column its five rungs sprawled.
+   It sizes itself rather than wearing `page-shell`, which caps at
+   --shell-max with equal specificity -- a max-width there lost the cascade
+   and the band stayed 2200px wide. */
+.key-shell {
+  position: relative;
   width: min(100% - 2 * var(--shell-pad), 1400px);
   margin-inline: auto;
+}
+
+/* The reason the glass is allowed to exist. A frosted panel with nothing
+   behind it is just murkier white for the price of a backdrop-filter, so the
+   crimson sits UNDER the band and the blur has something to bend. It is a
+   sibling, not a child: backdrop-filter blurs what is behind an element, and
+   a child would be in front of it. */
+.key-shell__bloom {
+  position: absolute;
+  /* Reaching WELL past the band, which is the whole point. A bloom confined
+     under the panel is invisible: 72% white over 18% crimson is #f2eaed, and
+     the first attempt read as faintly warm off-white for the price of a
+     backdrop-filter. The light that sells it is the part OUTSIDE the glass,
+     spilling onto the grey ground at full strength, with the panel floating
+     in the middle of it. */
+  inset: -85% -8%;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 62% 58% at 50% 52%,
+    color-mix(in srgb, var(--accent) 26%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 12%, transparent) 42%,
+    color-mix(in srgb, var(--accent) 4%, transparent) 66%,
+    transparent 82%
+  );
+  filter: blur(48px);
+}
+
+/* The glass. 72% white over an 18% crimson bloom was chosen by MEASURING the
+   composite, not by eye: at those values --muted body text lands at 4.9:1 on
+   the effective background (#f2eaed-ish), clear of the 4.5:1 floor, while
+   --muted-soft failed at every combination tried -- which is why the rung
+   ordinals moved to --muted. */
+.key-band {
+  position: relative;
+  z-index: 1;
   padding: var(--s-sm) clamp(var(--s-md), 2vw, var(--s-lg)) var(--s-md);
-  background: var(--card);
+  background: color-mix(in srgb, #ffffff 72%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  backdrop-filter: blur(16px) saturate(1.15);
   border-radius: var(--r-card);
-  box-shadow: var(--card-shadow);
-  border: var(--card-border);
+  box-shadow: var(--glass-shadow);
+  border: 1px solid color-mix(in srgb, #ffffff 55%, transparent);
+}
+
+/* Without backdrop-filter, a translucent panel over a crimson bloom is not
+   glass -- it is a pink smear. Both of these fall back to the plain card and
+   drop the bloom entirely. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .key-band {
+    background: var(--card);
+    box-shadow: var(--card-shadow);
+    border: var(--card-border);
+  }
+
+  .key-shell__bloom {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .key-band {
+    background: var(--card);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: var(--card-shadow);
+    border: var(--card-border);
+  }
+
+  .key-shell__bloom {
+    display: none;
+  }
 }
 
 .key-band__caption {
@@ -365,7 +460,11 @@
   font-family: var(--font-mono);
   font-size: var(--t-caption);
   letter-spacing: var(--track-caption);
-  color: var(--muted-soft);
+  /* --muted, not --muted-soft. Measured over the glass: --muted-soft is
+     4.61:1 on pure white and fails 4.5:1 at EVERY bloom/glass combination
+     tried, because any tint eats its 0.11 of headroom. Its own token comment
+     says "CANVAS ONLY" for this reason. */
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
   transition: color 0.24s cubic-bezier(0.16, 1, 0.3, 1);
 }
