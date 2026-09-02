@@ -464,11 +464,6 @@ function Home() {
           </p>
         )}
 
-        {/* The input CELL: the card, and the info notch welded under it. One
-            grid cell rather than two, so the notch and its drawer are the
-            card's width by construction -- the key used to be a free box
-            below the whole workbench, measured against nothing on the page. */}
-        <div className="input-col">
         <section className="workbench__input" aria-label="Translate a SMILES string">
           {/* Two ways in, one card. The tabs are radios rather than buttons
               so a keyboard gets arrow-key movement for free and the current
@@ -644,9 +639,6 @@ function Home() {
               links to, on a screen that has to hold everything. */}
         </section>
 
-        <ConfidenceLegend />
-        </div>
-
         {job ? (
           <BatchResults job={job} onForget={startAnother} />
         ) : hasResults ? (
@@ -658,6 +650,9 @@ function Home() {
                      directly above it -- on a page that has to fit one
                      screen, that space belongs to the working area. */}
       </main>
+
+      <ConfidenceLegend />
+
     </>
   )
 }
