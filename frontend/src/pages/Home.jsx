@@ -5,6 +5,7 @@ import ConfidenceLegend from '../components/ConfidenceLegend'
 import Dropzone from '../components/Dropzone'
 import BatchResults from '../components/BatchResults'
 import Switch from '../components/Switch'
+import Icon from '../components/Icon'
 import {
   createJob,
   fetchExamples,
@@ -616,10 +617,12 @@ function Home() {
 
             <div className="workbench__actions">
               <button type="submit" className="btn btn--accent" disabled={isSubmitting}>
+                <Icon name="translate" />
                 {submitLabel}
               </button>
               {job && (
                 <button type="button" className="btn" onClick={startAnother}>
+                  <Icon name="plus" />
                   New batch
                 </button>
               )}
