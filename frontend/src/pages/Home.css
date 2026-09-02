@@ -490,11 +490,17 @@
   z-index: 1;
   display: inline-flex;
   align-items: center;
-  gap: 1.1ch;
+  gap: 1.4ch;
   height: var(--info-notch-h);
   margin-top: -1px;
   margin-right: clamp(var(--s-xl), 4vw, 72px);
-  padding-inline: var(--s-md);
+  /* Wide enough that --r-notch reads as two corners on a shelf rather than
+     as one lozenge: at 82px the two 24px arcs met in the middle and the tab
+     had no flat bottom edge at all. The header's island has the same radius
+     over a much longer run, which is why it reads as a shelf. */
+  padding-inline: var(--s-lg);
+  min-width: 148px;
+  justify-content: center;
   background: var(--card);
   border: 0;
   border-end-start-radius: var(--r-notch);
@@ -522,33 +528,14 @@
   line-height: 1;
 }
 
-/* The fillet, mirrored from .notch__wing. A square of card-white with a
-   quarter-disc masked out, leaving a concave arc that sweeps from the
-   island's side up to the card's bottom edge. The mask circle sits at the
-   square's TOP corner nearest the island (the header puts it at the bottom,
-   because its islands hang the other way up), so the white that survives
-   hugs both the card's edge and this tab. 98%/100% rather than a hard stop:
-   one soft pixel is what keeps the arc from stair-stepping. */
-.info__wing {
-  position: absolute;
-  top: 0;
-  width: var(--notch-wing);
-  height: var(--notch-wing);
-  background: var(--card);
-  pointer-events: none;
-}
-
-.info__wing--left {
-  right: 100%;
-  -webkit-mask: radial-gradient(circle var(--notch-wing) at 0 0, transparent 98%, #000 100%);
-  mask: radial-gradient(circle var(--notch-wing) at 0 0, transparent 98%, #000 100%);
-}
-
-.info__wing--right {
-  left: 100%;
-  -webkit-mask: radial-gradient(circle var(--notch-wing) at 100% 0, transparent 98%, #000 100%);
-  mask: radial-gradient(circle var(--notch-wing) at 100% 0, transparent 98%, #000 100%);
-}
+/* The fillets are .notch__wing from App.css, used as-is. See the note in
+   ConfidenceLegend.jsx: the header's islands and this one both hang downward
+   from their edge, so the concave sweep is identical and there is nothing to
+   mirror. .info__notch is position: relative so they anchor to it, which is
+   the only thing this surface has to provide.
+   Two consequences worth stating: --notch-wing is BOTH the fillet's size and
+   its arc radius (one token, by definition), so the tab must stay inset from
+   the card's right edge by more than 20px or the right fillet hangs off it. */
 
 /* --- the bulb ------------------------------------------------------- */
 
