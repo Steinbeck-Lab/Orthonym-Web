@@ -1641,8 +1641,15 @@ input.field__control {
      it. A target does not get more inviting past a certain size; it just
      gets emptier. */
   max-height: 380px;
-  align-self: center;
   width: 100%;
+  /* CENTRED in the slot, on the MAIN axis. align-self: center was here and
+     did nothing useful: the field slot is a column flex, so align-self is
+     the horizontal axis and the zone is already width: 100%. The vertical
+     axis is the main one, where a flex item with flex: 1 and a max-height
+     takes its 380px and sits at the START -- measured 23px of slot above the
+     zone against 342px below it. Auto margins on the main axis are what
+     centre a flex item. */
+  margin-block: auto;
   /* And it SCROLLS when the slot is shorter than the face. The field slot
      around it is overflow: hidden (so a Ketcher iframe cannot blow the
      one-screen budget), which means anything taller than the slot is not
@@ -1735,11 +1742,12 @@ input.field__control {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  /* Air, deliberately. This face had been squeezed to a 6px rhythm chasing
-     vertical budget, and five lines 6px apart read as a paragraph rather
-     than a composition. The plate, the lead and the button each get their
-     own space; the two quiet lines stay close to what they qualify. */
-  gap: var(--s-xs);
+  /* No gap: every step is set on the element that needs it, because the
+     rhythm here is deliberately UNEVEN. One repeated gap is what made five
+     lines read as a paragraph -- the plate wants a lot of air under it, the
+     format line wants to sit tight under the lead it qualifies, and the
+     button wants its own space again. */
+  gap: 0;
   min-width: 0;
   padding: var(--s-lg);
   text-align: center;
@@ -1764,9 +1772,9 @@ input.field__control {
   position: relative;
   display: grid;
   place-items: center;
-  width: 54px;
-  height: 46px;
-  margin-bottom: var(--s-sm);
+  width: 76px;
+  height: 62px;
+  margin-bottom: var(--s-lg);
   background: var(--card);
   border: 1px solid var(--hairline-strong);
   border-radius: 13px;
@@ -1778,8 +1786,8 @@ input.field__control {
 
 .dropzone__plate svg {
   display: block;
-  width: 22px;
-  height: 22px;
+  width: 30px;
+  height: 30px;
 }
 
 /* The two plates behind. Scaled OUT rather than offset, so the stack reads
@@ -1795,13 +1803,14 @@ input.field__control {
 }
 
 .dropzone__plate::before {
-  inset: -5px -7px;
+  inset: -7px -11px;
+  border-radius: 17px;
   opacity: 0.85;
 }
 
 .dropzone__plate::after {
-  inset: -10px -14px;
-  border-radius: 18px;
+  inset: -14px -22px;
+  border-radius: 21px;
   opacity: 0.5;
 }
 
@@ -1822,9 +1831,12 @@ input.field__control {
 
 .dropzone__lead {
   font-family: var(--font-display);
-  /* A step down. At 1.75rem this was the largest type on the page after the
-     wordmark, for a sentence nobody needs to read twice. */
-  font-size: clamp(1.05rem, 1.2vw, 1.3rem);
+  /* Back up, and by SIZE rather than weight: the reference sets this line
+     bold, and DESIGN.md allows exactly three bold exceptions in the whole
+     system -- the stat figures, the route labels and the six hero letters.
+     A fourth would cost more than the resemblance is worth, so the presence
+     comes from scale instead. */
+  font-size: clamp(1.3rem, 1.55vw, 1.7rem);
   letter-spacing: 0.04em;
   color: var(--ink);
   /* A dropped filename can be anything at all. */
@@ -1837,6 +1849,9 @@ input.field__control {
    reader had to parse). It is a list of file extensions; it should read like
    one being mentioned in passing. */
 .dropzone__formats {
+  /* Tight under the lead it qualifies: 4px, against the 24px the button
+     gets below it. */
+  margin-top: 4px;
   font-family: var(--font-body);
   font-size: var(--t-body-sm);
   line-height: 1.5;
@@ -1844,12 +1859,20 @@ input.field__control {
 }
 
 .dropzone__note {
-  margin-top: var(--s-xs);
-  max-width: 48ch;
+  margin-top: var(--s-md);
+  max-width: 54ch;
   font-family: var(--font-body);
   font-size: var(--t-body-sm);
   line-height: 1.5;
   color: var(--muted);
+}
+
+/* The column name is a literal, so it is set as one -- but quietly, inside a
+   sentence that is already the faintest thing on the face. */
+.dropzone__note code {
+  font-family: var(--font-mono);
+  font-size: 0.94em;
+  color: var(--body-strong);
 }
 
 /* An explicit control, because "the whole area is clickable" is a thing you
@@ -1861,8 +1884,8 @@ input.field__control {
   display: inline-flex;
   align-items: center;
   gap: 0.9ch;
-  margin-top: var(--s-sm);
-  padding: 8px 20px;
+  margin-top: var(--s-lg);
+  padding: 10px 22px;
   font-family: var(--font-mono);
   font-size: var(--t-caption);
   letter-spacing: var(--track-caption);
