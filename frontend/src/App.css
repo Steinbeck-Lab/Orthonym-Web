@@ -1217,21 +1217,24 @@ input.field__control {
   gap: var(--s-xs);
 }
 
-/* THE TOGGLE, in the same glass the buttons wear.
-   It was machined until 2026-09-02 -- a hard 0-radius track with a square
-   knob -- which was right while every button was a flat 0-radius outline.
-   Once the buttons became deeply round glossy pills, this rectangle was the
-   only control left disagreeing with the rest of the interface.
+/* THE ROCKER. Ported by shape from a toggle the owner pinned (21st.dev,
+   Ravi Katiyar), no code: a moulded light-grey well with an inset rim, a
+   near-black paddle with two grip lines down its middle, and a pair of
+   indicator lamps flanking the track with the live side lit.
+   Two earlier versions are named in Switch.jsx because both are the obvious
+   thing to reach for again -- a machined 0-radius box, and an iOS pill that
+   matched the buttons so closely it stopped reading as a switch.
    State is carried FOUR ways and colour is never one of them alone: the
-   knob's position, the track's fill, a check inside the knob, and the mono
-   state word beside it. */
+   paddle's position, which lamp is lit, that lamp's filled-vs-hollow shape,
+   and the mono state word beside it. */
 
 .switch {
   display: inline-flex;
   align-items: center;
   gap: var(--s-sm);
   align-self: flex-start;
-  /* The visible track is 28px tall; the button keeps a 44px target. */
+  /* The visible well is 18px tall; the button keeps a 44px target, which is
+     what makes a control this small still comfortable to hit. */
   min-height: 44px;
   padding: 0;
   background: transparent;
@@ -1255,120 +1258,122 @@ input.field__control {
   outline: none;
 }
 
-.switch:focus-visible .switch__track {
+.switch:focus-visible .switch__well {
   outline: 2px solid var(--accent);
-  outline-offset: 3px;
+  outline-offset: 2px;
 }
 
-.switch__track {
+/* --- the well ---------------------------------------------------------
+   Moulded, not glass: a light inner face sunk inside a slightly darker rim,
+   with the shadow falling INWARD. The buttons are the glass in this system;
+   a control you push should look like it can be pushed into something. */
+.switch__well {
   position: relative;
   flex: none;
-  overflow: hidden;
-  isolation: isolate;
-  width: 52px;
-  height: 28px;
-  /* OFF: a neutral frosted pill. NOT a crimson-tinted one -- a switch whose
-     off state already carries the accent reads as half-on.
-     The border is --muted-soft rather than a hairline on purpose: WCAG 1.4.11
-     wants 3:1 for the boundary that identifies a control, and
-     --hairline-strong is 1.53:1 against a white card. --muted-soft is 4.61:1.
-     Its "CANVAS ONLY" token note is about TEXT contrast on a surface, which
-     this is not. */
-  background: var(--card-soft);
-  border: 1px solid var(--muted-soft);
+  /* HALF the size it shipped at, by instruction ("too big, reduce to 50%").
+     Every number below is halved with it -- the paddle, its throw, the grip,
+     the lamps and the rim -- because a rocker that keeps its paddle while
+     the well shrinks stops being a rocker. */
+  width: 48px;
+  height: 18px;
+  background: var(--surface-soft);
+  /* The rim, and it is a 2px border rather than a hairline for the same
+     reason the old track's was: WCAG 1.4.11 wants 3:1 for the boundary that
+     identifies a control, and --hairline-strong is 1.53:1 on a white card.
+     --surface-elevated reads as moulding while the inset shadow below is
+     what actually draws the edge. */
+  border: 1px solid var(--surface-elevated);
   border-radius: var(--r-pill);
-  box-shadow: inset 0 1px 2px rgba(17, 18, 20, 0.06);
+  box-shadow:
+    inset 0 1px 2px rgba(17, 18, 20, 0.16),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.7);
+}
+
+/* --- the paddle -------------------------------------------------------
+   A near-black rounded slab filling most of the well's height and a little
+   under half its width, which is what makes this read as a rocker rather
+   than a knob in a groove. --card-dark gets a consumer again: DESIGN.md
+   records that nothing had used it since Home's accuracy band was removed. */
+.switch__paddle {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 22px;
+  height: 14px;
+  background: var(--card-dark);
+  border-radius: 7px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 1px 2px rgba(17, 18, 20, 0.4),
+    0 2px 5px -2px rgba(17, 18, 20, 0.35);
+  /* Transform only, so the slide composites. Ease-out-quart rather than the
+     expo the colours use: expo front-loads nearly the whole curve, and on a
+     46px throw that reads as a snap instead of a movement. */
+  transition: transform 0.34s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* 48 - 1 - 1 - 22 = 24, less the 1px left inset already applied. */
+.switch--on .switch__paddle {
+  transform: translateX(23px);
+}
+
+/* THE GRIP: two vertical lines down the paddle's middle, drawn as the left
+   and right borders of a small centred box. A moulded texture, not a
+   symbol -- which is why it is CSS and not an icon. */
+.switch__paddle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 7px;
+  border-left: 1px solid rgba(255, 255, 255, 0.24);
+  border-right: 1px solid rgba(255, 255, 255, 0.24);
+  transform: translate(-50%, -50%);
+}
+
+/* --- the lamps --------------------------------------------------------
+   One per side, outside the well. The live one is FILLED and glowing, the
+   other a hollow ring: the state survives the colour being taken away,
+   which is the rule.
+   Crimson on both sides, not the reference's red-for-off and green-for-on.
+   That would be two new hues in a system with exactly one accent, and it
+   would say that turning best-effort OFF is an error -- when off is the
+   stricter setting. */
+.switch__lamp {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid var(--muted-soft);
   transition:
     background-color 0.22s cubic-bezier(0.16, 1, 0.3, 1),
     border-color 0.22s cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* ON: exactly .btn--accent's treatment -- 90% crimson glass, the lit upper
-   edge, a tinted lift. The two controls now read as the same material. */
-.switch--on .switch__track {
-  background: color-mix(in srgb, var(--accent) 90%, transparent);
-  -webkit-backdrop-filter: blur(10px) saturate(1.6);
-  backdrop-filter: blur(10px) saturate(1.6);
-  border-color: color-mix(in srgb, var(--accent) 94%, transparent);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    0 1px 2px rgba(138, 20, 40, 0.14),
-    0 6px 14px -6px rgba(138, 20, 40, 0.4);
+.switch__lamp--off {
+  margin-right: -6px;
 }
 
-/* The lit upper edge, on the ON state only -- there is no glass to catch
-   light while the track is a flat grey. */
-.switch__track::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto;
-  height: 54%;
-  background: linear-gradient(
-    to bottom,
-    rgba(255, 255, 255, 0.24),
-    rgba(255, 255, 255, 0)
-  );
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+.switch__lamp--on {
+  margin-left: -6px;
 }
 
-.switch--on .switch__track::before {
-  opacity: 1;
-}
-
-.switch__knob {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  background: var(--card);
-  border-radius: 50%;
-  box-shadow:
-    0 1px 2px rgba(17, 18, 20, 0.2),
-    0 2px 6px -2px rgba(17, 18, 20, 0.18);
-  color: var(--accent);
-  /* Transform only, so the slide composites. Ease-out-quart rather than the
-     expo the colours use: expo front-loads almost the whole curve, and on a
-     24px slide that reads as a snap. */
-  transition: transform 0.32s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-/* 52 - 2 - 2 - 22 = 26. */
-.switch--on .switch__knob {
-  transform: translateX(26px);
-}
-
-/* The check scales in behind the knob's own travel, so it arrives after the
-   knob has committed rather than riding along with it. */
-.switch__knob .icon {
-  margin: 0;
-  animation: knob-check 260ms cubic-bezier(0.25, 1, 0.5, 1) 90ms both;
-}
-
-@keyframes knob-check {
-  from {
-    opacity: 0;
-    transform: scale(0.5);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
+.switch:not(.switch--on) .switch__lamp--off,
+.switch--on .switch__lamp--on {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 5px color-mix(in srgb, var(--accent) 65%, transparent);
 }
 
 .switch__label {
   color: inherit;
 }
 
-/* The state IN WORDS. It is the signal that survives when position and fill
-   cannot be compared against anything. */
+/* The state IN WORDS. It is the signal that survives when position, paddle
+   and lamp cannot be compared against anything. */
 .switch__state {
   color: var(--ink);
 }
@@ -1378,60 +1383,39 @@ input.field__control {
   color: var(--hairline-strong);
 }
 
-/* Disabled is FLAT, like the buttons: no glass, no lift, no glow. */
-.switch:disabled .switch__track {
+/* Disabled: the lamps go out and the paddle goes grey. Nothing lit, nothing
+   lifted -- the same rule the buttons follow. */
+.switch:disabled .switch__well {
   background: var(--surface-card);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+  border-color: var(--surface-card);
+  box-shadow: inset 0 1px 2px rgba(17, 18, 20, 0.08);
+}
+
+.switch:disabled .switch__paddle {
+  background: var(--hairline-strong);
+  box-shadow: none;
+}
+
+.switch:disabled .switch__paddle::after {
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+.switch:disabled .switch__lamp {
+  background: transparent;
   border-color: var(--hairline-strong);
   box-shadow: none;
-}
-
-.switch:disabled .switch__track::before {
-  opacity: 0;
-}
-
-.switch:disabled .switch__knob {
-  background: var(--surface-soft);
-  box-shadow: none;
-  color: var(--hairline-strong);
 }
 
 .switch:disabled .switch__state {
   color: var(--hairline-strong);
 }
 
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .switch--on .switch__track {
-    background: var(--accent);
-    border-color: var(--accent);
-  }
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  .switch--on .switch__track {
-    background: var(--accent);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-    border-color: var(--accent);
-  }
-
-  .switch__track::before {
-    display: none;
-  }
-}
-
-/* Reduced motion keeps every STATE -- the fill, the knob's position, the
-   check -- and drops the travel. */
+/* Reduced motion keeps every STATE -- the paddle's side, the lit lamp, the
+   word -- and drops the travel. */
 @media (prefers-reduced-motion: reduce) {
-  .switch__track,
-  .switch__track::before,
-  .switch__knob {
+  .switch__paddle,
+  .switch__lamp {
     transition: none;
-  }
-
-  .switch__knob .icon {
-    animation: none;
   }
 }
 
@@ -1444,13 +1428,6 @@ input.field__control {
   font-size: var(--t-body-sm);
   line-height: 1.5;
   color: var(--muted);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .switch__track,
-  .switch__knob {
-    transition: none;
-  }
 }
 
 /* -------------------- example tags -------------------- */

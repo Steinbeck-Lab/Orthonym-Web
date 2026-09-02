@@ -1,24 +1,36 @@
-import Icon from './Icon'
-
 /**
- * A two-position switch, in the same glass the buttons wear.
+ * A two-position ROCKER, built as a piece of hardware.
  *
- * It was a MACHINED switch until 2026-09-02: a hard-edged 0-radius track
- * with a square knob, which was right while every button in the system was
- * a flat 0-radius outline. Once the buttons became deeply round glossy
- * pills, the rectangle was the only control left disagreeing with the rest
- * of the interface -- so the track is now a pill that fills with crimson
- * glass, and the knob is a circle that slides.
+ * Ported by shape from a toggle the owner pinned (21st.dev, Ravi Katiyar);
+ * none of its code is here. That reference is not an iOS pill -- it is a
+ * moulded rocker: a light grey well with an inset rim, a near-black paddle
+ * with two grip lines down its middle, and a pair of indicator lamps
+ * FLANKING the track, the one on the live side lit.
+ *
+ * Two intermediate versions were wrong and are worth naming, because both
+ * are the obvious thing to reach for again. The first was machined -- a hard
+ * 0-radius track with a square knob -- which was right while every button
+ * in the system was a flat 0-radius outline, and stopped being right the
+ * moment the buttons became round glossy pills. The second was an iOS pill:
+ * a circle knob sliding in a crimson glass track, matching the buttons. It
+ * matched them so well that it stopped being a switch and started being a
+ * small button.
+ *
+ * The lamps light in CRIMSON on both sides rather than red-for-off and
+ * green-for-on. The reference does the latter; here it would mean two new
+ * hues in a system with exactly one accent, and it would say that turning
+ * best-effort OFF is an error -- when off is the stricter, more conservative
+ * setting. The lamp marks which side is live, which is all it has to do.
  *
  * Built as a real <button role="switch"> rather than a styled checkbox, so
  * the accessible name, the state and keyboard operation all come from the
  * platform. Space and Enter both toggle it for free.
  *
- * THE STATE IS CARRIED THREE WAYS, and that is deliberate: knob POSITION,
- * the track's fill, and a mono state word beside it -- plus a check inside
- * the knob as a fourth. Colour is never the only signal (DESIGN.md), and a
- * switch that relied on position alone is unreadable to anyone who cannot
- * compare it against a second switch in the other state.
+ * THE STATE IS CARRIED FOUR WAYS, and colour is never one of them alone
+ * (DESIGN.md): the paddle's POSITION, which LAMP is lit, the lamp's own
+ * filled-vs-hollow shape, and the mono state word beside it. A switch that
+ * relied on position alone is unreadable to anyone who cannot compare it
+ * against a second switch in the other state.
  */
 export default function Switch({ id, checked, onChange, disabled, label, hint, onWord, offWord }) {
   const hintId = hint ? `${id}-hint` : undefined
@@ -35,13 +47,16 @@ export default function Switch({ id, checked, onChange, disabled, label, hint, o
         onClick={() => onChange(!checked)}
         className={`switch${checked ? ' switch--on' : ''}`}
       >
-        <span className="switch__track" aria-hidden="true">
-          <span className="switch__knob">
-            {/* Inside the knob, so it travels with it. aria-hidden by way of
-                Icon -- the state is already announced by aria-checked. */}
-            {checked && <Icon name="check" size={12} />}
-          </span>
+        {/* The lamps sit OUTSIDE the well, one per side, and the lit one
+            says which side is live. Filled-with-a-glow vs a hollow ring, so
+            the difference survives without colour. */}
+        <span className="switch__lamp switch__lamp--off" aria-hidden="true" />
+        <span className="switch__well" aria-hidden="true">
+          {/* The paddle. Its grip lines are drawn by CSS, not by an icon:
+              they are a moulded texture, not a symbol. */}
+          <span className="switch__paddle" />
         </span>
+        <span className="switch__lamp switch__lamp--on" aria-hidden="true" />
         <span className="switch__label">{label}</span>
         <span className="switch__state">{checked ? onWord : offWord}</span>
       </button>
