@@ -36,18 +36,25 @@ const TIERS = [
   // the label here too: a key should teach the vocabulary you will meet, not
   // a second longer one. The full tier names live on the result tiles.
   //
-  // One line each, and each one measured at the real row width.
+  // TWO lines each: what the tier IS, then how it got that way. The one-line
+  // version fitted, and it left every reader who did not already know the
+  // engine to guess at the mechanism -- "Verified" by what? The detail line
+  // is where the round-trip, the rule set and the abstain's formula get
+  // named, and it costs 50px across all five because the space it uses was
+  // empty panel on the right.
   {
     key: 'pin',
     ordinal: '01',
     label: 'PIN',
     body: 'Verified, and the preferred name.',
+    detail: 'OPSIN read the name back and got your structure.',
   },
   {
     key: 'fallback',
     ordinal: '02',
     label: 'FALLBACK',
-    body: 'Verified, not the preferred one.',
+    body: 'Verified, but not the preferred name.',
+    detail: 'Correct by the general rules, not the strict ones.',
   },
   {
     // "Could not confirm" and NOT "verification did not run", because it did.
@@ -63,13 +70,19 @@ const TIERS = [
     key: 'best-effort',
     ordinal: '03',
     label: 'UNVERIFIED',
-    body: 'OPSIN could not confirm it.',
+    body: 'A real name OPSIN could not confirm.',
+    // "The check ran" is the load-bearing half of this line, for the reason
+    // in the comment above.
+    detail: 'The check ran and failed. Best-effort mode only.',
   },
   {
     key: 'abstain',
     ordinal: '04',
     label: 'NO NAME',
-    body: 'The engine refused to guess.',
+    body: 'The engine declined rather than guess.',
+    // Only an abstain carries a formula (openstout_service.py sets it
+    // nowhere else), which is exactly why it is worth saying here.
+    detail: 'A molecular formula stands in for the name.',
   },
   {
     // Not only an unreadable SMILES: RDKit failing to parse gives this status
@@ -79,7 +92,8 @@ const TIERS = [
     key: 'error',
     ordinal: '05',
     label: 'BAD INPUT',
-    body: 'Unreadable input, or naming failed.',
+    body: 'The input could not be named.',
+    detail: 'RDKit refused it, or naming failed part-way.',
   },
 ]
 
@@ -237,7 +251,10 @@ export default function ConfidenceLegend() {
                 <span className="rung__ordinal">{tier.ordinal}</span>
                 <h3 className="rung__name">{tier.label}</h3>
                 <Specimen tier={tier.key} />
-                <p className="rung__body">{tier.body}</p>
+                <div className="rung__body">
+                  <p className="rung__line">{tier.body}</p>
+                  <p className="rung__detail">{tier.detail}</p>
+                </div>
               </li>
             ))}
           </ol>
