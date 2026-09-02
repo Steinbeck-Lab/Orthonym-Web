@@ -122,7 +122,10 @@ fn resolveDarkColor(radiance: vec3f) -> vec3f {
   // This is light behaving like ink, which is the honest reading of a light
   // leak on paper -- and it is the only version in which the ray structure
   // upstream computes is actually visible here.
-  let lit = clamp(max(grained.r, max(grained.g, grained.b)) * 1.05, 0.0, 1.0);
+  // The one knob for "how much flare". 1.05 read as too much on the page, so
+  // it is halved: the ray structure is unchanged, the veil it lays on the
+  // paper is half as dense.
+  let lit = clamp(max(grained.r, max(grained.g, grained.b)) * 0.52, 0.0, 1.0);
   let veil = mix(vec3f(1.0), params.flareColor, lit);
   let grainedVeil = clamp(
     veil - vec3f(grain * params.filmGrain * grainMask),
