@@ -1606,3 +1606,216 @@ input.field__control {
   border: 1px solid var(--hairline-strong);
   border-radius: var(--r-card-sm);
 }
+
+/* A native control that is invisible but still focusable and still the thing
+   that receives the click -- NEVER display: none, which would take it out of
+   the tab order and off the keyboard entirely, and never .sr-only either,
+   which does not set pointer-events and so would swallow the clicks meant
+   for the label on top of it. Two elements need exactly this: the input-tab
+   radios on Home and the drop zone's file input. It was written out twice,
+   byte for byte, in one file. */
+.input-tab input,
+.dropzone__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* -------------------- the drop zone -------------------- */
+/* The upload tab used to be a native "Choose File" button alone at the top
+   of a tall empty card: nothing said a file could be dragged, and a drag
+   from a file manager had nowhere to land. The whole slot is the target now.
+   The native input is still the mechanism -- hidden, never replaced -- so
+   the label, the keyboard and the platform picker all work as issued. */
+
+.dropzone {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  border-radius: var(--r-card-sm);
+  background: var(--card-soft);
+  /* Both composited, and both cheap: the zone lifts a little under a file
+     rather than redrawing a border. */
+  transition:
+    background-color 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dropzone--armed {
+  background: color-mix(in srgb, var(--accent) 5%, var(--card-soft));
+  transform: scale(1.006);
+}
+
+/* The seam. Inset by a pixel and allowed to overflow, so the stroke
+   straddles its own path the way a stroke should. */
+.dropzone__seam {
+  position: absolute;
+  inset: 1px;
+  /* Sized EXPLICITLY. An <svg> is a replaced element with an intrinsic
+     300x150, and for a replaced box `width: auto` takes that intrinsic size
+     rather than resolving from left/right -- so `inset` alone drew the seam
+     as a 300x150 rectangle in the corner of the zone. */
+  width: calc(100% - 2px);
+  height: calc(100% - 2px);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.dropzone__seam-line {
+  fill: none;
+  stroke: var(--hairline-strong);
+  stroke-width: 1.5;
+  /* 9 + 7 = 16, and the animation below travels exactly 32 -- two whole
+     stitches -- so the loop has no seam of its own. */
+  stroke-dasharray: 9 7;
+  transition:
+    stroke 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+    stroke-width 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* A file has landed, so the seam is CLOSED -- solid, and quiet again. The
+   same vocabulary the confidence rules use: dashed is provisional, solid is
+   settled. */
+.dropzone--loaded .dropzone__seam-line {
+  stroke: var(--ink);
+  stroke-dasharray: none;
+}
+
+/* Under a file, the seam is being sewn: the dashes run. Declared AFTER
+   --loaded on purpose -- same specificity, so the live state has to be the
+   later rule or dragging over a card that already holds a file would show
+   the settled seam instead of the running one. */
+.dropzone--armed .dropzone__seam-line {
+  stroke: var(--accent);
+  stroke-width: 2;
+  animation: seam-run 900ms linear infinite;
+}
+
+@keyframes seam-run {
+  to {
+    stroke-dashoffset: -32;
+  }
+}
+
+/* The label IS the target: it fills the zone, so a click anywhere opens the
+   picker and a drop anywhere lands. */
+.dropzone__face {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-xs);
+  min-width: 0;
+  padding: var(--s-lg);
+  text-align: center;
+  cursor: pointer;
+}
+
+.dropzone__input:focus-visible + .dropzone__face {
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
+  border-radius: var(--r-card-sm);
+}
+
+/* Three stitches, stacked. Not a cloud-with-an-arrow: this system's marks
+   are rules, and a stack of them reading down is the same figure the
+   confidence ladder uses. They spread apart under a file. */
+.dropzone__mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: var(--s-md);
+}
+
+.dropzone__mark-stroke {
+  display: block;
+  height: 3px;
+  background: var(--ink);
+  transition:
+    width 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dropzone__mark-stroke:nth-child(1) {
+  width: 72px;
+}
+
+.dropzone__mark-stroke:nth-child(2) {
+  width: 46px;
+}
+
+.dropzone__mark-stroke:nth-child(3) {
+  width: 22px;
+}
+
+/* Armed: the stack squares up into a landing pad, in the accent, because
+   this is chrome -- an interaction affordance -- and never a tier. */
+.dropzone--armed .dropzone__mark-stroke {
+  width: 72px;
+  background: var(--accent);
+}
+
+.dropzone__lead {
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 1.7vw, 1.75rem);
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  /* A dropped filename can be anything at all. */
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.dropzone__sub {
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  color: var(--muted);
+}
+
+.dropzone__formats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-xs);
+  margin-top: var(--s-xs);
+}
+
+.dropzone__formats code {
+  padding: 2px 7px;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  color: var(--body-strong);
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+}
+
+.dropzone__note {
+  max-width: 42ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* The zone is legible without any of the above: motion off, states stay. */
+@media (prefers-reduced-motion: reduce) {
+  .dropzone,
+  .dropzone__seam-line,
+  .dropzone__mark-stroke {
+    transition: none;
+  }
+
+  .dropzone--armed .dropzone__seam-line {
+    animation: none;
+  }
+
+  .dropzone--armed {
+    transform: none;
+  }
+}

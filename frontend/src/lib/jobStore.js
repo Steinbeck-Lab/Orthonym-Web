@@ -20,6 +20,13 @@
 // crashes because storage is unavailable would be a much worse bug than
 // forgetting a job.
 
+// The status vocabulary and the terminal test belong to batchJob.js -- this
+// module must not invent a second opinion about what "finished" means. The
+// extension is required: `node --test` resolves this file for real, and it
+// does not do Vite's extensionless lookup (svgHighlight.js is imported the
+// same way, for the same reason).
+import { isTerminal } from './batchJob.js'
+
 // v2, and the bump is the fix rather than housekeeping. v1 remembered a job
 // for as long as the server would keep it -- 24 hours -- so a FINISHED batch
 // came back on every reload, including a hard reload, which cannot clear
@@ -45,13 +52,20 @@ export const MAX_REMEMBERED = 8
  */
 export const UNKNOWN_EXPIRY_MAX_AGE_SECONDS = 24 * 60 * 60
 
+// The v1 retirement is a MIGRATION: it has to happen before the first read,
+// and exactly once. Doing it inside storageOrNull ran removeItem twice per
+// rememberJob/forgetJob (each of those resolves the storage itself and then
+// again via readJobs) for the whole life of the tab, long after the key was
+// gone.
+let retired = false
+
 function storageOrNull() {
   try {
     const storage = window.localStorage ?? null
-    if (storage) {
-      // Retired keys are dropped on first touch: a superseded schema left in
-      // place is dead weight that only ever confuses the next reader of a
-      // browser's storage panel.
+    if (storage && !retired) {
+      retired = true
+      // A superseded schema left in place is dead weight that only ever
+      // confuses the next reader of a browser's storage panel.
       for (const key of RETIRED_KEYS) storage.removeItem(key)
     }
     return storage
@@ -117,14 +131,25 @@ export function readJobs(nowSeconds = Math.floor(Date.now() / 1000)) {
  * envelope does not carry it — the first status poll does), and an entry
  * without it is kept rather than dropped; the next write fills it in.
  */
-export function rememberJob({ jobId, ownerToken, moleculeCount, expiresAt = null }) {
+export function rememberJob({ jobId, ownerToken, moleculeCount, expiresAt = null, status = null }) {
   const storage = storageOrNull()
   if (!storage || !jobId) return readJobs()
+  // THE STORE ENFORCES ITS OWN RULE. "Never persist a terminal job" is the
+  // whole point of this module, and it used to be enforced only by
+  // BatchResults calling forgetJob at the right moment -- so any other
+  // caller that remembered a job without checking first would silently
+  // reintroduce the bug where a finished batch came back on every reload.
+  // Home already calls this from two places. A terminal status now removes
+  // the entry instead of writing it, and callers with no status to offer
+  // (the submission envelope's own "queued", a poll filling in an expiry)
+  // are unaffected.
+  if (isTerminal(status)) return forgetJob(jobId)
   const entry = {
     jobId,
     ownerToken: ownerToken ?? null,
     moleculeCount: Number.isFinite(moleculeCount) ? moleculeCount : null,
     expiresAt: Number.isFinite(expiresAt) ? expiresAt : null,
+    status: status ?? null,
     rememberedAt: Math.floor(Date.now() / 1000),
   }
   const next = withJob(readJobs(), entry)

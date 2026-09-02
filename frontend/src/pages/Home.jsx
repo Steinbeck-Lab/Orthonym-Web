@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import ExampleChips from '../components/ExampleChips'
 import SamplerGrid from '../components/SamplerGrid'
 import ConfidenceLegend from '../components/ConfidenceLegend'
+import Dropzone from '../components/Dropzone'
 import BatchResults from '../components/BatchResults'
 import Switch from '../components/Switch'
 import {
@@ -17,11 +18,6 @@ import { MAX_ROWS, parseSmilesLines } from '../lib/parseSmiles'
 import useKetcher from '../lib/useKetcher'
 import useReducedMotion from '../lib/useReducedMotion'
 import './Home.css'
-
-// The same set the file picker's `accept` offers, as a pattern, because a
-// DROPPED file never passes through `accept` at all. Kept beside it in the
-// markup so the two cannot drift.
-const ACCEPTED_FILE_RE = /\.(sdf|mol|csv|smi|txt)$/i
 
 function emptyRow(smiles) {
   return {
@@ -136,7 +132,6 @@ function Home() {
   })
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
-  const [dragging, setDragging] = useState(false)
   const [job, setJob] = useState(null)
 
   // A job still RUNNING in this browser is picked back up on load: its owner
@@ -234,6 +229,10 @@ function Home() {
             jobId: err.jobId,
             ownerToken: err.ownerToken,
             moleculeCount: err.moleculeCount,
+            // Not from the error -- TranslateJobQueuedError carries no status
+            // -- but a fact: the fast path timed out because the job is still
+            // going. The store only needs to know it is not terminal.
+            status: 'running',
           }
           rememberJob(entry)
           setJob(entry)
@@ -261,6 +260,7 @@ function Home() {
         jobId: envelope.job_id,
         ownerToken: envelope.owner_token,
         moleculeCount: envelope.molecule_count ?? count,
+        status: envelope.status ?? 'queued',
       }
       rememberJob(entry)
       setJob(entry)
@@ -350,69 +350,6 @@ function Home() {
       // them try anyway.
       setValidationNote(`Could not read that file: ${err?.message ?? 'unknown error'}`)
     }
-  }
-
-  function handleFilePick(event) {
-    void acceptFile(event.target.files?.[0] ?? null)
-  }
-
-  // --- dropping a file on the card ------------------------------------
-  // dragDepth counts enter/leave rather than tracking a boolean: dragging
-  // over a child fires dragleave on the parent, so a boolean flickers the
-  // armed state off and on as the pointer crosses the label inside the zone.
-  const dragDepthRef = useRef(0)
-
-  function endDrag() {
-    dragDepthRef.current = 0
-    setDragging(false)
-  }
-
-  function handleDragEnter(event) {
-    if (isSubmitting) return
-    // Only a file drag arms the zone -- dragging selected text over the card
-    // is not an upload.
-    if (!Array.from(event.dataTransfer?.types ?? []).includes('Files')) return
-    event.preventDefault()
-    dragDepthRef.current += 1
-    setDragging(true)
-  }
-
-  function handleDragOver(event) {
-    if (isSubmitting) return
-    if (!Array.from(event.dataTransfer?.types ?? []).includes('Files')) return
-    // Without preventDefault on dragover the browser keeps its own default
-    // and the drop never reaches this handler at all.
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'copy'
-  }
-
-  function handleDragLeave() {
-    if (dragDepthRef.current > 0) dragDepthRef.current -= 1
-    if (dragDepthRef.current === 0) setDragging(false)
-  }
-
-  function handleDrop(event) {
-    event.preventDefault()
-    endDrag()
-    if (isSubmitting) return
-    const dropped = event.dataTransfer?.files
-    if (!dropped || dropped.length === 0) return
-    if (dropped.length > 1) {
-      // One job, one file. Saying so beats silently naming the first of five.
-      setValidationNote('One file at a time, please — that was ' + dropped.length + '.')
-      return
-    }
-    const chosen = dropped[0]
-    // Checked here rather than left to the server: a dropped file bypasses
-    // the picker's `accept`, and "unsupported file type" is a better answer
-    // than a 400 after a 50 MB upload.
-    if (!ACCEPTED_FILE_RE.test(chosen.name)) {
-      setValidationNote(
-        `STITCH reads .sdf, .mol, .csv, .smi and .txt — "${chosen.name}" is none of those.`
-      )
-      return
-    }
-    void acceptFile(chosen)
   }
 
   function startAnother() {
@@ -627,75 +564,14 @@ function Home() {
               </div>
             ) : (
               <div className="field">
-                <span className="field__label" id="batch-file-label">
-                  A file of molecules
-                </span>
-                {/* THE DROP ZONE. The whole area is the target, not a 90px
-                    "Choose File" button in the corner of an empty card --
-                    which is what this was, and a file manager's drag had
-                    nowhere to land. The native input stays in the markup and
-                    keeps doing the work: it is visually hidden rather than
-                    replaced, so the keyboard, the label association and the
-                    picker all behave exactly as the platform intends. */}
-                <div
-                  className={`dropzone${dragging ? ' dropzone--armed' : ''}${
-                    file ? ' dropzone--loaded' : ''
-                  }`}
-                  onDragEnter={handleDragEnter}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                >
-                  {/* The seam. A dashed rule is this system's mark for
-                      "provisional" and the footer already sews one shut, so
-                      an empty target is drawn as a seam waiting to be
-                      stitched -- and while a file is over it, the dashes
-                      actually run. SVG rather than a dashed border because a
-                      border cannot animate its dashes, and one rect on the
-                      GPU is cheaper than a repainting box-shadow. */}
-                  <svg className="dropzone__seam" aria-hidden="true">
-                    {/* 100% of an svg inset by 1px, NOT a rect inset by 1px:
-                        width/height presentation attributes take a length or
-                        a percentage and no calc(), and x/y/width/height as
-                        CSS properties are not portable. The svg carries the
-                        inset instead, and overflow: visible lets the stroke
-                        straddle the path as strokes normally do. */}
-                    <rect className="dropzone__seam-line" width="100%" height="100%" rx="13" />
-                  </svg>
-
-                  <input
-                    id="batch-file"
-                    className="dropzone__input"
-                    type="file"
-                    accept=".sdf,.mol,.csv,.smi,.txt"
-                    onChange={handleFilePick}
-                    disabled={isSubmitting}
-                  />
-                  <label htmlFor="batch-file" className="dropzone__face">
-                    <span className="dropzone__mark" aria-hidden="true">
-                      <span className="dropzone__mark-stroke" />
-                      <span className="dropzone__mark-stroke" />
-                      <span className="dropzone__mark-stroke" />
-                    </span>
-                    <span className="dropzone__lead">
-                      {file ? file.name : 'Drop a file here'}
-                    </span>
-                    <span className="dropzone__sub">
-                      {file ? 'Drop another to replace it' : 'or click to choose one'}
-                    </span>
-                    <span className="dropzone__formats">
-                      <code>.sdf</code>
-                      <code>.mol</code>
-                      <code>.csv</code>
-                      <code>.smi</code>
-                      <code>.txt</code>
-                    </span>
-                    <span className="dropzone__note">
-                      A <code>.csv</code> needs a <code>smiles</code> column; a plain list wants
-                      one SMILES per line.
-                    </span>
-                  </label>
-                </div>
+                <span className="field__label">A file of molecules</span>
+                <Dropzone
+                  inputId="batch-file"
+                  file={file}
+                  onFile={(chosen) => void acceptFile(chosen)}
+                  onReject={setValidationNote}
+                  disabled={isSubmitting}
+                />
 
                 {preview && (
                   <div className="preview">
