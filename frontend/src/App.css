@@ -1635,6 +1635,14 @@ input.field__control {
   display: flex;
   flex: 1;
   min-height: 0;
+  /* CAPPED, and centred in whatever the slot gives it. The one-screen layout
+     hands the field everything left over, which on a tall window made this a
+     700px dashed rectangle with four lines of text adrift in the middle of
+     it. A target does not get more inviting past a certain size; it just
+     gets emptier. */
+  max-height: 380px;
+  align-self: center;
+  width: 100%;
   border-radius: var(--r-card-sm);
   background: var(--card-soft);
   /* Both composited, and both cheap: the zone lifts a little under a file
@@ -1666,11 +1674,14 @@ input.field__control {
 
 .dropzone__seam-line {
   fill: none;
-  stroke: var(--hairline-strong);
-  stroke-width: 1.5;
-  /* 9 + 7 = 16, and the animation below travels exactly 32 -- two whole
+  /* --hairline, not --hairline-strong, and a finer dash. At 1.5px in the
+     strong ink the boundary was the loudest mark in the card, which put it
+     ahead of the instruction inside it. */
+  stroke: var(--hairline);
+  stroke-width: 1.25;
+  /* 6 + 6 = 12, and the animation below travels exactly 24 -- two whole
      knots -- so the loop has no seam of its own. */
-  stroke-dasharray: 9 7;
+  stroke-dasharray: 6 6;
   transition:
     stroke 0.28s cubic-bezier(0.16, 1, 0.3, 1),
     stroke-width 0.28s cubic-bezier(0.16, 1, 0.3, 1);
@@ -1696,7 +1707,7 @@ input.field__control {
 
 @keyframes seam-run {
   to {
-    stroke-dashoffset: -32;
+    stroke-dashoffset: -24;
   }
 }
 
@@ -1708,7 +1719,7 @@ input.field__control {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--s-xs);
+  gap: 6px;
   min-width: 0;
   padding: var(--s-lg);
   text-align: center;
@@ -1762,7 +1773,9 @@ input.field__control {
 
 .dropzone__lead {
   font-family: var(--font-display);
-  font-size: clamp(1.25rem, 1.7vw, 1.75rem);
+  /* A step down. At 1.75rem this was the largest type on the page after the
+     wordmark, for a sentence nobody needs to read twice. */
+  font-size: clamp(1.05rem, 1.2vw, 1.3rem);
   letter-spacing: 0.04em;
   color: var(--ink);
   /* A dropped filename can be anything at all. */
@@ -1770,33 +1783,20 @@ input.field__control {
   overflow-wrap: anywhere;
 }
 
-.dropzone__sub {
-  font-family: var(--font-body);
-  font-size: var(--t-body-sm);
-  color: var(--muted);
-}
-
+/* ONE LINE of mono, not five pills. Five bordered objects for five file
+   extensions made the accepted-formats list the busiest thing in the card;
+   as a single tracked line it is read once and then ignored, which is all a
+   format list has ever needed to be. */
 .dropzone__formats {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--s-xs);
-  margin-top: var(--s-xs);
-}
-
-.dropzone__formats code {
-  padding: 2px 7px;
   font-family: var(--font-mono);
   font-size: var(--t-caption);
   letter-spacing: var(--track-caption);
-  color: var(--body-strong);
-  background: var(--card);
-  border: 1px solid var(--hairline);
-  border-radius: 999px;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 .dropzone__note {
-  max-width: 42ch;
+  max-width: 48ch;
   font-family: var(--font-body);
   font-size: var(--t-body-sm);
   line-height: 1.5;
