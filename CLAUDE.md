@@ -170,10 +170,13 @@ were the same capability reached a different way. `/explain` now carries the inp
 output card, Expert by default (PRODUCT.md principle 1: a proof you must hunt for a switch to see
 is not offered). Learn drops the SMILES tab entirely rather than mislabel it, per the teach-mode
 spec's rule against naming a format. Home (`/`, "Translate") renders results through
-`SamplerGrid`/`Tile`. Every
-route opens with the same `.page-head` card (a wide title+lede card) and closes on the same footer;
-the working part of each route is a **contained** `.workspace` card grid (two rounded cards, input
-| output, inside the 1600px column — Home's is named `.workbench`; `/explain` adds
+`SamplerGrid`/`Tile`. Four
+routes open with the same `.page-head` card (a wide title+lede card); **Home does not** — since
+2026-09-02 it opens with `.home-hero`, the wordmark over a CSS crimson flare plus a tagline whose
+bold letters spell STITCH, and its old title+lede card and its accuracy band were both removed at
+the owner's request. Every route closes on the same footer.
+The working part of each route is a **contained** `.workspace` card grid (two rounded cards, input
+| output, inside the `--shell-max` column — Home's is named `.workbench`; `/explain` adds
 `.workspace--draw` **on the Draw tab only**, which flips the split so the structure editor takes the wide cell — Ketcher is unusable in the narrow column). `useKetcher` takes an `enabled` flag for the same reason: its 20 s readiness clock must start when the iframe mounts, not when the page does, or picking Draw late finds the editor already declared broken. There is
 one `.workspace` definition in `App.css` — if you ever see two, the later one is a stale leftover
 and wins the cascade; delete it. `Explain.jsx` and `Teach.jsx` no longer carry independent copies of
@@ -191,17 +194,25 @@ system as of 2026-08-26, a **TechX-style card bento** (dribbble shot 23855252, u
 this") wearing **ChemAudit chrome**. The body is a **soft cool-grey ground** (`--ground: #d5d8dc`)
 carrying **rounded cards** (`--r-card: 22px`, inner tiles `--r-card-sm: 14px`) — white
 (`--card`), quiet grey (`--card-soft`), and one or two **near-black feature cards** (`--card-dark`,
-e.g. the 94.8% figure) — separated by a modest `--gap: 14px`, in a **contained** column
-(`--shell-max: 1600px`, not full-bleed). **Every card lifts** on a soft two-part `--card-shadow`;
+via the `.card--dark` primitive — as of 2026-09-02 **no surface uses one**, since Home's accuracy
+band, which carried the only instance, was removed at the owner's request; the primitive stays in
+the system) — separated by a modest `--gap: 14px`, in a **contained** column
+(`--shell-max: 2200px`, not full-bleed — it was 1600, widened 2026-09-01). **Every card lifts** on a soft two-part `--card-shadow`;
 a generic `.card` and `.bento` primitive live in `App.css`. Hairline seams survive only as
 *internal* dividers inside a card (a tile's head/foot rule). Type is the three-face trinity —
 **Saira Condensed** (display/wordmark/name), **Public Sans** (body), **JetBrains Mono**
-(nav/labels/data) — at weight 400, with **one selective-bold step**: Public Sans **700** for the big
-stat figures only (`.spec__value`, up to 2.75rem); the rendered chemical name stays 400.
+(nav/labels/data) — at weight 400, with **three bold exceptions and no others**: Public Sans **700**
+for the big stat figures (`.spec__value`, up to 2.75rem), the header's route labels, and the six
+hero-tagline letters that spell STITCH (the last two by direct instruction, 2026-09-02). The
+rendered chemical name stays 400 — IUPAC weight and case are semantic.
 The **one crimson accent** (`--accent: #c41e3a`) is confined to chrome — active nav, the logo mark,
-inline links, the focus ring, the one primary button per surface, a faint footer keyline — and
-**never touches a confidence tier or the round-trip verdict**. The **header/footer are floating
-16px-radius glass** (their own soft shadow). Confidence stays a **monochrome rule beneath the name**
+inline links, the focus ring, the one primary button per surface, the sliding active-route pill, the hero's flare
+and the footer's self-sewing join — and **never touches a confidence tier or the round-trip
+verdict**. The **header is one white notch island** cut into the top edge of the window (flush at
+`top: 0`, 24px bottom corners, a concave CSS fillet on each flank, no shadow) and the **footer has
+no band at all** (a transparent strip carrying two lifted pills). Both replaced ChemAudit's
+floating glass on 2026-09-02 by instruction; the glass tokens now dress only the mobile menu
+panel. Confidence stays a **monochrome rule beneath the name**
 inside the white cards (double = PIN, dashed = fallback, dotted = best-effort, one faint rule =
 abstain, two struck rules = error), at a constant `min(100%, 30ch)`. Two structural facts still
 hold: every interactive page puts its input beside its own output (`.workspace`), and each page's
@@ -226,8 +237,10 @@ uppercased**, because IUPAC case is semantic. DESIGN.md records each with its re
 a token. `.impeccable/review/*.png` are prior visual-audit screenshots — check the filename/mtime
 against the current design system before trusting one as "what it looks like now."
 
-**Accuracy claims cite a real, versioned benchmark — never round them up.** The three figures
-shown on Home and About — **94.8% round-trip exact match**, **0 wrong structures emitted**, over a
+**Accuracy claims cite a real, versioned benchmark — never round them up.** The three figures,
+shown on **About** (Home's accuracy band was removed on the owner's instruction on 2026-09-02;
+Home now links to About for it, and About states the version, the benchmark and the metric's own
+definition, which is what PRODUCT.md principle 2 requires) — **94.8% round-trip exact match**, **0 wrong structures emitted**, over a
 **1,500-molecule** ChEBI+PubChem set — are OpenSTOUT **v1.0.0**'s published numbers
 (`~/OpenSTOUT/Project/README.md` § Accuracy). v1.0.0 publishes no per-corpus breakdown, so the
 site shows none; the earlier four-figure v21.0 split (~30.4% / 29.6% / 16.9% / 92.2%, 7,500

@@ -20,10 +20,22 @@
    beside it. Deliberately short vertical padding — the old hero left a tall
    empty band above the workbench, which read as wasted space. */
 
+/* The hero: the wordmark over a crimson flare, on one white card.
+   The flare is CSS only -- a radial core, a masked ray fan and a horizontal
+   streak, all multiplied into the paper so it stays crimson-on-white rather
+   than turning the card into a light box. Every layer is decorative and
+   aria-hidden; the wordmark and the tagline sit above them on z-index. */
+
 .home-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  position: relative;
+  isolation: isolate; /* keeps the flare's multiply blend inside this card */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: var(--s-md);
+  min-height: clamp(260px, 27vw, 400px);
   width: min(100% - 2 * var(--shell-pad), var(--shell-max));
   margin-inline: auto;
   padding: clamp(var(--s-lg), 3vw, var(--s-xl));
@@ -33,27 +45,168 @@
   border: var(--card-border);
 }
 
-.home-hero__title {
-  max-width: 20ch;
-  text-wrap: balance;
-  font-size: clamp(2.25rem, 4.2vw, 4.25rem);
-  line-height: 1.05;
+.flare {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  /* multiply, not screen: on a white card, crimson light has to DARKEN the
+     paper or it disappears entirely. */
+  mix-blend-mode: multiply;
 }
 
-.home-hero__lede {
-  max-width: 60ch;
+/* The core: one soft crimson bloom behind the wordmark, breathing slowly. */
+.flare__core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(135%, 1000px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--accent) 26%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 9%, transparent) 22%,
+    transparent 48%
+  );
+  animation: flare-breathe 9s ease-in-out infinite;
+}
+
+/* The rays: a repeating conic fan, masked to fade out well before the card's
+   edge so it reads as light rather than as a wheel. */
+/* Few, thin, and dying well inside the card. A first pass at 33 wedges and
+   0.5 opacity turned the hero into a sunburst poster: the rays reached the
+   card's corners and the white paper disappeared. The mask radius is the
+   control that matters -- this element is 120% of the card wide, so a fade
+   ending at 34% of ITS width is roughly 40% of the card. */
+.flare__rays {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(120%, 1100px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  opacity: 0.22;
+  background: repeating-conic-gradient(
+    from 0deg,
+    color-mix(in srgb, var(--accent) 30%, transparent) 0deg 1.1deg,
+    transparent 1.1deg 20deg
+  );
+  filter: blur(0.6px);
+  -webkit-mask: radial-gradient(circle, #000 0%, transparent 34%);
+  mask: radial-gradient(circle, #000 0%, transparent 34%);
+  animation: flare-spin 80s linear infinite;
+}
+
+/* The streak: the one hard-edged element, blurred just enough to read as a
+   lens artefact instead of a rule. */
+.flare__streak {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--accent) 30%, transparent) 32%,
+    color-mix(in srgb, var(--accent) 52%, transparent) 50%,
+    color-mix(in srgb, var(--accent) 30%, transparent) 68%,
+    transparent
+  );
+  filter: blur(1.5px);
+  animation: flare-drift 12s ease-in-out infinite;
+}
+
+@keyframes flare-breathe {
+  0%,
+  100% {
+    opacity: 0.82;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.07);
+  }
+}
+
+@keyframes flare-spin {
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+@keyframes flare-drift {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: translateY(-50%) scaleX(0.92);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translateY(-50%) scaleX(1.04);
+  }
+}
+
+/* A still flare is still a flare: reduced motion keeps the picture and drops
+   every animation. */
+@media (prefers-reduced-motion: reduce) {
+  .flare__core,
+  .flare__rays,
+  .flare__streak {
+    animation: none;
+  }
+}
+
+.home-hero__word {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(3.25rem, 11vw, 9rem);
+  font-weight: 400;
+  line-height: 0.95;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--ink);
+  margin-right: -0.14em; /* pull back the trailing tracking */
+}
+
+.home-hero__tagline {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  max-width: 46ch;
+  text-align: center;
+  text-wrap: balance;
   font-family: var(--font-body);
   font-size: var(--t-body-md);
-  line-height: 1.55;
+  line-height: 1.5;
   color: var(--body-strong);
 }
 
-@media (min-width: 1000px) {
-  .home-hero {
-    grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
-    align-items: center;
-    gap: var(--s-xl);
-  }
+/* The six letters that spell the name. Bold is otherwise reserved for the
+   big stat figures, and this is the one other place the system spends it --
+   it is carrying meaning here, not emphasis. Under the pointer each letter
+   steps to crimson and glows; nothing moves, so there is nothing for
+   reduced-motion to switch off. */
+.home-hero__cap {
+  font-weight: 700;
+  color: var(--ink);
+  transition:
+    color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    text-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.home-hero__cap:hover {
+  color: var(--accent);
+  text-shadow:
+    0 0 2px color-mix(in srgb, var(--accent) 60%, transparent),
+    0 0 14px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 /* -------------------- the mosaic -------------------- */
@@ -640,98 +793,4 @@
   text-transform: uppercase;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
-}
-
-/* -------------------- accuracy band -------------------- */
-/* One coherent grid with the rest of the page: the three figures sit in a
-   3-equal-column row, so their seams fall at 1/3 and 2/3 of the viewport —
-   exactly under the workbench input|results seam (1/3) and the results
-   internal seam (2/3). The intro is a full-width row above with no vertical
-   seam of its own, so no stray dividing line wanders off the shared grid.
-   The three figures are OpenSTOUT v1.0.0's published round-trip numbers. */
-
-.home-accuracy {
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap);
-  width: 100%;
-  max-width: var(--shell-max);
-  margin-inline: auto;
-  padding-inline: var(--shell-pad);
-}
-
-.home-accuracy__intro {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-sm);
-  padding: var(--s-xl);
-  background: var(--card);
-  border-radius: var(--r-card);
-  box-shadow: var(--card-shadow);
-  border: var(--card-border);
-}
-
-.home-accuracy__title {
-  font-size: var(--t-display-md);
-  line-height: 1.2;
-  letter-spacing: var(--track-display-md);
-}
-
-.home-accuracy__note {
-  max-width: 68ch;
-  font-family: var(--font-body);
-  font-size: var(--t-body-sm);
-  line-height: 1.55;
-  color: var(--body-strong);
-}
-
-.home-accuracy__source {
-  font-family: var(--font-mono);
-  font-size: var(--t-caption);
-  line-height: 1.6;
-  letter-spacing: var(--track-caption);
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-/* The three figures: a 3-equal-column bento row. Seams at 1/3 and 2/3
-   line up with every other seam on the page. */
-.home-accuracy__stats {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--gap);
-  background: transparent;
-}
-
-.home-accuracy__cell {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: var(--s-xs);
-  min-width: 0;
-  padding: var(--s-xl);
-  background: var(--card);
-  border-radius: var(--r-card);
-  box-shadow: var(--card-shadow);
-  border: var(--card-border);
-}
-
-/* The headline figure gets the reference's dark feature-card treatment. */
-.home-accuracy__cell:first-child {
-  background: var(--card-dark);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.home-accuracy__cell:first-child .spec__value {
-  color: var(--on-dark);
-}
-
-.home-accuracy__cell:first-child .spec__label {
-  color: var(--muted-on-dark);
-}
-
-@media (min-width: 700px) {
-  .home-accuracy__stats {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
