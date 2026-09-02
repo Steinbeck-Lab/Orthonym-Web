@@ -1,7 +1,12 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 
-import { MAX_REMEMBERED, pruneExpired, withJob } from './jobStore.js'
+import {
+  MAX_REMEMBERED,
+  UNKNOWN_EXPIRY_MAX_AGE_SECONDS,
+  pruneExpired,
+  withJob,
+} from './jobStore.js'
 
 // Only the pure halves are tested here: readJobs/rememberJob/forgetJob touch
 // window.localStorage, which node:test has no business pretending to be. The
@@ -23,6 +28,18 @@ test('pruneExpired keeps a job whose expiry is not known yet', () => {
   const now = 1_000_000
   const fresh = { jobId: 'just-submitted', expiresAt: null }
   assert.deepEqual(pruneExpired([fresh], now), [fresh])
+})
+
+test('pruneExpired ages out an entry whose expiry never arrived', () => {
+  // `expiresAt` is filled in by the first successful status poll. If that
+  // poll never lands -- the backend was unreachable, the tab was closed --
+  // the entry has no expiry to check, and without this bound it stayed in
+  // the browser forever, restoring a panel for a job the server deleted a
+  // day ago. rememberedAt is what dates it.
+  const now = 1_000_000
+  const stale = { jobId: 'orphan', expiresAt: null, rememberedAt: now - UNKNOWN_EXPIRY_MAX_AGE_SECONDS - 1 }
+  const recent = { jobId: 'fresh', expiresAt: null, rememberedAt: now - 60 }
+  assert.deepEqual(pruneExpired([stale, recent], now), [recent])
 })
 
 test('pruneExpired throws out entries that are not usable jobs', () => {

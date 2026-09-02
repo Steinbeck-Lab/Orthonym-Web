@@ -199,9 +199,28 @@
   margin-inline: auto;
   padding-inline: var(--shell-pad);
   /* The flexible row of the page: the hero and the key band are fixed, this
-     takes what is left of the one screen. */
+     takes what is left of the one screen. min-height: 0 gives the grid a
+     DEFINITE height to size its rows against -- which is half the fix
+     below; the other half is that every cell clips. */
   flex: 1;
   min-height: 0;
+}
+
+/* NOTHING MAY ESCAPE A CELL. This is the fix for a measured collision, and
+   both declarations are load-bearing.
+   The grid's rows are auto-sized, and the content here is a structure
+   drawing or a 10,000-row table -- an 848px result tile inside a 599px row.
+   With overflow: visible those cells simply painted outside the box: 121px
+   straight through the confidence key band, 71px through the footer, and the
+   example chips pushed to y=1001 on a 1000px window, which is where they
+   went missing. Clipping turns each cell into a scroll container, which also
+   drops its automatic minimum size to zero, which is what finally lets an
+   auto row shrink to the share of the screen it actually has.
+   Do not "simplify" this to overflow: hidden -- the content would be
+   unreachable rather than merely overflowing, which is worse. */
+.workbench > * {
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .workbench__alert {
@@ -279,6 +298,19 @@
   gap: var(--gap);
   min-width: 0;
   background: transparent;
+  /* Rows FIT the cell rather than being dictated by a structure drawing.
+     A row was auto-sized, the drawing inside it asked for a 4:3 box at the
+     full card width, and one ethanol therefore claimed 650px of height and
+     pushed its own name below the fold. Now the rows divide the height the
+     one-screen layout leaves: one result fills the cell exactly and needs no
+     scrolling at all.
+     minmax(0, 1fr) and not minmax(min-content, 1fr): a row sized to
+     min-content measured the structure drawing's own intrinsic height (727px
+     for one molecule), so the rows stopped shrinking altogether and the cell
+     scrolled even on a tall window. The tile absorbs the short-window case
+     instead -- see .tile. */
+  grid-auto-rows: minmax(0, 1fr);
+  padding: 2px;
 }
 
 .sampler--empty {
@@ -336,12 +368,16 @@
   display: flex;
   flex-direction: column;
   flex: 1;
-  /* 0 and clipped, both deliberate. The slot is whatever the one-screen
-     layout leaves, and its tallest occupant (the Ketcher iframe) carries a
-     min-height of its own -- without these, that floor won an argument it
-     should not have been in and the editor drew straight over the switch and
-     the hint below it. */
-  min-height: 0;
+  /* A FLOOR, not zero, and clipped either way. The slot is whatever the
+     one-screen layout leaves -- but at zero it left nothing: on a short
+     window, and while a batch table shared the grid, the card shrank to
+     34px and the textarea disappeared entirely (the "everything's gone"
+     bug). 120px is the same floor Home gives the Ketcher iframe below, so
+     the editor and the textarea agree and neither wins an argument the
+     other should not be in; the clip is what keeps that promise. Once even
+     120px will not fit, .page__content scrolls and the footer stays put --
+     which is the honest failure, not a collapsed card. */
+  min-height: 120px;
   overflow: hidden;
 }
 
@@ -696,11 +732,48 @@
   flex-direction: column;
   gap: var(--s-md);
   min-width: 0;
+  /* Fits its row. The SMILES echo, the name and the foot are the cell's
+     fixed furniture; the drawing takes what is left (below).
+     overflow-y: auto, not hidden: the drawing keeps a legibility floor, so
+     on a window too short to honour it the card scrolls rather than cutting
+     the round-trip proof off its own bottom edge. On any ordinary window the
+     row is taller than that floor and nothing scrolls at all. */
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: var(--s-lg);
   background: var(--card);
   border-radius: var(--r-card);
   box-shadow: var(--card-shadow);
   border: var(--card-border);
+}
+
+/* THE ARRIVAL. Transform and opacity only -- both composited, so the card
+   glides in on the GPU instead of relayouting the grid on every frame, which
+   is what "smoother" actually means here. Exponential ease-out, once, and a
+   60ms stagger so a set of results reads as arriving in order rather than
+   all at once. */
+.tile {
+  animation: tile-in 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+
+@keyframes tile-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile {
+    animation: none;
+  }
 }
 
 /* A queued entry is a quieter grey card — visibly not yet worked. */
@@ -736,14 +809,20 @@
   overflow-wrap: anywhere;
 }
 
+/* The middle of the card is the part that gives, so the drawing can take the
+   leftover height instead of setting the card's. */
 .tile__patch {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .tile__result-row {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
   gap: var(--s-md);
 }
 
@@ -757,28 +836,41 @@
 /* One constant rule length for every tier in every cell: the mark means
    the same thing everywhere, so it must MEASURE the same everywhere. A
    rule that hugs its name reads as a 105px stub under "benzene" and an
-   855px bar under "ethanol" — same tier, two different signals. */
+   855px bar under "ethanol" — same tier, two different signals.
+   The constant length belongs to the RULE, though, and not to the name.
+   While the block itself was 30ch wide the name was wrapped at 30
+   characters inside an 866px card, so a real IUPAC name broke over three
+   lines with two thirds of the card left empty beside it. The name now has
+   the whole width and the rule is drawn under it at its own fixed measure. */
 .tile__name-block--pin,
 .tile__name-block--fallback,
 .tile__name-block--best-effort {
+  width: 100%;
+}
+
+.tile__name-block--pin::after,
+.tile__name-block--fallback::after,
+.tile__name-block--best-effort::after {
+  content: '';
+  display: block;
   width: min(100%, 30ch);
 }
 
 /* Verified Preferred IUPAC Name — the double rule, the strongest mark in
    the system. */
-.tile__name-block--pin {
+.tile__name-block--pin::after {
   border-bottom: 3px double var(--ink);
 }
 
 /* Verified fallback: real, round-trip confirmed, but not a PIN. */
-.tile__name-block--fallback {
+.tile__name-block--fallback::after {
   border-bottom: 1px dashed var(--ink);
 }
 
 /* Best effort: a real name that OPSIN could not confirm. The rule goes
    dotted AND drops to --muted, so it reads as weaker at a glance without
    ever becoming a colour code. */
-.tile__name-block--best-effort {
+.tile__name-block--best-effort::after {
   border-bottom: 1px dotted var(--muted);
 }
 
@@ -857,25 +949,48 @@
 }
 
 /* The name settles into focus from an already-legible default: it is
-   never invisible, only unresolved. Exponential ease-out, once. */
-.citation-name--animate .citation-name__cell {
-  animation: name-settle 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-delay: calc(var(--cell-index) * 14ms);
+   never invisible, only unresolved. Exponential ease-out, once.
+   The BLUR lives here, on the one block, and not on the characters. It used
+   to be part of the per-character keyframes, which meant a 93-character
+   IUPAC name animated 93 separate filters at once -- a filter cannot be
+   composited away, so each frame re-rasterised the whole name and the reveal
+   visibly stuttered. One filter on the parent looks the same and costs one
+   layer. */
+.citation-name--animate {
+  animation: name-focus 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-@keyframes name-settle {
+@keyframes name-focus {
   from {
-    opacity: 0.35;
-    filter: blur(2px);
+    filter: blur(2.5px);
   }
 
   to {
-    opacity: 1;
     filter: blur(0);
   }
 }
 
+/* ...and the characters carry only opacity, which the compositor can do on
+   its own. The stagger is CAPPED: at 12ms a character, a long name's last
+   letter would have waited 1.1s to appear, so the whole reveal is over
+   inside 740ms however long the name is. */
+.citation-name--animate .citation-name__cell {
+  animation: name-settle 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: min(calc(var(--cell-index) * 12ms), 320ms);
+}
+
+@keyframes name-settle {
+  from {
+    opacity: 0.25;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .citation-name--animate,
   .citation-name--animate .citation-name__cell {
     animation: none;
   }
@@ -938,7 +1053,15 @@
   align-items: center;
   justify-content: center;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  /* NO aspect-ratio. A 4:3 box at the full width of an 866px card is 650px
+     tall, which is how one ethanol came to own 848px of a 599px row and push
+     its own name out of sight. The frame now takes the height the card has
+     left and the drawing scales inside it (object-fit: contain below), so
+     the molecule is as large as the space genuinely allows and no larger. */
+  flex: 1;
+  /* A FLOOR, so "fits the card" never becomes "is too small to read". Below
+     this the row stops shrinking and the results cell scrolls instead. */
+  min-height: 180px;
   padding: var(--s-sm);
   background: var(--card-soft);
   border: var(--card-border);
@@ -1096,12 +1219,211 @@
   outline-offset: 2px;
 }
 
-.field__file {
-  width: 100%;
-  padding: var(--s-sm) 0;
+/* -------------------- the drop zone -------------------- */
+/* The upload tab used to be a native "Choose File" button alone at the top
+   of a tall empty card: nothing said a file could be dragged, and a drag
+   from a file manager had nowhere to land. The whole slot is the target now.
+   The native input is still the mechanism -- hidden, never replaced -- so
+   the label, the keyboard and the platform picker all work as issued. */
+
+.dropzone {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  border-radius: var(--r-card-sm);
+  background: var(--card-soft);
+  /* Both composited, and both cheap: the zone lifts a little under a file
+     rather than redrawing a border. */
+  transition:
+    background-color 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dropzone--armed {
+  background: color-mix(in srgb, var(--accent) 5%, var(--card-soft));
+  transform: scale(1.006);
+}
+
+/* The seam. Inset by a pixel and allowed to overflow, so the stroke
+   straddles its own path the way a stroke should. */
+.dropzone__seam {
+  position: absolute;
+  inset: 1px;
+  /* Sized EXPLICITLY. An <svg> is a replaced element with an intrinsic
+     300x150, and for a replaced box `width: auto` takes that intrinsic size
+     rather than resolving from left/right -- so `inset` alone drew the seam
+     as a 300x150 rectangle in the corner of the zone. */
+  width: calc(100% - 2px);
+  height: calc(100% - 2px);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.dropzone__seam-line {
+  fill: none;
+  stroke: var(--hairline-strong);
+  stroke-width: 1.5;
+  /* 9 + 7 = 16, and the animation below travels exactly 32 -- two whole
+     stitches -- so the loop has no seam of its own. */
+  stroke-dasharray: 9 7;
+  transition:
+    stroke 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+    stroke-width 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* A file has landed, so the seam is CLOSED -- solid, and quiet again. The
+   same vocabulary the confidence rules use: dashed is provisional, solid is
+   settled. */
+.dropzone--loaded .dropzone__seam-line {
+  stroke: var(--ink);
+  stroke-dasharray: none;
+}
+
+/* Under a file, the seam is being sewn: the dashes run. Declared AFTER
+   --loaded on purpose -- same specificity, so the live state has to be the
+   later rule or dragging over a card that already holds a file would show
+   the settled seam instead of the running one. */
+.dropzone--armed .dropzone__seam-line {
+  stroke: var(--accent);
+  stroke-width: 2;
+  animation: seam-run 900ms linear infinite;
+}
+
+@keyframes seam-run {
+  to {
+    stroke-dashoffset: -32;
+  }
+}
+
+/* The input is present and hidden, not removed: `display: none` would take
+   it out of the tab order and orphan the label. */
+.dropzone__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The label IS the target: it fills the zone, so a click anywhere opens the
+   picker and a drop anywhere lands. */
+.dropzone__face {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-xs);
+  min-width: 0;
+  padding: var(--s-lg);
+  text-align: center;
+  cursor: pointer;
+}
+
+.dropzone__input:focus-visible + .dropzone__face {
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
+  border-radius: var(--r-card-sm);
+}
+
+/* Three stitches, stacked. Not a cloud-with-an-arrow: this system's marks
+   are rules, and a stack of them reading down is the same figure the
+   confidence ladder uses. They spread apart under a file. */
+.dropzone__mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: var(--s-md);
+}
+
+.dropzone__mark-stroke {
+  display: block;
+  height: 3px;
+  background: var(--ink);
+  transition:
+    width 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dropzone__mark-stroke:nth-child(1) {
+  width: 72px;
+}
+
+.dropzone__mark-stroke:nth-child(2) {
+  width: 46px;
+}
+
+.dropzone__mark-stroke:nth-child(3) {
+  width: 22px;
+}
+
+/* Armed: the stack squares up into a landing pad, in the accent, because
+   this is chrome -- an interaction affordance -- and never a tier. */
+.dropzone--armed .dropzone__mark-stroke {
+  width: 72px;
+  background: var(--accent);
+}
+
+.dropzone__lead {
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 1.7vw, 1.75rem);
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  /* A dropped filename can be anything at all. */
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.dropzone__sub {
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  color: var(--muted);
+}
+
+.dropzone__formats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-xs);
+  margin-top: var(--s-xs);
+}
+
+.dropzone__formats code {
+  padding: 2px 7px;
   font-family: var(--font-mono);
   font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
   color: var(--body-strong);
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+}
+
+.dropzone__note {
+  max-width: 42ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* The zone is legible without any of the above: motion off, states stay. */
+@media (prefers-reduced-motion: reduce) {
+  .dropzone,
+  .dropzone__seam-line,
+  .dropzone__mark-stroke {
+    transition: none;
+  }
+
+  .dropzone--armed .dropzone__seam-line {
+    animation: none;
+  }
+
+  .dropzone--armed {
+    transform: none;
+  }
 }
 
 .field__hint {
@@ -1144,8 +1466,13 @@
 
 /* -------------------- batch results -------------------- */
 
+/* A cell of the workbench, in the output column beside the input — NOT
+   spanning both. Spanning made the grid two rows deep inside a row-height
+   budget that only fits one, and the grid paid for the table by crushing the
+   input card to its min-content: 34px of a 255px card, which read as the
+   input having vanished. One row, two columns, each cell scrolling its own
+   content is the shape that holds. */
 .batch {
-  grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
   gap: var(--s-md);
@@ -1250,6 +1577,13 @@
   color: var(--muted);
 }
 
+/* The rows are the part of the card that gives. One declaration does it,
+   because a box with overflow-x: auto and overflow-y: visible has its
+   visible axis computed to auto as well -- so this is a scroll container
+   both ways, and a flex item that can therefore shrink below its content.
+   The card's head, progress bar, CSV link and pager stay put while a long
+   job's rows scroll under them, which is why the scroll belongs here rather
+   than on the card as a whole. */
 .batch__table-wrap {
   overflow-x: auto;
 }

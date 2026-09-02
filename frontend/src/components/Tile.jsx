@@ -7,7 +7,7 @@ import StitchedName from './StitchedName'
  * phase: 'pending' (queued, result not yet revealed) | 'active' (currently
  *        resolving into place) | 'done' (settled, final state)
  */
-export default function Tile({ row, phase, reduceMotion }) {
+export default function Tile({ row, phase, index = 0, reduceMotion }) {
   const { smiles, status, name, formula, error, depiction_svg, roundtrip_smiles, roundtrip_match } = row
   const isPending = phase === 'pending'
   const isActive = phase === 'active'
@@ -24,6 +24,10 @@ export default function Tile({ row, phase, reduceMotion }) {
     <li
       className={`tile tile--${stateClass}${isActive ? ' tile--active' : ''}`}
       aria-busy={isActive || isPending}
+      /* --i staggers the card's own arrival. The cards used to appear with no
+         transition at all, which read as a jolt next to the name resolving
+         inside them. */
+      style={{ '--i': index }}
     >
       <div className="tile__head">
         <code className="tile__smiles" title={smiles}>

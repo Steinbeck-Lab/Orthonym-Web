@@ -132,9 +132,21 @@ with `.workbench--draw` flipping the split so the editor gets the wide cell),
 pasting more than `FAST_PATH_MAX_MOLECULES` submits a job instead of refusing the eleventh line, a
 file gets a `parse-preview` count first, and `components/BatchResults.jsx` shows progress, a paged
 table, Stop, Delete and a per-row **Draw** (`/api/depict`, one molecule at a time — batch rows
-carry no picture on purpose). `lib/jobStore.js` keeps `job_id` + `owner_token` in **localStorage**,
+carry no picture on purpose). The Upload tab is a **drop zone**, not a bare `Choose File` button:
+the whole slot is the target, the native input stays in the markup (hidden, so the label, keyboard
+and platform picker still work), and the SVG seam around it runs its dashes while a file is over it
+and goes solid once one lands. A dropped file's extension is checked in the browser, because a drop
+never passes through the picker's `accept`.
+
+`lib/jobStore.js` keeps `job_id` + `owner_token` in **localStorage**,
 because the token is issued once and a reload would otherwise lose the ability to stop a
-10,000-molecule job; entries prune themselves at `expires_at`.
+10,000-molecule job. **It holds only jobs that might still need stopping**: `BatchResults` calls
+`forgetJob` the moment a job goes terminal, which is what makes a reload CLEAR the page. Keeping a
+finished job (v1's behaviour) restored the batch panel on every load and survived a hard reload —
+which cannot clear localStorage — so the panel could not be dismissed at all. The key is
+`stitch.jobs.v2` and the bump is part of that fix: it retires every v1 entry rather than restoring
+one last stale panel. Entries prune at `expires_at`, or at `rememberedAt + 24 h` when the first
+status poll never landed and there is no `expires_at` to check.
 
 Three things about that UI were **measured against the running backend**, not assumed, and each
 would be easy to "simplify" back into a lie:
@@ -258,9 +270,22 @@ no band at all** (a transparent strip carrying two lifted pills). Both replaced 
 floating glass on 2026-09-02 by instruction; the glass tokens now dress only the mobile menu
 panel. Confidence stays a **monochrome rule beneath the name**
 inside the white cards (double = PIN, dashed = fallback, dotted = best-effort, one faint rule =
-abstain, two struck rules = error), at a constant `min(100%, 30ch)`. Two structural facts still
+abstain, two struck rules = error), at a constant `min(100%, 30ch)` — a measure that belongs to the
+**mark** (drawn as an `::after`) and never to the name, which takes the full width of its card.
+Two structural facts still
 hold: every interactive page puts its input beside its own output (`.workspace`), and each page's
 "how this works" copy lives on the About page.
+
+**The one-screen shell only works because every cell clips.** `.page` is `100dvh; overflow: hidden`
+and `.workbench` is the flexed row that gives — but with `overflow: visible` on its cells, content
+taller than the row painted straight through the key band (121px) and the footer (71px), and a
+batch table sharing the grid crushed the input card to 34px. `.workbench > * { min-height: 0;
+overflow-y: auto }` is the fix: clipping is what makes a cell a scroll container, which is also
+what lets an auto grid row shrink. Two related facts: `.batch` sits in the output column rather
+than spanning both, and `.tile__depiction` has **no `aspect-ratio`** (a 4:3 box at card width was
+650px tall and pushed the name out of view) — it takes the height the card has left, with a 180px
+floor. Verify a layout change by MEASURING overlap in a browser, in the state that has results:
+the one-screen commit checked only the empty state and shipped both collisions.
 
 The world **began** pinned by the user to the "Bugatti design analysis" template
 (getdesign.md/bugatti) and has since been steered, by successive user instructions, into a

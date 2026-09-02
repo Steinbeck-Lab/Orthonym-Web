@@ -20,14 +20,41 @@
 // crashes because storage is unavailable would be a much worse bug than
 // forgetting a job.
 
-const STORAGE_KEY = 'stitch.jobs.v1'
+// v2, and the bump is the fix rather than housekeeping. v1 remembered a job
+// for as long as the server would keep it -- 24 hours -- so a FINISHED batch
+// came back on every reload, including a hard reload, which cannot clear
+// localStorage. Nothing in the app could shift it and it read as the page
+// being stuck. The store now holds only jobs that might still need stopping
+// (see rememberJob and BatchResults), and the new key retires every v1 entry
+// on the first load rather than restoring one last stale panel.
+const STORAGE_KEY = 'stitch.jobs.v2'
+const RETIRED_KEYS = ['stitch.jobs.v1']
 
 /** Most recent jobs kept. Small on purpose: this is a convenience, not a log. */
 export const MAX_REMEMBERED = 8
 
+/**
+ * How long an entry may live without a known expiry.
+ *
+ * `expiresAt` arrives on the first successful status poll, not with the
+ * submission, so a job submitted while the backend was unreachable keeps
+ * `expiresAt: null` -- and pruneExpired deliberately keeps those, so without
+ * a bound it would sit in a browser forever, restoring a panel for a job the
+ * server has long since deleted. 24 hours is JOB_RESULT_TTL_SECONDS: past it
+ * there is nothing left to own.
+ */
+export const UNKNOWN_EXPIRY_MAX_AGE_SECONDS = 24 * 60 * 60
+
 function storageOrNull() {
   try {
-    return window.localStorage ?? null
+    const storage = window.localStorage ?? null
+    if (storage) {
+      // Retired keys are dropped on first touch: a superseded schema left in
+      // place is dead weight that only ever confuses the next reader of a
+      // browser's storage panel.
+      for (const key of RETIRED_KEYS) storage.removeItem(key)
+    }
+    return storage
   } catch {
     return null
   }
@@ -39,13 +66,17 @@ function storageOrNull() {
  */
 export function pruneExpired(jobs, nowSeconds) {
   if (!Array.isArray(jobs)) return []
-  return jobs.filter(
-    (job) =>
-      job &&
-      typeof job.jobId === 'string' &&
-      job.jobId.length > 0 &&
-      (!Number.isFinite(job.expiresAt) || job.expiresAt > nowSeconds)
-  )
+  return jobs.filter((job) => {
+    if (!job || typeof job.jobId !== 'string' || job.jobId.length === 0) return false
+    if (Number.isFinite(job.expiresAt)) return job.expiresAt > nowSeconds
+    // Expiry unknown: fall back to when it was remembered, so an entry whose
+    // first status poll never landed still ages out instead of living
+    // forever. rememberJob always stamps that, so every real entry is
+    // bounded; one carrying neither date is kept, because a job submitted a
+    // moment ago is the one whose token matters most.
+    if (!Number.isFinite(job.rememberedAt)) return true
+    return job.rememberedAt + UNKNOWN_EXPIRY_MAX_AGE_SECONDS > nowSeconds
+  })
 }
 
 /**
