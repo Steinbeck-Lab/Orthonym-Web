@@ -14,7 +14,12 @@
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  background: var(--ground);
+  /* NO background. It used to paint --ground here, which is exactly what a
+     flat ground wanted -- but this box is painted ABOVE the gradient layer's
+     negative z-index (paint order: root background, negative-z descendants,
+     then in-flow block backgrounds), so an opaque fill here covers the
+     gradient completely. The floor now lives on `body` and on `.ground`
+     itself, both of which sit below this box. */
 }
 
 /* The contained content column. The bento sits inside this rather than
@@ -1395,4 +1400,121 @@ input.field__control {
   margin-top: var(--gap);
   padding-top: var(--gap);
   border-top: 1px solid var(--hairline);
+}
+
+/* -------------------- the gradient ground -------------------- */
+/* The bench the cards sit on. It was a flat --ground fill; since 2026-09-02 it
+   is a slow gradient, by instruction, built from the ONE accent and the cool
+   greys already in the system -- no new hue enters the palette, so nothing
+   here can be mistaken for a confidence tier.
+   Fixed behind everything at z-index 0 with the page content above it: the
+   white cards stay fully opaque, so the gradient reads in the gaps, the
+   margins and the hero, which is exactly where the grey used to read. */
+
+/* z-index: -1, and NOTHING else may be given a z-index to sit "above" it.
+   Paint order puts a negative-z descendant above the root background and
+   below every normal-flow box, which is exactly this layer's job.
+   The first version instead raised the page's own children to z-index 1.
+   That gave .home-hero a stacking context, the hero flare's
+   mix-blend-mode: multiply lost the page as its backdrop, and the white
+   parts of its veil painted a solid white rectangle across the hero -- the
+   same failure that `isolation: isolate` caused there, arrived by a
+   different route. If a card ever needs to escape this layer, give the CARD
+   a z-index; never the hero. */
+.ground {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  /* The flat colour stays underneath as the floor: if a browser drops the
+     blur or the gradients, the page is still the grey bench it always was. */
+  background: var(--ground);
+}
+
+/* Each field is a soft radial wash, far larger than the viewport so its edge
+   never enters the frame, blurred so the gradient has no seams, and moved with
+   transforms only. Crimson sits at 6-9% -- enough to tint the grey, nowhere
+   near enough to read as colour. */
+.ground__field {
+  position: absolute;
+  width: 90vmax;
+  height: 90vmax;
+  border-radius: 50%;
+  filter: blur(90px);
+  will-change: transform;
+}
+
+.ground__field--a {
+  top: -32vmax;
+  left: -18vmax;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--accent) 9%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 3%, transparent) 45%,
+    transparent 70%
+  );
+  animation: ground-drift-a 64s ease-in-out infinite alternate;
+}
+
+.ground__field--b {
+  bottom: -40vmax;
+  right: -22vmax;
+  /* The cool counterweight: the card-soft grey, which keeps the crimson from
+     reading as a single pink cloud. */
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--card-soft) 85%, transparent) 0%,
+    color-mix(in srgb, var(--card-soft) 40%, transparent) 40%,
+    transparent 72%
+  );
+  animation: ground-drift-b 82s ease-in-out infinite alternate;
+}
+
+.ground__field--c {
+  top: 22vmax;
+  right: -26vmax;
+  width: 70vmax;
+  height: 70vmax;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--accent) 6%, transparent) 0%,
+    transparent 65%
+  );
+  animation: ground-drift-c 96s ease-in-out infinite alternate;
+}
+
+@keyframes ground-drift-a {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(12vmax, 8vmax, 0) scale(1.12);
+  }
+}
+
+@keyframes ground-drift-b {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.06);
+  }
+  to {
+    transform: translate3d(-14vmax, -10vmax, 0) scale(1);
+  }
+}
+
+@keyframes ground-drift-c {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(-10vmax, 14vmax, 0) scale(1.18);
+  }
+}
+
+/* A still gradient is still a gradient: the composition survives, the drift
+   does not. */
+@media (prefers-reduced-motion: reduce) {
+  .ground__field {
+    animation: none;
+  }
 }

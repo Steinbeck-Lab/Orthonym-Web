@@ -215,7 +215,11 @@ the kind of thing that drifts silently into an XSS hole.
 
 **Read `DESIGN.md` before any visual change.** It's not aspirational — it documents the shipped
 system as of 2026-08-26, a **TechX-style card bento** (dribbble shot 23855252, user-pinned "like
-this") wearing **ChemAudit chrome**. The body is a **soft cool-grey ground** (`--ground: #d5d8dc`)
+this") wearing **ChemAudit chrome**. The body is a **soft cool-grey ground** (`--ground: #d5d8dc`,
+since 2026-09-02 a slow **gradient** ground — a fixed `.ground` layer of three blurred radial
+fields, crimson at 6–9% plus one grey counterweight, drifting over 64–96s; **`.page` must stay
+transparent and nothing may take a positive `z-index`**, or the layer is covered or the hero
+flare's `multiply` breaks — see DESIGN.md)
 carrying **rounded cards** (`--r-card: 22px`, inner tiles `--r-card-sm: 14px`) — white
 (`--card`), quiet grey (`--card-soft`), and one or two **near-black feature cards** (`--card-dark`,
 via the `.card--dark` primitive — as of 2026-09-02 **no surface uses one**, since Home's accuracy
