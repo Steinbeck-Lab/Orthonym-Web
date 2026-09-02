@@ -521,15 +521,6 @@
    deleting that page unloaded the stylesheet and took .results and
    .fetch-error with it -- both still used here. Vite only ships CSS some
    module imports, and "some other page imports it" is not ownership. */
-.explain__editor {
-  display: block;
-  width: 100%;
-  min-height: 460px;
-  background: var(--canvas);
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--r-card-sm);
-}
-
 /* From StructureToIupac.css, same reason. */
 .results {
   display: flex;
