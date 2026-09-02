@@ -1,16 +1,23 @@
+import Icon from './Icon'
+
 /**
- * A machined two-position switch.
+ * A two-position switch, in the same glass the buttons wear.
  *
- * Built as a real <button role="switch"> rather than a styled checkbox so
- * the accessible name, the pressed state and keyboard operation all come
- * from the platform. Space and Enter both toggle it for free.
+ * It was a MACHINED switch until 2026-09-02: a hard-edged 0-radius track
+ * with a square knob, which was right while every button in the system was
+ * a flat 0-radius outline. Once the buttons became deeply round glossy
+ * pills, the rectangle was the only control left disagreeing with the rest
+ * of the interface -- so the track is now a pill that fills with crimson
+ * glass, and the knob is a circle that slides.
  *
- * The state is never carried by knob position alone: the track inverts
- * (transparent-with-outline -> filled ink, the same "engaged = fill"
- * language the primary button uses on hover) AND a mono state word sits
- * beside it. In a system with no accent colour and no shadow, position
- * plus fill plus a word is the whole vocabulary available, and a switch
- * that relied on position alone would be unreadable to anyone who cannot
+ * Built as a real <button role="switch"> rather than a styled checkbox, so
+ * the accessible name, the state and keyboard operation all come from the
+ * platform. Space and Enter both toggle it for free.
+ *
+ * THE STATE IS CARRIED THREE WAYS, and that is deliberate: knob POSITION,
+ * the track's fill, and a mono state word beside it -- plus a check inside
+ * the knob as a fourth. Colour is never the only signal (DESIGN.md), and a
+ * switch that relied on position alone is unreadable to anyone who cannot
  * compare it against a second switch in the other state.
  */
 export default function Switch({ id, checked, onChange, disabled, label, hint, onWord, offWord }) {
@@ -29,7 +36,11 @@ export default function Switch({ id, checked, onChange, disabled, label, hint, o
         className={`switch${checked ? ' switch--on' : ''}`}
       >
         <span className="switch__track" aria-hidden="true">
-          <span className="switch__knob" />
+          <span className="switch__knob">
+            {/* Inside the knob, so it travels with it. aria-hidden by way of
+                Icon -- the state is already announced by aria-checked. */}
+            {checked && <Icon name="check" size={12} />}
+          </span>
         </span>
         <span className="switch__label">{label}</span>
         <span className="switch__state">{checked ? onWord : offWord}</span>
