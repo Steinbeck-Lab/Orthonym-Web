@@ -1643,6 +1643,14 @@ input.field__control {
   max-height: 380px;
   align-self: center;
   width: 100%;
+  /* And it SCROLLS when the slot is shorter than the face. The field slot
+     around it is overflow: hidden (so a Ketcher iframe cannot blow the
+     one-screen budget), which means anything taller than the slot is not
+     merely cut off, it is unreachable -- measured at an 800px window, where
+     the zone gets 97px for a face that needs about 150 and the format and
+     note lines simply vanished. A scroll container inside a drop target is
+     not elegant; text nobody can reach is worse. */
+  overflow-y: auto;
   border-radius: var(--r-card-sm);
   background: var(--card-soft);
   /* Both composited, and both cheap: the zone lifts a little under a file

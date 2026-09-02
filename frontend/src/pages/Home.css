@@ -694,9 +694,9 @@
      the middle, and max-content sized each column to its OWN sentence --
      every rung is a separate grid, so the five marks and five sentences
      ended up on five different axes. 34ch fits the longest line
-     ("Unreadable input, or naming failed.") so all five agree, and the mark
-     takes everything left over. */
-  grid-template-columns: auto minmax(140px, 1fr) 34ch;
+     ("Correct by the general rules, not the strict ones.") so all five
+     agree, and the mark takes everything left over. */
+  grid-template-columns: auto minmax(140px, 1fr) 52ch;
   grid-template-areas:
     'ordinal name body'
     'ordinal mark body';
@@ -818,10 +818,27 @@
 
 .rung__body {
   grid-area: body;
+  min-width: 0;
+}
+
+/* What the tier IS. */
+.rung__line {
   margin: 0;
   font-family: var(--font-body);
   font-size: var(--t-body-sm);
-  line-height: 1.5;
+  line-height: 1.45;
+  color: var(--body);
+}
+
+/* ...and HOW it got that way, a step quieter. Two tones rather than two
+   sizes: at a smaller size the mechanism became fine print, and the
+   mechanism is the part a reader who does not know this engine actually
+   needs. */
+.rung__detail {
+  margin: 1px 0 0;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.45;
   color: var(--muted);
 }
 
