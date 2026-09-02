@@ -114,11 +114,6 @@
   --notch-h-nav: 56px; /* the routes island, deliberately a touch deeper */
   --r-notch: 24px; /* the islands' bottom corners */
   --notch-wing: 20px;
-  /* A fourth island, and the only one not on the window: Home's INFO tab,
-     carved out of the BOTTOM of the input card with the same fillets. A
-     touch shallower than the header's, because it hangs off a card rather
-     than the whole page, and still a 40px target. */
-  --info-notch-h: 40px;
 
   /* -- the bento world (TechX reference, dribbble 23855252) ------------
      A later instruction ("like this") replaced the flat, 0-radius,
