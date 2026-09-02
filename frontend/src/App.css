@@ -1160,30 +1160,12 @@ input.field__control {
 }
 
 .site-footer__copyright {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.9rem;
   margin: 0;
   font-family: var(--font-mono);
   font-size: 0.7rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
-}
-
-/* The rights-holder mark. 2rem is a floor, not a preference — see the note in
-   Footer.jsx: the wordmark's caps are a quarter of the artwork's height. */
-.site-footer__org {
-  display: inline-flex;
-  flex: none;
-  border-radius: var(--r-chrome);
-}
-
-.site-footer__org img {
-  display: block;
-  height: 2rem;
-  width: auto;
 }
 
 /* The credit, as a floating pill — the one place the footer lifts, matching
@@ -1207,6 +1189,22 @@ input.field__control {
   color: var(--ink);
 }
 
+/* The rights-holder mark, inside the pill where the words "Beilstein-Institut"
+   used to be. 2rem is a legibility floor, not a preference — see the note in
+   Footer.jsx: the wordmark's caps are a quarter of the artwork's height. */
+.credit__org {
+  display: inline-flex;
+  flex: none;
+  margin-inline: 0.35ch;
+  border-radius: var(--r-chrome);
+}
+
+.credit__org img {
+  display: block;
+  height: 2rem;
+  width: auto;
+}
+
 .credit__lead {
   font-family: var(--font-mono);
   font-size: 0.68rem;
@@ -1221,6 +1219,49 @@ input.field__control {
   height: 1.05rem;
   color: var(--accent);
   flex: none;
+  overflow: visible;
+}
+
+/* Steam. Each wisp drifts up, thins out and returns, a quarter-beat behind
+   the one before it, for as long as the pill is hovered. transform-box:
+   fill-box keeps each path's own geometry as the origin, so they translate
+   in place instead of swinging around the SVG's corner. */
+.credit__steam {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+
+.credit:hover .credit__steam {
+  animation: credit-steam 1.7s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.credit:hover .credit__steam:nth-of-type(2) {
+  animation-delay: 0.22s;
+}
+
+.credit:hover .credit__steam:nth-of-type(3) {
+  animation-delay: 0.44s;
+}
+
+@keyframes credit-steam {
+  0% {
+    opacity: 0.85;
+    transform: translateY(0) scaleY(1);
+  }
+  55% {
+    opacity: 0.15;
+    transform: translateY(-2.5px) scaleY(1.25);
+  }
+  100% {
+    opacity: 0.85;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .credit:hover .credit__steam {
+    animation: none;
+  }
 }
 
 .credit__who {
@@ -1235,9 +1276,44 @@ input.field__control {
   border-bottom-color: var(--accent);
 }
 
+/* The joining mark: two crimson strokes that sew themselves when the pill is
+   hovered, the second a beat behind the first. 13 is one stroke's own length
+   (12.73) rounded up, so a single dash covers the path exactly once and the
+   animation reads as drawing rather than sliding. */
 .credit__x {
-  color: var(--muted);
-  padding-inline: 0.15ch;
+  width: 0.8rem;
+  height: 0.8rem;
+  margin-inline: 0.5ch;
+  color: var(--accent);
+  flex: none;
+}
+
+.credit__x-stroke {
+  stroke-dasharray: 13;
+  stroke-dashoffset: 0;
+}
+
+.credit:hover .credit__x-stroke {
+  animation: stitch-cross 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.credit:hover .credit__x-stroke + .credit__x-stroke {
+  animation-delay: 90ms;
+}
+
+@keyframes stitch-cross {
+  from {
+    stroke-dashoffset: 13;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .credit:hover .credit__x-stroke {
+    animation: none;
+  }
 }
 
 .to-top {
