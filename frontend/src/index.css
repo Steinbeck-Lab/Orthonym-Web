@@ -97,6 +97,22 @@
      accent stays consistent everywhere it appears. 5.84:1 = AA for body. */
   --link: #c41e3a;
 
+  /* -- a SECOND accent, for /explain's action (2026-09-02) --------------
+     By instruction ("explain button can be dark orange"). This is a real
+     departure from the one-accent rule and it is deliberately narrow: it
+     dresses ONE button variant, never a confidence tier, never chrome, and
+     never the header.
+     The value was CHOSEN BY MEASUREMENT, and the first attempt failed. Any
+     dark orange has to survive two composites, not one: the button's fill is
+     90% over a white card, and the gloss highlight then lays ~5% more white
+     over the label's cap heights. #a8480c is 5.84:1 solid and 4.82:1 at 90%
+     -- both fine -- but 4.44:1 once the highlight is counted, which is under
+     AA. The probe caught it on /explain.
+     #9c4109 clears every step: 6.44:1 solid, 5.28:1 at 90%, and 4.90:1 under
+     the highlight. Do not lighten it without redoing all three. */
+  --accent-amber: #9c4109; /* 6.44:1 solid, 4.90:1 as glossy 90% fill */
+  --accent-amber-deep: #7d3407; /* hover/press depth */
+
   /* -- glass: the ChemAudit header floats as a blurred panel over the
      canvas. This is the one place a shadow and a >0 radius are allowed;
      the rest of the system stays flat with radius 0. */

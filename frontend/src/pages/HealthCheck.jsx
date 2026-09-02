@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { checkHealth } from '../lib/api'
 import './HealthCheck.css'
+import Icon from '../components/Icon'
 
 const STATE_LABEL = {
   checking: 'Checking…',
@@ -69,6 +70,7 @@ function HealthCheck() {
             onClick={runCheck}
             disabled={isChecking}
           >
+            <Icon name="refresh" />
             {isChecking ? 'Checking…' : 'Check again'}
           </button>
         </div>

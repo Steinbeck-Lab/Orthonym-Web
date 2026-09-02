@@ -19,6 +19,7 @@ import {
 } from '../lib/batchJob'
 import { forgetJob, rememberJob } from '../lib/jobStore'
 import { STATE_CLASS, STATE_LABEL, VERIFIED_STATUSES } from '../lib/statuses'
+import Icon from './Icon'
 
 // One submitted batch: its progress while it runs, then its rows.
 //
@@ -313,6 +314,7 @@ function BatchResults({ job, onForget }) {
       <section className="batch" aria-label="Batch job">
         <p className="batch__gone">{gone}</p>
         <button type="button" className="btn" onClick={() => onForget?.(jobId)}>
+          <Icon name="refresh" />
           Start again
         </button>
       </section>
@@ -341,11 +343,13 @@ function BatchResults({ job, onForget }) {
         <div className="batch__actions">
           {canCancel && (
             <button type="button" className="btn" onClick={stop} disabled={busy === 'cancel'}>
+              <Icon name="stop" size={13} />
               {busy === 'cancel' ? 'Stopping…' : 'Stop'}
             </button>
           )}
           {canDelete && (
             <button type="button" className="btn" onClick={discard} disabled={busy === 'delete'}>
+              <Icon name="trash" size={13} />
               {busy === 'delete' ? 'Deleting…' : 'Delete results'}
             </button>
           )}
@@ -504,6 +508,7 @@ function BatchResults({ job, onForget }) {
                 onClick={() => setPage((p) => clampPage(p - 1, countable))}
                 disabled={page === 0}
               >
+                <Icon name="back" size={13} />
                 Previous
               </button>
               <span className="batch__page-count">
@@ -516,6 +521,7 @@ function BatchResults({ job, onForget }) {
                 disabled={page + 1 >= pages}
               >
                 Next
+                <Icon name="forward" size={13} />
               </button>
             </nav>
           )}

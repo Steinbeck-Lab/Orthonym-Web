@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react'
 
+import Icon from './Icon'
+
 // A file target that is the whole slot, and then a MANIFEST of what was read.
 //
 // Shape borrowed from extend.ai's file-upload (ui.extend.ai, owner-pinned):
@@ -308,19 +310,7 @@ export default function Dropzone({
               face whose whole job is to open the picker. Quiet by design --
               the card's one primary action is Start job. */}
           <span className="dropzone__browse">
-            <svg
-              className="dropzone__browse-icon"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-              aria-hidden="true"
-            >
-              <line x1="8" y1="11" x2="8" y2="2" />
-              <path d="M4.6 5.4 8 2l3.4 3.4" />
-              <line x1="2.5" y1="13.5" x2="13.5" y2="13.5" />
-            </svg>
+            <Icon name="upload" size={13} />
             Browse files
           </span>
 

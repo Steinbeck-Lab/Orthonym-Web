@@ -790,21 +790,73 @@
    border box, no pill. The label IS the tag. */
 
 /* -------------------- buttons -------------------- */
-/* The signature control: transparent fill, 1px ink outline, pill radius,
-   mono uppercase label at 2.5px tracking, 44px tall. Bugatti never
-   documents hover; a working tool has to, so the state that reads as
-   "engaged" is the outline filling in. */
+/* EVERY BUTTON IS CRIMSON, and every button is GLOSSY, on every page. Both
+   by instruction ("make all the buttons crimson throughout", "all pages
+   should have glossy like buttons"), and together they supersede the
+   one-accent-action rule DESIGN.md carried from the start: crimson used to
+   mark the single primary action on a surface while every other button was
+   a flat ink outline.
+   The HIERARCHY survives inside the colour rather than being lost with it,
+   which is the one thing worth defending here. A secondary action is a pale
+   frosted crimson pill; the primary is filled crimson glass. Same hue,
+   obviously different weight, and the eye still lands on the thing that
+   submits.
+
+   THE GLOSS IS ONE MECHANISM, not a copy per variant. `.btn` owns the
+   highlight, the sheen, the lift and the clip; a variant sets only its fill
+   and two dials -- `--gloss` (how hard the top highlight hits) and `--sheen`
+   (how bright the band that crosses on hover), plus the blend mode that
+   band uses. A pale pill needs a strong white top to read as glass at all; a
+   saturated one needs a subtle one or it goes chalky, and needs `overlay`
+   or the sheen washes its label to grey. Same code, two numbers.
+
+   Shape borrowed from uselayouts' discover-button (owner-pinned): a deeply
+   round pill that lifts, a mono uppercase label, an icon beside it. None of
+   its code is here, and its spring physics are not -- this system eases out
+   and never bounces.
+
+   EVERY FILL BELOW IS A CONTRAST DECISION. Measured on the composite over a
+   white card, not on the token:
+     secondary  --accent-deep on 14% crimson  = 7.03:1
+     --accent   white label on 90% crimson    = 5.10:1  (4.68:1 at the glyph
+                tops, under the highlight)
+     --amber    white label on 90% #a8480c    = 4.82:1
+   Raising any transparency without redoing that arithmetic will quietly
+   drop one of them below AA. */
 
 .btn {
+  /* The two gloss dials. Overridden per variant below. */
+  --gloss: 0.6;
+  --sheen: 0.8;
+  --sheen-blend: normal;
+
+  position: relative;
+  /* Clips the sheen to the pill; isolate keeps its blend inside this box. */
+  overflow: hidden;
+  isolation: isolate;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /* Room for an icon. 1ch of the MONO face, so the gap tracks the label's
+     own letter-spacing rather than being a px number that drifts from it. */
+  gap: 1ch;
   min-height: 44px;
-  padding: 14px 32px;
-  background: transparent;
-  color: var(--ink);
-  border: 1px solid var(--ink);
+  padding: 14px 30px;
+  /* 14%, not 6%: a 6% tint gives a highlight nothing to sit on and the gloss
+     was simply invisible. */
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  -webkit-backdrop-filter: blur(8px) saturate(1.3);
+  backdrop-filter: blur(8px) saturate(1.3);
+  /* --accent-deep, not --accent. Measured: --accent on this composite is
+     4.64:1 -- over AA, but with 0.14 of headroom, which is the kind of
+     margin that vanishes the first time someone nudges the fill. The deep
+     tone is 7.03:1 on the same fill and still unmistakably crimson. */
+  color: var(--accent-deep);
+  border: 1px solid color-mix(in srgb, var(--accent) 46%, transparent);
   border-radius: var(--r-pill);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 1px 2px rgba(138, 20, 40, 0.07);
   font-family: var(--font-mono);
   font-size: var(--t-button);
   font-weight: 400;
@@ -815,52 +867,278 @@
   cursor: pointer;
   transition:
     background-color 0.22s cubic-bezier(0.16, 1, 0.3, 1),
-    color 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    border-color 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+    color 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* THE LIT UPPER EDGE. ::before paints BEFORE the label, so the highlight
+   goes under the type -- which is where light on a glass slab sits. */
+.btn::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 54%;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, var(--gloss)),
+    rgba(255, 255, 255, 0)
+  );
+  pointer-events: none;
+}
+
+/* THE SHEEN: a band of light that crosses the pill once, on hover. It paints
+   ABOVE the label deliberately -- a real highlight passes over the letters
+   too. Transform only, so it runs on the compositor. */
+.btn::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -55%;
+  width: 42%;
+  background: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, var(--sheen)) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  mix-blend-mode: var(--sheen-blend);
+  pointer-events: none;
+  transform: translate3d(0, 0, 0);
+}
+
+.btn:hover:not(:disabled)::after {
+  animation: btn-sheen 760ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@keyframes btn-sheen {
+  to {
+    transform: translate3d(340%, 0, 0);
+  }
+}
+
+/* Hover FILLS it, which is the same gesture the old ink outline made -- only
+   the destination is the accent now rather than black. */
 .btn:hover:not(:disabled) {
-  background: var(--ink);
-  color: var(--on-primary);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: var(--accent);
+  color: var(--accent-deep);
   text-decoration: none;
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 8px 18px -10px rgba(138, 20, 40, 0.4);
 }
 
 .btn:active:not(:disabled) {
-  background: var(--body);
-  border-color: var(--body);
-  color: var(--on-primary);
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  border-color: var(--accent-deep);
+  color: var(--accent-deep);
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
+/* Disabled is FLAT, on every variant. A luminous, lifted, sheening button
+   that does nothing when pressed is the worst affordance in the set. */
 .btn:disabled {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   color: var(--muted);
   border-color: var(--hairline-strong);
+  box-shadow: none;
+  transform: none;
   cursor: not-allowed;
 }
 
-/* The one crimson primary action per surface (Translate, Convert, Explain,
-   Name it, Check again). The other buttons keep the outline-to-ink default.
-   White on crimson is 5.84:1 — AA. */
+.btn:disabled::before,
+.btn:disabled::after {
+  display: none;
+}
+
+/* --- the filled primary, in crimson glass -------------------------------
+   What makes it read as glass on a WHITE card, where a backdrop-filter has
+   nothing to bend: the fill is genuinely TRANSLUCENT, so the card shows
+   through and lightens the crimson. That is the real cue, not the blur --
+   which is still declared, because it is correct wherever this button does
+   sit over something textured (the gradient ground, a depiction). */
 .btn--accent {
-  background: var(--accent);
-  border-color: var(--accent);
+  --gloss: 0.24;
+  --sheen: 0.5;
+  --sheen-blend: overlay;
+
+  background: color-mix(in srgb, var(--accent) 90%, transparent);
+  -webkit-backdrop-filter: blur(10px) saturate(1.6);
+  backdrop-filter: blur(10px) saturate(1.6);
+  border-color: color-mix(in srgb, var(--accent) 94%, transparent);
   color: var(--on-primary);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    0 1px 2px rgba(138, 20, 40, 0.16),
+    0 10px 22px -8px rgba(138, 20, 40, 0.44);
 }
 
 .btn--accent:hover:not(:disabled) {
-  background: var(--accent-deep);
-  border-color: var(--accent-deep);
+  background: color-mix(in srgb, var(--accent-deep) 92%, transparent);
+  border-color: color-mix(in srgb, var(--accent-deep) 96%, transparent);
   color: var(--on-primary);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.36),
+    0 2px 4px rgba(138, 20, 40, 0.18),
+    0 16px 30px -10px rgba(138, 20, 40, 0.5);
 }
 
+/* Pressed: the glass compresses. The lift collapses and the pill settles a
+   pixel, which is the whole feedback -- no colour flash. */
 .btn--accent:active:not(:disabled) {
-  background: var(--accent-deep);
+  background: color-mix(in srgb, var(--accent-deep) 96%, transparent);
   border-color: var(--accent-deep);
   color: var(--on-primary);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 2px 6px -2px rgba(138, 20, 40, 0.42);
 }
 
 .btn--accent:disabled {
   background: var(--surface-card);
   border-color: var(--hairline-strong);
   color: var(--muted);
+}
+
+/* --- /explain's action, in the second accent ----------------------------
+   By instruction ("explain button can be dark orange"), and deliberately
+   narrow: it recolours ONE button and nothing else -- not a confidence tier,
+   not the chrome, not the header. Every rule above applies unchanged, which
+   is the point of putting the gloss on .btn. */
+.btn--amber {
+  --gloss: 0.24;
+  --sheen: 0.5;
+  --sheen-blend: overlay;
+
+  background: color-mix(in srgb, var(--accent-amber) 90%, transparent);
+  -webkit-backdrop-filter: blur(10px) saturate(1.6);
+  backdrop-filter: blur(10px) saturate(1.6);
+  border-color: color-mix(in srgb, var(--accent-amber) 94%, transparent);
+  color: var(--on-primary);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    0 1px 2px rgba(120, 62, 14, 0.16),
+    0 10px 22px -8px rgba(120, 62, 14, 0.44);
+}
+
+.btn--amber:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-amber-deep) 92%, transparent);
+  border-color: color-mix(in srgb, var(--accent-amber-deep) 96%, transparent);
+  color: var(--on-primary);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.36),
+    0 2px 4px rgba(120, 62, 14, 0.18),
+    0 16px 30px -10px rgba(120, 62, 14, 0.5);
+}
+
+.btn--amber:active:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-amber-deep) 96%, transparent);
+  border-color: var(--accent-amber-deep);
+  color: var(--on-primary);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 2px 6px -2px rgba(120, 62, 14, 0.42);
+}
+
+.btn--amber:disabled {
+  background: var(--surface-card);
+  border-color: var(--hairline-strong);
+  color: var(--muted);
+}
+
+/* Every button icon. flex: none so a long label never squeezes it, and the
+   optical nudge is because a 24-unit stroke grid centres on its box while an
+   uppercase mono label sits on its baseline -- without it the icon reads a
+   pixel low against the caps beside it. */
+.icon {
+  display: block;
+  flex: none;
+  margin-top: -1px;
+}
+
+/* --- the two honest fallbacks -------------------------------------------
+   Both are the same answer: the SOLID accent, which is what these buttons
+   were before and is 5.84:1 under white text. Without backdrop-filter a
+   translucent fill is only a lighter, lower-contrast colour for nothing, and
+   a reader who has asked for less transparency has asked for exactly that. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .btn--accent {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .btn--accent:hover:not(:disabled) {
+    background: var(--accent-deep);
+    border-color: var(--accent-deep);
+  }
+
+  .btn--amber {
+    background: var(--accent-amber);
+    border-color: var(--accent-amber);
+  }
+
+  .btn--amber:hover:not(:disabled) {
+    background: var(--accent-amber-deep);
+    border-color: var(--accent-amber-deep);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .btn,
+  .btn--accent,
+  .btn--amber {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .btn--accent {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .btn--accent:hover:not(:disabled) {
+    background: var(--accent-deep);
+    border-color: var(--accent-deep);
+  }
+
+  .btn--amber {
+    background: var(--accent-amber);
+    border-color: var(--accent-amber);
+  }
+
+  .btn--amber:hover:not(:disabled) {
+    background: var(--accent-amber-deep);
+    border-color: var(--accent-amber-deep);
+  }
+
+  .btn::before {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn {
+    transition:
+      background-color 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+      border-color 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+      color 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .btn:hover:not(:disabled),
+  .btn:active:not(:disabled) {
+    transform: none;
+  }
+
+  .btn:hover:not(:disabled)::after {
+    animation: none;
+  }
 }
 
 /* -------------------- fields -------------------- */
@@ -1897,14 +2175,6 @@ input.field__control {
   transition:
     background-color 200ms cubic-bezier(0.16, 1, 0.3, 1),
     border-color 200ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-/* Drawn from three strokes, like every other mark in this system: the shaft,
-   the head, and the line it is going into. */
-.dropzone__browse-icon {
-  display: block;
-  width: 13px;
-  height: 13px;
 }
 
 .dropzone__face:hover .dropzone__browse {

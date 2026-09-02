@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchStructureFromName } from '../lib/api'
 import './IupacToSmiles.css'
+import Icon from '../components/Icon'
 
 // Curated names verified live against the real /api/iupac-to-smiles
 // endpoint (OPSIN-backed) before shipping -- simple, well-known IUPAC
@@ -102,6 +103,7 @@ function IupacToSmiles() {
               />
               <div className="from-name-panel__actions">
                 <button type="submit" className="btn" disabled={isLoading}>
+                  <Icon name="translate" />
                   {isLoading ? 'Converting…' : 'Convert'}
                 </button>
                 {validationNote && (

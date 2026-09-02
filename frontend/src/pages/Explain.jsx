@@ -7,6 +7,7 @@ import { segmentAtPath } from '../lib/svgHighlight'
 import { useAtomHighlight } from '../lib/useAtomHighlight'
 import { useKetcher } from '../lib/useKetcher'
 import './Explain.css'
+import Icon from '../components/Icon'
 
 // Curated structures spanning what the decomposition really does now that
 // it comes from OPSIN's own parse tree rather than SMARTS rules: a simple
@@ -332,10 +333,11 @@ function Explain() {
             <div className="explain-panel__actions">
               <button
                 type={mode === 'draw' ? 'button' : 'submit'}
-                className="btn"
+                className="btn btn--amber"
                 onClick={mode === 'draw' ? handleDraw : undefined}
                 disabled={isLoading || (mode === 'draw' && editorState !== 'ready')}
               >
+                <Icon name="translate" />
                 {isLoading ? 'Explaining…' : 'Explain'}
               </button>
               {validationNote && (
