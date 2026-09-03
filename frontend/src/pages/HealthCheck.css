@@ -1,55 +1,70 @@
 /* ============================================================
    Orthonym — Health Check
 
-   A two-cell bento: the live state on the left, the raw evidence for it
-   on the right, welded by one hairline seam and running edge to edge.
+   Two cards on the grey ground, state | evidence, at the shared 4fr/8fr
+   split — which is now the SHARED `.workspace` primitive (App.css) rather
+   than a private grid in this file that happened to redeclare the same
+   columns, gap, shell width and inset. `.health-patch` survives only as the
+   hook for what goes INSIDE those two cards, plus the one-screen clamp below
+   -- which is scoped to the split, for a measured reason recorded there.
 
-   Health is never signalled by colour. It reuses the site's own rule
-   vocabulary so the marks mean the same thing here as they do under a
-   chemical name: a double rule for confirmed-good, three waiting dashes
-   for in-progress, two struck lines for failure.
+   NOTE ON THE CASCADE: this stylesheet is imported before App.css, so at
+   EQUAL specificity App.css wins. Every rule below that overrides a shared
+   declaration (`.card__label`'s margin, `.health-patch__row dd`'s type) is
+   deliberately one class heavier than the rule it beats.
+
+   Health is never signalled by colour, and never by the double rule. It
+   reuses the site's own monochrome mark vocabulary, kept distinct from every
+   confidence tier: three shimmering hairline dashes while the request is in
+   flight, ONE solid 2px ink rule for reachable, the struck pair for
+   unreachable. Paired ink lines already carry a meaning of their own in this
+   system, so "good" must never be drawn with them.
    ============================================================ */
 
-.health-patch {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--gap);
-  width: 100%;
-  max-width: var(--shell-max);
-  margin-inline: auto;
-  padding-inline: var(--shell-pad);
+/* Nothing may escape a cell -- but that rule is NOT restated here. This page
+   renders `class="workspace health-patch"`, so these two cards are already
+   `.workspace > *` and already take `min-height: 0; overflow-y: auto` from
+   App.css. A local copy at equal specificity did nothing except give the next
+   reader a second place to look. */
+
+/* ROW SIZING, and only row sizing — the one-screen clamp itself (`flex: 1;
+   min-height: 0`) belongs to `.workspace` in App.css and applies at every
+   width, so restating it here would be a duplicate, not a scoping.
+
+   What IS genuinely scoped to the split is `grid-auto-rows`. Below 1000px
+   `.workspace` collapses to one column and these two cards become two stacked
+   rows; `minmax(0, 1fr)` there gave each card HALF the leftover height —
+   measured at 400x640: two 113px boxes, each scrolling its own contents, with
+   the state word cut off and the button below its card's fold. Zero overflow,
+   and unreadable. A narrow screen gets the honest answer instead: the cards
+   take their content height and the page scrolls inside `.page__content`,
+   exactly as /about does. */
+@media (min-width: 1000px) {
+  .health-patch {
+    grid-auto-rows: minmax(0, 1fr);
+  }
 }
 
-.health-patch__state,
-.health-patch__details {
-  min-width: 0;
-  padding: var(--s-xl);
-  background: var(--card);
-  border-radius: var(--r-card);
-  box-shadow: var(--card-shadow);
-  border: var(--card-border);
+/* The shared `.card__label` carries its own 16px bottom margin, which double
+   counts against these flex gaps. */
+.health-patch .card__label {
+  margin-bottom: 0;
 }
+
+/* -------------------- the state cell -------------------- */
 
 .health-patch__state {
   display: flex;
   flex-direction: column;
-  gap: var(--s-md);
-}
-
-
-
-.health-patch__top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s-lg);
-  margin-bottom: var(--s-xxs);
+  align-items: flex-start;
+  gap: var(--s-sm);
 }
 
 /* The state itself is the largest thing in the cell — display face,
-   uppercase, wide-tracked, the way Bugatti sets a model name. */
+   uppercase, wide-tracked. Weight 400: bold is for stat figures and the
+   header's route labels, and this is neither. */
 .health-patch__label {
+  margin: 0;
   font-family: var(--font-display);
   font-size: var(--t-display-md);
   font-weight: 400;
@@ -60,23 +75,42 @@
 }
 
 /* -------------------- the state mark -------------------- */
+/* A FIXED slot, so the three phases cannot change the card's height as they
+   swap — the mark sits immediately under the state word, at one constant
+   measure, the way a confidence rule sits under a name. */
 
 .health-patch__swatch {
   display: flex;
-  align-items: flex-start;
-  min-height: 24px;
+  align-items: center;
+  width: min(100%, 320px);
+  height: 24px;
+  /* The comment above calls this a FIXED slot, so it has to actually be one.
+     It is a column-flex item, and the cell above gets `flex: 1; min-height: 0`
+     at the split breakpoint -- without this the slot is the first thing the
+     compression eats and the four marks stop sitting at one constant height,
+     which is the only reason they read as the same statement. */
+  flex-shrink: 0;
 }
 
 /* Reachable: one solid, unbroken ink rule — a continuous line for a
-   continuous connection. Deliberately NOT the double rule: paired ink
-   lines are the struck/failed mark below, and a state signal that shares
-   its shape with the failure signal carries no information at all. */
+   continuous connection. Deliberately NOT the double rule. */
 .health-patch__fill {
-  width: min(100%, 320px);
+  width: 100%;
   height: 2px;
   background: var(--ink);
 }
 
+/* Degraded: the SAME rule, stopping short. The backend answered, so the line
+   is real; it cannot verify a name, so the line does not reach the end. This
+   is a measure change, not a new mark — borrowing the dashed or dotted rule
+   would say "fallback" or "best-effort", which are confidence tiers and mean
+   something specific about a NAME, not about a server. */
+.health-patch__fill--partial {
+  width: 45%;
+}
+
+/* Checking: the site's waiting mark, three hairline dashes at 70/45/58%
+   shimmering out of step (the shared `dash-wait`, App.css). */
 .health-patch__pending-cloth {
   display: flex;
   flex-direction: column;
@@ -112,38 +146,60 @@
   }
 }
 
-/* Unreachable: the struck slot. */
+/* Why this state, in the body face: an aside under the state word, the way a
+   result tile explains its tier. Only ever rendered for `degraded`, where the
+   word alone ("Reachable, but degraded") does not say what is degraded. */
+/* Composes `.prose-sm` (App.css) for the type; only the measure is local. */
+.health-patch__reason {
+  max-width: 52ch;
+}
+
+/* Unreachable: the struck pair, two hairlines 5px apart centre to centre —
+   the same spacing the result tile's error mark uses (Home.css: absolute at
+   top 20px / 25px), so the two read as the same statement.
+   The gap is 4px, not 5px, because these are 1px rules laid out in a flex
+   column: gap is edge-to-edge and the spacing that has to match is centre-to-
+   centre. 4 + 1 = 5. Spelled out because `var(--s-xxs)` sat here under a
+   comment claiming 5px, which is the kind of near-miss that gets "corrected"
+   to 5 and silently breaks the match. */
 .health-patch__snip-wrap {
-  position: relative;
-  width: min(100%, 320px);
-  min-height: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
 }
 
 .health-patch__snip {
-  position: absolute;
-  left: 0;
+  display: block;
   width: 100%;
   height: 1px;
   background: var(--ink);
 }
 
-.health-patch__snip--a {
-  top: 9px;
+/* The single primary action, pinned to the foot of the cell: the two cards
+   stretch to the same height and this gives the shorter one a base line
+   rather than a long empty tail. `auto` resolves to 0 the moment the content
+   is taller than the cell, so it cannot push anything out. */
+.health-patch__actions {
+  margin-top: auto;
+  padding-top: var(--s-lg);
 }
 
-.health-patch__snip--b {
-  top: 14px;
-}
-
-/* -------------------- evidence -------------------- */
-/* Bugatti's spec-cell table: a mono label, its value beneath, hairline
-   rules between rows and nothing else. */
+/* -------------------- the evidence cell -------------------- */
+/* A spec-cell table: a mono label, its value beneath, hairline rules between
+   rows and nothing else. */
 
 .health-patch__details {
   display: flex;
   flex-direction: column;
-  /* A <dl> carries a UA block margin. Left in, it holds this cell off its
-     own grid area and the mosaic ground shows through as a grey ring. */
+  gap: var(--s-md);
+}
+
+.health-patch__list {
+  display: flex;
+  flex-direction: column;
+  /* A <dl> carries a UA block margin. Left in, it holds this list off the
+     card's own padding and the row rules stop lining up with the label. */
   margin: 0;
 }
 
@@ -189,16 +245,25 @@
   color: inherit;
 }
 
-.health-patch__raw {
-  display: block;
-  max-height: 240px;
-  overflow: auto;
-  white-space: pre-wrap;
+/* The clause that used to close the hero lede, moved down beside the
+   endpoint it describes. A mono CAPTION, not prose — the trinity rule bans
+   the mono face in a paragraph, and this annotates machine data. Two classes
+   deep so it beats `.health-patch__row dd` above, which App.css's later
+   position would otherwise let win at equal weight. */
+.health-patch__row .health-patch__hint {
+  font-size: var(--t-caption);
+  line-height: 1.6;
+  letter-spacing: 0;
+  text-transform: none;
+  /* 5.74:1 on the white card. */
+  color: var(--muted);
 }
 
-/* Seam on the shared 1/3 grid line, matching every other page. */
-@media (min-width: 1000px) {
-  .health-patch {
-    grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
-  }
+/* Arbitrary server text, capped so one long error can neither stretch the
+   card nor take the screen. */
+.health-patch__raw {
+  display: block;
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
 }
