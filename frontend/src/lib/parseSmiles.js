@@ -1,3 +1,5 @@
+import { splitLines } from './parseLines.js'
+
 // Mirrors the backend's FAST_PATH_MAX_MOLECULES (backend/app/core/config.py),
 // not a number of its own: one SMILES per line, blank/whitespace-only lines
 // dropped, and only the first MAX_ROWS processed.
@@ -16,14 +18,5 @@
 export const MAX_ROWS = 10
 
 export function parseSmilesLines(rawText) {
-  const lines = rawText
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-
-  return {
-    lines: lines.slice(0, MAX_ROWS),
-    total: lines.length,
-    truncated: lines.length > MAX_ROWS,
-  }
+  return splitLines(rawText, MAX_ROWS)
 }
