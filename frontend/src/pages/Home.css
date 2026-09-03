@@ -241,30 +241,22 @@
   gap: var(--s-sm);
   min-width: 0;
   padding: var(--s-md) var(--s-xl);
-  /* The tint is a BLOOM under the TABS, and it has to fade in BOTH directions.
-     A plain `linear-gradient(180deg, ...)` fades downward but runs the full
-     width of the card, so past the last tab it was a pink stripe with nothing
-     above it -- a band across the paper rather than colour bleeding out of the
-     tabs. Reported as "the gradient is put on the white box weirdly", and the
-     description was exact.
-     An ellipse anchored at the top edge, centred on the tab strip, fades away
-     from the tabs on every axis at once. The strip starts at the card's left
-     padding plus one fillet and runs about 40% of the card's width, so the
-     centre sits near 20% and the ellipse is sized to cover it.
-     Full tint at the origin, because the live tab's fill has to EQUAL the
-     colour directly beneath it or the join shows as a line -- that equality is
-     the whole merge. It is spent well before the field's label at 17px. */
-  background:
-    radial-gradient(
-      ellipse 48% 38px at 20% 0,
-      var(--tab-tint) 0%,
-      color-mix(in srgb, var(--tab-tint) 45%, var(--card)) 48%,
-      transparent 100%
-    ),
-    var(--card);
+  /* PLAIN WHITE. The card used to paint its own tint here -- first a linear
+     band, then a radial bloom -- and either way it was a SECOND formula
+     meeting the tabs' first one along the join. Two different formulas cannot
+     agree at every x, so a step showed no matter how each was tuned. The tabs
+     carry their own bleed now (see --tab-bleed), so there is exactly one paint
+     source and nothing left to mismatch. */
+  background: var(--card);
   border-radius: var(--r-card);
   box-shadow: var(--card-shadow);
   border: var(--card-border);
+  /* The top border is drawn OVER the card's own fill, so it reads as a pale
+     hairline along the whole top edge -- the white line visible beside the
+     first tab, where no tab covers it. Transparent rather than removed: the
+     1px stays in the box model, so nothing shifts by a pixel, and the card's
+     shadow still marks the edge everywhere the tabs do not. */
+  border-top-color: transparent;
 }
 
 .workbench__input form {
@@ -1461,17 +1453,24 @@
   /* Inset past the card's 22px corner AND past the first tab's own fillet, so
      the leftmost island stands on the straight part of the top edge. */
   padding-left: calc(var(--s-xl) + var(--notch-wing));
-  /* The islands must TOUCH the card: -1px pulls them over its hairline so the
-     live one can cancel it and merge. */
-  margin-bottom: -1px;
+  /* The strip is pulled up by exactly the bleed depth, so each tab's VISIBLE
+     bottom lands on the card's top edge and only the fading part overlaps it.
+     It must equal --tab-bleed: left at -1px while the boxes grew by 30px, the
+     tabs floated 29px clear of the card with their bleed dissolving over the
+     grey ground instead of over the card. */
+  margin-bottom: calc(-1 * var(--tab-bleed));
 }
 
 .input-tab {
   position: relative;
   display: inline-flex;
   align-items: center;
-  /* ONE height for all three. The stack, not a step, says which is live. */
-  height: var(--info-notch-h);
+  /* ONE height for all three. The stack, not a step, says which is live.
+     The box is TALLER than the tab looks: --info-notch-h of visible tab plus
+     --tab-bleed of colour that runs down over the card and fades out. The
+     padding keeps the label inside the visible part. */
+  height: calc(var(--info-notch-h) + var(--tab-bleed));
+  padding-block: 0 var(--tab-bleed);
   padding-inline: var(--s-lg);
   /* THE STACK. Each tab tucks a fillet's width under its neighbour, so the row
      reads as a fanned set of folders rather than three separate lozenges. */
@@ -1487,9 +1486,44 @@
      fillets below take the matching one, so the junctions stay continuous
      through the curves too.
      The gloss is the same white top highlight the buttons use, over the top. */
+  /* The gloss, matching .btn: a white highlight over the top of the fill.
+     0.5 rather than the button's 0.6, because these fills are pale to start
+     with and the button's dial washed them out. */
   background:
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0) 62%),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 24px),
     linear-gradient(to right, var(--tab-a), var(--tab-b));
+  /* THE BLEED IS A MASK, not a white veil painted over the fill.
+     A veil fading to --card looks identical on a white card, but it leaves the
+     box fully OPAQUE all the way down -- so a drop-shadow would trace the
+     box's real bottom edge and draw the very line this whole exercise removed.
+     A mask takes the alpha to zero instead, so the tab genuinely dissolves and
+     there is no edge for a shadow to find.
+     `repeat-x` is load-bearing: a mask covers the border box, and the fillets
+     are positioned OUTSIDE it. Repeating along x tiles the same vertical fade
+     across them so they dissolve on the same schedule; not repeating along y
+     keeps everything below the box transparent, which is what stops the
+     shadow reappearing under the bleed. */
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0,
+    #000 var(--info-notch-h),
+    transparent calc(var(--info-notch-h) + var(--tab-bleed))
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0,
+    #000 var(--info-notch-h),
+    transparent calc(var(--info-notch-h) + var(--tab-bleed))
+  );
+  -webkit-mask-repeat: repeat-x;
+  mask-repeat: repeat-x;
+  /* The button's lift, in the pastels' own hue rather than crimson. Rendered
+     as a filter, not a box-shadow: a box-shadow traces the BOX, which runs
+     30px into the card, while drop-shadow traces the painted silhouette --
+     the notch curve, the fillets, and the fade -- so nothing is drawn where
+     the tab has already dissolved. */
+  filter: drop-shadow(0 1px 1px rgba(138, 20, 40, 0.1))
+    drop-shadow(0 6px 10px rgba(138, 20, 40, 0.12));
   font-family: var(--font-mono);
   font-size: var(--t-nav);
   font-weight: 700;
@@ -1505,6 +1539,9 @@
      7.46:1 at its worst, and still clearly separable from ink (10.45 vs
      17.37:1 on the palest stop), which is what the signal needs. */
   color: var(--body);
+  /* The button's top rim, the last part of its gloss recipe. Inset, so it is
+     drawn inside the box and cannot reach the bleed. */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
   cursor: pointer;
   /* Colour only. A transform lift was here and got CLIPPED on the way up --
      the strip has no room above it -- so the tab appeared to crop mid-
@@ -1534,9 +1571,12 @@
   z-index: 1;
 }
 
-/* Hover brightens rather than moves: a lift had nowhere to go and cropped. */
+/* Hover brightens rather than moves: a lift had nowhere to go and cropped.
+   The shadow is restated because `filter` is one property -- setting only
+   brightness here would drop the lift. */
 .input-tab:hover {
-  filter: brightness(1.04);
+  filter: drop-shadow(0 1px 1px rgba(138, 20, 40, 0.1))
+    drop-shadow(0 6px 10px rgba(138, 20, 40, 0.12)) brightness(1.03);
 }
 
 /* THE LIVE TAB rises to the top of the stack. Its fill and the card's first
@@ -1550,7 +1590,8 @@
 .input-tab.input-tab--on,
 .input-tab.input-tab--on:hover {
   z-index: 4;
-  filter: none;
+  filter: drop-shadow(0 1px 1px rgba(138, 20, 40, 0.1))
+    drop-shadow(0 6px 10px rgba(138, 20, 40, 0.12));
   color: var(--ink);
 }
 
@@ -1573,12 +1614,18 @@
   position: absolute;
   bottom: 0;
   width: var(--notch-wing);
-  height: var(--notch-wing);
+  /* As tall as the curve PLUS the bleed, so the colour under the fillet fades
+     on exactly the same ramp as the tab beside it. A 20px fillet left a strip
+     of bare card under each curve, which is the step that showed at the right
+     of the last tab. */
+  height: calc(var(--notch-wing) + var(--tab-bleed));
   pointer-events: none;
 }
 
 /* Each fillet takes the colour of the EDGE it grows out of, so the ramp stays
-   continuous around the curves instead of jumping back to a flat fill. */
+   continuous around the curves instead of jumping back to a flat fill -- and
+   carries the same white veil, so it dissolves into the card on the same
+   schedule as the tab it belongs to. */
 .input-tab::before {
   background: var(--tab-a);
 }
@@ -1994,6 +2041,15 @@
    --tab-foot is where the gradient settles: a hair lighter than --card-soft
    (#edeff2) so the framed SMILES field, which IS --card-soft, still has an
    edge to show against the card behind it. */
+/* How far each tab's colour runs down over the card before it is gone. 30px
+   reaches past the card's top and dies well above the field's label at 17px
+   below it. One number, read by the tab box, its padding, the strip's negative
+   margin, both fillets and both veils -- they must all agree or the bleed
+   stops in the wrong place. */
+.input-col {
+  --tab-bleed: 30px;
+}
+
 /* THE PASTEL RAMP. The owner's palette pulled toward white until all three are
    genuinely pale and evenly spaced -- measured luminances 0.819 / 0.712 /
    0.606, steps of 0.107 and 0.106, against raw coral's 0.32 which was far too
