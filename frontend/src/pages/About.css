@@ -1,12 +1,24 @@
 /* ============================================================
    STITCH — About (Read mode)
 
-   The one route whose job is comprehension, so it is built for reading:
-   full-bleed bands seamed by hairlines, an uppercase display heading
-   held in a narrow left column, and the prose itself in a measured
-   sans column beside it. The measured accuracy figures open the
-   page as spec cells, at full size — the accuracy figures are not fine
-   print here.
+   The one route whose job is comprehension, and the one route allowed to
+   run past a single screen: it scrolls inside `.page__content` by design
+   (DESIGN.md's scroll budget records this route as the one that overflows,
+   against 0
+   for Home, /from-name, /explain and /health).
+
+   It opens the way Home does — a `.page-hero` (App.css) on the bare grey
+   ground, NOT the white `.page-head` card it carried until 2026-09-02 —
+   and everything below it is the shared card vocabulary: rounded
+   `--r-card` cards on the ground, `--gap` between them, `--card-shadow`
+   as the only lift. The prose bands hold a display heading in a narrow
+   left column beside a measured sans column; the measured accuracy
+   figures open the page as full-size spec cells, because the numbers are
+   not fine print here.
+
+   Nothing on this page is interactive except one inline link, so there is
+   no button and no `.workspace` — the crimson accent appears here only as
+   `--link`, which is chrome.
    ============================================================ */
 
 .about-page {
@@ -25,6 +37,31 @@
    become cards themselves, below. */
 .about-band {
   width: 100%;
+}
+
+/* -------------------- the figures' provenance -------------------- */
+/* PRODUCT.md principle 2: never show a measured figure without the version,
+   the benchmark and the metric's own definition. This line sits directly
+   under the three spec cells so a reader who only scans the numbers still
+   gets all three; the accuracy band below states the same facts in prose.
+
+   Mono is legal because this is a CAPTION, not a paragraph — the one
+   unbreakable trinity rule is that the monospace face never sets a
+   paragraph of running prose.
+
+   Colour is `--body`, NOT the `--muted` a mono caption normally takes.
+   This line sits on the bare grey ground, not inside a card, and #666666
+   on --ground (#d5d8dc) measures 4.02:1 — under AA. #333333 on the same
+   ground is 8.84:1. `--muted-soft` is even further out of bounds here: it
+   is canvas-only. */
+.about-spec-source {
+  padding-block: var(--s-sm) 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  line-height: 1.5;
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--body);
 }
 
 /* -------------------- split bands -------------------- */
@@ -100,9 +137,13 @@
 
 /* -------------------- fact mosaic -------------------- */
 /* The verified facts and the acknowledgments both render as a bento
-   mosaic: cells welded by a 1px hairline seam over a hairline ground,
-   0px corners, no fill, no shadow. A cell is a label in mono caption
-   over one line of prose — never an icon-plus-heading-plus-text card. */
+   mosaic of the site's standard cards: white fill, --r-card corners,
+   --card-shadow, --gap between them, on the grey ground. (This block used
+   to describe 1px hairline seams and 0px corners — the flat full-bleed
+   world that the TechX card bento replaced on 2026-08-26. The rules below
+   have carried the card frame since then; only the comment lagged.)
+   A cell is a label in mono caption over one line of prose — never an
+   icon-plus-heading-plus-text card. */
 
 .about-cards {
   display: grid;

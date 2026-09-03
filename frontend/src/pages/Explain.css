@@ -1,9 +1,18 @@
 /* ============================================================
    STITCH — Explain
 
-   Inherits the shared full-bleed workspace mosaic, field, button and tag
-   vocabulary. Page-specific: the input-mode switch, the four result
-   states, the hoverable name, and the atom-highlight wash.
+   The page opens on BARE GROUND (`.page-hero`, App.css) and works in the
+   contained `.workspace` card bento; the field, button, chip and card
+   vocabulary are all shared. Page-specific and living here: the input-mode
+   switch, the four result states, the hoverable name, and the atom-highlight
+   wash.
+
+   Several boxes this file used to draw are now drawn by App.css's bento
+   adaptation instead (`.explain-results .explain-patch` is flattened,
+   `.explain-result__diagram` gets the --r-card-sm framed-image treatment).
+   App.css loads LAST, so its versions win; the flat-world copies that used
+   to sit here were dead declarations and have been removed rather than left
+   to contradict it.
 
    The highlight wash (--glow) is the system's one named colour
    exception, and it is a function rather than a decoration: it says "you
@@ -50,14 +59,22 @@
 }
 
 /* -------------------- input mode switch -------------------- */
-/* Two radios, set as mono caption labels on a hairline rule. No pills,
-   no segmented-control chrome. */
+/* Three radios (IUPAC name / SMILES / Draw) as pills on a hairline rule.
+   They must stay on ONE row: wrapping made "Draw" read as a second,
+   unrelated control rather than the third tab.
+
+   This rule was written TWICE in this file -- here, and again at the bottom
+   when /teach folded into this page. The later block silently won the gap
+   and the alignment, so the `gap: var(--s-lg)` here had never rendered.
+   Merged into one rule, keeping the values that were actually in effect;
+   the two hardcoded gaps are now the nearest system steps. */
 
 .explain-mode {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s-lg);
+  align-items: baseline;
+  column-gap: var(--s-md);
+  row-gap: var(--s-xxs);
   min-width: 0;
   margin: 0;
   padding: 0 0 var(--s-sm);
@@ -96,7 +113,12 @@
   text-transform: uppercase;
   color: var(--muted);
   cursor: pointer;
-  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+  /* Colour and border-colour only, at the system's state duration and
+     easing. Nothing here translates or scales. */
+  transition:
+    color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .explain-mode__option:hover {
@@ -143,53 +165,26 @@
   gap: var(--s-lg);
 }
 
-.explain-fetch-error {
-  padding: var(--s-lg);
-  background: var(--surface-soft);
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--r-none);
-  font-family: var(--font-body);
-  font-size: var(--t-body-sm);
-  line-height: 1.5;
-  color: var(--ink);
-}
-
-.explain-fetch-error code {
-  padding: 0 0.25em;
-  background: var(--surface-card);
-  color: var(--ink);
-}
-
+/* Only the LAYOUT is still this file's. App.css flattens every
+   `.explain-patch` inside `.explain-results` -- transparent, no border, no
+   radius, no padding -- so a state renders as content in the result card
+   rather than a box inside a box. The fill, hairline and 0px radius this
+   rule used to carry were dead declarations from the flat world, and the
+   per-state fills and the error state's ink border were dead with them.
+   The error state loses nothing: its mark is the two struck rules below,
+   which is the monochrome error vocabulary the whole site uses. */
 .explain-patch {
   display: flex;
   flex-direction: column;
   gap: var(--s-lg);
-  padding: var(--s-lg);
-  background: var(--canvas);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-none);
 }
 
-.explain-patch--idle,
-.explain-patch--loading {
-  background: var(--surface-soft);
-}
-
+/* Pushes the empty note off the top of a result card that is otherwise all
+   air. NOT centring: the parent is a plain block box, where an `auto` block
+   margin resolves to 0 and only the flex/grid case would centre. It reads as
+   deliberate spacing either way, so the rule stays and the claim goes. */
 .explain-patch--idle {
   margin-block: auto;
-}
-
-.explain-patch--error {
-  border-color: var(--ink);
-}
-
-/* A settled result already frames its own diagram, so an outer border
-   would be a box drawn around a box. The success state drops it and lets
-   the workspace seam do the containing. */
-.explain-patch--success,
-.explain-patch--unmapped {
-  padding: 0;
-  border: none;
 }
 
 /* This route shows how a name decomposes; it does not report the name's
@@ -348,35 +343,35 @@
   border-bottom: 1px solid var(--ink);
 }
 
-.explain-result__notice {
-  padding: var(--s-md);
-  background: var(--surface-soft);
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--r-none);
-  font-family: var(--font-body);
-  font-size: var(--t-body-sm);
-  line-height: 1.5;
-  color: var(--ink);
-}
-
 .explain-result__body {
   display: flex;
   flex-direction: column;
   gap: var(--s-lg);
 }
 
-/* The structure diagram: edge to edge in its frame, 0px corners, one
-   hairline, exactly like every other depiction on the site. */
+/* The structure diagram. Its FRAME is App.css's -- `--card-soft` ground,
+   `--card-border` keyline, `--r-card-sm` corners, the same framed-image
+   treatment `.tile__depiction` and the Ketcher editor wear -- so the flat
+   world's canvas/hairline/0px copy has been removed rather than left here
+   to lose the cascade silently. Only the box's own geometry is set here. */
+/* NO aspect-ratio, and that is the whole point of this rule. CLAUDE.md
+   records the identical `aspect-ratio: 4 / 3` being torn out of
+   `.tile__depiction` because a 4:3 box at card width measured 650px tall and
+   pushed the name out of view; here it sat in the 8fr OUTPUT card, which is
+   wider still. Two reasons it has to go now rather than later: /explain is
+   one of the routes DESIGN.md records at zero scroll overflow, and the
+   depiction is drawn by CDK since 2026-09-02 with CIP stereo labels round
+   the edges, so its natural proportions are not the ones this ratio assumed.
+   `flex: 1` with a 180px floor is Home's proven pattern: take the height the
+   card has left, never demand more. */
 .explain-result__diagram {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  flex: 1;
+  min-height: 180px;
   padding: var(--s-md);
-  background: var(--canvas);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-none);
 }
 
 .explain-result__diagram svg {
@@ -397,7 +392,6 @@
   padding: var(--s-lg) 0 0;
   background: var(--canvas);
   border-top: 1px solid var(--hairline-strong);
-  border-radius: var(--r-none);
 }
 
 .explain-detail__label {
@@ -447,7 +441,9 @@
   padding: var(--s-md) 0;
   background: transparent;
   border: none;
-  border-radius: var(--r-none);
+  /* The row's hover fill is a rounded tile like every other small surface
+     in the bento, not a square-cornered band from the flat world. */
+  border-radius: var(--r-card-sm);
   text-align: left;
   cursor: pointer;
   transition: background-color 0.18s cubic-bezier(0.16, 1, 0.3, 1);
@@ -515,43 +511,24 @@
   }
 }
 
-/* The Ketcher frame on the Draw tab.
-   Moved here from Teach.css when /teach folded into this page. It had to
-   move, not just be left behind: Teach.css was imported by Teach.jsx, so
-   deleting that page unloaded the stylesheet and took .results and
-   .fetch-error with it -- both still used here. Vite only ships CSS some
-   module imports, and "some other page imports it" is not ownership. */
-/* From StructureToIupac.css, same reason. */
-.results {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-lg);
-}
+/* `.results` and `.fetch-error` used to be parked here, inherited from
+   Teach.css and StructureToIupac.css when those pages folded in. Both are
+   gone. `.results` because nothing renders it; `.fetch-error` because the
+   thing it described turned out to be genuinely shared -- it now lives in
+   App.css as `.notice`, which is where an un-namespaced name belongs. That is
+   the distinction the page-prefix rule is really making: a name either is
+   shared, and goes in the shared file, or it is not, and takes its page's
+   prefix. What it must never do is sit un-namespaced in ONE page's stylesheet,
+   because five stylesheets share one cascade and the last loaded wins with no
+   error. */
 
-.fetch-error {
-  padding: var(--s-lg);
-  background: var(--surface-soft);
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--r-card-sm);
-  font-family: var(--font-body);
-  font-size: var(--t-body-sm);
-  line-height: 1.5;
-  color: var(--ink);
-}
-
-.fetch-error code {
-  padding: 0 0.25em;
-  background: var(--surface-card);
-  color: var(--ink);
-}
-
-/* Three input options now (name / SMILES / draw), and they must stay on one
-   row: wrapping made "Draw" look like a second, unrelated control rather than
-   the third tab. */
-.explain-mode {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  column-gap: 1.1rem;
-  row-gap: 0.35rem;
+/* The two hover transitions added in the 2026-09-02 pass were the only ones
+   in this file without a reduced-motion branch; every other transition here
+   already had one. Colour-only and 0.18s, so the budget was never the issue
+   -- the omission was. */
+@media (prefers-reduced-motion: reduce) {
+  .explain-name__part,
+  .explain-segment {
+    transition: none;
+  }
 }

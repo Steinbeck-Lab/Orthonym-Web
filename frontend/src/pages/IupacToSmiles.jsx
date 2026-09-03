@@ -75,13 +75,21 @@ function IupacToSmiles() {
 
   return (
     <>
-      <div className="page-head page-shell">
-        <h1 className="page-head__title">Read the name back</h1>
-        <p className="page-head__lede">
-          Type an IUPAC name and STITCH parses it back into a molecule &mdash; a SMILES string
-          plus a 2D depiction &mdash; using OPSIN, an independent name-to-structure parser.
+      {/* The opening is NOT a card. `.page-hero` (App.css) is `.home-hero`'s
+          geometry for a route that has a title instead of the wordmark: no
+          fill, no border, no shadow, no radius, so the page begins with the
+          grey ground rather than with a second white rectangle under the
+          header notch. It self-insets, so it must not also take `page-shell`.
+          The lede is ONE sentence by design. The rest of what the old
+          `.page-head` lede said -- the SMILES + depiction output, and OPSIN's
+          name -- moved down into the input card, where it sits beside the
+          control it describes. Nothing new is claimed here. */}
+      <section className="page-hero" aria-label="Introduction">
+        <h1 className="page-hero__title">Read the name back</h1>
+        <p className="page-hero__lede">
+          Type an IUPAC name and STITCH parses it back into a molecule.
         </p>
-      </div>
+      </section>
 
       <main className="workspace" aria-label="IUPAC to Structure">
         <section className="from-name-panel" aria-label="Convert an IUPAC name">
@@ -102,7 +110,10 @@ function IupacToSmiles() {
                 onChange={(event) => setNameInput(event.target.value)}
               />
               <div className="from-name-panel__actions">
-                <button type="submit" className="btn" disabled={isLoading}>
+                {/* The one primary action on this surface, and therefore the
+                    one filled crimson glass button. The chips below are the
+                    secondary vocabulary and stay `.chip`. */}
+                <button type="submit" className="btn btn--accent" disabled={isLoading}>
                   <Icon name="translate" />
                   {isLoading ? 'Converting…' : 'Convert'}
                 </button>
@@ -116,7 +127,10 @@ function IupacToSmiles() {
 
             <div className="examples" role="group" aria-label="Try a curated example">
               <span className="examples__label">Try one:</span>
-              <ul className="examples__list">
+              {/* role="list" because index.css strips list semantics globally
+                  (`list-style: none` with no role), which silently drops the
+                  list from the accessibility tree in Safari/VoiceOver. */}
+              <ul className="examples__list" role="list">
                 {EXAMPLES.map((example) => (
                   <li key={example.name}>
                     <button
@@ -133,24 +147,36 @@ function IupacToSmiles() {
             </div>
           </form>
 
-          <p className="page-about-note">
-            Read how this works, and STITCH&rsquo;s measured accuracy, on the{' '}
-            <Link to="/about" className="about-link">
-              About
-            </Link>{' '}
-            page.
-          </p>
+          {/* The card's foot: what you get and who parsed it, then the shared
+              pointer to About. One hairline divider INSIDE the card, which is
+              the only place a seam survives in this system. */}
+          <div className="from-name-panel__foot">
+            <p className="prose-sm">
+              You get a SMILES string plus a 2D depiction, read by OPSIN &mdash; an
+              independent name-to-structure parser.
+            </p>
+            <p className="page-about-note">
+              Read how this works, and STITCH&rsquo;s measured accuracy, on the{' '}
+              <Link to="/about" className="about-link">
+                About
+              </Link>{' '}
+              page.
+            </p>
+          </div>
         </section>
 
         <section className="from-name-results" aria-label="Structure result">
           {fetchError && (
-            <p className="from-name-fetch-error" role="alert">
+            <p className="notice" role="alert">
               Could not reach STITCH&rsquo;s backend ({fetchError}). Is it running on{' '}
               <code>localhost:8000</code>?
             </p>
           )}
 
-          <div aria-live="polite">
+          {/* The live region is also the flex track the depiction grows in:
+              it takes the height the card has left, so the drawing is as
+              large as the cell genuinely allows and never larger. */}
+          <div className="from-name-results__live" aria-live="polite">
             {phase === 'idle' && (
               <div className="from-name-patch from-name-patch--idle">
                 <p className="from-name-patch__empty-note">
@@ -161,7 +187,7 @@ function IupacToSmiles() {
             )}
 
             {phase === 'loading' && (
-              <div className="from-name-patch from-name-patch--loading" aria-busy="true">
+              <div className="from-name-patch" aria-busy="true">
                 <div className="from-name-patch__top">
                   <span className="from-name-patch__state-label">Converting&hellip;</span>
                 </div>
@@ -193,7 +219,7 @@ function IupacToSmiles() {
             )}
 
             {phase === 'error' && (
-              <div className="from-name-patch from-name-patch--error" role="alert">
+              <div className="from-name-patch" role="alert">
                 <div className="from-name-patch__top">
                   <span className="from-name-patch__state-label">
                     {apiError || 'Could not parse this name'}
