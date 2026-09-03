@@ -288,19 +288,27 @@ def test_the_fingerprint_falls_back_rather_than_raising(monkeypatch):
 
 
 def test_the_fast_and_batch_paths_agree_on_the_cache_key(redis_client):
-    """untested-4: I3 is fixed -- main.py routes the fast path through
-    _canonicalize, so both paths key on the same canonical SMILES -- but
-    nothing asserted it.
+    """untested-4: spec section 6.1's shared-cache promise is only true if the
+    two entry points derive identical keys for the same input. They did not
+    once already: the fast path silently stopped routing through the shared
+    canonicaliser, so /api/translate and /api/jobs built different strings for
+    one molecule and a name computed on one path was re-computed on the other.
+    test_cache_key asserted nothing about this, and test_fast_path asserted
+    call ORDER only.
 
-    Spec section 6.1's shared-cache promise is only true if the two paths
-    derive identical keys for the same molecule. They did not once already:
-    the fast path silently stopped canonicalizing, so "OCC" and "CCO" were
-    separate entries and a molecule named on one path was re-named on the
-    other. test_cache_key asserted nothing about canonicality, and
-    test_fast_path asserted call ORDER only.
+    What this test does NOT assert any more: that three spellings of ethanol
+    collapse to one key. Owner decision 2026-09-03 (commit 170174b) is to name
+    the SMILES the user actually typed, because Orthonym's naming is not
+    invariant to atom order -- a molecule can name on the typed ordering and
+    abstain on the RDKit-canonical one. So `_canonical_or_error` returns the
+    input string untouched on the RDKit path, and two spellings legitimately
+    take two cache entries. That costs efficiency, never correctness: the OPSIN
+    round-trip compares InChIKeys, which are canonical either way.
 
-    Uses two spellings of ethanol that RDKit canonicalizes to one form. If a
-    path ever stops canonicalizing, its key changes and this fails.
+    The live invariant is therefore per-input agreement, asserted below, plus
+    an explicit pin on the as-typed behaviour -- so re-introducing
+    canonicalisation fails here loudly instead of silently reverting an owner
+    decision.
     """
     from app.inputs import InputFormat, parse
     from app.main import _canonicalize
@@ -311,23 +319,26 @@ def test_the_fast_and_batch_paths_agree_on_the_cache_key(redis_client):
     # through main._canonicalize, and /api/jobs through inputs.parse. The
     # defect being guarded is precisely the two disagreeing, so a test that
     # only exercised one of them would prove nothing.
-    fast = {_canonicalize([s], 10)[0].smiles for s in spellings}
-    batch = {
-        parse(s.encode(), InputFormat.SMILES_LIST, 10)[0].smiles for s in spellings
-    }
-    assert fast == batch, (
-        f"the two paths canonicalize differently: fast={fast} batch={batch}"
-    )
-    canonical = fast | batch
-    assert len(canonical) == 1, (
-        f"canonicalization is not collapsing these spellings: {canonical}"
-    )
+    for spelling in spellings:
+        fast = _canonicalize([spelling], 10)[0].smiles
+        batch = parse(spelling.encode(), InputFormat.SMILES_LIST, 10)[0].smiles
+        assert fast == batch, (
+            f"the two paths build different SMILES for {spelling!r}: "
+            f"fast={fast!r} batch={batch!r}, so a name computed on one path "
+            f"cannot be reused by the other"
+        )
+        assert name_cache.cache_key(fast, best_effort=True) == name_cache.cache_key(
+            batch, best_effort=True
+        ), f"the two paths derive different cache keys for {spelling!r}"
 
+    # The as-typed pin. Three spellings, three keys -- if this ever reads 1,
+    # something has started RDKit-canonicalising again and the macrocycle that
+    # motivated 170174b will start abstaining once more.
     keys = {
         name_cache.cache_key(_canonicalize([s], 10)[0].smiles, best_effort=True)
         for s in spellings
     }
-    assert len(keys) == 1, (
-        "the same molecule written three ways produces different cache keys, "
-        "so a name computed on one path cannot be reused by the other"
+    assert len(keys) == len(spellings), (
+        "the spellings are collapsing to one cache key, so something is "
+        "RDKit-canonicalising the input again -- see commit 170174b"
     )
