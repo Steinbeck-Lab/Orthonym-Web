@@ -261,22 +261,27 @@
   gap: var(--s-sm);
   min-width: 0;
   padding: var(--s-md) var(--s-xl);
-  /* The tint is a BLOOM at the top edge, gone by the time the field's label
-     starts (owner: "gradient should end just above the title"). MEASURED:
-     the field's label sits 17px below the card's top edge, so the bloom is
-     spent by 14px and never runs behind it. In pixels, not percentages --
-     the stop has to clear a fixed-height label no matter how tall the card
-     gets, and a percentage moves with the card.
-     Everything below it is the plain white card, so every piece of text on
-     this surface keeps the contrast it was measured at. */
-  background: linear-gradient(
-    180deg,
-    var(--tab-tint) 0,
-    color-mix(in srgb, var(--tab-tint) 62%, var(--card)) 8px,
-    color-mix(in srgb, var(--tab-tint) 22%, var(--card)) 16px,
-    var(--card) 26px,
-    var(--card) 100%
-  );
+  /* The tint is a BLOOM under the TABS, and it has to fade in BOTH directions.
+     A plain `linear-gradient(180deg, ...)` fades downward but runs the full
+     width of the card, so past the last tab it was a pink stripe with nothing
+     above it -- a band across the paper rather than colour bleeding out of the
+     tabs. Reported as "the gradient is put on the white box weirdly", and the
+     description was exact.
+     An ellipse anchored at the top edge, centred on the tab strip, fades away
+     from the tabs on every axis at once. The strip starts at the card's left
+     padding plus one fillet and runs about 40% of the card's width, so the
+     centre sits near 20% and the ellipse is sized to cover it.
+     Full tint at the origin, because the live tab's fill has to EQUAL the
+     colour directly beneath it or the join shows as a line -- that equality is
+     the whole merge. It is spent well before the field's label at 17px. */
+  background:
+    radial-gradient(
+      ellipse 48% 38px at 20% 0,
+      var(--tab-tint) 0%,
+      color-mix(in srgb, var(--tab-tint) 45%, var(--card)) 48%,
+      transparent 100%
+    ),
+    var(--card);
   border-radius: var(--r-card);
   box-shadow: var(--card-shadow);
   border: var(--card-border);
@@ -2003,7 +2008,6 @@
    None of these is ever text, and none signals a tier -- they name an input
    method, which is not a confidence claim. */
 .input-col {
-  --tab-foot: #f3f4f6;
   --tab-tint: #fae5e2;
 }
 
