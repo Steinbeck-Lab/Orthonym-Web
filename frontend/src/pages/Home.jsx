@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import ExampleChips from '../components/ExampleChips'
 import SamplerGrid from '../components/SamplerGrid'
+import ResultsTable from '../components/ResultsTable'
+import ProcessingBar from '../components/ProcessingBar'
 import ConfidenceLegend from '../components/ConfidenceLegend'
 import Dropzone from '../components/Dropzone'
 import BatchResults from '../components/BatchResults'
@@ -405,6 +407,16 @@ function Home() {
   }
 
   const hasResults = rows.length > 0
+  // The confidence key's open state, lifted so the empty-page layout can slide
+  // the input card left and dock the 5-box side bar on the right.
+  const [infoOpen, setInfoOpen] = useState(false)
+  // 3+ molecules render as a table, placed BELOW the input box at full width
+  // (owner instruction 2026-09-03) -- a table with two structure columns per row
+  // needs the width a split column beside the input cannot give.
+  const tableBelow = hasResults && !job && rows.length > 2
+  const splitLayout = (job || hasResults) && !tableBelow
+  // Empty page with the key open: slide the card left, dock the side bar right.
+  const infoAside = !hasResults && !job && infoOpen
   // Counted from the same parser the submit path uses, so the hint and the
   // behaviour can never disagree.
   // Memoised on the text, not recomputed per render: every state change in
@@ -418,7 +430,13 @@ function Home() {
   // happens to be that comparison today.
   const overFastPath = needsJob(pastedCount, MAX_ROWS)
   const willStartJob = inputMode === 'file' || overFastPath
-  const submitLabel = isSubmitting ? 'Starting…' : willStartJob ? 'Start job' : 'Translate'
+  const submitLabel = isSubmitting
+    ? willStartJob
+      ? 'Starting…'
+      : 'Processing…'
+    : willStartJob
+      ? 'Start job'
+      : 'Translate'
   // What the docked bar says is queued up. Derived, never a second source of
   // truth: Paste counts the same parsed lines the over-the-limit hint counts,
   // Upload reports what the PARSER found rather than the filename (a file's
@@ -492,7 +510,7 @@ function Home() {
           centred column until there are results, then an even split, and the
           field area holds a fixed height so the tabs cannot move anything. */}
       <main
-        className={job || hasResults ? 'workbench workbench--split' : 'workbench'}
+        className={`workbench${splitLayout ? ' workbench--split' : ''}${tableBelow ? ' workbench--table-below' : ''}${infoAside ? ' workbench--info-aside' : ''}`}
         aria-label="Translate SMILES to IUPAC names"
       >
         {fetchError && (
@@ -685,7 +703,9 @@ function Home() {
                 button could be read as three of anything. */}
             <div className="workbench__actions">
               <button type="submit" className="btn btn--accent" disabled={isSubmitting}>
-                <Icon name="translate" />
+                <span className={isSubmitting ? 'btn__spin' : undefined}>
+                  <Icon name={isSubmitting ? 'refresh' : 'translate'} />
+                </span>
                 {submitLabel}
               </button>
               {countLabel && <span className="workbench__count">{countLabel}</span>}
@@ -714,13 +734,28 @@ function Home() {
               links to, on a screen that has to hold everything. */}
         </section>
 
-        <ConfidenceLegend />
+        {/* Empty page: the key opens to the RIGHT, into the space beside the
+            centred card. Once results share the row, that space is gone, so it
+            opens downward at the bottom instead (owner instruction 2026-09-03). */}
+        <ConfidenceLegend openToSide={!hasResults && !job} onOpenChange={setInfoOpen} />
         </div>
 
         {job ? (
           <BatchResults job={job} onForget={startAnother} />
+        ) : isSubmitting ? (
+          /* The inline request blocks up to 30s. A dedicated processing panel
+             (animated bar + live clock) shows it is WORKING -- the empty pending
+             table underneath read as a crashed site (owner instruction). */
+          <ProcessingBar count={rows.length} />
         ) : hasResults ? (
-          <SamplerGrid rows={rows} reduceMotion={reduceMotion} />
+          /* 1-2 molecules read best as cards; 3+ switch to a scannable table
+             with the structures inline (owner instruction 2026-09-03). A job
+             (>10, or a timed-out fast path) is BatchResults, above. */
+          rows.length > 2 ? (
+            <ResultsTable rows={rows} />
+          ) : (
+            <SamplerGrid rows={rows} reduceMotion={reduceMotion} />
+          )
         ) : null /* Nothing at all until there is something to show. The key
                      moved to the band at the foot of the page, and the line
                      that replaced it ("submit a molecule and each result

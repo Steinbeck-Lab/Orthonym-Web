@@ -155,8 +155,14 @@ function Specimen({ tier }) {
   )
 }
 
-export default function ConfidenceLegend() {
+export default function ConfidenceLegend({ openToSide = false, onOpenChange }) {
   const [open, setOpen] = useState(false)
+
+  // Report the open state up so the page can move the input card aside to make
+  // room for the side bar (owner instruction 2026-09-03: the box may move).
+  useEffect(() => {
+    onOpenChange?.(open)
+  }, [open, onOpenChange])
   // The bulb breathes until the key has been opened ONCE, then goes steady
   // for the rest of the session. Its job is to point out something you have
   // not seen; a lamp that keeps pulsing at someone who has already read the
@@ -188,6 +194,7 @@ export default function ConfidenceLegend() {
   const classes = ['info']
   if (open) classes.push('info--open')
   if (!seen) classes.push('info--unseen')
+  if (openToSide) classes.push('info--side')
 
   return (
     <div className={classes.join(' ')} ref={rootRef}>

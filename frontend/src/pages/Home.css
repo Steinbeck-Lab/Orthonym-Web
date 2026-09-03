@@ -198,29 +198,24 @@
   max-width: var(--shell-max);
   margin-inline: auto;
   padding-inline: var(--shell-pad);
-  /* The flexible row of the page: the hero and the key band are fixed, this
-     takes what is left of the one screen. min-height: 0 gives the grid a
-     DEFINITE height to size its rows against -- which is half the fix
-     below; the other half is that every cell clips. */
-  flex: 1;
-  min-height: 0;
+  /* Grows with its content -- the page scrolls, so a tall result tile or a batch
+     table just makes the page longer instead of scrolling inside a clamped cell.
+     This used to be `flex: 1; min-height: 0` to take exactly the one screen left
+     over; that clamp is gone with the one-screen shell. */
+  align-content: start;
+  /* Columns are INDEPENDENT heights, top-aligned -- not stretched to match the
+     taller one. Stretching is what made a single short result card fill a tall
+     white box, and what made both cards grow when the info drawer opened under
+     the input column. Each cell is now as tall as its own content. */
+  align-items: start;
 }
 
-/* NOTHING MAY ESCAPE A CELL. This is the fix for a measured collision, and
-   both declarations are load-bearing.
-   The grid's rows are auto-sized, and the content here is a structure
-   drawing or a 10,000-row table -- an 848px result tile inside a 599px row.
-   With overflow: visible those cells simply painted outside the box: 121px
-   straight through the confidence key band, 71px through the footer, and the
-   example chips pushed to y=1001 on a 1000px window, which is where they
-   went missing. Clipping turns each cell into a scroll container, which also
-   drops its automatic minimum size to zero, which is what finally lets an
-   auto row shrink to the share of the screen it actually has.
-   Do not "simplify" this to overflow: hidden -- the content would be
-   unreachable rather than merely overflowing, which is worse. */
+/* Cells take their natural height and the page scrolls. This used to force every
+   cell to `overflow-y: auto` (an inner scroll container) so the one-screen clamp
+   above could size auto rows -- which is exactly the inner card scrollbar the
+   owner rejected. With the page scrolling normally there is nothing to clip. */
 .workbench > * {
   min-height: 0;
-  overflow-y: auto;
 }
 
 .workbench__alert {
@@ -242,16 +237,9 @@
   color: var(--ink);
 }
 
-/* THE PANEL IS A GRADIENT, from the active tab's tint at the top through
-   white to a soft grey at the foot (owner instruction: "gradient to go from
-   blush to white to soft grey"). It is what makes the folder read as one
-   piece of paper rather than a tinted strip stuck onto a white box.
-
-   The first stop is --tab-tint, set by the mode class below and identical to
-   the active tab's own fill. The white band arrives fast (by 30%) so that
-   every piece of text on this card -- switch labels, hints, the count -- sits
-   on white or near-white and keeps its measured contrast. Only the tab
-   labels, which are ink, ever sit on a tint. */
+/* THE PANEL IS PLAIN WHITE. Each tab's own gradient fades to --card by its foot,
+   so the tab welds seamlessly onto this white card and there is nothing for the
+   panel to paint or match. */
 .workbench__input {
   display: flex;
   flex-direction: column;
@@ -262,11 +250,10 @@
   min-width: 0;
   padding: var(--s-md) var(--s-xl);
   /* PLAIN WHITE. The card used to paint its own tint here -- first a linear
-     band, then a radial bloom -- and either way it was a SECOND formula
-     meeting the tabs' first one along the join. Two different formulas cannot
-     agree at every x, so a step showed no matter how each was tuned. The tabs
-     carry their own bleed now (see --tab-bleed), so there is exactly one paint
-     source and nothing left to mismatch. */
+     band, then a radial bloom -- and either way it was a SECOND formula meeting
+     the tabs' fill along the join, which always showed a step. Each tab's
+     gradient now finishes at --card by its own foot, so this white is the only
+     paint source and nothing can mismatch. */
   background: var(--card);
   border-radius: var(--r-card);
   box-shadow: var(--card-shadow);
@@ -314,29 +301,18 @@
 
 .sampler {
   display: grid;
-  /* Equal-width cards that fill the row by count — no wider feature cell,
-     and no stranded empty cell for odd counts at typical widths. */
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  /* ONE column: result cards stack one below the other (owner instruction
+     2026-09-03). The card view is only 1-2 molecules now -- 3+ switch to the
+     table -- and each card is wide enough for its two side-by-side structures. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--gap);
   min-width: 0;
   background: transparent;
-  /* Rows FIT the cell rather than being dictated by a structure drawing.
-     A row was auto-sized, the drawing inside it asked for a 4:3 box at the
-     full card width, and one ethanol therefore claimed 650px of height and
-     pushed its own name below the fold. Now the rows divide the height the
-     one-screen layout leaves: one result fills the cell exactly and needs no
-     scrolling at all.
-     minmax(0, 1fr) and not minmax(min-content, 1fr): a row sized to
-     min-content measured the structure drawing's own intrinsic height (727px
-     for one molecule), so the rows stopped shrinking altogether and the cell
-     scrolled even on a tall window. The tile absorbs the short-window case
-     instead -- see .tile. */
-  grid-auto-rows: minmax(0, 1fr);
-  /* The wheel stops here. Both this cell and the tiles inside it are scroll
-     containers, so without this a tile that has reached its bottom would
-     chain the scroll into the cell behind it and the reader would lose their
-     place in a card they were still reading. */
-  overscroll-behavior: contain;
+  /* Rows take their NATURAL height and the page scrolls. This was
+     `minmax(0, 1fr)` to divide the one screen the old clamp left; with the page
+     scrolling normally each tile is as tall as its content (the drawing has its
+     own floor, see .tile__depiction) and more results just make the page longer. */
+  grid-auto-rows: auto;
   padding: 2px;
 }
 
@@ -345,6 +321,108 @@
   align-items: center;
   padding: var(--s-xxl) var(--shell-pad);
   background: var(--canvas);
+}
+
+/* -------------------- processing (inline wait) -------------------- */
+/* Shown while the blocking fast-path request is in flight, so the wait reads as
+   WORKING, not crashed. An indeterminate stripe (no server progress exists for
+   the inline call) plus a live clock. */
+.processing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-sm);
+  padding: clamp(var(--s-lg), 3vw, var(--s-xl));
+  background: var(--card);
+  border-radius: var(--r-card);
+  box-shadow: var(--card-shadow);
+  border: var(--card-border);
+}
+
+.processing__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-md);
+  font-family: var(--font-mono);
+  font-size: var(--t-nav);
+  letter-spacing: var(--track-nav);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.processing__elapsed {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.processing__track {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--card-soft));
+  overflow: hidden;
+}
+
+/* An indeterminate bar: a stripe that sweeps left to right forever. Transform
+   only, composited. */
+.processing__stripe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--accent),
+    color-mix(in srgb, var(--accent) 40%, transparent)
+  );
+  animation: processing-sweep 1.15s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+@keyframes processing-sweep {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(360%);
+  }
+}
+
+.processing__note {
+  margin: 0;
+  max-width: 60ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .processing__stripe {
+    animation: none;
+    width: 100%;
+    opacity: 0.6;
+  }
+}
+
+/* The submit button's icon spins while the request is in flight. */
+.btn__spin {
+  display: inline-flex;
+  animation: btn-spin 0.9s linear infinite;
+}
+
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn__spin {
+    animation: none;
+  }
 }
 
 .sampler__empty-note {
@@ -390,24 +468,45 @@
 .workbench__input .field:first-of-type {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  /* A FLOOR, not zero, and clipped either way. The slot is whatever the
-     one-screen layout leaves -- but at zero it left nothing: on a short
-     window, and while a batch table shared the grid, the card shrank to
-     34px and the textarea disappeared entirely (the "everything's gone"
-     bug). 120px is the same floor Home gives the Ketcher iframe below, so
-     the editor and the textarea agree and neither wins an argument the
-     other should not be in; the clip is what keeps that promise. Once even
-     120px will not fit, .page__content scrolls and the footer stays put --
-     which is the honest failure, not a collapsed card. */
+  /* A fixed, SCALING height -- the same across all three input modes, so
+     switching never resizes the card. clamp() grows a little with the window
+     but can neither balloon into a grey void (the old flex:1 gave 474px on a
+     tall screen) nor drop below usable. min-height is a belt-and-braces floor
+     beneath the clamp, matching the Ketcher iframe's own floor below so the
+     editor and the textarea agree. overflow:hidden makes the cell a scroll
+     container and clips rather than pushing the notch off screen. */
+  flex: 0 0 auto;
+  height: clamp(180px, 32vh, 320px);
   min-height: 120px;
   overflow: hidden;
+  /* Switching to Draw grows this slot from ~320px to ~668px; animate that so the
+     card expands smoothly instead of jumping (owner instruction 2026-09-03).
+     Both endpoints are definite px, so `height` interpolates cleanly. */
+  transition: height 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workbench__input .field:first-of-type {
+    transition: none;
+  }
+}
+
+/* THE DRAW TAB needs a much taller slot than the paste box: Ketcher's toolbar,
+   canvas and element list run ~500px, and the 320px paste height clipped the
+   bottom of it (owner instruction 2026-09-03: make Ketcher fully visible). This
+   only grows the Draw mode; paste and upload keep their compact height. */
+.workbench__input--draw .field:first-of-type {
+  height: clamp(480px, 62vh, 680px);
 }
 
 /* Home's editor takes the slot it is given. /explain keeps the 180px floor
    from App.css, where the workspace can afford it. */
 .workbench__input .structure-editor {
   min-height: 120px;
+}
+
+.workbench__input--draw .structure-editor {
+  min-height: 460px;
 }
 
 .workbench__input .field:first-of-type .field__control {
@@ -468,19 +567,45 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  /* Centred and capped while it is alone on the page, exactly as the card
-     used to be; the split rule below hands it the whole column instead. */
-  width: min(100%, 1100px);
+  /* Positioned so the side-mode INFO tab can anchor to the card's RIGHT edge. */
+  position: relative;
+  /* Centred and capped while it is alone on the page. 960px (50% wider than the
+     earlier 640, owner instruction 2026-09-03) gives the paste card real
+     presence on an empty page; the split rule below hands it the whole column
+     once results share the row. */
+  width: min(100%, 960px);
   margin-inline: auto;
+  /* The card slides left (via transform) when the key opens beside it, so the
+     motion is smooth and composited rather than a margin pop. The panel is
+     absolute against this element, so it rides along and stays at the card's
+     right edge. */
+  transition: transform var(--info-ms, 520ms) cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Empty page, key open: slide the card left by half the side bar's footprint so
+   the card + bar group sits centred, and the bar has the right gutter to fill
+   (owner instruction 2026-09-03: move the main box, smoothly, to the right of
+   which the bar slides out). */
+.workbench--info-aside .input-col {
+  transform: translateX(calc(-0.5 * (min(380px, 32vw) + var(--gap))));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .input-col {
+    transition: none;
+  }
 }
 
 /* The card is no longer a direct child of .workbench, so it takes over the
    containment `.workbench > *` used to give it: it is the part of the cell
    that flexes, and it clips rather than pushing the notch off the screen. */
 .input-col > .workbench__input {
-  flex: 1;
+  /* Content height, NOT stretched to fill the cell. Filling the cell is what
+     ballooned the paste box into a 474px grey void on tall screens; the field
+     now sizes itself (see the clamp below) and the card is as tall as its
+     content, with the grey ground showing beneath it like any other card. */
+  flex: 0 0 auto;
   min-height: 0;
-  overflow-y: auto;
 }
 
 /* --- the disclosure ------------------------------------------------- */
@@ -507,6 +632,190 @@
 
 .info--open {
   grid-template-rows: auto 1fr;
+}
+
+/* SIDE MODE. On the empty page there is room to the right of the centred card,
+   so the key opens INTO that space rather than pushing the card taller (owner
+   instruction 2026-09-03: to the right when there is no output, at the bottom
+   once there is). The panel is absolutely positioned, so opening it never
+   extends the card or the column beside it -- which is the "boxes extending"
+   the owner rejected. It animates on opacity + transform (composited, per the
+   motion budget), not on a layout property. */
+/* Side mode: the notch rides the card's RIGHT edge near the top and is turned
+   90 degrees anticlockwise (owner instruction 2026-09-03, marked in live mode).
+   Absolute within the position:relative input-col; top = the card's top edge
+   (tabs height). Only the notch position/rotation change here. */
+.info--side {
+  position: absolute;
+  top: 142px;
+  right: -92px;
+  z-index: 5;
+}
+
+.info--side .info__notch {
+  /* Centre pivot so the 180 turn on open spins in place like the bottom notch. */
+  transform-origin: center;
+  transform: rotate(-90deg);
+  margin-right: 0;
+}
+
+.info--side .info__drawer {
+  /* Anchored to the CARD's right edge and emerges rightward from there (owner
+     instruction 2026-09-03: fade in and slide out from the right, where the main
+     box ends). Absolute against .info (the card's width), bottom-aligned so the
+     bar rises beside the card. The card itself does not move. */
+  position: absolute;
+  left: calc(100% + var(--gap));
+  /* Top-aligned with the notch, which now rides the card's upper-right edge, so
+     the bar opens DOWN the right side instead of up off the top of the screen. */
+  top: 0;
+  width: min(380px, 32vw);
+  z-index: 20;
+  overflow: visible;
+  opacity: 0;
+  /* Starts tucked at the card's edge, then slides OUT to the right as it fades
+     in. Composited (opacity + transform), per the motion budget. */
+  transform: translateX(-22px);
+  pointer-events: none;
+  visibility: hidden;
+  transition:
+    opacity var(--info-ms) cubic-bezier(0.22, 1, 0.36, 1),
+    transform var(--info-ms) cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear var(--info-ms);
+}
+
+.info--side.info--open .info__drawer {
+  opacity: 1;
+  /* Docked (X: 0) and lifted UP so the box's top lines up with the tabs' top
+     edge (owner instruction 2026-09-03). */
+  transform: translate(0, -142px);
+  pointer-events: auto;
+  visibility: visible;
+  /* The box appears and lifts AS the notch turns (no delay), not after it
+     (owner instruction 2026-09-03). */
+  transition-delay: 0s, 0s, 0s;
+}
+
+/* The side panel floats free, so it drops the top margin the bottom drawer used
+   to clear the card edge, and keeps its own card chrome. */
+.info--side .info__panel {
+  margin-top: 0;
+}
+
+/* No flip in side mode: the 180-degree tab flip exists to re-attach the tab to a
+   panel that opens BELOW it. Here the panel is beside the card, so the tab stays
+   put and only lifts to ink on open. */
+.info--side.info--open .info__notch {
+  /* Turns a further 180 degrees from the vertical rest (-90deg) on open and
+     slides right to dock flush against the info box (owner instruction
+     2026-09-03). The translate closes the gap to the panel's left edge; the
+     value accounts for the centre pivot's offset. */
+  transform: translateX(70px) rotate(90deg);
+}
+
+.info--side.info--open .info__notch-label {
+  transform: none;
+}
+
+/* THE SIDE BAR IS FIVE BOXES, divided vertically (owner instruction
+   2026-09-03), and dressed with the system's OWN accents used SEMANTICALLY:
+   OLIVE marks the two verified tiers, AMBER the unverified one, and the last two
+   stay neutral. The colour rides the ordinal, a hairline accent bar under the
+   label, and a whisper of box tint -- never the specimen MARK, which stays
+   monochrome because that mark is the exact grammar the result tiles speak, and
+   crimson never touches a tier. The bottom drawer's wide horizontal ladder and
+   its running thread do not belong in a narrow right-hand bar, so both go. */
+.info--side .info__panel {
+  padding: 0;
+  overflow: hidden;
+  /* A faint olive-to-white wash down the panel: the bar reads "verified at the
+     top, less so below", the same descent the five tiers make. */
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--olive) 7%, var(--card)),
+    var(--card) 40%
+  );
+}
+
+.info--side .info__caption {
+  padding: var(--s-md) var(--s-md) var(--s-sm);
+  color: var(--ink);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.info--side .info__rungs {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.info--side .info__rungs::before,
+.info--side .rung::before {
+  display: none;
+}
+
+.info--side .rung {
+  --tier-accent: var(--muted);
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    'ordinal name'
+    'mark mark'
+    'body body';
+  align-items: center;
+  column-gap: var(--s-sm);
+  row-gap: 8px;
+  padding: var(--s-md) var(--s-md);
+  border-top: 1px solid var(--hairline);
+  border-radius: 0;
+  transition: background-color 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.info--side .rung:first-child {
+  border-top: 0;
+}
+
+/* Verified tiers wear olive; the unverified one wears amber; the last two stay
+   neutral -- the palette's two real accents, put to a meaning. */
+.info--side .rung--pin,
+.info--side .rung--fallback {
+  --tier-accent: var(--olive);
+}
+
+.info--side .rung--best-effort {
+  --tier-accent: var(--accent-amber);
+}
+
+/* The ordinal carries the tier colour, big and confident. */
+.info--side .rung__ordinal {
+  color: var(--tier-accent);
+  font-weight: 700;
+  opacity: 1;
+}
+
+.info--side .rung__name {
+  color: var(--ink);
+}
+
+/* A short accent underline beneath the label, in the tier colour -- the one bit
+   of colour that says which family this tier belongs to without touching the
+   monochrome specimen. */
+.info--side .rung__name::after {
+  content: '';
+  display: block;
+  width: 2.2ch;
+  height: 2px;
+  margin-top: 4px;
+  border-radius: 2px;
+  background: var(--tier-accent);
+}
+
+.info--side .rung__specimen {
+  width: 100%;
+}
+
+/* Hover lifts a whisper of the tier colour into the box. */
+.info--side .rung:hover {
+  background: color-mix(in srgb, var(--tier-accent) 7%, transparent);
 }
 
 /* THE NOTCH. The header's shape, mirrored: App.css carves three white
@@ -573,7 +882,11 @@
    translateY(14px) puts the tab at 13..53. It welds, and 14px of ground
    opens above it. No margin anywhere has to change. */
 .info--open .info__notch {
-  transform: translateY(var(--gap)) rotate(180deg);
+  /* The flip is unchanged; the notch moves down 2px MORE than the gap so its
+     flipped bottom overlaps the panel top and welds flush, closing the hairline
+     the owner saw between the notch and the info box (owner instruction
+     2026-09-03: nudge the notch ~2px lower and it flushes). */
+  transform: translateY(calc(var(--gap) + 2px)) rotate(180deg);
 }
 
 .info__notch:hover,
@@ -1072,18 +1385,14 @@
 .tile {
   display: flex;
   flex-direction: column;
-  gap: var(--s-md);
+  gap: var(--s-sm);
   min-width: 0;
-  /* Fits its row. The SMILES echo, the name and the foot are the cell's
-     fixed furniture; the drawing takes what is left (below).
-     overflow-y: auto, not hidden: the drawing keeps a legibility floor, so
-     on a window too short to honour it the card scrolls rather than cutting
-     the round-trip proof off its own bottom edge. On any ordinary window the
-     row is taller than that floor and nothing scrolls at all. */
+  /* Natural height; the page scrolls, so a tile never scrolls inside itself.
+     overflow-x: clip contains a long SMILES echo without forcing overflow-y to
+     `auto` (which would re-add an inner scrollbar). */
   min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: var(--s-lg);
+  overflow-x: clip;
+  padding: var(--s-md) var(--s-lg);
   background: var(--card);
   border-radius: var(--r-card);
   box-shadow: var(--card-shadow);
@@ -1173,6 +1482,56 @@
 .tile__name-block {
   max-width: 100%;
   padding-bottom: var(--s-sm);
+}
+
+/* The name flows INLINE and uses the card's FULL width, wrapping only at real
+   chemical boundaries; the copy button is inline too, so it sits right after the
+   last character (owner instruction 2026-09-03: at the end of the text, and let
+   long names use the space). An inline-flex wrapper was shrink-wrapping the name
+   and forcing it to wrap at half width -- inline keeps it in the block's own
+   full-width inline flow instead. The ::after confidence rule (a block) still
+   draws beneath. */
+.tile__name-line {
+  display: inline;
+}
+
+/* The title leads the card, BOLD and a step larger (owner instruction
+   2026-09-03). This is a deliberate departure from the system's "chemical name
+   stays 400" rule, made by direct instruction; case is still never touched, so
+   the semantics IUPAC case carries are intact. ~20% over the tile's own size. */
+.tile__name-block .citation-name {
+  display: inline;
+  font-weight: 700;
+  font-size: clamp(1.5rem, 1.92vw, 1.95rem);
+}
+
+/* Sits with the last line of the name rather than dropping below it. */
+.tile__name-line .copy-btn {
+  vertical-align: middle;
+}
+
+/* THE VERIFICATION VERDICT, in olive, directly beneath the name -- the PIN/tier
+   label and the round-trip proof, moved up from the foot so the claim and its
+   evidence sit together (owner instruction 2026-09-03). */
+.tile__verify {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xxs);
+  margin-bottom: var(--s-xs);
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  line-height: 1.5;
+  color: var(--olive);
+}
+
+.tile__verify-label {
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+}
+
+.tile__verify-rt code {
+  font-family: var(--font-mono);
+  color: var(--olive);
 }
 
 /* One constant rule length for every tier in every cell: the mark means
@@ -1379,30 +1738,304 @@
 /* Treated as the system's photography: edge to edge inside its cell, 0px
    corners, a single hairline frame, never a rounded thumbnail. */
 
+/* INPUT | RE-PARSED, side by side and ALWAYS horizontal (owner instruction
+   2026-09-03). Each panel is a figure (drawing + caption); they split the row
+   50/50 however narrow the card, rather than wrapping to a stack. */
+.tile__depictions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--s-sm);
+}
+
 .tile__depiction {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  /* NO aspect-ratio. A 4:3 box at the full width of an 866px card is 650px
-     tall, which is how one ethanol came to own 848px of a 599px row and push
-     its own name out of sight. The frame now takes the height the card has
-     left and the drawing scales inside it (object-fit: contain below), so
-     the molecule is as large as the space genuinely allows and no larger. */
-  flex: 1;
-  /* A FLOOR, so "fits the card" never becomes "is too small to read". Below
-     this the row stops shrinking and the results cell scrolls instead. */
-  min-height: 180px;
-  padding: var(--s-sm);
+  /* Split the row evenly; min-width:0 lets them shrink together instead of one
+     shoving the other out. */
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+  /* A DEFINITE, bounded height, kept compact -- two panels side by side, and the
+     owner asked for less whitespace, so the panel hugs the drawing rather than
+     framing it in air. */
+  height: clamp(140px, 20vh, 200px);
+  padding: var(--s-xs);
   background: var(--card-soft);
   border: var(--card-border);
   border-radius: var(--r-card-sm);
 }
 
 .tile__depiction img {
+  flex: 1;
   width: 100%;
-  height: 100%;
+  min-height: 0;
   object-fit: contain;
+}
+
+/* A quiet mono caption under each drawing, naming which structure it is. The
+   re-parsed one carries the round-trip verdict (✓/✗) so the two pictures read
+   as a claim, not just decoration. */
+.tile__depiction-cap {
+  margin-top: var(--s-xs);
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.tile__depiction-note {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  color: var(--muted);
+}
+
+/* -------------------- copy button -------------------- */
+/* A small ghost button beside a name (or in a table cell). Frosted crimson on
+   hover, matching the system's secondary button, and it flips to a check for a
+   moment on a successful copy (see CopyButton.jsx). */
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: baseline;
+  width: 26px;
+  height: 26px;
+  margin-left: 0.4ch;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.copy-btn:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.copy-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Copied: settle on ink so the check reads as done, not as a hover. */
+.copy-btn--done {
+  color: var(--ink);
+}
+
+/* -------------------- results table (3+ molecules) -------------------- */
+/* The 3-or-more inline view, full width below the input box: a scannable table
+   drawn as # | SMILES | input structure | IUPAC name | retranslated structure,
+   with the confidence verdict on its own tinted row beneath the name and the
+   retranslated structure. Each molecule is one <tbody> of two rows, tinted by
+   its tier through --tier-accent -- olive for the verified tiers, amber for the
+   unverified one, the palette's two real accents put to a meaning (the specimen
+   grammar stays for the cards; a table earns colour instead). */
+.results-table-wrap {
+  /* Hug the table and centre it, rather than stretch the full page width -- a
+     full-width table flung the five columns apart with big empty gaps between
+     them (owner instruction 2026-09-03: reduce the wide table). */
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+  overflow-x: auto;
+  background: var(--card);
+  border-radius: var(--r-card);
+  box-shadow: var(--card-shadow);
+  border: var(--card-border);
+  padding: var(--s-sm) var(--s-lg) var(--s-md);
+}
+
+.results-table {
+  width: auto;
+  border-collapse: collapse;
+  font-family: var(--font-body);
+}
+
+.results-table thead th {
+  padding: var(--s-md) var(--s-md) var(--s-sm);
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 2px solid var(--hairline);
+  white-space: nowrap;
+}
+
+.results-th--num {
+  width: 3ch;
+  text-align: center;
+}
+
+/* Each molecule is a tbody with its own tier accent. A hairline sits between
+   molecules, not between the two rows within one. */
+.results-group {
+  --tier-accent: var(--muted);
+  border-bottom: 1px solid var(--hairline);
+  transition: background-color 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.results-group:last-child {
+  border-bottom: 0;
+}
+
+.results-group--pin,
+.results-group--fallback {
+  --tier-accent: var(--olive);
+}
+
+.results-group--best-effort {
+  --tier-accent: var(--accent-amber);
+}
+
+.results-group--error {
+  --tier-accent: var(--accent);
+}
+
+.results-group:hover {
+  background: color-mix(in srgb, var(--tier-accent) 5%, transparent);
+}
+
+.results-table td {
+  padding: var(--s-xs) var(--s-sm) 2px;
+  vertical-align: middle;
+}
+
+/* The number, set in a tier-tinted disc -- the one strong spot of colour on the
+   row, and an index the eye can run down. */
+.results-cell--num {
+  width: 3ch;
+  text-align: center;
+  vertical-align: top;
+}
+
+.results-cell--num::before {
+  content: attr(data-n);
+}
+
+.results-cell--num {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: var(--t-body-sm);
+  color: var(--tier-accent);
+}
+
+.results-cell--smiles {
+  vertical-align: middle;
+}
+
+.results-cell--smiles code {
+  font-family: var(--font-mono);
+  font-size: var(--t-body-sm);
+  color: var(--body);
+  word-break: break-all;
+  /* A giant SMILES is CLAMPED to a few lines with an ellipsis -- NO scroll
+     (owner instruction 2026-09-03) -- so every row stays the height of its
+     structure tile. The full string is on the cell's title for hover. */
+  display: -webkit-box;
+  -webkit-line-clamp: 10;
+  line-clamp: 10;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  width: 18ch;
+  line-height: 1.5;
+}
+
+/* The structures are the point of the row, so they get real size -- bigger
+   drawings, tighter cells (owner instruction 2026-09-03: less whitespace, larger
+   depiction). */
+.results-cell--pic {
+  width: 232px;
+}
+
+.results-cell--pic img {
+  display: block;
+  width: 100%;
+  height: 200px;
+  object-fit: contain;
+  background: var(--card-soft);
+  border: var(--card-border);
+  border-radius: var(--r-card-sm);
+  padding: var(--s-xs);
+}
+
+.results-cell__none {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  color: var(--muted);
+}
+
+.results-cell--name {
+  min-width: 12ch;
+  vertical-align: middle;
+}
+
+.results-name {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.2ch;
+}
+
+/* The rendered chemical name stays 400 and true-case -- IUPAC case is semantic.
+   A long name wraps at a readable measure instead of stretching the column to
+   1000px and flinging the retranslated structure off to the right (owner
+   instruction 2026-09-03). overflow-wrap: anywhere lets a locant run break so a
+   von Baeyer name still fits the measure. */
+.results-name__text {
+  display: inline-block;
+  max-width: 44ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-md);
+  color: var(--ink);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+/* THE CONFIDENCE ROW: beneath the name and the retranslated structure, tinted by
+   tier. The first three cells are empty spacers so the verdict aligns under the
+   two columns it describes. */
+.results-conf-row td {
+  padding: 0 var(--s-md) var(--s-md);
+  vertical-align: top;
+}
+
+.results-conf-cell {
+  border-top: 0;
+}
+
+.results-conf {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.8ch;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tier-accent) 12%, transparent);
+  color: var(--tier-accent);
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+}
+
+.results-conf__rt {
+  color: color-mix(in srgb, var(--tier-accent) 80%, var(--ink));
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 /* -------------------- foot -------------------- */
@@ -1449,231 +2082,143 @@
    movement for free and the current choice is announced. The visual is the
    same pill language the header nav uses. */
 
-/* -------------------- the tabs: a stacked glass folder -------------------- */
-/* Paste | Upload file | Draw as a fanned stack of glass notches rising out of
-   the card's top edge. Owner instruction 2026-09-03, after two passes that
-   missed: "notch style, can stack up on top of each other with proper
-   glassmorphism, draw colour is too dark and I need pastel".
-
-   Three things the earlier passes got wrong and this one fixes:
-   - Tabs of DIFFERENT heights made a ragged, stepped top edge. They are all
-     one height now; the stack and the glass carry the state instead.
-   - Fillets on every outer flank left hard vertical seams between flush tabs.
-     Only the LIVE tab gets them, because only the live tab is the one carved
-     out of the card -- the others are tucked behind it.
-   - The tints were the palette's raw values, and coral was far too saturated
-     to read as pastel. They are pulled toward white now (see the ramp below).
-
-   Glass is deliberate here rather than decorative, which is the bar DESIGN.md
-   sets for it: these tabs sit over the page's moving gradient ground, so a
-   blur genuinely samples something. The system already owns the tokens. */
+/* -------------------- the tabs: a fanned stack of pastel notches -------------------- */
+/* Paste | Upload file | Draw, each a notch shaped like .info (crown corners,
+   concave wing fillets on both flanks) rising out of the card's top edge and
+   welded flush to it. They overlap by one wing and stack into a fanned folder
+   set (z 3/2/1, the live tab lifted to z4). Owner instruction 2026-09-03 began
+   "each tab one notch, exactly like info", then "pastel colour per tab": each
+   tab carries its own hue -- rose / peach / coral -- as a top-to-white gradient
+   (soft when idle, strong when live) with claymorphism inset shadows and a seam
+   shadow between neighbours. State: live = strong hue, ink label, top of stack;
+   idle = soft hue, muted label. */
 .input-tabs {
-  display: flex;
+  align-self: flex-start;
+  display: inline-flex;
   align-items: flex-end;
-  /* Inset past the card's 22px corner AND past the first tab's own fillet, so
-     the leftmost island stands on the straight part of the top edge. */
-  padding-left: calc(var(--s-xl) + var(--notch-wing));
-  /* The strip is pulled up by exactly the bleed depth, so each tab's VISIBLE
-     bottom lands on the card's top edge and only the fading part overlaps it.
-     It must equal --tab-bleed: left at -1px while the boxes grew by 30px, the
-     tabs floated 29px clear of the card with their bleed dissolving over the
-     grey ground instead of over the card. */
-  margin-bottom: calc(-1 * var(--tab-bleed));
+  margin-left: var(--s-xl);
+  /* Weld: overlap the card's top edge by 1px, like .info's margin-top: -1px. */
+  margin-bottom: -1px;
+  position: relative;
+  /* --wing is defined here so every tab and its fillets inherit one wing size.
+     The strip casts no shadow of its own -- each tab carries its own (the seam
+     and clay insets below). */
+  --wing: var(--notch-wing);
 }
 
 .input-tab {
   position: relative;
   display: inline-flex;
   align-items: center;
-  /* ONE height for all three. The stack, not a step, says which is live.
-     The box is TALLER than the tab looks: --info-notch-h of visible tab plus
-     --tab-bleed of colour that runs down over the card and fades out. The
-     padding keeps the label inside the visible part. */
-  height: calc(var(--info-notch-h) + var(--tab-bleed));
-  padding-block: 0 var(--tab-bleed);
+  height: var(--info-notch-h);
   padding-inline: var(--s-lg);
-  /* THE STACK. Each tab tucks a fillet's width under its neighbour, so the row
-     reads as a fanned set of folders rather than three separate lozenges. */
-  margin-left: calc(-1 * var(--notch-wing));
+  /* STACK: each notch overlaps the previous by one wing, so the row piles like a
+     fanned set of folders. Both flanks keep their fillet (below), so every notch
+     curves on both sides and the overlap nests one curve into the next. */
+  margin-left: calc(-1 * var(--wing));
   border-start-start-radius: var(--r-notch);
   border-start-end-radius: var(--r-notch);
-  /* ONE CONTINUOUS RAMP, SLICED. Each tab runs left-to-right from its own
-     colour to the NEXT tab's, so at every junction the two sides are the same
-     value and there is no step to see. Three flat fills butting against each
-     other cannot be seamless -- a colour change at a boundary IS an edge, and
-     that is what "so many break" was: not the shapes, the colours.
-     --tab-a is the colour at this tab's left edge, --tab-b at its right; the
-     fillets below take the matching one, so the junctions stay continuous
-     through the curves too.
-     The gloss is the same white top highlight the buttons use, over the top. */
-  /* THREE LAYERS, painted top to bottom.
-     1. the gloss, matching .btn -- a white highlight over the top of the fill.
-     2. the VEIL: clear down the visible tab, then reaching full --card by the
-        bottom of the box. This is the bleed. The card underneath IS --card, so
-        the bottom of every tab and the card beneath it hold the same value at
-        every x, and the join cannot show.
-     3. the horizontal ramp.
-
-     No `mask` anywhere, and that is the second attempt at this. A mask took
-     the alpha to zero, which drop-shadow needs -- but `mask-clip` defaults to
-     border-box and the fillets are positioned OUTSIDE the box, so the mask
-     deleted all six curves. `no-clip` brought them back UNMASKED (it does not
-     tile the fade outward, whatever `mask-repeat` says), so the outer fillets
-     stayed solid bars while everything beside them dissolved, and giving each
-     fillet its own fade instead produced vertical banding. A veil has none of
-     those failure modes: it is just paint. */
-  background:
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 24px),
-    linear-gradient(
-      to bottom,
-      transparent 0,
-      transparent var(--info-notch-h),
-      var(--card) calc(var(--info-notch-h) + var(--tab-bleed))
-    ),
-    linear-gradient(to right, var(--tab-a), var(--tab-b));
+  /* Each tab carries its OWN hue -- soft when idle, strong when live -- fading to
+     the card's white by ~52% so the crown is tinted and the foot welds flush.
+     --tab-top is the current crown colour (soft here, swapped to strong on the
+     live tab below). */
+  --tab-top: var(--tab-soft);
+  background: linear-gradient(to bottom, var(--tab-top), var(--card) 52%);
+  /* THE SEAM SHADOW as a variable, so it composes with the clay insets in one
+     box-shadow instead of a second rule fighting over the property. The last tab
+     overrides it to a no-op (below), since it has no neighbour to shadow. */
+  --seam: 5px 0 6px -8px rgba(17, 18, 20, 0.85);
+  /* CLAYMORPHISM, inset only: a bright top gloss and a left inner light give the
+     matte puffy dome. INSET so it stays inside the tab and never casts onto the
+     card -- an outer bottom shadow is what read as "detached" earlier. */
+  box-shadow:
+    var(--seam),
+    inset 0 3px 5px rgba(255, 255, 255, 0.9),
+    inset 3px 0 6px -3px rgba(255, 255, 255, 0.55);
   font-family: var(--font-mono);
   font-size: var(--t-nav);
   font-weight: 700;
   letter-spacing: var(--track-nav);
   text-transform: uppercase;
-  /* The live tab is the one in INK; the others step back to --body. Height
-     differences were tried first and read as a ragged, stepped top edge, so
-     the state is carried by type colour instead and the silhouette stays one
-     smooth wave.
-     --body, NOT --muted. Measured across the ramp's four stops, --muted
-     (#666) lands at 4.75 / 4.35 / 3.86 / 3.39:1 -- it fails AA on three of
-     them, and these fills only get deeper toward the right. --body (#333) is
-     7.46:1 at its worst, and still clearly separable from ink (10.45 vs
-     17.37:1 on the palest stop), which is what the signal needs. */
-  color: var(--body);
-  /* The button's gloss recipe finished: its white top rim, plus a lift.
-     The lift is shaped so it CANNOT reach the box's bottom, which is 30px
-     inside the card: offset 3px up and spread -3px puts the shadow's lower
-     edge 6px above the box bottom, and a 10px blur reaches 5px of that -- so
-     it dies 1px short. A plain drop shadow would trace the box and draw a
-     grey line across the white card, which is the line this whole strip
-     exists to avoid. */
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.65),
-    0 -3px 10px -3px rgba(138, 20, 40, 0.2);
+  color: var(--muted);
   cursor: pointer;
-  /* Colour only. A transform lift was here and got CLIPPED on the way up --
-     the strip has no room above it -- so the tab appeared to crop mid-
-     animation. DESIGN.md's motion budget says colour and border-colour only
-     for exactly this kind of reason. */
-  transition: filter 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .input-tab:first-of-type {
   margin-left: 0;
 }
 
-/* Leftmost on top, each next one tucked behind -- the way a real folder set
-   fans. Painting order alone gives the opposite (later DOM wins), so the
-   order is stated. These are local to the card and cannot reach the page
-   ground, which sits behind `.page` entirely; the header and the info bulb
-   already use small positive values the same way. */
+/* Per-tab hues: rose / peach / coral, each a strong (live) and soft (idle) tint.
+   The fan order stacks leftmost on top. */
 .input-tab:nth-of-type(1) {
   z-index: 3;
+  --tab-strong: #f6c7d4;
+  --tab-soft: #fbe8ee;
 }
 
 .input-tab:nth-of-type(2) {
   z-index: 2;
+  --tab-strong: #f7d2bf;
+  --tab-soft: #fcece1;
 }
 
 .input-tab:nth-of-type(3) {
   z-index: 1;
+  --tab-strong: #f1b6b1;
+  --tab-soft: #fbe2df;
 }
 
-/* Hover brightens rather than moves: a lift had nowhere to go and cropped. */
+/* The last tab has no neighbour to its right, so its seam cast is a no-op (an
+   invisible transparent shadow keeps the box-shadow list valid). */
+.input-tab:last-of-type {
+  --seam: 0 0 0 transparent;
+}
+
 .input-tab:hover {
-  filter: brightness(1.03);
+  color: var(--body);
 }
 
-/* THE LIVE TAB rises to the top of the stack. Its fill and the card's first
-   gradient stop are the same colour, and that equality is the whole merge.
-
-   Written `.input-tab.input-tab--on`, not `.input-tab--on`. The stack order
-   above is set with `:nth-of-type`, which scores TWO simple selectors; a lone
-   class scores one and loses. Measured before the fix: Draw active reported
-   z-index 1 and stayed at the BACK of its own stack. Doubling the class here
-   ties the specificity, and this rule comes later, so it wins. */
+/* The live notch: its STRONG hue, ink label, on top, and a deeper clay lift. */
 .input-tab.input-tab--on,
 .input-tab.input-tab--on:hover {
   z-index: 4;
-  filter: none;
   color: var(--ink);
+  --tab-top: var(--tab-strong);
+  box-shadow:
+    var(--seam),
+    inset 0 3px 5px rgba(255, 255, 255, 0.95),
+    inset 3px 0 6px -3px rgba(255, 255, 255, 0.6);
 }
 
-/* THE FILLETS, on EVERY tab and on BOTH flanks. A square of the tab's own
-   colour with a circle punched out of the inner TOP corner, so the surface
-   curves out of each tab instead of meeting it at a right angle.
-
-   On every tab because the owner asked for it directly: the concave curve at
-   the left of the live tab was the part that looked right, and the flat ends
-   of the other two were the part that did not. Stacked, each tab's fillet
-   lands on its neighbour and the row reads as overlapping folders -- which is
-   what a fanned folder set actually looks like.
-
-   `--notch-wing` is both the square's size and the circle's radius: one number
-   by definition, which is what went wrong the last time a notch here was
-   hand-mirrored. */
+/* THE FILLETS: .info's .notch__wing, white, on both flanks of every notch,
+   mirrored up (bottom:0, mask circle on the TOP-outer corner). All white, so an
+   overlapped inner fillet melts into its neighbour with no seam. */
 .input-tab::before,
 .input-tab::after {
   content: '';
   position: absolute;
   bottom: 0;
-  width: var(--notch-wing);
-  /* As tall as the curve PLUS the bleed, so the colour under the fillet fades
-     on exactly the same ramp as the tab beside it. A 20px fillet left a strip
-     of bare card under each curve, which is the step that showed at the right
-     of the last tab. */
-  height: calc(var(--notch-wing) + var(--tab-bleed));
+  width: var(--wing);
+  height: var(--wing);
+  background: var(--card);
   pointer-events: none;
-}
-
-/* Each fillet takes the colour of the EDGE it grows out of, so the ramp stays
-   continuous around the curves instead of jumping back to a flat fill -- and
-   carries the same white veil, so it dissolves into the card on the same
-   schedule as the tab it belongs to. */
-/* Each fillet takes the colour of the EDGE it grows out of, and the SAME veil
-   on the same schedule, so it dissolves in step with the tab beside it. The
-   fade starts at --notch-wing because the fillet's own top sits that far below
-   the tab's -- the two fades line up in page coordinates, which is what stops
-   the vertical banding. */
-.input-tab::before {
-  background:
-    linear-gradient(
-      to bottom,
-      transparent 0,
-      transparent var(--notch-wing),
-      var(--card) calc(var(--notch-wing) + var(--tab-bleed))
-    ),
-    var(--tab-a);
-}
-
-.input-tab::after {
-  background:
-    linear-gradient(
-      to bottom,
-      transparent 0,
-      transparent var(--notch-wing),
-      var(--card) calc(var(--notch-wing) + var(--tab-bleed))
-    ),
-    var(--tab-b);
 }
 
 .input-tab::before {
   right: 100%;
-  -webkit-mask: radial-gradient(circle var(--notch-wing) at 0 0, transparent 98%, #000 100%);
-  mask: radial-gradient(circle var(--notch-wing) at 0 0, transparent 98%, #000 100%);
+  -webkit-mask: radial-gradient(circle var(--wing) at 0 0, transparent 98%, #000 100%);
+  mask: radial-gradient(circle var(--wing) at 0 0, transparent 98%, #000 100%);
 }
 
 .input-tab::after {
   left: 100%;
-  -webkit-mask: radial-gradient(circle var(--notch-wing) at 100% 0, transparent 98%, #000 100%);
-  mask: radial-gradient(circle var(--notch-wing) at 100% 0, transparent 98%, #000 100%);
+  -webkit-mask: radial-gradient(circle var(--wing) at 100% 0, transparent 98%, #000 100%);
+  mask: radial-gradient(circle var(--wing) at 100% 0, transparent 98%, #000 100%);
 }
+
+/* The outer-end fillets sit white over the grey ground -- fine, as .info is white
+   on grey too -- and read as the strip curving in at each end. */
 
 @media (prefers-reduced-motion: reduce) {
   .input-tab {
@@ -2057,71 +2602,3 @@
   white-space: nowrap;
 }
 
-/* -------------------- one tint per tab -------------------- */
-/* From the palette the owner supplied: blush / salmon / coral, plus the two
-   greys. --tab-own is what a tab paints itself; --tab-tint is what the CARD
-   starts its gradient with, and they are equal by construction for whichever
-   tab is active -- that equality IS the seamless join.
-
-   Every one of these is a FILL under ink, never text and never a state
-   signal. Measured against ink: blush 17.37:1, salmon 10.54:1, coral 7.35:1.
-   None of them is used as text on white, where all three fail.
-
-   --tab-foot is where the gradient settles: a hair lighter than --card-soft
-   (#edeff2) so the framed SMILES field, which IS --card-soft, still has an
-   edge to show against the card behind it. */
-/* How far each tab's colour runs down over the card before it is gone. 30px
-   reaches past the card's top and dies well above the field's label at 17px
-   below it. One number, read by the tab box, its padding, the strip's negative
-   margin, both fillets and both veils -- they must all agree or the bleed
-   stops in the wrong place. */
-.input-col {
-  --tab-bleed: 30px;
-}
-
-/* THE PASTEL RAMP. The owner's palette pulled toward white until all three are
-   genuinely pale and evenly spaced -- measured luminances 0.819 / 0.712 /
-   0.606, steps of 0.107 and 0.106, against raw coral's 0.32 which was far too
-   dark to sit in a pastel set. Every label is ink and every one clears AA by a
-   mile: 17.4 / 15.2 / 13.1 against the solid fill, and 16.6 / 15.0 / 13.5 as
-   60% glass over the grey ground, which is the state that actually ships.
-   None of these is ever text, and none signals a tier -- they name an input
-   method, which is not a confidence claim. */
-.input-col {
-  --tab-tint: #fae5e2;
-}
-
-/* Four stops, three slices. Tab N ends on exactly the value tab N+1 starts on,
-   which is what makes every junction invisible. */
-.input-tab:nth-of-type(1) {
-  --tab-a: #fae5e2;
-  --tab-b: #f9d9d5;
-}
-
-.input-tab:nth-of-type(2) {
-  --tab-a: #f9d9d5;
-  --tab-b: #f7c9c6;
-}
-
-.input-tab:nth-of-type(3) {
-  --tab-a: #f7c9c6;
-  --tab-b: #f4b8b8;
-}
-
-.input-col--paste {
-  --tab-tint: #fae5e2;
-}
-
-.input-col--file {
-  --tab-tint: #f9d3ce;
-}
-
-.input-col--draw {
-  --tab-tint: #f6bfbf;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .input-tab {
-    transition: none;
-  }
-}
