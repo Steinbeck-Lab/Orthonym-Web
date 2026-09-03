@@ -496,6 +496,37 @@ def explain_iupac_name(name: str) -> dict:
     return explain_name(name)
 
 
+def _quietly(produce):
+    """Run `produce`, and turn any failure -- or an empty result -- into None.
+
+    RDKit's InChI writer signals refusal in two different ways depending on
+    the input: sometimes it raises, sometimes it returns an empty string and
+    logs to stderr. Both mean "no InChI for this molecule", and neither is a
+    reason to fail the whole row, so both collapse to None here.
+    """
+    try:
+        return produce() or None
+    except Exception:  # noqa: BLE001 - any failure means "no identifier"
+        logger.debug("Could not produce an identifier", exc_info=True)
+        return None
+
+
+def _molblock_2d(mol):
+    """A 2D V2000 molblock for the SDF download.
+
+    Coordinates are computed on a COPY: Compute2DCoords mutates the molecule
+    it is given, and `mol` is also what the depiction is drawn from. The two
+    steps share one guard because a molblock without coordinates parses but
+    renders as a flat pile in every viewer -- worse than no file at all.
+    """
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+
+    copy = Chem.Mol(mol)
+    AllChem.Compute2DCoords(copy)
+    return Chem.MolToMolBlock(copy)
+
+
 @celery_app.task(name="app.tasks.name_to_smiles")
 def name_to_smiles(name: str) -> dict:
     from orthonym.validation.opsin_roundtrip import opsin_parse
@@ -508,11 +539,19 @@ def name_to_smiles(name: str) -> dict:
     if mol is None:
         return {
             "smiles": None,
+            "canonical_smiles": None,
+            "inchi": None,
+            "inchikey": None,
+            "molblock": None,
             "depiction_svg": None,
             "error": "Could not parse this name via OPSIN",
         }
     return {
         "smiles": raw,
+        "canonical_smiles": _quietly(lambda: Chem.MolToSmiles(mol)),
+        "inchi": _quietly(lambda: Chem.MolToInchi(mol)),
+        "inchikey": _quietly(lambda: Chem.MolToInchiKey(mol)),
+        "molblock": _quietly(lambda: _molblock_2d(mol)),
         "depiction_svg": structure_svg_data_uri(raw, mol),
         "error": None,
     }
