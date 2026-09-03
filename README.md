@@ -164,6 +164,39 @@ That failure mode is why `app/jvm_guard.py` refuses rather than degrades: if no 
 JVM, every naming endpoint — including `POST /api/jobs` — returns 503 instead of serving names with
 an unverified confidence tier.
 
+### The third jar: CDK draws every picture
+
+`backend/vendor/cdk/cdk-2.12.jar` (42 MB, LGPL — see its `NOTICE`) is the **default depiction
+engine**. It annotates **CIP stereo descriptors** onto the drawing — `(R)`/`(S)`, `(E)`/`(Z)`, and
+`(?)` for a stereocentre the input leaves undefined — which is the reason it replaced RDKit's
+drawing. RDKit remains the fallback for any process where the JVM will not come up. CDK is also a
+**second SMILES parser**: a string RDKit refuses is offered to it before the input is called
+unreadable.
+
+It is **not on the JVM's classpath**, and cannot be: OpenSTOUT owns the only `startJVM` call and
+boots with a fixed one. `app/cdk_bridge.py` loads it in an isolated `java.net.URLClassLoader`
+instead — read that module's docstring before changing anything about it, especially the parent
+loader and the URL order, both of which are load-bearing and both of which fail in ways that look
+like something else.
+
+**`default-jre-headless` alone is not enough for this**, and the way it fails is the point:
+`fontconfig`, `libfreetype6`, `libharfbuzz0b` and `fonts-dejavu-core` must be installed too, or
+`libfontmanager.so` cannot load, only the *draw* step dies, and the app silently serves RDKit
+pictures with no stereo labels. Nothing looks broken from the outside. `backend/Dockerfile`
+installs all four.
+
+**Regression check for CDK** (run it after any jar bump, JRE change, or image slimming):
+
+```bash
+docker compose run --rm --entrypoint sh backend -c \
+  'python -c "from app import cdk_bridge as c; print(c.self_check(), c.cip_labels(\"C[C@H](N)C(=O)O\"))"'
+# must print:  True ['S']
+```
+
+`self_check()` asserts on the ANSWER — L-alanine must come back labelled `S` — not merely on the
+absence of an exception, because a CIP pass that stopped labelling still returns a perfectly good
+SVG. Each Celery child runs it at boot and logs the verdict.
+
 **Regression check.** Confirm a worker is up first, or this returns 503 rather than a name:
 
 ```bash

@@ -84,7 +84,8 @@ from rdkit.Chem.inchi import MolToInchiKey
 from openstout import OpenSTOUT
 from openstout.validation.opsin_roundtrip import opsin_parse
 
-from .depiction import mol_to_svg_data_uri
+from . import cdk_bridge
+from .depiction import structure_svg_data_uri
 from .schemas import VERIFIED_STATUSES, ResultItem
 
 # Constructed once per process and reused across all requests. This is
@@ -248,8 +249,20 @@ def _abstain_item(smiles: str, tier: str, row: dict) -> ResultItem:
     )
 
 
-def translate_one(smiles: str, best_effort: bool = True) -> ResultItem:
+def translate_one(
+    smiles: str, best_effort: bool = True, depict: bool = True
+) -> ResultItem:
     """Translate a single SMILES string into a ResultItem.
+
+    `depict` exists because the BATCH path throws the picture away. `name_one`
+    (app.tasks) returns "the ResultItem fields a BatchRow needs, minus
+    depiction_svg", and `name_cache` excludes it too -- so every batch molecule
+    was drawing an SVG that nothing ever read. Free when the renderer was RDKit
+    (measured at 0.0 ms against the naming cost, which is why nobody noticed);
+    not free now that CDK draws. Measured on a warm JVM over 5 molecules x 3
+    reps: 7.67 ms/molecule with the picture, 5.46 ms without -- **2.2 ms of
+    pure waste per row, ~22 s on a full 10,000-molecule job**. Callers that
+    actually read the picture leave it True.
 
     `best_effort` gates the escalation described in the module docstring.
     When False the escalated namer is never consulted, so no OPSIN-
@@ -260,7 +273,8 @@ def translate_one(smiles: str, best_effort: bool = True) -> ResultItem:
     its two possible good outcomes cannot be separated before it runs.
     """
     mol = Chem.MolFromSmiles(smiles)
-    if mol is None:
+    if mol is None and cdk_bridge.parse_smiles(smiles) is None:
+        # Neither toolkit can read it. Only now is it really unparseable.
         return ResultItem(
             smiles=smiles,
             status="error",
@@ -273,6 +287,21 @@ def translate_one(smiles: str, best_effort: bool = True) -> ResultItem:
             roundtrip_smiles=None,
             roundtrip_match=None,
         )
+    # `mol` may still be None here: CDK's valence and aromaticity models are
+    # more permissive than RDKit's, so it reads structures RDKit refuses
+    # (measured: pentavalent nitrogen written without charges, N-oxides written
+    # as N(=O), some organometallics). Continuing without a Mol is deliberate.
+    # The namer takes the SMILES STRING, not a Mol, so it can still be asked --
+    # and CDK can still draw the picture. What we lose is the round-trip check,
+    # which needs RDKit to compute an InChIKey for the input; that loss is
+    # handled below and costs the molecule its verified tier, honestly.
+    #
+    # Measured, not hoped for: these almost all end in an abstain, and an
+    # abstain carries no depiction by design (_abstain_item), so the gain here
+    # is the VERDICT, not a picture. "I read your structure and declined to name
+    # it" is true; "Could not parse this SMILES string" was not. The picture for
+    # such a molecule reaches the user through GET /api/depict, which draws any
+    # SMILES either toolkit can read.
 
     row = _namer.name_tiered(smiles)
     status, name, tier = classify(row)
@@ -288,15 +317,23 @@ def translate_one(smiles: str, best_effort: bool = True) -> ResultItem:
         return _abstain_item(smiles, tier, row)
 
     # status in ("pin", "fallback", "best_effort"): a real name shipped.
-    depiction_svg = mol_to_svg_data_uri(mol)
-    roundtrip_smiles, roundtrip_match = _roundtrip_check(name, mol)
+    depiction_svg = structure_svg_data_uri(smiles, mol) if depict else None
+    # No Mol means no InChIKey for the input, so there is nothing to compare
+    # OPSIN's re-parse AGAINST. (None, None) is the right answer, not (raw,
+    # False): "I could not check" is not "I checked and it differs".
+    roundtrip_smiles, roundtrip_match = (
+        _roundtrip_check(name, mol) if mol is not None else (None, None)
+    )
 
     if status in VERIFIED_STATUSES and roundtrip_smiles is None:
-        # Final review report, C3, backend half. SELF-01 uses the same
-        # opsin_parse() as the round-trip check above, so a null
-        # roundtrip_smiles on a verified tier can only mean OPSIN was
-        # unreachable: SELF-01 failed OPEN and let an unverified candidate
-        # through wearing a verified label. name_cache already refuses to
+        # Final review report, C3, backend half. Two causes reach here, and both
+        # mean the same thing about the CLAIM. Either SELF-01 used the same
+        # opsin_parse() as the round-trip check and OPSIN was unreachable, so
+        # SELF-01 failed OPEN and let an unverified candidate through wearing a
+        # verified label -- or RDKit could not read the input at all (the CDK
+        # branch at the top of this function), so no round trip could be
+        # computed. In both cases the verification behind the label did not
+        # happen. name_cache already refuses to
         # PERSIST such a row for its 7-day TTL -- but declining to cache a
         # lie is not the same as declining to tell it, and the frontend
         # renders "pin" with the double rule that means round-trip

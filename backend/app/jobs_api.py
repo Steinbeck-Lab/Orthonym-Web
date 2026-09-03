@@ -31,9 +31,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from rdkit import Chem
 
-from app import redis_store
+from app import cdk_bridge, redis_store
 from app.core.config import get_settings
-from app.depiction import mol_to_svg_data_uri
+from app.depiction import structure_svg_data_uri
 from app.inputs import (
     InputFormat,
     ParsedMolecule,
@@ -871,7 +871,7 @@ def depict(
     smiles: str = Query(..., min_length=1, max_length=MAX_DEPICT_SMILES),
     response: Response = None,  # noqa: B008 - FastAPI injects this
 ) -> DepictResponse:
-    """One molecule's 2D structure. Pure RDKit: no JVM, no worker, no queue.
+    """One molecule's 2D structure. No worker, no queue -- drawn right here.
 
     This is what lets a batch results table draw a row on demand, since
     batch rows deliberately carry no depiction. That also means a 1,000-row
@@ -882,14 +882,38 @@ def depict(
     exactly what check_fast_allowed's 60/minute budget would mistake for
     abuse. That budget bounds request COUNT, not per-call cost -- see
     MAX_DEPICT_ATOMS above for the latter.
+
+    THIS ENDPOINT BOOTS A JVM IN THE WEB PROCESS. So does app.inputs, whose
+    _canonical_or_error offers an RDKit-refused SMILES to CDK and runs inside
+    main._canonicalize on every /api/translate -- these are the two web-process
+    entry points into cdk_bridge, and both are deliberate.
+
+    Here the reason is that CDK draws every other picture on the site, with CIP
+    stereo labels; a batch row drawn by RDKit instead would be the one picture
+    on the site missing them. cdk_bridge starts the JVM lazily, so a deployment
+    nobody draws in never pays for it. Measured on this machine, timing the
+    FIRST DRAW rather than just the JVM boot -- which is what the first request
+    actually pays: 707 ms and +296 MB RSS, once; then 6 ms, then ~0.3 ms per
+    picture once the JIT has warmed. Note the Dockerfile runs uvicorn with two
+    workers and the JVM is per-process, so a busy tier can pay both twice.
+
+    It does NOT make this a naming endpoint -- jvm_guard is still what gates
+    those, and it still asks Redis whether a WORKER has a JVM, not this process.
     """
     check_depict_allowed(client_ip(request))
     mol = Chem.MolFromSmiles(smiles)
-    if mol is None:
-        return DepictResponse(
-            depiction_svg=None, error="Could not parse this SMILES string"
-        )
-    if mol.GetNumAtoms() > MAX_DEPICT_ATOMS:
+    if mol is not None:
+        n_atoms = mol.GetNumAtoms()
+    else:
+        # CDK reads structures RDKit refuses. Its container is only needed to
+        # bound the size below; the draw itself goes from the SMILES string.
+        cdk_mol = cdk_bridge.parse_smiles(smiles)
+        if cdk_mol is None:
+            return DepictResponse(
+                depiction_svg=None, error="Could not parse this SMILES string"
+            )
+        n_atoms = cdk_bridge.atom_count(cdk_mol)
+    if n_atoms > MAX_DEPICT_ATOMS:
         # 200-with-error, not a 400 (round 3 review, finding 5): a per-row
         # caller in a results table had to handle two different shapes for
         # "cannot draw this" depending on WHY. One shape lets a row show
@@ -897,11 +921,16 @@ def depict(
         # does, instead of branching on status code first.
         return DepictResponse(
             depiction_svg=None,
-            error=(
-                f"Too many atoms to depict ({mol.GetNumAtoms()} > "
-                f"{MAX_DEPICT_ATOMS})"
-            ),
+            error=(f"Too many atoms to depict ({n_atoms} > {MAX_DEPICT_ATOMS})"),
+        )
+    svg = structure_svg_data_uri(smiles, mol)
+    if svg is None:
+        # Both engines declined a molecule at least one of them parsed. Rare,
+        # but a 200 with a null picture and no reason would render as an empty
+        # box with nothing to explain it.
+        return DepictResponse(
+            depiction_svg=None, error="Could not draw this structure"
         )
     if response is not None:
         response.headers["Cache-Control"] = "public, max-age=86400"
-    return DepictResponse(depiction_svg=mol_to_svg_data_uri(mol), error=None)
+    return DepictResponse(depiction_svg=svg, error=None)

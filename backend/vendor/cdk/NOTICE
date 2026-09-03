@@ -1,0 +1,45 @@
+CDK — Third-Party Vendored Artifact
+====================================
+
+cdk-2.12.jar
+------------
+- Component:  CDK (Chemistry Development Kit)
+- Project:    https://github.com/cdk/cdk
+- Version:    2.12
+- Source:     https://github.com/cdk/cdk/releases/download/cdk-2.12/cdk-2.12.jar
+- SHA-256:    443d86e549edd659807a444770819a05f9ea626511f433ed99342c7568272e5a
+- License:    GNU Lesser General Public License v2.1 or later (LGPL-2.1-or-later)
+              https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
+
+WHAT STITCH USES IT FOR
+-----------------------
+Two things, both in backend/app/cdk_bridge.py:
+
+1. 2D structure depiction with CIP stereo descriptors. CDK is the DEFAULT
+   renderer for every picture the site shows; RDKit remains the fallback for
+   processes with no JVM.
+2. A second opinion on SMILES parsing. A string RDKit refuses is offered to
+   CDK, whose valence and aromaticity models are more permissive.
+
+HOW IT IS LOADED, AND WHY THAT MATTERS FOR THE LICENSE
+-------------------------------------------------------
+The jar is shipped unmodified and loaded at runtime as a separate program:
+JPype hands it to a java.net.URLClassLoader inside the JVM OpenSTOUT already
+runs. STITCH does not link against it, embed it, or modify it. This is the same
+arrangement, and the same reasoning, that backend/vendor/openstout/NOTICE
+records for the OPSIN and centres jars.
+
+The jar is an uber-jar: it bundles CDK's own dependencies. Their licenses travel
+with them inside the archive.
+
+REPLACING OR UPGRADING IT
+-------------------------
+backend/app/cdk_bridge.py resolves the newest cdk-*.jar in this directory, and
+the STITCH_CDK_JAR environment variable overrides the path entirely. Two things
+must be re-checked after any version bump, because both depend on CDK internals
+rather than on its public API:
+
+  * cdk_bridge.self_check() must still pass. It fails if the CIP labelling path
+    breaks -- which it can, silently, because centres-cli-1.5.jar carries its own
+    partial copy of CDK and the two are resolved by URL ORDER, not by version.
+  * backend/tests/test_cdk_bridge.py must still pass in full.

@@ -58,7 +58,10 @@ def name_one(smiles: str, best_effort: bool) -> dict:
     if cached is not None:
         item = cached
     else:
-        item = translate_one(smiles, best_effort=best_effort)
+        # depict=False: the dict below drops depiction_svg and name_cache
+        # excludes it, so drawing one here would be measured waste (see
+        # translate_one). The fast path draws its own, from the same cache.
+        item = translate_one(smiles, best_effort=best_effort, depict=False)
         name_cache.put_cached(item, best_effort)
     return {
         "smiles": item.smiles,
@@ -396,7 +399,7 @@ def translate_fast(prepared: list[dict], best_effort: bool) -> list[dict]:
     before dispatch, so an item with `smiles: None` here already failed
     that check (or failed to parse) and must never reach RDKit at all.
     """
-    from app.depiction import mol_to_svg_data_uri
+    from app.depiction import structure_svg_data_uri
     from rdkit import Chem
 
     rows = []
@@ -456,11 +459,19 @@ def translate_fast(prepared: list[dict], best_effort: bool) -> list[dict]:
         ):
             # A cached item was stored without its picture; redraw it here so
             # the response shape never varies by cache hit or miss.
-            mol = Chem.MolFromSmiles(result_item.smiles)
-            if mol is not None:
-                result_item = result_item.model_copy(
-                    update={"depiction_svg": mol_to_svg_data_uri(mol)}
-                )
+            #
+            # No `if mol is not None` gate any more. structure_svg_data_uri
+            # draws from the SMILES STRING with CDK first and only reaches for
+            # the Mol as its RDKit fallback, so gating on RDKit excluded exactly
+            # the CDK-only molecules the fallback exists for -- engine knowledge
+            # leaking back into the caller. The Mol is still parsed because the
+            # fallback genuinely needs one in a JVM-less process; measured at
+            # 0.027 ms/row, which is why it is not worth deferring.
+            svg = structure_svg_data_uri(
+                result_item.smiles, Chem.MolFromSmiles(result_item.smiles)
+            )
+            if svg is not None:
+                result_item = result_item.model_copy(update={"depiction_svg": svg})
         rows.append(result_item.model_dump())
     return rows
 
@@ -485,7 +496,7 @@ def name_to_smiles(name: str) -> dict:
     from openstout.validation.opsin_roundtrip import opsin_parse
     from rdkit import Chem
 
-    from app.depiction import mol_to_svg_data_uri
+    from app.depiction import structure_svg_data_uri
 
     raw = opsin_parse(name)
     mol = Chem.MolFromSmiles(raw) if raw else None
@@ -497,7 +508,7 @@ def name_to_smiles(name: str) -> dict:
         }
     return {
         "smiles": raw,
-        "depiction_svg": mol_to_svg_data_uri(mol),
+        "depiction_svg": structure_svg_data_uri(raw, mol),
         "error": None,
     }
 

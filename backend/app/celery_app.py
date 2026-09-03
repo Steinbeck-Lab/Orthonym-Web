@@ -389,7 +389,7 @@ def _start_child_jvm(**_kwargs) -> None:
     # opsin_decompose (or openstout.jvm_bridge through it) in the Celery
     # PARENT risks starting a JVM before fork, which is the exact condition
     # _assert_parent_has_no_jvm exists to prevent.
-    from app import opsin_decompose
+    from app import cdk_bridge, opsin_decompose
     from app.redis_store import record_worker_opsin_status
 
     pid = os.getpid()
@@ -428,10 +428,20 @@ def _start_child_jvm(**_kwargs) -> None:
     # been false. Spec section 5's Failure A treated as Failure B.
     naming_ok = _opsin_can_verify()
     decompose_ok = opsin_decompose.self_check()
+    # A THIRD, narrower question again: can this child draw with CDK, with the
+    # CIP labels? It gates nothing -- depiction.py falls back to RDKit and a
+    # picture without stereo labels is still a picture -- so it is logged, not
+    # stamped. It is checked at boot rather than on first use because
+    # cdk_bridge's isolated classloader depends on which vendored jar shadows
+    # which CDK package; a CDK or centres version bump can break that silently,
+    # and the failure mode is unlabelled pictures nobody notices.
+    cdk_ok = cdk_bridge.self_check()
     logger.info(
-        "Celery child %s: OPSIN name verification %s; name decomposition %s",
+        "Celery child %s: OPSIN name verification %s; name decomposition %s; "
+        "CDK depiction %s",
         pid,
         "available" if naming_ok else "UNAVAILABLE (naming will be refused)",
         "available" if decompose_ok else "DISABLED (/explain and /teach only)",
+        "available" if cdk_ok else "UNAVAILABLE (falling back to RDKit, no CIP labels)",
     )
     _stamp_and_beat(record_worker_opsin_status, pid, ok=naming_ok)
