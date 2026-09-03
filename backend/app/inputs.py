@@ -196,11 +196,24 @@ def _canonical_or_error(
         )
     mol = Chem.MolFromSmiles(smiles)
     if mol is not None:
+        # Keep the AS-TYPED string, do not RDKit-canonicalise it. Orthonym's
+        # naming is not invariant to atom order: the same molecule written two
+        # ways can name on one ordering and abstain on the other (measured on a
+        # complex polycyclic -- the as-typed form named a verified fallback, the
+        # RDKit-canonical form abstained). Owner decision 2026-09-03: always name
+        # the SMILES the user actually typed. Safe because the OPSIN round-trip
+        # compares InChIKeys, which are canonical, so a name that verifies is
+        # correct regardless of which ordering produced it -- naming the typed
+        # form can recover names, never emit a wrong one. Trade-off: the name
+        # cache keys on this string, so two spellings of one molecule take two
+        # cache entries (efficiency only, not correctness). Only RDKit-parseable
+        # SMILES text is affected; the CDK-rescue branch below and molfile inputs
+        # (_from_mol) still carry a derived canonical form, which is all they have.
         return ParsedMolecule(
             index=index,
             raw_input=raw_input,
             input_id=input_id,
-            smiles=Chem.MolToSmiles(mol),
+            smiles=smiles,
             error=None,
         )
 
