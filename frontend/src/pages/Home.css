@@ -1486,44 +1486,31 @@
      fillets below take the matching one, so the junctions stay continuous
      through the curves too.
      The gloss is the same white top highlight the buttons use, over the top. */
-  /* The gloss, matching .btn: a white highlight over the top of the fill.
-     0.5 rather than the button's 0.6, because these fills are pale to start
-     with and the button's dial washed them out. */
+  /* THREE LAYERS, painted top to bottom.
+     1. the gloss, matching .btn -- a white highlight over the top of the fill.
+     2. the VEIL: clear down the visible tab, then reaching full --card by the
+        bottom of the box. This is the bleed. The card underneath IS --card, so
+        the bottom of every tab and the card beneath it hold the same value at
+        every x, and the join cannot show.
+     3. the horizontal ramp.
+
+     No `mask` anywhere, and that is the second attempt at this. A mask took
+     the alpha to zero, which drop-shadow needs -- but `mask-clip` defaults to
+     border-box and the fillets are positioned OUTSIDE the box, so the mask
+     deleted all six curves. `no-clip` brought them back UNMASKED (it does not
+     tile the fade outward, whatever `mask-repeat` says), so the outer fillets
+     stayed solid bars while everything beside them dissolved, and giving each
+     fillet its own fade instead produced vertical banding. A veil has none of
+     those failure modes: it is just paint. */
   background:
     linear-gradient(to bottom, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 24px),
+    linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent var(--info-notch-h),
+      var(--card) calc(var(--info-notch-h) + var(--tab-bleed))
+    ),
     linear-gradient(to right, var(--tab-a), var(--tab-b));
-  /* THE BLEED IS A MASK, not a white veil painted over the fill.
-     A veil fading to --card looks identical on a white card, but it leaves the
-     box fully OPAQUE all the way down -- so a drop-shadow would trace the
-     box's real bottom edge and draw the very line this whole exercise removed.
-     A mask takes the alpha to zero instead, so the tab genuinely dissolves and
-     there is no edge for a shadow to find.
-     `repeat-x` is load-bearing: a mask covers the border box, and the fillets
-     are positioned OUTSIDE it. Repeating along x tiles the same vertical fade
-     across them so they dissolve on the same schedule; not repeating along y
-     keeps everything below the box transparent, which is what stops the
-     shadow reappearing under the bleed. */
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    #000 0,
-    #000 var(--info-notch-h),
-    transparent calc(var(--info-notch-h) + var(--tab-bleed))
-  );
-  mask-image: linear-gradient(
-    to bottom,
-    #000 0,
-    #000 var(--info-notch-h),
-    transparent calc(var(--info-notch-h) + var(--tab-bleed))
-  );
-  -webkit-mask-repeat: repeat-x;
-  mask-repeat: repeat-x;
-  /* The button's lift, in the pastels' own hue rather than crimson. Rendered
-     as a filter, not a box-shadow: a box-shadow traces the BOX, which runs
-     30px into the card, while drop-shadow traces the painted silhouette --
-     the notch curve, the fillets, and the fade -- so nothing is drawn where
-     the tab has already dissolved. */
-  filter: drop-shadow(0 1px 1px rgba(138, 20, 40, 0.1))
-    drop-shadow(0 6px 10px rgba(138, 20, 40, 0.12));
   font-family: var(--font-mono);
   font-size: var(--t-nav);
   font-weight: 700;
@@ -1539,9 +1526,16 @@
      7.46:1 at its worst, and still clearly separable from ink (10.45 vs
      17.37:1 on the palest stop), which is what the signal needs. */
   color: var(--body);
-  /* The button's top rim, the last part of its gloss recipe. Inset, so it is
-     drawn inside the box and cannot reach the bleed. */
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  /* The button's gloss recipe finished: its white top rim, plus a lift.
+     The lift is shaped so it CANNOT reach the box's bottom, which is 30px
+     inside the card: offset 3px up and spread -3px puts the shadow's lower
+     edge 6px above the box bottom, and a 10px blur reaches 5px of that -- so
+     it dies 1px short. A plain drop shadow would trace the box and draw a
+     grey line across the white card, which is the line this whole strip
+     exists to avoid. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    0 -3px 10px -3px rgba(138, 20, 40, 0.2);
   cursor: pointer;
   /* Colour only. A transform lift was here and got CLIPPED on the way up --
      the strip has no room above it -- so the tab appeared to crop mid-
@@ -1571,12 +1565,9 @@
   z-index: 1;
 }
 
-/* Hover brightens rather than moves: a lift had nowhere to go and cropped.
-   The shadow is restated because `filter` is one property -- setting only
-   brightness here would drop the lift. */
+/* Hover brightens rather than moves: a lift had nowhere to go and cropped. */
 .input-tab:hover {
-  filter: drop-shadow(0 1px 1px rgba(138, 20, 40, 0.1))
-    drop-shadow(0 6px 10px rgba(138, 20, 40, 0.12)) brightness(1.03);
+  filter: brightness(1.03);
 }
 
 /* THE LIVE TAB rises to the top of the stack. Its fill and the card's first
@@ -1590,8 +1581,7 @@
 .input-tab.input-tab--on,
 .input-tab.input-tab--on:hover {
   z-index: 4;
-  filter: drop-shadow(0 1px 1px rgba(138, 20, 40, 0.1))
-    drop-shadow(0 6px 10px rgba(138, 20, 40, 0.12));
+  filter: none;
   color: var(--ink);
 }
 
@@ -1626,12 +1616,31 @@
    continuous around the curves instead of jumping back to a flat fill -- and
    carries the same white veil, so it dissolves into the card on the same
    schedule as the tab it belongs to. */
+/* Each fillet takes the colour of the EDGE it grows out of, and the SAME veil
+   on the same schedule, so it dissolves in step with the tab beside it. The
+   fade starts at --notch-wing because the fillet's own top sits that far below
+   the tab's -- the two fades line up in page coordinates, which is what stops
+   the vertical banding. */
 .input-tab::before {
-  background: var(--tab-a);
+  background:
+    linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent var(--notch-wing),
+      var(--card) calc(var(--notch-wing) + var(--tab-bleed))
+    ),
+    var(--tab-a);
 }
 
 .input-tab::after {
-  background: var(--tab-b);
+  background:
+    linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent var(--notch-wing),
+      var(--card) calc(var(--notch-wing) + var(--tab-bleed))
+    ),
+    var(--tab-b);
 }
 
 .input-tab::before {
