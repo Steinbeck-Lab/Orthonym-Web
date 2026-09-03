@@ -419,6 +419,21 @@ function Home() {
   const overFastPath = needsJob(pastedCount, MAX_ROWS)
   const willStartJob = inputMode === 'file' || overFastPath
   const submitLabel = isSubmitting ? 'Starting…' : willStartJob ? 'Start job' : 'Translate'
+  // What the docked bar says is queued up. Derived, never a second source of
+  // truth: Paste counts the same parsed lines the over-the-limit hint counts,
+  // Upload reports what the PARSER found rather than the filename (a file's
+  // name says nothing about how many molecules are in it), and Draw is one
+  // structure or nothing. Empty string renders an empty span, which keeps the
+  // bar's two-column geometry stable instead of letting the button jump left.
+  const countLabel = useMemo(() => {
+    // Paste only. Upload and Draw deliberately say nothing here: the drop
+    // zone already reports what the parser read ("N molecules", read as CSV)
+    // and repeating it in the bar is the exact two-places-for-one-file
+    // duplication the zone was rebuilt to remove; Draw is one structure or
+    // nothing, which the editor shows better than a number can.
+    if (inputMode !== 'paste' || pastedCount === 0) return ''
+    return `${pastedCount} ${pastedCount === 1 ? 'molecule' : 'molecules'}`
+  }, [inputMode, pastedCount])
 
   return (
     <>
@@ -552,7 +567,7 @@ function Home() {
                 )}
               </div>
             ) : inputMode === 'paste' ? (
-              <div className="field">
+              <div className="field field--framed">
                 <label htmlFor="smiles-input" className="field__label">
                   SMILES &mdash; one per line
                 </label>
@@ -644,11 +659,20 @@ function Home() {
               />
             </div>
 
+            {/* The action row sits on the card, NOT inside the input's grey
+                frame -- the frame marks where you TYPE, and a button in it
+                would read as part of the field. The count rides here with the
+                button because it is the honest preview of what pressing it
+                will do: the same `pastedCount` the over-the-limit hint uses,
+                so the two can never disagree, and it names the unit rather
+                than showing a bare number, since "3" beside a Translate
+                button could be read as three of anything. */}
             <div className="workbench__actions">
               <button type="submit" className="btn btn--accent" disabled={isSubmitting}>
                 <Icon name="translate" />
                 {submitLabel}
               </button>
+              {countLabel && <span className="workbench__count">{countLabel}</span>}
               {job && (
                 <button type="button" className="btn" onClick={startAnother}>
                   <Icon name="plus" />

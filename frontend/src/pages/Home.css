@@ -1761,3 +1761,67 @@
   text-underline-offset: 0.2em;
   cursor: pointer;
 }
+
+/* -------------------- the framed text input -------------------- */
+/* The grey box marks WHERE YOU TYPE, and nothing else. It wraps the textarea
+   and its label; the switches and the Translate button stay on the white card
+   outside it, because a control inside the frame reads as part of the field.
+
+   Paste only. Upload and Draw already carry their own frames -- the drop zone
+   has its dashed seam, the Ketcher iframe has `.structure-editor` -- and
+   wrapping those again would be a frame inside a frame.
+
+   The treatment is the system's existing one for inner content: --card-soft
+   ground, --card-border keyline, --r-card-sm corners, and NO shadow, which is
+   what separates a frame from a card here (DESIGN.md: framed content inside a
+   card, never a card in a card).
+
+   flex: 1 + min-height: 0 because this is the part of the input card that
+   gives. The card is a flex column in a one-screen page; the tabs, switches
+   and action row are fixed, and the field takes what is left. */
+.field--framed {
+  flex: 1;
+  min-height: 0;
+  gap: var(--s-xxs);
+  padding: var(--s-sm) var(--s-md);
+  background: var(--card-soft);
+  border: var(--card-border);
+  border-radius: var(--r-card-sm);
+  /* Colour only, and only on the border -- DESIGN.md's motion budget. */
+  transition: border-color 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* The ring goes on the FRAME, since the frame is what now reads as the field.
+   `outline` at a negative offset, per the non-shifting-ring rule: a border
+   here would change the box and shift every row below it on focus. */
+.field--framed:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Inside the frame the textarea drops its own chrome. Two nested focus
+   treatments read as two fields, and the underline is redundant once the box
+   itself draws the edge. */
+.field--framed .field__control {
+  flex: 1;
+  min-height: 0;
+  padding-top: var(--s-xxs);
+  border-bottom: none;
+  resize: none;
+}
+
+.field--framed .field__control:focus {
+  outline: none;
+  border-bottom: none;
+}
+
+/* The count rides beside the button, in the mono caption voice every other
+   piece of machine metadata on this page uses. */
+.workbench__count {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
