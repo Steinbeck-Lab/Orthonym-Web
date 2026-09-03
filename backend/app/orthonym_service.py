@@ -250,7 +250,7 @@ def _abstain_item(smiles: str, tier: str, row: dict) -> ResultItem:
 
 
 def translate_one(
-    smiles: str, best_effort: bool = True, depict: bool = True
+    smiles: str, best_effort: bool = True, depict: bool = True, verify: bool = True
 ) -> ResultItem:
     """Translate a single SMILES string into a ResultItem.
 
@@ -263,6 +263,14 @@ def translate_one(
     reps: 7.67 ms/molecule with the picture, 5.46 ms without -- **2.2 ms of
     pure waste per row, ~22 s on a full 10,000-molecule job**. Callers that
     actually read the picture leave it True.
+
+    `verify` runs the OPSIN round-trip check. Turning it off does not make a
+    name look better than it is: the check is what produces `roundtrip_smiles`,
+    and the downgrade below already treats a missing round trip as "this tier's
+    claim is not backed", so every verified tier falls to `best_effort`. The
+    saving is real but modest -- measured 0.60 ms/molecule, ~6 s on a full
+    10,000-molecule job -- and it is exposed mainly so the proof can be turned
+    off and SEEN to matter.
 
     `best_effort` gates the escalation described in the module docstring.
     When False the escalated namer is never consulted, so no OPSIN-
@@ -322,7 +330,7 @@ def translate_one(
     # OPSIN's re-parse AGAINST. (None, None) is the right answer, not (raw,
     # False): "I could not check" is not "I checked and it differs".
     roundtrip_smiles, roundtrip_match = (
-        _roundtrip_check(name, mol) if mol is not None else (None, None)
+        _roundtrip_check(name, mol) if (verify and mol is not None) else (None, None)
     )
 
     if status in VERIFIED_STATUSES and roundtrip_smiles is None:
@@ -348,6 +356,26 @@ def translate_one(
         if not best_effort:
             return _abstain_item(smiles, tier, row)
         status = "best_effort"
+        # THE TIER HAS TO MOVE TOO. The paragraph above says "only the claim
+        # about it is corrected, down to the tier that claims no verification
+        # at all" -- but until now only `status` moved, so the row went out as
+        # status="best_effort" with tier="pin_verified" still attached: two
+        # fields of the same payload disagreeing about whether OPSIN confirmed
+        # anything. `status` is what the UI draws, which is why nobody saw it;
+        # `tier` is what an API or CSV consumer reads.
+        #
+        # It was rare while this branch only fired on a SELF-01 fail-open. The
+        # verify switch makes it the ordinary case, so it is fixed here rather
+        # than left as a contradiction a user can now produce on purpose.
+        #
+        # `pin_unverified` is the exact tier for a PIN candidate whose round
+        # trip was not confirmed -- classify() has always mapped it to
+        # "best_effort" and it simply had no producer until now. A downgraded
+        # `systematic_verified` has no matching "unverified" spelling, so it
+        # takes `best_effort`, the tier that means "a real name, OPSIN-
+        # unverified". Both are in the Tier literal, so the model still
+        # validates.
+        tier = "pin_unverified" if tier == "pin_verified" else "best_effort"
 
     return ResultItem(
         smiles=smiles,

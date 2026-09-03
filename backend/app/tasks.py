@@ -47,22 +47,24 @@ class _ChunkTimedOut(Exception):
         self.remaining = remaining
 
 
-def name_one(smiles: str, best_effort: bool) -> dict:
+def name_one(smiles: str, best_effort: bool, verify: bool = True) -> dict:
     """Name one molecule, consulting the cache first.
 
     Returns the ResultItem fields a BatchRow needs, minus depiction_svg.
     The fast path and the batch path share this, so a molecule named by a
     batch answers instantly on Home and vice versa.
     """
-    cached = name_cache.get_cached(smiles, best_effort)
+    cached = name_cache.get_cached(smiles, best_effort, verify)
     if cached is not None:
         item = cached
     else:
         # depict=False: the dict below drops depiction_svg and name_cache
         # excludes it, so drawing one here would be measured waste (see
         # translate_one). The fast path draws its own, from the same cache.
-        item = translate_one(smiles, best_effort=best_effort, depict=False)
-        name_cache.put_cached(item, best_effort)
+        item = translate_one(
+            smiles, best_effort=best_effort, depict=False, verify=verify
+        )
+        name_cache.put_cached(item, best_effort, verify)
     return {
         "smiles": item.smiles,
         "name": item.name,
@@ -102,7 +104,7 @@ def _error_row(index: int, raw_input: str, input_id: str | None, message: str) -
 
 
 def _name_prepared(
-    prepared: list[dict], best_effort: bool
+    prepared: list[dict], best_effort: bool, verify: bool = True
 ) -> tuple[list[dict], int]:
     """Name a list of already-parsed molecules. Returns (rows, failed).
 
@@ -126,7 +128,7 @@ def _name_prepared(
             failed += 1
             continue
         try:
-            named = name_one(item["smiles"], best_effort)
+            named = name_one(item["smiles"], best_effort, verify)
         except SoftTimeLimitExceeded as exc:
             # MUST come before the broad handler: SoftTimeLimitExceeded
             # subclasses Exception, so `except Exception` would swallow the
@@ -243,7 +245,7 @@ def _close_job(job_id: str, n_chunks: int) -> int:
 
 @celery_app.task(name="app.tasks.translate_job_inline")
 def translate_job_inline(
-    job_id: str, prepared: list[dict], best_effort: bool
+    job_id: str, prepared: list[dict], best_effort: bool, verify: bool = True
 ) -> list[dict]:
     """Fast path: name a small list in one task and close it here.
 
@@ -278,7 +280,7 @@ def translate_job_inline(
         # redelivery of a task that already ran to completion once.
         return list(redis_store.iter_all_rows(job_id))
     try:
-        rows, failed = _name_prepared(prepared, best_effort)
+        rows, failed = _name_prepared(prepared, best_effort, verify)
     except _ChunkTimedOut as timeout:
         rows, failed = _timed_out_rows(timeout)
     redis_store.write_chunk(job_id, 0, rows)
@@ -289,7 +291,8 @@ def translate_job_inline(
 
 @celery_app.task(name="app.tasks.run_chunk")
 def run_chunk(
-    job_id: str, index: int, prepared: list[dict], best_effort: bool
+    job_id: str, index: int, prepared: list[dict], best_effort: bool,
+    verify: bool = True
 ) -> int:
     """One chunk of a batch job. Writes its own key and bumps the counter.
 
@@ -310,7 +313,7 @@ def run_chunk(
         return 0
 
     try:
-        rows, failed = _name_prepared(prepared, best_effort)
+        rows, failed = _name_prepared(prepared, best_effort, verify)
     except _ChunkTimedOut as timeout:
         rows, failed = _timed_out_rows(timeout)
 
@@ -378,7 +381,9 @@ def _fast_error_item(smiles: str, message: str) -> dict:
 
 
 @celery_app.task(name="app.tasks.translate_fast")
-def translate_fast(prepared: list[dict], best_effort: bool) -> list[dict]:
+def translate_fast(
+    prepared: list[dict], best_effort: bool, verify: bool = True
+) -> list[dict]:
     """The single-molecule path: full ResultItems, picture included.
 
     Separate from the batch tasks because the response must stay
@@ -426,12 +431,12 @@ def translate_fast(prepared: list[dict], best_effort: bool) -> list[dict]:
 
         smiles = item["smiles"]
         try:
-            cached = name_cache.get_cached(smiles, best_effort)
+            cached = name_cache.get_cached(smiles, best_effort, verify)
             result_item = cached if cached is not None else translate_one(
-                smiles, best_effort=best_effort
+                smiles, best_effort=best_effort, verify=verify
             )
             if cached is None:
-                name_cache.put_cached(result_item, best_effort)
+                name_cache.put_cached(result_item, best_effort, verify)
         except SoftTimeLimitExceeded:
             # MUST precede the broad handler: SoftTimeLimitExceeded subclasses
             # Exception DIRECTLY, so `except Exception` would swallow Celery's
@@ -514,7 +519,8 @@ def name_to_smiles(name: str) -> dict:
 
 
 def dispatch_batch(
-    job_id: str, prepared: list[dict], best_effort: bool, chunk_size: int
+    job_id: str, prepared: list[dict], best_effort: bool, chunk_size: int,
+    verify: bool = True
 ) -> int:
     """Split into chunks and fire the chord. Returns the chunk count."""
     chunks = [
@@ -522,7 +528,7 @@ def dispatch_batch(
     ]
     errback = mark_job_failed.s(job_id)
     header = [
-        run_chunk.s(job_id, index, chunk, best_effort).on_error(errback)
+        run_chunk.s(job_id, index, chunk, best_effort, verify).on_error(errback)
         for index, chunk in enumerate(chunks)
     ]
     chord(header)(finalize_job.s(job_id, len(chunks)).on_error(errback))

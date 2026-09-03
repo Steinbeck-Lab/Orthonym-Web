@@ -58,7 +58,7 @@ def test_an_oversized_smiles_on_the_fast_path_never_reaches_rdkit(
     real_translate_one = tasks_module.translate_one
     oversized = "C" * 30000
 
-    def guarded_translate_one(smiles, best_effort=True):
+    def guarded_translate_one(smiles, best_effort=True, depict=True, verify=True):
         assert smiles != oversized, (
             "the oversized SMILES reached translate_one -- "
             "MAX_MOLECULE_SMILES_LENGTH did not gate it before RDKit"
@@ -501,7 +501,7 @@ def test_one_bad_molecule_does_not_lose_the_whole_fast_request(monkeypatch):
 
     real = tasks.translate_one
 
-    def _explode_on_the_second(smiles, best_effort=True):
+    def _explode_on_the_second(smiles, best_effort=True, depict=True, verify=True):
         if smiles == "CCC":
             raise ValueError("Unexpected name_tiered() row, cannot classify")
         return real(smiles, best_effort=best_effort)
@@ -555,7 +555,7 @@ def test_a_soft_time_limit_is_not_swallowed_by_the_per_molecule_guard(monkeypatc
         "re-check every `except Exception` that must not swallow it"
     )
 
-    def _timeout(smiles, best_effort=True):
+    def _timeout(smiles, best_effort=True, depict=True, verify=True):
         raise SoftTimeLimitExceeded()
 
     monkeypatch.setattr(tasks, "translate_one", _timeout)

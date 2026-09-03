@@ -87,14 +87,14 @@ export class TranslateJobQueuedError extends Error {
  * @throws {TranslateJobQueuedError} when the backend queues the submission
  *   as a background job instead of returning results directly (see above).
  */
-export async function translateBatch(smilesList, { bestEffort = true } = {}) {
+export async function translateBatch(smilesList, { bestEffort = true, verify = true } = {}) {
   const res = await fetch('/api/translate', {
     method: 'POST',
     headers: JSON_HEADERS,
     // best_effort defaults to true server-side too, so an older caller that
     // omits it keeps the shipped behaviour. False stops after the primary
     // namer, which means no OPSIN-unverified name can come back at all.
-    body: JSON.stringify({ smiles: smilesList, best_effort: bestEffort }),
+    body: JSON.stringify({ smiles: smilesList, best_effort: bestEffort, verify }),
   })
   if (!res.ok) {
     throw new Error(`POST /api/translate failed with ${res.status}`)
@@ -237,18 +237,19 @@ async function jobFailure(res, jobId) {
  * file as JSON, or text as multipart, both 400 — see _read_input in
  * backend/app/jobs_api.py.
  */
-function inputRequest({ file, text, bestEffort }) {
+function inputRequest({ file, text, bestEffort, verify = true }) {
   if (file) {
     const form = new FormData()
     form.append('file', file)
     form.append('best_effort', String(bestEffort))
+    form.append('verify', String(verify))
     // No Content-Type header: the browser has to set the multipart boundary.
     return { method: 'POST', body: form }
   }
   return {
     method: 'POST',
     headers: JSON_HEADERS,
-    body: JSON.stringify({ text, best_effort: bestEffort }),
+    body: JSON.stringify({ text, best_effort: bestEffort, verify }),
   }
 }
 
@@ -262,8 +263,8 @@ function inputRequest({ file, text, bestEffort }) {
  * someone their file is fine and then fail on row 6.
  * @returns {Promise<{format:string, molecule_count:number, sample:Array<{index:number,input:string,input_id:string|null,smiles:string|null,error:string|null}>, errors:string[]}>}
  */
-export async function parsePreview({ file = null, text = '', bestEffort = true } = {}) {
-  const res = await fetch('/api/parse-preview', inputRequest({ file, text, bestEffort }))
+export async function parsePreview({ file = null, text = '', bestEffort = true, verify = true } = {}) {
+  const res = await fetch('/api/parse-preview', inputRequest({ file, text, bestEffort, verify }))
   if (!res.ok) throw await jobFailure(res)
   return res.json()
 }
@@ -276,8 +277,8 @@ export async function parsePreview({ file = null, text = '', bestEffort = true }
  * accounts).
  * @returns {Promise<{job_id:string, molecule_count:number, status:string, owner_token:string}>}
  */
-export async function createJob({ file = null, text = '', bestEffort = true } = {}) {
-  const res = await fetch('/api/jobs', inputRequest({ file, text, bestEffort }))
+export async function createJob({ file = null, text = '', bestEffort = true, verify = true } = {}) {
+  const res = await fetch('/api/jobs', inputRequest({ file, text, bestEffort, verify }))
   if (!res.ok) throw await jobFailure(res)
   return res.json()
 }

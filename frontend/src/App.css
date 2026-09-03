@@ -1199,6 +1199,25 @@ input.field__control {
   gap: var(--s-xs);
 }
 
+/* Two switches across, each taking half the row. `minmax(0, 1fr)` rather than
+   `1fr`: a grid track's implicit minimum is min-content, and the hint under
+   each switch is a full sentence, so plain `1fr` lets the longer hint push the
+   row wider than the card and the input card starts scrolling sideways.
+   Below 640px it collapses to one column -- two switches plus their hints do
+   not fit across a phone, and the hints are the part that makes each switch
+   answerable. */
+.workbench__switches {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-lg);
+}
+
+@media (min-width: 640px) {
+  .workbench__switches {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
 /* THE ROCKER. Ported by shape from a toggle the owner pinned (21st.dev,
    Ravi Katiyar), no code: a moulded light-grey well with an inset rim, a
    near-black paddle with two grip lines down its middle, and a pair of

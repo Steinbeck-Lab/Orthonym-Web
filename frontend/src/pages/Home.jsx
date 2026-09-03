@@ -111,6 +111,12 @@ function Home() {
   // the escalated one. Turning it off makes the engine strict — it can then
   // only ever return a verified name or an honest abstain.
   const [bestEffort, setBestEffort] = useState(true)
+  // OPSIN round-trip verification. Default ON, and it is the thing that earns
+  // a result its "pin" or "fallback" badge. Turning it off cannot make a name
+  // look better than it is -- the backend's existing downgrade demotes every
+  // verified tier to best-effort when there is no round trip to show, so the
+  // switch trades proof for speed and says so on every tile.
+  const [verify, setVerify] = useState(true)
   const [validationNote, setValidationNote] = useState(null)
   const [fetchError, setFetchError] = useState(null)
   const reduceMotion = useReducedMotion()
@@ -183,7 +189,7 @@ function Home() {
     setRows(lines.map(emptyRow))
     setIsSubmitting(true)
 
-    translateBatch(lines, { bestEffort })
+    translateBatch(lines, { bestEffort, verify })
       .then((results) => {
         setIsSubmitting(false)
 
@@ -254,7 +260,7 @@ function Home() {
     setValidationNote(null)
     setFetchError(null)
     try {
-      const envelope = await createJob({ file: chosenFile, text, bestEffort })
+      const envelope = await createJob({ file: chosenFile, text, bestEffort, verify })
       // Remember it BEFORE anything else can fail: owner_token is returned
       // exactly once, and losing it means the job can never be stopped.
       const entry = {
@@ -345,7 +351,7 @@ function Home() {
     setValidationNote(null)
     if (!chosen) return
     try {
-      setPreview(await parsePreview({ file: chosen, bestEffort }))
+      setPreview(await parsePreview({ file: chosen, bestEffort, verify }))
     } catch (err) {
       // A preview that fails is not a submission that fails; say so and let
       // them try anyway.
@@ -587,24 +593,47 @@ function Home() {
               </div>
             )}
 
-            <Switch
-              id="best-effort-mode"
-              checked={bestEffort}
-              onChange={setBestEffort}
-              disabled={isSubmitting}
-              label="Best-effort mode"
-              onWord="On"
-              offWord="Off"
-              /* Short form. The three-line version cost 115px of a 631px
-                 budget; this keeps the fact that decides whether to flip the
-                 switch. The detail is on About, and an unverified RESULT now
-                 names this switch itself (Tile.jsx). */
-              hint={
-                bestEffort
-                  ? 'Unnameable molecules get a looser pass, always marked unverified.'
-                  : 'Strict: only verified names, otherwise an honest abstain.'
-              }
-            />
+            {/* The two switches sit SIDE BY SIDE, not stacked. They are one
+                decision in two halves -- how hard to try (best-effort) and
+                whether to prove it (verify) -- and stacking them read as two
+                unrelated settings while costing ~90px of a one-screen budget.
+                The row wraps to a column below 640px, where two switches plus
+                their hints will not fit across. */}
+            <div className="workbench__switches">
+              <Switch
+                id="opsin-verify"
+                checked={verify}
+                onChange={setVerify}
+                disabled={isSubmitting}
+                label="OPSIN verify"
+                onWord="On"
+                offWord="Off"
+                hint={
+                  verify
+                    ? 'Every name is parsed back by OPSIN and checked against your structure.'
+                    : 'Faster, but nothing is checked \u2014 every name ships as unverified.'
+                }
+              />
+
+              <Switch
+                id="best-effort-mode"
+                checked={bestEffort}
+                onChange={setBestEffort}
+                disabled={isSubmitting}
+                label="Best-effort mode"
+                onWord="On"
+                offWord="Off"
+                /* Short form. The three-line version cost 115px of a 631px
+                   budget; this keeps the fact that decides whether to flip the
+                   switch. The detail is on About, and an unverified RESULT now
+                   names this switch itself (Tile.jsx). */
+                hint={
+                  bestEffort
+                    ? 'Unnameable molecules get a looser pass, always marked unverified.'
+                    : 'Strict: only verified names, otherwise an honest abstain.'
+                }
+              />
+            </div>
 
             <div className="workbench__actions">
               <button type="submit" className="btn btn--accent" disabled={isSubmitting}>
