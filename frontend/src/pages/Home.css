@@ -1498,28 +1498,33 @@
   margin-left: calc(-1 * var(--notch-wing));
   border-start-start-radius: var(--r-notch);
   border-start-end-radius: var(--r-notch);
-  /* OPAQUE, and this is the fix for "why is there a white border" and "they
-     look disconnected from the box". The first version was translucent glass
-     with a bright inset rim. Two problems, both structural rather than a
-     matter of taste:
-       - the rim IS the white border. An inset white line on every tab drew an
-         outline around each one, which is the opposite of seamless.
-       - a translucent tab sits over the PAGE GROUND (the tabs are above the
-         card), while the card beneath is solid. Two different composites can
-         never meet at the same colour, so the join showed as a line no matter
-         how the alpha was tuned.
-     The gloss survives as a gradient IN the fill -- the same one the buttons
-     use -- so the tabs still read as glassy without a blur that samples the
-     wrong backdrop. */
+  /* ONE CONTINUOUS RAMP, SLICED. Each tab runs left-to-right from its own
+     colour to the NEXT tab's, so at every junction the two sides are the same
+     value and there is no step to see. Three flat fills butting against each
+     other cannot be seamless -- a colour change at a boundary IS an edge, and
+     that is what "so many break" was: not the shapes, the colours.
+     --tab-a is the colour at this tab's left edge, --tab-b at its right; the
+     fillets below take the matching one, so the junctions stay continuous
+     through the curves too.
+     The gloss is the same white top highlight the buttons use, over the top. */
   background:
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 60%),
-    var(--tab-own);
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0) 62%),
+    linear-gradient(to right, var(--tab-a), var(--tab-b));
   font-family: var(--font-mono);
   font-size: var(--t-nav);
   font-weight: 700;
   letter-spacing: var(--track-nav);
   text-transform: uppercase;
-  color: var(--ink);
+  /* The live tab is the one in INK; the others step back to --body. Height
+     differences were tried first and read as a ragged, stepped top edge, so
+     the state is carried by type colour instead and the silhouette stays one
+     smooth wave.
+     --body, NOT --muted. Measured across the ramp's four stops, --muted
+     (#666) lands at 4.75 / 4.35 / 3.86 / 3.39:1 -- it fails AA on three of
+     them, and these fills only get deeper toward the right. --body (#333) is
+     7.46:1 at its worst, and still clearly separable from ink (10.45 vs
+     17.37:1 on the palest stop), which is what the signal needs. */
+  color: var(--body);
   cursor: pointer;
   /* Colour only. A transform lift was here and got CLIPPED on the way up --
      the strip has no room above it -- so the tab appeared to crop mid-
@@ -1566,6 +1571,7 @@
 .input-tab.input-tab--on:hover {
   z-index: 4;
   filter: none;
+  color: var(--ink);
 }
 
 /* THE FILLETS, on EVERY tab and on BOTH flanks. A square of the tab's own
@@ -1588,8 +1594,17 @@
   bottom: 0;
   width: var(--notch-wing);
   height: var(--notch-wing);
-  background: var(--tab-own);
   pointer-events: none;
+}
+
+/* Each fillet takes the colour of the EDGE it grows out of, so the ramp stays
+   continuous around the curves instead of jumping back to a flat fill. */
+.input-tab::before {
+  background: var(--tab-a);
+}
+
+.input-tab::after {
+  background: var(--tab-b);
 }
 
 .input-tab::before {
@@ -2011,16 +2026,21 @@
   --tab-tint: #fae5e2;
 }
 
+/* Four stops, three slices. Tab N ends on exactly the value tab N+1 starts on,
+   which is what makes every junction invisible. */
 .input-tab:nth-of-type(1) {
-  --tab-own: #fae5e2;
+  --tab-a: #fae5e2;
+  --tab-b: #f9d9d5;
 }
 
 .input-tab:nth-of-type(2) {
-  --tab-own: #f9d3ce;
+  --tab-a: #f9d9d5;
+  --tab-b: #f7c9c6;
 }
 
 .input-tab:nth-of-type(3) {
-  --tab-own: #f6bfbf;
+  --tab-a: #f7c9c6;
+  --tab-b: #f4b8b8;
 }
 
 .input-col--paste {
