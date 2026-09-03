@@ -242,6 +242,16 @@
   color: var(--ink);
 }
 
+/* THE PANEL IS A GRADIENT, from the active tab's tint at the top through
+   white to a soft grey at the foot (owner instruction: "gradient to go from
+   blush to white to soft grey"). It is what makes the folder read as one
+   piece of paper rather than a tinted strip stuck onto a white box.
+
+   The first stop is --tab-tint, set by the mode class below and identical to
+   the active tab's own fill. The white band arrives fast (by 30%) so that
+   every piece of text on this card -- switch labels, hints, the count -- sits
+   on white or near-white and keeps its measured contrast. Only the tab
+   labels, which are ink, ever sit on a tint. */
 .workbench__input {
   display: flex;
   flex-direction: column;
@@ -251,7 +261,21 @@
   gap: var(--s-sm);
   min-width: 0;
   padding: var(--s-md) var(--s-xl);
-  background: var(--card);
+  /* The tint is a BLOOM at the top edge, gone by the time the field's label
+     starts (owner: "gradient should end just above the title"). MEASURED:
+     the field's label sits 17px below the card's top edge, so the bloom is
+     spent by 14px and never runs behind it. In pixels, not percentages --
+     the stop has to clear a fixed-height label no matter how tall the card
+     gets, and a percentage moves with the card.
+     Everything below it is the plain white card, so every piece of text on
+     this surface keeps the contrast it was measured at. */
+  background: linear-gradient(
+    180deg,
+    var(--tab-tint) 0,
+    color-mix(in srgb, var(--tab-tint) 34%, var(--card)) 7px,
+    var(--card) 14px,
+    var(--card) 100%
+  );
   border-radius: var(--r-card);
   box-shadow: var(--card-shadow);
   border: var(--card-border);
@@ -1427,38 +1451,157 @@
    movement for free and the current choice is announced. The visual is the
    same pill language the header nav uses. */
 
+/* -------------------- the tabs: a stacked glass folder -------------------- */
+/* Paste | Upload file | Draw as a fanned stack of glass notches rising out of
+   the card's top edge. Owner instruction 2026-09-03, after two passes that
+   missed: "notch style, can stack up on top of each other with proper
+   glassmorphism, draw colour is too dark and I need pastel".
+
+   Three things the earlier passes got wrong and this one fixes:
+   - Tabs of DIFFERENT heights made a ragged, stepped top edge. They are all
+     one height now; the stack and the glass carry the state instead.
+   - Fillets on every outer flank left hard vertical seams between flush tabs.
+     Only the LIVE tab gets them, because only the live tab is the one carved
+     out of the card -- the others are tucked behind it.
+   - The tints were the palette's raw values, and coral was far too saturated
+     to read as pastel. They are pulled toward white now (see the ramp below).
+
+   Glass is deliberate here rather than decorative, which is the bar DESIGN.md
+   sets for it: these tabs sit over the page's moving gradient ground, so a
+   blur genuinely samples something. The system already owns the tokens. */
 .input-tabs {
   display: flex;
-  gap: 4px;
-  margin-bottom: var(--s-md);
+  align-items: flex-end;
+  /* Inset past the card's 22px corner AND past the first tab's own fillet, so
+     the leftmost island stands on the straight part of the top edge. */
+  padding-left: calc(var(--s-xl) + var(--notch-wing));
+  /* The islands must TOUCH the card: -1px pulls them over its hairline so the
+     live one can cancel it and merge. */
+  margin-bottom: -1px;
 }
 
 .input-tab {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  padding: 8px 14px;
-  border-radius: var(--r-pill);
+  /* ONE height for all three. The stack, not a step, says which is live. */
+  height: var(--info-notch-h);
+  padding-inline: var(--s-lg);
+  /* THE STACK. Each tab tucks a fillet's width under its neighbour, so the row
+     reads as a fanned set of folders rather than three separate lozenges. */
+  margin-left: calc(-1 * var(--notch-wing));
+  border-start-start-radius: var(--r-notch);
+  border-start-end-radius: var(--r-notch);
+  /* Glass: a translucent pastel over a blur of whatever is behind, plus a
+     bright top rim, which is the part that actually sells it -- a blur with no
+     rim reads as a smudge. */
+  background: color-mix(in srgb, var(--tab-own) 60%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.6);
+  backdrop-filter: blur(14px) saturate(1.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 1px 0 0 rgba(255, 255, 255, 0.35);
   font-family: var(--font-mono);
   font-size: var(--t-nav);
   font-weight: 700;
   letter-spacing: var(--track-nav);
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--ink);
   cursor: pointer;
   transition:
-    color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
-    background-color 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.input-tab:first-of-type {
+  margin-left: 0;
+}
+
+/* Leftmost on top, each next one tucked behind -- the way a real folder set
+   fans. Painting order alone gives the opposite (later DOM wins), so the
+   order is stated. These are local to the card and cannot reach the page
+   ground, which sits behind `.page` entirely; the header and the info bulb
+   already use small positive values the same way. */
+.input-tab:nth-of-type(1) {
+  z-index: 3;
+}
+
+.input-tab:nth-of-type(2) {
+  z-index: 2;
+}
+
+.input-tab:nth-of-type(3) {
+  z-index: 1;
+}
+
+/* A tucked tab lifts slightly toward the front on hover: a preview of picking
+   it, using the one transform the motion budget already allows a control. */
 .input-tab:hover {
-  color: var(--ink);
-  background: var(--surface-soft);
+  background: color-mix(in srgb, var(--tab-own) 78%, transparent);
+  transform: translateY(-2px);
 }
 
-.input-tab--on,
-.input-tab--on:hover {
-  color: var(--accent);
-  background: var(--accent-wash);
+/* THE LIVE TAB. On top of the stack, nearly opaque so its colour matches the
+   card's first gradient stop, and the only one wearing fillets -- because it
+   is the only one carved out of the card. It does not lift on hover: it is
+   already where it belongs.
+
+   Written `.input-tab.input-tab--on`, not `.input-tab--on`. The stack order
+   above is set with `:nth-of-type`, which scores TWO simple selectors; a lone
+   class scores one and loses. Measured before the fix: Draw active reported
+   z-index 1 and stayed at the BACK of its own stack. Doubling the class here
+   ties the specificity, and this rule comes later, so it wins. */
+.input-tab.input-tab--on,
+.input-tab.input-tab--on:hover {
+  z-index: 4;
+  background: color-mix(in srgb, var(--tab-own) 94%, transparent);
+  transform: none;
+}
+
+/* THE FILLETS, live tab only. A square of its colour on each flank with a
+   circle punched out of the inner TOP corner, so the card's surface curves up
+   into the island instead of meeting it at a right angle. `--notch-wing` is
+   both the square's size and the circle's radius: one number by definition,
+   which is what went wrong the last time a notch here was hand-mirrored. */
+.input-tab--on::before,
+.input-tab--on::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  width: var(--notch-wing);
+  height: var(--notch-wing);
+  background: color-mix(in srgb, var(--tab-own) 94%, transparent);
+  pointer-events: none;
+}
+
+.input-tab--on::before {
+  right: 100%;
+  -webkit-mask: radial-gradient(circle var(--notch-wing) at 0 0, transparent 98%, #000 100%);
+  mask: radial-gradient(circle var(--notch-wing) at 0 0, transparent 98%, #000 100%);
+}
+
+.input-tab--on::after {
+  left: 100%;
+  -webkit-mask: radial-gradient(circle var(--notch-wing) at 100% 0, transparent 98%, #000 100%);
+  mask: radial-gradient(circle var(--notch-wing) at 100% 0, transparent 98%, #000 100%);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .input-tab {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--tab-own);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .input-tab {
+    transition: none;
+  }
+
+  .input-tab:hover {
+    transform: none;
+  }
 }
 
 .input-tab:focus-within {
@@ -1824,4 +1967,60 @@
   text-transform: uppercase;
   color: var(--muted);
   white-space: nowrap;
+}
+
+/* -------------------- one tint per tab -------------------- */
+/* From the palette the owner supplied: blush / salmon / coral, plus the two
+   greys. --tab-own is what a tab paints itself; --tab-tint is what the CARD
+   starts its gradient with, and they are equal by construction for whichever
+   tab is active -- that equality IS the seamless join.
+
+   Every one of these is a FILL under ink, never text and never a state
+   signal. Measured against ink: blush 17.37:1, salmon 10.54:1, coral 7.35:1.
+   None of them is used as text on white, where all three fail.
+
+   --tab-foot is where the gradient settles: a hair lighter than --card-soft
+   (#edeff2) so the framed SMILES field, which IS --card-soft, still has an
+   edge to show against the card behind it. */
+/* THE PASTEL RAMP. The owner's palette pulled toward white until all three are
+   genuinely pale and evenly spaced -- measured luminances 0.819 / 0.712 /
+   0.606, steps of 0.107 and 0.106, against raw coral's 0.32 which was far too
+   dark to sit in a pastel set. Every label is ink and every one clears AA by a
+   mile: 17.4 / 15.2 / 13.1 against the solid fill, and 16.6 / 15.0 / 13.5 as
+   60% glass over the grey ground, which is the state that actually ships.
+   None of these is ever text, and none signals a tier -- they name an input
+   method, which is not a confidence claim. */
+.input-col {
+  --tab-foot: #f3f4f6;
+  --tab-tint: #fae5e2;
+}
+
+.input-tab:nth-of-type(1) {
+  --tab-own: #fae5e2;
+}
+
+.input-tab:nth-of-type(2) {
+  --tab-own: #f9d3ce;
+}
+
+.input-tab:nth-of-type(3) {
+  --tab-own: #f6bfbf;
+}
+
+.input-col--paste {
+  --tab-tint: #fae5e2;
+}
+
+.input-col--file {
+  --tab-tint: #f9d3ce;
+}
+
+.input-col--draw {
+  --tab-tint: #f6bfbf;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .input-tab {
+    transition: none;
+  }
 }

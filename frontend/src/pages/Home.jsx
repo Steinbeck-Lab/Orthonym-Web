@@ -506,47 +506,63 @@ function Home() {
             grid cell rather than two, so the notch and its drawer are the
             card's width by construction -- the key used to be a free box
             below the whole workbench, measured against nothing on the page. */}
-        <div className="input-col">
-        <section className="workbench__input" aria-label="Translate a SMILES string">
-          {/* Two ways in, one card. The tabs are radios rather than buttons
-              so a keyboard gets arrow-key movement for free and the current
-              choice is announced. */}
-          <div className="input-tabs" role="radiogroup" aria-label="How to give STITCH molecules">
-            <label className={inputMode === 'paste' ? 'input-tab input-tab--on' : 'input-tab'}>
-              <input
-                type="radio"
-                name="input-mode"
-                value="paste"
-                checked={inputMode === 'paste'}
-                onChange={() => setInputMode('paste')}
-                disabled={isSubmitting}
-              />
-              Paste
-            </label>
-            <label className={inputMode === 'file' ? 'input-tab input-tab--on' : 'input-tab'}>
-              <input
-                type="radio"
-                name="input-mode"
-                value="file"
-                checked={inputMode === 'file'}
-                onChange={() => setInputMode('file')}
-                disabled={isSubmitting}
-              />
-              Upload file
-            </label>
-            <label className={inputMode === 'draw' ? 'input-tab input-tab--on' : 'input-tab'}>
-              <input
-                type="radio"
-                name="input-mode"
-                value="draw"
-                checked={inputMode === 'draw'}
-                onChange={() => setInputMode('draw')}
-                disabled={isSubmitting}
-              />
-              Draw
-            </label>
-          </div>
+        <div className={`input-col input-col--${inputMode}`}>
+        {/* The active tab's tint is set as a CSS variable on the CARD, not on
+            the tab, because the card's gradient has to START with it -- that
+            shared first colour is the entire folder illusion: tab and panel
+            are one surface with no seam between them. One class per mode
+            rather than an inline style, so every colour still lives in the
+            stylesheet. */}
+          {/* The tabs sit ABOVE the card, not inside it, which is what makes
+            them read as tabs at all. Inside, they shared the card's tinted
+            top band and the active one had no shape left -- the whole strip
+            read as a coloured header bar. Outside, each tab is a discrete
+            shape standing on the card's top edge, and the active one merges
+            into the panel because its fill and the panel's first gradient
+            stop are the same colour.
 
+            Still radios, not buttons: a keyboard gets arrow-key movement for
+            free and the current choice is announced. */}
+        <div className="input-tabs" role="radiogroup" aria-label="How to give STITCH molecules">
+          <label className={inputMode === 'paste' ? 'input-tab input-tab--on' : 'input-tab'}>
+            <input
+              type="radio"
+              name="input-mode"
+              value="paste"
+              checked={inputMode === 'paste'}
+              onChange={() => setInputMode('paste')}
+              disabled={isSubmitting}
+            />
+            Paste
+          </label>
+          <label className={inputMode === 'file' ? 'input-tab input-tab--on' : 'input-tab'}>
+            <input
+              type="radio"
+              name="input-mode"
+              value="file"
+              checked={inputMode === 'file'}
+              onChange={() => setInputMode('file')}
+              disabled={isSubmitting}
+            />
+            Upload file
+          </label>
+          <label className={inputMode === 'draw' ? 'input-tab input-tab--on' : 'input-tab'}>
+            <input
+              type="radio"
+              name="input-mode"
+              value="draw"
+              checked={inputMode === 'draw'}
+              onChange={() => setInputMode('draw')}
+              disabled={isSubmitting}
+            />
+            Draw
+          </label>
+        </div>
+
+        <section
+          className={`workbench__input workbench__input--${inputMode}`}
+          aria-label="Translate a SMILES string"
+        >
           <form onSubmit={handleSubmit} noValidate>
             {inputMode === 'draw' ? (
               <div className="field">
