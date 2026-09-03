@@ -106,7 +106,7 @@ function Footer() {
           <span className="credit__lead">by</span>
           <a
             className="credit__who"
-            href="https://github.com/Kohulan"
+            href="https://kohulanr.com"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -141,7 +141,14 @@ function Footer() {
           </a>
           <span className="sr-only">and</span>
           <CreditCross />
-          <span className="credit__where">Steinbeck-Lab</span>
+          <a
+            className="credit__where"
+            href="https://cheminf.uni-jena.de"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Steinbeck-Lab
+          </a>
         </p>
 
         <button

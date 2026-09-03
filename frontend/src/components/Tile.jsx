@@ -1,4 +1,6 @@
 import { NAMED_STATUSES, STATE_CLASS, STATE_LABEL, VERIFIED_STATUSES } from '../lib/statuses'
+import useDepiction from '../lib/useDepiction'
+import CopyButton from './CopyButton'
 import ThreadedName from './ThreadedName'
 
 /**
@@ -9,6 +11,10 @@ import ThreadedName from './ThreadedName'
  */
 export default function Tile({ row, phase, index = 0, reduceMotion }) {
   const { smiles, status, name, formula, error, depiction_svg, roundtrip_smiles, roundtrip_match } = row
+  // The RETRANSLATED structure: what OPSIN parsed the name back to. The naming
+  // result only ships the INPUT's picture, so this one is drawn on demand from
+  // roundtrip_smiles. A null roundtrip (no round trip ran) is a no-op fetch.
+  const retrans = useDepiction(roundtrip_smiles)
   const isPending = phase === 'pending'
   const isActive = phase === 'active'
   const animateName = isActive && !reduceMotion
@@ -29,6 +35,37 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
          inside them. */
       style={{ '--i': index }}
     >
+      {/* THE NAME LEADS the card (owner instruction 2026-09-03: title bold,
+          larger, at the top), with the copy button inline at the end of it and
+          the PIN/round-trip verdict in olive directly beneath -- the proof sits
+          with the claim rather than in the foot. */}
+      {!isPending && NAMED_STATUSES.has(status) && (
+        <div className={`tile__name-block tile__name-block--${STATE_CLASS[status]}`}>
+          <span className="tile__name-line">
+            <ThreadedName name={name} animate={animateName} />
+            <CopyButton text={name} />
+          </span>
+        </div>
+      )}
+
+      {!isPending && NAMED_STATUSES.has(status) && (
+        <div className="tile__verify">
+          <span className="tile__verify-label">{label}</span>
+          {roundtrip_smiles ? (
+            <span className="tile__verify-rt">
+              round-trip check: <code>{roundtrip_smiles}</code>{' '}
+              {roundtrip_match ? '— matches ✓' : '— does not match ✗'}
+            </span>
+          ) : (
+            VERIFIED_STATUSES.has(status) && (
+              <span className="tile__verify-rt">
+                round-trip check: unavailable — could not confirm this result
+              </span>
+            )
+          )}
+        </div>
+      )}
+
       <div className="tile__head">
         <code className="tile__smiles" title={smiles}>
           {smiles}
@@ -44,15 +81,28 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
           </div>
         )}
 
-        {!isPending && NAMED_STATUSES.has(status) && (
-          <div className="tile__result-row">
-            <div className={`tile__name-block tile__name-block--${STATE_CLASS[status]}`}>
-              <ThreadedName name={name} animate={animateName} />
-            </div>
-            {depiction_svg && (
-              <div className="tile__depiction">
-                <img src={depiction_svg} alt={`2D structure depiction for "${name}"`} />
-              </div>
+        {/* Input structure and the retranslated one, side by side, so the
+            round-trip claim is something the eye can check. The second panel
+            only appears when a round trip actually ran. */}
+        {!isPending && NAMED_STATUSES.has(status) && depiction_svg && (
+          <div className="tile__depictions">
+            <figure className="tile__depiction">
+              <img src={depiction_svg} alt={`2D structure you entered, "${smiles}"`} />
+              <figcaption className="tile__depiction-cap">Input</figcaption>
+            </figure>
+            {roundtrip_smiles && (
+              <figure className="tile__depiction">
+                {retrans.svg ? (
+                  <img src={retrans.svg} alt={`2D structure OPSIN re-parsed from the name, "${roundtrip_smiles}"`} />
+                ) : (
+                  <span className="tile__depiction-note">
+                    {retrans.loading ? 'Drawing…' : 'No picture'}
+                  </span>
+                )}
+                <figcaption className="tile__depiction-cap">
+                  Re-parsed {roundtrip_match ? '✓' : '✗'}
+                </figcaption>
+              </figure>
             )}
           </div>
         )}
@@ -71,30 +121,20 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
         )}
       </div>
 
+      {/* The foot renders only when it has something to say. A verified PIN or
+          fallback moved its label and proof up into the olive verdict, leaving
+          the foot empty -- and an empty foot still drew its top hairline and
+          padding, which was the whitespace at the card's bottom edge. */}
+      {(isPending ||
+        !NAMED_STATUSES.has(status) ||
+        status === 'best_effort' ||
+        (status === 'abstain' && formula)) && (
       <div className="tile__foot">
-        <span className="tile__state-label">{label}</span>
-        {!isPending && roundtrip_smiles && (
-          <p className="tile__roundtrip">
-            round-trip check: <code className="tile__roundtrip-smiles">{roundtrip_smiles}</code>{' '}
-            <span
-              className={`tile__roundtrip-result${roundtrip_match ? '' : ' tile__roundtrip-result--mismatch'}`}
-            >
-              {roundtrip_match ? '— matches ✓' : '— does not match ✗'}
-            </span>
-          </p>
-        )}
-        {/* This tier's rule (double/dashed) claims an OPSIN round-trip
-            confirmed the name, but no proof came back with this result.
-            The proof must never go missing silently -- an absent line here
-            would look identical to a tier that carries no such claim. */}
-        {!isPending && !roundtrip_smiles && VERIFIED_STATUSES.has(status) && (
-          <p className="tile__roundtrip">
-            round-trip check:{' '}
-            <span className="tile__roundtrip-result tile__roundtrip-result--unavailable">
-              unavailable
-            </span>{' '}
-            — could not confirm this result
-          </p>
+        {/* The state label lives with the name (in the olive verdict) for a
+            named result; the foot carries it only for the states that have no
+            name to sit under -- pending, abstain, error. */}
+        {(isPending || !NAMED_STATUSES.has(status)) && (
+          <span className="tile__state-label">{label}</span>
         )}
         {/* The link back to the control that produced this tier. Without it
             the tier reads as a property of the MOLECULE rather than a
@@ -130,6 +170,7 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
           <span className="tile__formula">Formula: {formula}</span>
         )}
       </div>
+      )}
     </li>
   )
 }

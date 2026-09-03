@@ -3,6 +3,7 @@ import {
   ArrowRight,
   ArrowRightLeft,
   Check,
+  Copy,
   Plus,
   RefreshCw,
   Square,
@@ -33,6 +34,7 @@ import {
 const ICONS = {
   translate: ArrowRightLeft, // SMILES becomes a name, and back again
   check: Check,
+  copy: Copy,
   upload: Upload,
   stop: Square, // a stopped thing is a shape, not a gesture
   trash: Trash2,
