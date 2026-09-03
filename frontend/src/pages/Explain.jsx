@@ -42,7 +42,7 @@ function SegmentNode({ segment, path, activePath, setHoveredPath, togglePath }) 
         <span className="explain-segment__explanation">{segment.explanation}</span>
       </button>
       {segment.children?.length > 0 && (
-        <ul className="explain-segment__children">
+        <ul className="explain-segment__children" role="list">
           {segment.children.map((child, index) => (
             <SegmentNode
               key={`${path}.${index}`}
@@ -222,19 +222,14 @@ function Explain() {
   const isLoading = phase === 'loading'
   const name = data?.name
   const segments = data?.segments || []
-  // Whether any part of this name was actually pinned to real atoms. The
-  // outer patch's accent border means "confirmed," never "a name exists,"
-  // so it is earned by at least one MAPPED part -- a part that is not
-  // `unmapped` owns or highlights atoms traced to OPSIN's own output.
-  //
-  // This used to test `kind === 'suffix'`, which silently changed meaning
-  // when the SMARTS design was retired. Back then "no suffix segment" was
-  // the only way a name could fail to decompose. It now means only "this
-  // molecule has no principal characteristic group," which is an ordinary,
-  // fully-decomposed outcome: benzene, TNT and DDT all decompose completely
-  // and have no suffix, yet every one of them rendered with the plain
-  // non-confirmed border.
-  const hasMappedParts = segments.some((segment) => segment.kind !== 'unmapped')
+  // NOTE: there used to be a `hasMappedParts` flag here, feeding
+  // `explain-patch--success` / `--unmapped` onto the outer patch. Both class
+  // names were removed from Explain.css and nothing styled them, so the flag
+  // scanned every segment on every render to choose between two inert strings.
+  // What a reader actually sees is the struck label on each unmapped part and
+  // the ConfidenceReport rule -- neither of which needs this. If the
+  // distinction is ever wanted again, it comes back together with the rule
+  // that renders it.
   // All-or-nothing is a SEGMENT-level property only: a top-level part with no
   // name_range means spans could not be proven for this name at all, so the
   // whole hoverable name falls back to the plain part list. A CHILD with no
@@ -247,14 +242,25 @@ function Explain() {
 
   return (
     <>
-      <div className="page-head page-shell">
-        <h1 className="page-head__title">Show the working</h1>
-        <p className="page-head__lede">
-            {level === 'learn'
-              ? 'Orthonym does not just give a molecule a name — this page shows how it got there. Draw a molecule, or type a name you already have, then move your pointer across the name to see which atoms each part describes.'
-              : 'Orthonym doesn’t just produce a name — on this page it shows its work. Enter an IUPAC name, a SMILES string, or draw a structure, then hover (or tap) any part of the decomposed name to see exactly which atoms it refers to.'}
-          </p>
-      </div>
+      {/* The opening is BARE GROUND, not a card. `.page-hero` (App.css) is
+          `.home-hero`'s geometry for a route that has a title instead of the
+          wordmark, so the header notch meets the grey floor here exactly as
+          it does on Home rather than a second white rectangle stacked under
+          it. It self-insets, so it takes no `page-shell`.
+
+          The lede is ONE sentence, which is all a hero wants. The
+          instruction that used to run on after it ("...then hover any part
+          of the decomposed name...") is not lost: it moved down into the
+          idle empty note, which is the thing a reader is actually looking at
+          while there is nothing to point at yet. */}
+      <section className="page-hero" aria-label="Introduction">
+        <h1 className="page-hero__title">Show the working</h1>
+        <p className="page-hero__lede">
+          {level === 'learn'
+            ? 'Orthonym does not just give a molecule a name — this page shows how it got there.'
+            : 'Orthonym doesn’t just produce a name — on this page it shows its work.'}
+        </p>
+      </section>
 
       {/* workspace--draw flips the split so the structure editor takes the
           wide cell (see CLAUDE.md) -- Ketcher is unusable in the narrow input
@@ -350,7 +356,7 @@ function Explain() {
 
           <div className="examples" role="group" aria-label="Try a curated example">
             <span className="examples__label">Try one:</span>
-            <ul className="examples__list">
+            <ul className="examples__list" role="list">
               {EXAMPLES.map((example) => (
                 <li key={example.smiles}>
                   <button
@@ -397,7 +403,7 @@ function Explain() {
         </fieldset>
 
         {fetchError && (
-          <p className="explain-fetch-error" role="alert">
+          <p className="notice" role="alert">
             Could not reach Orthonym&rsquo;s backend ({fetchError}). Is it running on{' '}
             <code>localhost:8000</code>?
           </p>
@@ -406,16 +412,21 @@ function Explain() {
         <div aria-live="polite">
           {phase === 'idle' && (
             <div className="explain-patch explain-patch--idle">
+              {/* Two sentences, because the second one came DOWN from the
+                  lede when the page-head card became a hero: a hero carries
+                  one sentence, and "then hover any part of the name" is an
+                  instruction for the panel it describes, not for the
+                  masthead. Same words, moved -- no new claim. */}
               <p className="explain-patch__empty-note">
                 {level === 'learn'
-                  ? 'Nothing to explain yet — draw a molecule or type a name above, or try one of the examples.'
-                  : 'Nothing to explain yet — enter an IUPAC name or a SMILES string above, draw a structure, or try one of the examples.'}
+                  ? 'Nothing to explain yet — draw a molecule or type a name above, or try one of the examples. Then move your pointer across the name to see which atoms each part describes.'
+                  : 'Nothing to explain yet — enter an IUPAC name or a SMILES string above, draw a structure, or try one of the examples. Then hover (or tap) any part of the decomposed name to see exactly which atoms it refers to.'}
               </p>
             </div>
           )}
 
           {phase === 'loading' && (
-            <div className="explain-patch explain-patch--loading" aria-busy="true">
+            <div className="explain-patch" aria-busy="true">
               <span className="explain-patch__state-label">Naming and decomposing&hellip;</span>
               <div className="explain-patch__pending-cloth" aria-hidden="true">
                 <span className="explain-patch__pending-dash" />
@@ -426,7 +437,7 @@ function Explain() {
           )}
 
           {phase === 'error' && (
-            <div className="explain-patch explain-patch--error" role="alert">
+            <div className="explain-patch" role="alert">
               <span className="explain-patch__state-label">
                 {apiError || 'Could not explain this molecule'}
               </span>
@@ -438,11 +449,7 @@ function Explain() {
           )}
 
           {phase === 'success' && (
-            <div
-              className={`explain-patch${
-                hasMappedParts ? ' explain-patch--success' : ' explain-patch--unmapped'
-              }`}
-            >
+            <div className="explain-patch">
               <div className="explain-result">
                 <div className="explain-result__name-row">
                   <span className="explain-result__name-label">Name</span>
@@ -528,7 +535,7 @@ function Explain() {
                     all. Shown here as a notice rather than a blocking error,
                     so nothing that WAS drawn gets hidden. */}
                 {apiError && (
-                  <p className="explain-result__notice" role="status">
+                  <p className="notice" role="status">
                     {apiError}
                   </p>
                 )}
@@ -557,7 +564,7 @@ function Explain() {
                       )}
                     </div>
                   ) : (
-                    <ul className="explain-segments" aria-label="Named parts">
+                    <ul className="explain-segments" role="list" aria-label="Named parts">
                       {segments.map((segment, index) => (
                         <SegmentNode
                           key={`${segment.kind}-${index}`}

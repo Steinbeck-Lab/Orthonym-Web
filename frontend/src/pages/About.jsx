@@ -8,18 +8,33 @@ import './About.css'
 // measured numbers the accuracy paragraph cites, not new claims. They come
 // from Orthonym v1.0.0's README; the earlier four-figure v21.0 split is
 // gone because v1.0.0 publishes no per-corpus breakdown to cite.
+//
+// EXACTLY TWO top-level children: the hero, then the reading column.
+// App.css's `.page__content > * + *:not(.site-footer)` is what supplies the
+// 14px between them, so a third box here would add a stray gap and a single
+// merged box would lose it.
 function About() {
   return (
     <>
-      <div className="page-head page-shell">
-        <h1 className="page-head__title">About Orthonym</h1>
-        <p className="page-head__lede">
-          Orthonym is a public showcase for a
-          deterministic, rule-based SMILES-to-IUPAC-name engine &mdash; built so visitors can try
-          it on real molecules and see exactly how it behaves, including where it succeeds, where
-          it falls back, and where it honestly declines to guess.
+      {/* The opening is NOT a card. It was `.page-head` — a wide white
+          rectangle stacked directly under the white header notch — until
+          Home dropped that shape on 2026-09-02 for a wordmark sitting
+          straight on the grey ground. `.page-hero` (App.css) is that same
+          move for a route that has a title instead of a wordmark: no fill,
+          no border, no shadow, no radius, and no stacking context, so the
+          gradient ground shows through and the page begins with the floor.
+          It self-insets to the shell column, so it must NOT also take
+          `page-shell` — that would pad it twice. */}
+      <section className="page-hero" aria-label="Introduction">
+        <h1 className="page-hero__title">About Orthonym</h1>
+        {/* One sentence. The rest of the old lede — the succeeds / falls back /
+            declines clause — was not deleted,
+            it moved down into "How it works", where the same three outcomes
+            are already the subject. */}
+        <p className="page-hero__lede">
+          A public showcase for a deterministic, rule-based SMILES-to-IUPAC-name engine.
         </p>
-      </div>
+      </section>
 
       <main className="about-page">
         {/* Orthonym v1.0.0's published figures (its README § Accuracy),
@@ -40,6 +55,15 @@ function About() {
               <span className="spec__label">Molecules benchmarked</span>
             </div>
           </div>
+          {/* PRODUCT.md principle 2: a figure travels with its version, its
+              benchmark and its metric's own definition — never as a bare
+              percentage. All three restate what the accuracy band below
+              already says; nothing new is claimed here. A caption, not a
+              paragraph, so the mono face is legal. */}
+          <p className="about-spec-source">
+            Orthonym v1.0.0 &middot; 1,500 molecules from ChEBI and PubChem &middot; a refusal to
+            name counts as a failure
+          </p>
         </section>
 
         <section className="about-band about-band--split" aria-label="How accurate is it">
@@ -73,6 +97,15 @@ function About() {
             <h2>How it works</h2>
           </div>
           <div className="about-band__body">
+            {/* Moved down out of the old title card's lede, unchanged in
+                substance: the three outcomes the paragraph after it
+                then names one by one. */}
+            <p className="prose">
+              Orthonym is built so
+              visitors can try the engine on real molecules and see exactly how it behaves,
+              including where it succeeds, where it falls back, and where it honestly declines to
+              guess.
+            </p>
             <p className="prose">
               Every SMILES string you submit goes through a fixed set of IUPAC nomenclature rules
               &mdash; there&rsquo;s no model and no training data involved, so the same input
@@ -133,13 +166,16 @@ function About() {
           </div>
         </section>
 
-        {/* At a glance — a bento mosaic of verified facts, not a card deck:
-            same 1px seams, same 0px corners as every other grid on the site. */}
+        {/* At a glance — verified facts as a row of small cards on the grey
+            ground, the same rounded-card vocabulary every other surface on
+            the site uses. `role="list"` is not optional: index.css sets
+            `list-style: none` globally, which strips the list semantics from
+            a bare <ul> in Safari/VoiceOver. */}
         <section className="about-band" aria-label="At a glance">
           <div className="about-band__title-row">
             <h2>At a glance</h2>
           </div>
-          <ul className="about-cards">
+          <ul className="about-cards" role="list">
             <li className="about-card">
               <span className="about-card__label">Engine</span>
               <p className="about-card__body">
@@ -181,7 +217,7 @@ function About() {
           <div className="about-band__title-row">
             <h2>Acknowledgments</h2>
           </div>
-          <ul className="about-cards">
+          <ul className="about-cards" role="list">
             <li className="about-card">
               <span className="about-card__label">IUPAC Blue Book 2013</span>
               <p className="about-card__body">

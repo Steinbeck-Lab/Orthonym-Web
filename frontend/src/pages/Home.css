@@ -1326,17 +1326,6 @@
   animation-delay: 320ms;
 }
 
-@keyframes dash-wait {
-  0%,
-  100% {
-    opacity: 0.4;
-  }
-
-  50% {
-    opacity: 1;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .tile__pending-dash {
     animation: none;
@@ -1390,57 +1379,6 @@
 .tile--abstain .tile__foot,
 .tile--error .tile__foot {
   margin-top: 0;
-}
-
-.tile__state-label {
-  font-family: var(--font-mono);
-  font-size: var(--t-caption);
-  line-height: 1.4;
-  letter-spacing: var(--track-caption);
-  text-transform: uppercase;
-  color: var(--ink);
-}
-
-.tile__roundtrip {
-  font-family: var(--font-mono);
-  font-size: var(--t-caption);
-  line-height: 1.6;
-  letter-spacing: 0;
-  color: var(--muted);
-  overflow-wrap: anywhere;
-}
-
-.tile__roundtrip-smiles {
-  font-size: inherit;
-  color: var(--body);
-}
-
-/* The round-trip verdict is never colour-coded — it is the glyph and the
-   word that carry it, exactly as the confidence rule does above. */
-.tile__roundtrip-result {
-  color: var(--ink);
-  white-space: nowrap;
-}
-
-.tile__roundtrip-result--mismatch {
-  color: var(--ink);
-  text-decoration: underline;
-  text-decoration-style: wavy;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.25em;
-}
-
-/* A missing proof is not a colour-coded state either, and it deliberately
-   shares the mismatch treatment above: both mean the round-trip claim this
-   tier's rule makes is not backed by a confirmed match, just for different
-   reasons (one failed, one never ran). It must never look like the silence
-   of a tier that makes no such claim. */
-.tile__roundtrip-result--unavailable {
-  color: var(--ink);
-  text-decoration: underline;
-  text-decoration-style: wavy;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.25em;
 }
 
 /* Why this tier, not what it is: sentence case in the body face, so it reads

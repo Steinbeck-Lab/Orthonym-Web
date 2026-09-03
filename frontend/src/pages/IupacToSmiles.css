@@ -1,11 +1,27 @@
 /* ============================================================
-   Orthonym — IUPAC → Structure
+   Orthonym — IUPAC → Structure (/from-name)
 
-   Inherits the shared full-bleed workspace mosaic, the shared field,
-   button and tag vocabulary. Page-specific: the four result states
-   (idle / loading / parsed / error), each an unboxed seamed panel rather
-   than a tinted status card. No state is ever signalled by colour.
+   Brought into Home's language on 2026-09-02. The page now opens with
+   `.page-hero` (App.css) — the wordmark-less twin of `.home-hero`, on the
+   bare grey ground, no card — and the working area stays the shared
+   `.workspace` two-card grid it already had.
+
+   WHAT THIS FILE OWNS, AND WHAT IT DOES NOT:
+   App.css flattens `.from-name-results .from-name-patch` (transparent, no
+   border, no radius, no padding) and frames `.from-name-patch__depiction`
+   with `--card-soft` / `--card-border` / `--r-card-sm`. Both selectors beat
+   anything at equal specificity here, because App.css is imported last.
+   So this file carries LAYOUT and the state marks only — the old
+   `--surface-soft` fills, `1px solid var(--hairline)` boxes and `--r-none`
+   corners that used to sit on the patches were already dead under those two
+   rules, and are gone rather than left to look meaningful.
+
+   No state is ever signalled by colour: waiting is three shimmering
+   hairlines, failure is the paired struck rules Translate uses. Crimson is
+   chrome (the one primary button) and touches nothing here.
    ============================================================ */
+
+/* -------------------- input card -------------------- */
 
 .from-name-panel {
   display: flex;
@@ -36,13 +52,24 @@
   color: var(--ink);
 }
 
-.from-name-panel .page-about-note {
+/* The card's foot. `margin-top: auto` pins it to the bottom of the card when
+   the results cell beside it is the taller of the two, so the two cards read
+   as one row rather than one full box and one half-empty one. The hairline
+   is an INTERNAL divider inside a card, which is the only seam this system
+   still allows. */
+.from-name-panel__foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xs);
   margin-top: auto;
   padding-top: var(--s-lg);
   border-top: 1px solid var(--hairline);
 }
 
-/* -------------------- results -------------------- */
+/* What the parse actually returns, and who did the parsing. This sentence
+   used to be the back half of the `.page-head` lede; a hero takes one
+   sentence, so it moved here rather than being deleted. */
+/* -------------------- results card -------------------- */
 
 .from-name-results {
   display: flex;
@@ -50,59 +77,36 @@
   gap: var(--s-lg);
 }
 
-.from-name-fetch-error {
-  padding: var(--s-lg);
-  background: var(--surface-soft);
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--r-none);
-  font-family: var(--font-body);
-  font-size: var(--t-body-sm);
-  line-height: 1.5;
-  color: var(--ink);
+/* The live region is the flex track the result grows in. `flex: 1` +
+   `min-height: 0` is what lets the depiction below take the height the card
+   has left instead of setting the card's height itself. */
+.from-name-results__live {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
-.from-name-fetch-error code {
-  padding: 0 0.25em;
-  background: var(--surface-card);
-  color: var(--ink);
-}
-
+/* Flat content inside the results card. The fill, border and radius that
+   used to be here are overridden by App.css's flatten rule anyway. */
 .from-name-patch {
   display: flex;
   flex-direction: column;
-  gap: var(--s-lg);
-  padding: var(--s-lg);
-  background: var(--canvas);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-none);
+  gap: var(--s-md);
+  min-height: 0;
 }
 
-/* Nothing entered yet. The panel is present and empty, deliberately. */
-.from-name-patch--idle {
-  background: var(--surface-soft);
-  border-color: var(--hairline);
-}
-
-/* Centre the idle panel so it does not strand at the top of an output cell
-   stretched to the taller input column — no dead band below it. */
+/* Nothing entered yet. Centred in the cell so it does not strand at the top
+   of an output card stretched to the taller input column. */
 .from-name-patch--idle {
   margin-block: auto;
 }
 
-/* Working. Same treatment as a queued result cell on Translate. */
-.from-name-patch--loading {
-  background: var(--surface-soft);
-}
-
-.from-name-patch--error {
-  border-color: var(--ink);
-}
-
-/* The parsed state frames its own depiction, so an outer border would be
-   a box around a box. */
+/* The parsed state is the one that has to fill the cell — everything else is
+   a line or two of type. */
 .from-name-patch--success {
-  padding: 0;
-  border: none;
+  flex: 1;
+  min-height: 0;
 }
 
 .from-name-patch__empty-note {
@@ -114,6 +118,7 @@
 }
 
 .from-name-patch__top {
+  flex: none;
   padding-bottom: var(--s-xs);
   border-bottom: 1px solid var(--hairline);
 }
@@ -130,13 +135,16 @@
 .from-name-patch__body {
   display: flex;
   flex-direction: column;
-  gap: var(--s-lg);
+  gap: var(--s-md);
+  flex: 1;
+  min-height: 0;
 }
 
 .from-name-patch__field {
   display: flex;
   flex-direction: column;
   gap: var(--s-xs);
+  flex: none;
 }
 
 .from-name-patch__field-label {
@@ -159,18 +167,31 @@
   overflow-wrap: anywhere;
 }
 
-/* The depiction is the page's photograph: edge to edge in its panel,
-   0px corners, one hairline frame. */
+/* NO aspect-ratio, and this is load-bearing rather than tidying: a 4:3 box
+   at the full width of this card measured 650px tall, which pushed the
+   result out of view and broke the page's zero-overflow budget. The frame
+   takes the height the card has left and the drawing scales inside it.
+   `flex: 1` — basis 0%, exactly as Home.css's `.tile__depiction` does it. An
+   earlier pass here wrote `flex: 1 1 240px`, reasoning that the basis would
+   ask the row for a picture worth looking at; what it actually does is
+   contribute 240px to the auto grid row's max-content height instead of the
+   180px floor, which is 60px of growth on a route DESIGN.md records at zero
+   overflow, for no visible gain once the card is taller than 240px anyway.
+   180px is the floor Home's tiles use — below it the drawing stops being
+   legible.
+   The fill, border and radius come from App.css's framed-depiction rule and
+   are deliberately not repeated here.
+   The CDK depiction carries CIP stereo labels ((R)/(S), (E)/(Z)) and can be
+   taller than the old RDKit picture; `object-fit: contain` is what absorbs
+   that, which is exactly why no ratio may be pinned. */
 .from-name-patch__depiction {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  flex: 1;
+  min-height: 180px;
   padding: var(--s-md);
-  background: var(--canvas);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-none);
 }
 
 .from-name-patch__depiction img {
@@ -236,10 +257,4 @@
 
 .from-name-patch__snip--b {
   top: 17px;
-}
-
-@media (min-width: 700px) {
-  .from-name-patch__depiction {
-    max-width: 460px;
-  }
 }

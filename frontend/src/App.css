@@ -705,49 +705,6 @@
   background: var(--hairline);
 }
 
-/* -------------------- page head -------------------- */
-/* Every route opens with a title + lede inside a wide card at the top of
-   the bento — the reference's top-left "title card". */
-
-.page-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-md);
-  /* self-inset card: sits shell-pad in from each viewport edge, capped at
-     the content width, so the grey ground frames it on all sides. */
-  width: min(100% - 2 * var(--shell-pad), var(--shell-max));
-  margin-inline: auto;
-  padding: clamp(var(--s-lg), 3vw, var(--s-xl));
-  background: var(--card);
-  border-radius: var(--r-card);
-  box-shadow: var(--card-shadow);
-  border: var(--card-border);
-}
-
-.page-head__title {
-  max-width: 24ch;
-  text-wrap: balance;
-}
-
-.page-head__lede {
-  max-width: 64ch;
-  font-size: var(--t-body-md);
-  line-height: 1.55;
-  color: var(--body-strong);
-}
-
-@media (min-width: 1000px) {
-  .page-head {
-    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-    align-items: center;
-    gap: var(--s-xxl);
-  }
-
-  .page-head__title {
-    font-size: clamp(2.75rem, 4.6vw, 4rem);
-  }
-}
-
 /* -------------------- workspace bento -------------------- */
 /* Every interactive route (Structure→IUPAC, IUPAC→Structure, Explain,
    Learn) puts its input beside its own output as two rounded cards in a
@@ -762,6 +719,18 @@
   max-width: var(--shell-max);
   margin-inline: auto;
   padding-inline: var(--shell-pad);
+  /* The flexible row of the page, exactly as Home's `.workbench` is: the hero
+     above it is fixed, this takes what is left of the one screen. Both halves
+     are needed and neither works alone -- `min-height: 0` is what gives the
+     grid a DEFINITE height to size its auto row against (a flex item's
+     automatic minimum size is otherwise its content, so it simply refuses to
+     shrink), and the cell rule below is what makes each cell clip so the row
+     can actually take that height.
+     MEASURED: with the cell rule alone, /from-name showing a result at
+     1440x900 still overflowed by 149px, because the grid itself was still
+     sizing to content. Both, and the same route overflows by 0. */
+  flex: 1;
+  min-height: 0;
 }
 
 .workspace > * {
@@ -771,6 +740,19 @@
   border-radius: var(--r-card);
   box-shadow: var(--card-shadow);
   border: var(--card-border);
+  /* The pair that makes a one-screen route stay one screen, and it is a PAIR:
+     `min-height: 0` alone is not enough. A grid item's automatic minimum size
+     is its content, so without it the cell refuses to shrink; and an auto grid
+     row sizes to its cells' content unless a cell is a scroll container, which
+     is what `overflow-y: auto` makes it. Home's `.workbench > *` has carried
+     both since the one-screen pass; `.workspace` had neither, and MEASURED on
+     /from-name showing a result at 1440x900 the row went to 789px inside a
+     763px content box -- 149px of the page pushed below the fold, on a route
+     DESIGN.md records at zero overflow. CLAUDE.md states the rule outright:
+     "clipping is what makes a cell a scroll container, which is also what lets
+     an auto grid row shrink." */
+  min-height: 0;
+  overflow-y: auto;
 }
 
 @media (min-width: 1000px) {
@@ -2482,4 +2464,193 @@ input.field__control {
   .dropzone--armed {
     transform: none;
   }
+}
+
+/* ==================== promoted out of Home.css ====================
+   Everything below was defined in pages/Home.css and consumed from more than
+   one route -- which only worked because App.jsx imports Home statically, so
+   Home.css happens to be on every page. That is a load-order accident, not a
+   contract: it breaks the moment Home is lazy-loaded, and it made every one
+   of these rules un-editable from the page that actually renders them.
+
+   dash-wait: the waiting mark's pulse. Consumed by Explain.css,
+   IupacToSmiles.css and HealthCheck.css as well as Home.
+   .tile__state-label / .tile__roundtrip*: rendered by
+   components/ConfidenceReport.jsx, which /explain shows and Home does not.
+   ================================================================== */
+
+@keyframes dash-wait {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+.tile__state-label {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  line-height: 1.4;
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.tile__roundtrip {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  line-height: 1.6;
+  letter-spacing: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.tile__roundtrip-smiles {
+  font-size: inherit;
+  color: var(--body);
+}
+
+/* The round-trip verdict is never colour-coded — it is the glyph and the
+   word that carry it, exactly as the confidence rule does above. */
+.tile__roundtrip-result {
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+/* One treatment, two reasons, ONE rule. A mismatch means the round trip ran
+   and disagreed; unavailable means it never ran. Both mean the same thing
+   about the CLAIM -- this tier's rule is not backed by a confirmed match --
+   and neither may look like the silence of a tier that makes no such claim.
+   Written as a selector list rather than two identical bodies, because a
+   selector list STATES that the sharing is deliberate; two copies only hope
+   the next editor notices. Still monochrome: the crimson never touches a
+   verdict. */
+.tile__roundtrip-result--mismatch,
+.tile__roundtrip-result--unavailable {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-style: wavy;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.25em;
+}
+
+/* -------------------- page head: the hero, on bare ground -------------------- */
+/* The four non-Home routes used to open with `.page-head`, a wide white CARD
+   carrying title and lede. Home stopped doing that on 2026-09-02: its opening
+   is `.home-hero`, which is deliberately NOT a card -- the wordmark sits
+   straight on the grey gradient ground, so the page begins with the floor
+   rather than with another white rectangle stacked under the header notch.
+
+   `.page-hero` is that same move for a route that has a title instead of a
+   wordmark: same strip height (`min-height: clamp(84px, 6vw, 112px)`), same
+   block padding, so every route opens on the same band of bare ground and the
+   header notch never meets a white edge.
+
+   It does NOT compute the same horizontal inset as `.home-hero`, and an
+   earlier version of this comment claimed it did. Measured at 1440x900 in the
+   shipped build: `.home-hero` is 1440 wide at x=0 with 64px of inline padding,
+   `.page-hero` is 1297 wide at x=64 with 40px. The cause is that `Home.jsx`
+   renders `class="home-hero page-shell"`, and `.page-shell` (above) wins at
+   equal specificity from a later file, replacing `.home-hero`'s own
+   `width: min(...)` with `width: 100%` + `padding-inline`. Both centre their
+   content and both cap their text, so nothing is visibly out of line -- but
+   they are two containment spellings, not one, and unifying them would resize
+   the box the WebGPU flare canvas fills. Left alone deliberately; see
+   DESIGN.md's `.home-hero` entry before changing either.
+
+   Three constraints inherited from `.home-hero`, none of them cosmetic:
+   - NO fill, border, shadow or radius. That is the entire point.
+   - NO `isolation`, and no positive `z-index` anywhere in the page tree. The
+     gradient ground sits at `z-index: -1` and Home's flare canvas blends
+     against it with `mix-blend-mode: multiply`; a stacking context here, or a
+     raised sibling, covers the ground or turns the veil white.
+   - `overflow: hidden`, so nothing can spill onto the header above or the
+     workspace below.
+
+   It is SHORTER than the card it replaces, which is what keeps the pages that
+   fit one screen still fitting it (DESIGN.md records /from-name, /explain and
+   /health at zero scroll overflow, and that is a measurement, not a wish). */
+
+.page-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-xs);
+  text-align: center;
+  min-height: clamp(84px, 6vw, 112px);
+  width: min(100% - 2 * var(--shell-pad), var(--shell-max));
+  margin-inline: auto;
+  padding: var(--s-sm) clamp(var(--s-lg), 3vw, var(--s-xl));
+  /* MEASURED, not defensive. `.page__content` is a flex column, and
+     `overflow: hidden` above makes this box's automatic minimum size 0 -- so
+     the default `flex-shrink: 1` can squeeze it all the way to its
+     `min-height`. On a route that fits one screen nothing overflows and
+     nothing shrinks, which is why three of the four look fine. On /about,
+     which overflows by design, `.about-page` cannot shrink (no `overflow`, so
+     its minimum size is its content) and the hero is the ONLY shrinkable item
+     in the column: every pixel of the shrink landed here. On a fresh load at
+     1440x900 the hero collapsed to its 86.4px floor with scrollHeight 98
+     against clientHeight 86, clipping the lede and the top of the title.
+     It belongs on the shared primitive rather than on the one page that
+     happens to overflow today -- the next long page would rediscover it. */
+  flex-shrink: 0;
+}
+
+/* One step down from `h1`'s display-xl: the wordmark is the biggest type on
+   the site and a route title must not compete with it. */
+.page-hero__title {
+  font-size: var(--t-display-lg);
+  letter-spacing: var(--track-display-lg);
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+/* The body face, not the display face -- this is a sentence, and the tagline
+   under Home's wordmark is set the same way. 68ch rather than the card lede's
+   64ch measure because centred text needs a little more room before it starts
+   breaking into ragged short lines. */
+.page-hero__lede {
+  max-width: 68ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-md);
+  line-height: 1.55;
+  color: var(--body-strong);
+  text-wrap: pretty;
+}
+
+/* -------------------- notice (a line of text beside a result) -------------------- */
+/* One sentence explaining why something is missing or degraded, INSIDE a card
+   that has already been drawn: a backend that could not be reached, a result
+   that rendered with a caveat. Three of these were written independently
+   (/explain twice, /from-name once) and reached two different verdicts about
+   the same system question, so it is settled here once.
+
+   FLAT content, never a framed tile. DESIGN.md:524: "Inner framed content
+   (depictions, editors) sits in a 14px-radius soft-grey frame. A flattened
+   'patch' renders as flat content inside its card, never a card-in-a-card."
+   An error paragraph is not a depiction or an editor, so it gets no fill, no
+   keyline and no radius — a left ink rule marks it instead. Monochrome, so it
+   can never be mistaken for a confidence mark.
+
+   Distinct from `.workbench__alert` (Home), which is a full card SPANNING the
+   grid because it replaces the results rather than sitting inside them. */
+.notice {
+  padding-left: var(--s-md);
+  border-left: 2px solid var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.notice code {
+  padding: 0 0.25em;
+  background: var(--card);
+  color: var(--ink);
 }
