@@ -112,6 +112,50 @@ on every build/`pip install`. Don't strip either "to slim the image" without re-
 regression check in `README.md` first (a fused polycyclic SMILES must come back `"fallback"`,
 never `"pin"`).
 
+**CDK is the third jar, and it is loaded by a classloader rather than by the classpath.**
+Since 2026-09-02 CDK 2.12 (`backend/vendor/cdk/cdk-2.12.jar`, 42 MB, LGPL — see its `NOTICE`) draws
+**every structure picture on the site**, with **CIP stereo descriptors** annotated: `(R)`/`(S)` on
+tetrahedral centres, `(E)`/`(Z)` on double bonds, and `(?)` on a centre that is genuinely
+stereogenic but undefined in the input. RDKit remains the fallback and nothing else. It is also a
+**second SMILES parser**: a string RDKit refuses is offered to CDK, whose valence and aromaticity
+models are more permissive.
+
+`backend/app/cdk_bridge.py` is the whole mechanism and its docstring is the long version. Four
+facts that are easy to "simplify" back into a broken state, each measured rather than reasoned:
+
+- **We must not call `startJVM`.** Orthonym's `jvm_bridge` owns the only one, boots with a FIXED
+  classpath (OPSIN + centres), and refuses a JVM started by any other pid — which would drop OPSIN
+  back to a `java -jar` subprocess per call, 216 ms instead of 0.8 ms.
+- **`CLASSPATH` does not help.** `jpype.startJVM(classpath=[...])` overrides the environment
+  variable rather than merging it, and a running JVM's classpath cannot be extended.
+- So CDK is loaded in our own `java.net.URLClassLoader`, reached with `JClass(name, loader=...)`.
+  **Its parent must be the bootstrap loader (a typed Java `null`), not the system loader**:
+  `centres-cli-1.5.jar` already carries 859 CDK classes (a partial CDK with no `depict` package),
+  so with the default parent half of CDK resolves to that old copy and
+  `StructureDiagramGenerator` dies with `IllegalAccessError`.
+- **URL order is load-bearing**: the CDK jar FIRST so it wins every `org.openscience.cdk` name,
+  the centres jar second so it contributes only `com.simolecule.centres` — which CIP labelling
+  needs, operating on the same `IAtomContainer` classes. Reversing them resurrects the partial CDK.
+
+`cdk_bridge.self_check()` runs at each Celery child's JVM boot and asserts on the ANSWER (L-alanine
+must come back labelled `S`), because a CIP pass that quietly stopped labelling still returns a
+perfectly good SVG. **Two web-process entry points boot a JVM in uvicorn**, both deliberate and
+both documented at the call site: `GET /api/depict` (so a batch row is not the one picture missing
+CIP labels) and `app.inputs._canonical_or_error` (reached from `main._canonicalize` on every
+`/api/translate`). Measured: +275 MB RSS and 0.48 s once, then 2 ms per picture. This does **not**
+make the web process able to name anything — `jvm_guard` still asks Redis whether a *worker* has a
+JVM.
+
+**The parse fallback had to go in `app/inputs.py`, not in `translate_one`.** Every path into the
+namer — paste box, upload, fast path — routes through `_canonicalize` first, so a string that dies
+there never reaches `orthonym_service` at all and a fallback added only there is unreachable code.
+Both sites now have one; the `translate_one` one handles `mol is None` for a molecule `inputs`
+rescued. The user-visible gain is a **verdict, not a picture**: such a molecule almost always
+abstains, and an abstain carries no depiction by design — but "I read your structure and declined
+to name it" is true where "Could not parse this SMILES string" was not. It also **cannot claim a
+verified tier**: with no RDKit Mol there is no InChIKey to compare OPSIN's re-parse against, so the
+round-trip is `(None, None)` and the existing downgrade demotes it to `best_effort`.
+
 **The job layer: naming happens in workers, and the web process refuses when they are missing.**
 `POST /api/translate` still answers inline for **10 molecules or fewer** — it dispatches
 `translate_fast` to the `fast` queue and blocks for up to `FAST_PATH_TIMEOUT` (30 s). Above that

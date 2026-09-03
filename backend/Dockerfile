@@ -13,6 +13,23 @@ FROM python:3.12-slim
 # rdMolDraw2D's compiled .so in a clean python:3.12-slim container (missing
 # any one of them crashes the whole app at import time in app/main.py with
 # an ImportError naming that specific .so).
+#
+# fontconfig/libharfbuzz0b/libfreetype6/fonts-dejavu-core are required by CDK,
+# which is now the DEFAULT depiction engine (app/cdk_bridge.py). CDK draws atom
+# labels and CIP descriptors as real glyphs through java.awt, and
+# default-jre-headless on slim ships libfontmanager.so WITHOUT its font stack.
+# Measured in the built image, not guessed:
+#
+#   java.lang.UnsatisfiedLinkError: .../lib/libfontmanager.so:
+#   libharfbuzz.so.0: cannot open shared object file
+#
+# Note how this failed: cdk_bridge.available() returned True and CIP labelling
+# worked -- only the DRAW step died, and depiction.py caught it and quietly
+# served RDKit pictures with no stereo labels. Nothing was broken enough to
+# notice from the outside. cdk_bridge.self_check() is what caught it, which is
+# the entire reason it asserts on a rendered SVG and not just on class loading.
+# fonts-dejavu-core is not optional decoration: with fontconfig present but no
+# font installed, AWT has nothing to measure and text metrics fail instead.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     default-jre-headless \
     libxrender1 \
@@ -20,6 +37,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxext6 \
     libsm6 \
     libexpat1 \
+    fontconfig \
+    libfreetype6 \
+    libharfbuzz0b \
+    fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /code

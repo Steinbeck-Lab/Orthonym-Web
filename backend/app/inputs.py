@@ -3,7 +3,10 @@
 One module serves both the upload endpoint and the paste box, because the
 two differ only in transport. Every function here is pure: no Redis, no
 Celery, no settings lookup. Limits arrive as an argument so the caller
-decides policy and this module only enforces it.
+decides policy and this module only enforces it. The one dependency that is
+not pure Python is app.cdk_bridge, consulted only for a SMILES RDKit has
+already refused -- see _canonical_or_error, which explains why the fallback
+has to be here.
 
 A record that will not parse becomes a ParsedMolecule carrying its own
 error. It never aborts the file -- a 5,000-molecule upload with three bad
@@ -21,6 +24,8 @@ from enum import Enum
 
 from rdkit import Chem
 from rdkit import RDLogger
+
+from app import cdk_bridge
 
 # RDKit writes parse failures to stderr by default, which turns a file with
 # a few bad records into pages of noise. We report each failure on its own
@@ -190,20 +195,64 @@ def _canonical_or_error(
             ),
         )
     mol = Chem.MolFromSmiles(smiles)
-    if mol is None:
+    if mol is not None:
         return ParsedMolecule(
             index=index,
             raw_input=raw_input,
             input_id=input_id,
-            smiles=None,
-            error="Could not parse this SMILES string",
+            smiles=Chem.MolToSmiles(mol),
+            error=None,
         )
+
+    # RDKit refused. Ask CDK, whose valence and aromaticity models are more
+    # permissive -- and which can still DRAW what it reads, so such a molecule
+    # reaches the user as a picture and an honest abstain rather than as
+    # "could not parse".
+    #
+    # This gate is the reason the fallback has to live here and not only in
+    # orthonym_service.translate_one: EVERY path into the namer -- the paste
+    # box, an upload, and the fast path -- routes through _canonicalize first
+    # (app/main.py), so a string that dies here never reaches translate_one at
+    # all and a fallback added only there would be unreachable code.
+    # Two consequences worth stating, since this runs in the WEB process on
+    # every /api/translate (main._canonicalize), not in a worker:
+    #  * it boots a JVM here on the first RDKit-refused molecule -- the same
+    #    lazy boot GET /api/depict pays for, and the second of exactly two
+    #    web-process entry points into cdk_bridge. It also makes a REJECTION
+    #    cost more than an acceptance: measured, an RDKit reject is 0.045 ms
+    #    and the CDK retry after it is 0.256 ms, so 10,000 unparseable lines
+    #    went from 0.47 s to 3.1 s of synchronous web-process CPU while 10,000
+    #    GOOD lines stayed at 0.28 s. That is UNBOUNDED per request -- the caps
+    #    here and in ratelimit.py bound molecule COUNT and request count, never
+    #    per-record cost. It is left unbounded on purpose rather than by
+    #    oversight: every cheap fix (cap the retries, prefilter the string)
+    #    silently stops rescuing some molecule that CDK could read, which is
+    #    the one thing this branch exists to do. If the cost ever matters,
+    #    bound it where cost is already bounded -- move the rescue behind
+    #    jobs_api._parse_or_400's worker hop, rather than adding a quiet cap
+    #    here.
+    #  * the string it returns is CDK's canonical form, not RDKit's, and that
+    #    string is what name_cache keys on. That is stable rather than
+    #    divergent -- CDK's SmiFlavor.Absolute output is canonical, so the same
+    #    molecule written two ways still lands on one key -- but the key is
+    #    from a different canonicaliser than every other row's, which is why it
+    #    is said out loud here rather than discovered from a cache miss.
+    cdk_smiles = cdk_bridge.normalise_smiles(smiles)
+    if cdk_smiles:
+        return ParsedMolecule(
+            index=index,
+            raw_input=raw_input,
+            input_id=input_id,
+            smiles=cdk_smiles,
+            error=None,
+        )
+
     return ParsedMolecule(
         index=index,
         raw_input=raw_input,
         input_id=input_id,
-        smiles=Chem.MolToSmiles(mol),
-        error=None,
+        smiles=None,
+        error="Could not parse this SMILES string",
     )
 
 
