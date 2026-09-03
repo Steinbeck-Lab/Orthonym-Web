@@ -272,8 +272,9 @@
   background: linear-gradient(
     180deg,
     var(--tab-tint) 0,
-    color-mix(in srgb, var(--tab-tint) 34%, var(--card)) 7px,
-    var(--card) 14px,
+    color-mix(in srgb, var(--tab-tint) 62%, var(--card)) 8px,
+    color-mix(in srgb, var(--tab-tint) 22%, var(--card)) 16px,
+    var(--card) 26px,
     var(--card) 100%
   );
   border-radius: var(--r-card);
@@ -1492,15 +1493,22 @@
   margin-left: calc(-1 * var(--notch-wing));
   border-start-start-radius: var(--r-notch);
   border-start-end-radius: var(--r-notch);
-  /* Glass: a translucent pastel over a blur of whatever is behind, plus a
-     bright top rim, which is the part that actually sells it -- a blur with no
-     rim reads as a smudge. */
-  background: color-mix(in srgb, var(--tab-own) 60%, transparent);
-  -webkit-backdrop-filter: blur(14px) saturate(1.6);
-  backdrop-filter: blur(14px) saturate(1.6);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.7),
-    inset 1px 0 0 rgba(255, 255, 255, 0.35);
+  /* OPAQUE, and this is the fix for "why is there a white border" and "they
+     look disconnected from the box". The first version was translucent glass
+     with a bright inset rim. Two problems, both structural rather than a
+     matter of taste:
+       - the rim IS the white border. An inset white line on every tab drew an
+         outline around each one, which is the opposite of seamless.
+       - a translucent tab sits over the PAGE GROUND (the tabs are above the
+         card), while the card beneath is solid. Two different composites can
+         never meet at the same colour, so the join showed as a line no matter
+         how the alpha was tuned.
+     The gloss survives as a gradient IN the fill -- the same one the buttons
+     use -- so the tabs still read as glassy without a blur that samples the
+     wrong backdrop. */
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 60%),
+    var(--tab-own);
   font-family: var(--font-mono);
   font-size: var(--t-nav);
   font-weight: 700;
@@ -1508,9 +1516,11 @@
   text-transform: uppercase;
   color: var(--ink);
   cursor: pointer;
-  transition:
-    background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  /* Colour only. A transform lift was here and got CLIPPED on the way up --
+     the strip has no room above it -- so the tab appeared to crop mid-
+     animation. DESIGN.md's motion budget says colour and border-colour only
+     for exactly this kind of reason. */
+  transition: filter 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .input-tab:first-of-type {
@@ -1534,17 +1544,13 @@
   z-index: 1;
 }
 
-/* A tucked tab lifts slightly toward the front on hover: a preview of picking
-   it, using the one transform the motion budget already allows a control. */
+/* Hover brightens rather than moves: a lift had nowhere to go and cropped. */
 .input-tab:hover {
-  background: color-mix(in srgb, var(--tab-own) 78%, transparent);
-  transform: translateY(-2px);
+  filter: brightness(1.04);
 }
 
-/* THE LIVE TAB. On top of the stack, nearly opaque so its colour matches the
-   card's first gradient stop, and the only one wearing fillets -- because it
-   is the only one carved out of the card. It does not lift on hover: it is
-   already where it belongs.
+/* THE LIVE TAB rises to the top of the stack. Its fill and the card's first
+   gradient stop are the same colour, and that equality is the whole merge.
 
    Written `.input-tab.input-tab--on`, not `.input-tab--on`. The stack order
    above is set with `:nth-of-type`, which scores TWO simple selectors; a lone
@@ -1554,59 +1560,65 @@
 .input-tab.input-tab--on,
 .input-tab.input-tab--on:hover {
   z-index: 4;
-  background: color-mix(in srgb, var(--tab-own) 94%, transparent);
-  transform: none;
+  filter: none;
 }
 
-/* THE FILLETS, live tab only. A square of its colour on each flank with a
-   circle punched out of the inner TOP corner, so the card's surface curves up
-   into the island instead of meeting it at a right angle. `--notch-wing` is
-   both the square's size and the circle's radius: one number by definition,
-   which is what went wrong the last time a notch here was hand-mirrored. */
-.input-tab--on::before,
-.input-tab--on::after {
+/* THE FILLETS, on EVERY tab and on BOTH flanks. A square of the tab's own
+   colour with a circle punched out of the inner TOP corner, so the surface
+   curves out of each tab instead of meeting it at a right angle.
+
+   On every tab because the owner asked for it directly: the concave curve at
+   the left of the live tab was the part that looked right, and the flat ends
+   of the other two were the part that did not. Stacked, each tab's fillet
+   lands on its neighbour and the row reads as overlapping folders -- which is
+   what a fanned folder set actually looks like.
+
+   `--notch-wing` is both the square's size and the circle's radius: one number
+   by definition, which is what went wrong the last time a notch here was
+   hand-mirrored. */
+.input-tab::before,
+.input-tab::after {
   content: '';
   position: absolute;
   bottom: 0;
   width: var(--notch-wing);
   height: var(--notch-wing);
-  background: color-mix(in srgb, var(--tab-own) 94%, transparent);
+  background: var(--tab-own);
   pointer-events: none;
 }
 
-.input-tab--on::before {
+.input-tab::before {
   right: 100%;
   -webkit-mask: radial-gradient(circle var(--notch-wing) at 0 0, transparent 98%, #000 100%);
   mask: radial-gradient(circle var(--notch-wing) at 0 0, transparent 98%, #000 100%);
 }
 
-.input-tab--on::after {
+.input-tab::after {
   left: 100%;
   -webkit-mask: radial-gradient(circle var(--notch-wing) at 100% 0, transparent 98%, #000 100%);
   mask: radial-gradient(circle var(--notch-wing) at 100% 0, transparent 98%, #000 100%);
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  .input-tab {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-    background: var(--tab-own);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .input-tab {
     transition: none;
   }
-
-  .input-tab:hover {
-    transform: none;
-  }
 }
 
-.input-tab:focus-within {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+/* KEYBOARD focus only, drawn INSIDE the tab.
+   Two bugs lived in the previous version of this rule.
+   `:focus-within` fires on mouse clicks too, so a crimson ring sat around
+   whichever tab was last clicked -- crimson, on a pastel strip whose whole
+   point is that it is quiet. `:has(:focus-visible)` asks the question the
+   browser already answers well: was this reached by keyboard?
+   And an `outline` with a POSITIVE offset extends past the tab, where
+   `.input-col`'s `overflow-y: auto` (the one-screen clamp, which cannot be
+   given up) clipped it -- which is the "tabs getting cropped" that was
+   actually a cropped ring. An inset box-shadow is drawn inside the box and
+   follows the tab's own radius, so there is nothing to clip and nothing to
+   spill over the neighbour tucked behind it. */
+.input-tab:has(:focus-visible) {
+  box-shadow: inset 0 0 0 2px var(--accent);
 }
 
 .field__hint {
