@@ -110,7 +110,21 @@ class ExamplesResponse(BaseModel):
 
 
 class IupacToSmilesResponse(BaseModel):
+    # OPSIN's own output, kept verbatim. NOT replaced by the canonical form:
+    # the string a tool actually produced is information, and normalising it
+    # away silently loses it. Same reasoning as commit 170174b's as-typed
+    # decision on the naming direction.
     smiles: Optional[str] = None
+    # RDKit's canonical form of the same molecule, so a caller can compare.
+    canonical_smiles: Optional[str] = None
+    # All four below are Optional and default to None because none of them is
+    # total: RDKit's InChI writer declines some inputs, and 2D coordinate
+    # generation can fail. A molecule that loses one identifier still returns
+    # the others rather than becoming an error row.
+    inchi: Optional[str] = None
+    inchikey: Optional[str] = None
+    # 2D V2000 molblock, the payload of the SDF download.
+    molblock: Optional[str] = None
     depiction_svg: Optional[str] = None
     error: Optional[str] = None
 
