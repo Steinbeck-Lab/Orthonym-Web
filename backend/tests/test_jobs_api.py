@@ -192,7 +192,7 @@ def test_a_soft_time_limit_keeps_named_rows_and_times_out_the_rest(
     calls = {"n": 0}
     real = tasks.name_one
 
-    def fake_name_one(smiles, best_effort):
+    def fake_name_one(smiles, best_effort, verify=True):
         calls["n"] += 1
         if calls["n"] > 2:
             raise SoftTimeLimitExceeded()
@@ -227,7 +227,7 @@ def test_one_molecule_raising_does_not_lose_the_rest_of_the_chunk(
 
     real = tasks.name_one
 
-    def fake_name_one(smiles, best_effort):
+    def fake_name_one(smiles, best_effort, verify=True):
         if smiles == "CCC":
             raise RuntimeError("engine exploded")
         return real(smiles, best_effort)
@@ -726,8 +726,9 @@ def test_an_uploaded_file_can_ask_for_verified_names_only(redis_client, monkeypa
     """
     seen: dict = {}
 
-    def _capture(ip, molecules, fmt, best_effort):
+    def _capture(ip, molecules, fmt, best_effort, verify=True):
         seen["best_effort"] = best_effort
+        seen["verify"] = verify
         from app.schemas import JobEnvelope
 
         return JobEnvelope(
@@ -756,8 +757,9 @@ def test_an_uploaded_file_still_defaults_to_best_effort(redis_client, monkeypatc
     """
     seen: dict = {}
 
-    def _capture(ip, molecules, fmt, best_effort):
+    def _capture(ip, molecules, fmt, best_effort, verify=True):
         seen["best_effort"] = best_effort
+        seen["verify"] = verify
         from app.schemas import JobEnvelope
 
         return JobEnvelope(

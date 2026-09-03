@@ -89,12 +89,22 @@ _CACHEABLE = {"pin", "fallback", "best_effort", "abstain"}
 
 
 
-def cache_key(canonical_smiles: str, best_effort: bool) -> str:
+def cache_key(canonical_smiles: str, best_effort: bool, verify: bool = True) -> str:
     """`best_effort` is part of the key because it decides whether the
     escalated namer runs at all -- and therefore whether a molecule can come
     back "best_effort". Sharing an entry across the two serves a wrong tier.
+
+    `verify` is part of it for a sharper reason: an unverified run produces a
+    STRICTLY WEAKER row -- no round-trip proof, every verified tier downgraded
+    to best_effort. Sharing one key would let a single unverified request
+    poison the entry for seven days, so everyone who asked for verification
+    afterwards would be served a best_effort row and told the engine could not
+    verify their molecule. The reverse direction is wrong too, just less
+    visibly: serving a verified row to a caller who asked to skip verification
+    hands them proof they did not request and cannot distinguish from a
+    genuinely skipped check.
     """
-    flags = f"be={int(best_effort)}"
+    flags = f"be={int(best_effort)},v={int(verify)}"
     digest = hashlib.sha256(canonical_smiles.encode("utf-8")).hexdigest()
     return (
         f"stitch:name:{_KEY_VERSION}:{_ENGINE_VERSION}:"
@@ -102,14 +112,16 @@ def cache_key(canonical_smiles: str, best_effort: bool) -> str:
     )
 
 
-def get_cached(canonical_smiles: str, best_effort: bool) -> ResultItem | None:
-    raw = get_redis().get(cache_key(canonical_smiles, best_effort))
+def get_cached(
+    canonical_smiles: str, best_effort: bool, verify: bool = True
+) -> ResultItem | None:
+    raw = get_redis().get(cache_key(canonical_smiles, best_effort, verify))
     if raw is None:
         return None
     return ResultItem.model_validate_json(raw)
 
 
-def put_cached(item: ResultItem, best_effort: bool) -> None:
+def put_cached(item: ResultItem, best_effort: bool, verify: bool = True) -> None:
     if item.status not in _CACHEABLE:
         return
     if item.status in VERIFIED_STATUSES and item.roundtrip_smiles is None:
@@ -132,7 +144,7 @@ def put_cached(item: ResultItem, best_effort: bool) -> None:
         return
     settings = get_settings()
     get_redis().set(
-        cache_key(item.smiles, best_effort),
+        cache_key(item.smiles, best_effort, verify),
         # exclude the picture: measured at 94% of the payload (2673 of 2839
         # bytes on ethanol), for something the batch path never draws --
         # BatchRow drops it deliberately and spec section 6.3 spells out why.

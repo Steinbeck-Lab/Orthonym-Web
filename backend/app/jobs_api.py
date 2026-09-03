@@ -97,11 +97,15 @@ CSV_COLUMNS = [
 class TextPayload(BaseModel):
     text: str
     best_effort: bool = True
+    verify: bool = True
 
 
 async def _read_input(
-    request: Request, file: UploadFile | None, best_effort: bool = True
-) -> tuple[bytes, bool]:
+    request: Request,
+    file: UploadFile | None,
+    best_effort: bool = True,
+    verify: bool = True,
+) -> tuple[bytes, bool, bool]:
     """Accept either a multipart file or a JSON {"text": ...} body.
 
     Size is checked before the bytes are handed on, so an oversized upload
@@ -150,7 +154,7 @@ async def _read_input(
         # OPSIN-unverified names with nothing recording that their request had
         # been overridden. The default stays True, matching TextPayload's, so
         # nothing changes for a caller who sends no field.
-        return data, best_effort
+        return data, best_effort, verify
 
     try:
         body = await request.json()
@@ -167,7 +171,7 @@ async def _read_input(
             status_code=413,
             detail=f"Input is larger than the {settings.MAX_FILE_SIZE_MB} MB limit",
         )
-    return data, payload.best_effort
+    return data, payload.best_effort, payload.verify
 
 
 def _raise_for_parse_outcome(outcome: dict) -> None:
@@ -290,7 +294,7 @@ def prepared_payload(molecules) -> list[dict]:
 
 
 def admit_and_dispatch(
-    ip: str, molecules, fmt: str, best_effort: bool
+    ip: str, molecules, fmt: str, best_effort: bool, verify: bool = True
 ) -> JobEnvelope:
     """Admit, register, and dispatch one batch job as a single unit.
 
@@ -349,12 +353,14 @@ def admit_and_dispatch(
             # that IP's two concurrent slots. The batch path recovered from
             # exactly that failure; the more-travelled path did not.
             translate_job_inline.apply_async(
-                args=[job_id, prepared, best_effort],
+                args=[job_id, prepared, best_effort, verify],
                 queue="fast",
                 link_error=mark_job_failed.s(job_id),
             )
         else:
-            dispatch_batch(job_id, prepared, best_effort, settings.BATCH_CHUNK_SIZE)
+            dispatch_batch(
+                job_id, prepared, best_effort, settings.BATCH_CHUNK_SIZE, verify
+            )
     except Exception:
         # A dispatch failure after a successful admission (a broker
         # hiccup, say) must not leave a registered slot behind forever:
@@ -392,7 +398,7 @@ async def parse_preview(
     SDF), so `molecule_count` stays honest without paying for a full parse.
     """
     check_fast_allowed(client_ip(request))
-    data, _ = await _read_input(request, file)
+    data, _, _ = await _read_input(request, file)
     fmt = sniff(data)
     try:
         sample_molecules, total = parse_preview_sample(data, fmt, PREVIEW_SAMPLE)
@@ -433,6 +439,10 @@ async def create_job(
     request: Request,
     file: UploadFile | None = File(default=None),
     best_effort: bool = Form(default=True),
+    # Same route as best_effort, and for the same reason: an uploader who
+    # turned verification off on Home must not have it silently turned back on
+    # by choosing the Upload tab.
+    verify: bool = Form(default=True),
 ) -> JobEnvelope:
     settings = get_settings()
     ip = client_ip(request)
@@ -477,7 +487,7 @@ async def create_job(
     # TOCTOU-safe registration now, since this already ran.
     check_job_allowed(ip)
 
-    data, best_effort = await _read_input(request, file, best_effort)
+    data, best_effort, verify = await _read_input(request, file, best_effort, verify)
     # run_in_threadpool: create_job is `async def`, so calling the blocking
     # parse directly would hold the asyncio event loop for its whole duration
     # -- nothing else on that loop runs, including uvicorn reading other
@@ -487,7 +497,7 @@ async def create_job(
         _parse_or_400, data, settings.MAX_BATCH_SIZE
     )
 
-    return admit_and_dispatch(ip, molecules, fmt.value, best_effort)
+    return admit_and_dispatch(ip, molecules, fmt.value, best_effort, verify)
 
 
 # A job in one of these has stopped doing work and can be deleted. "cancelled"

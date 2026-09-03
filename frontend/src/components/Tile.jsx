@@ -96,18 +96,34 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
             — could not confirm this result
           </p>
         )}
-        {/* The link back to the control that produced this tier. An
-            unverified name exists only because best-effort mode is on, and
-            without saying so the tier reads as a property of the molecule
-            rather than a consequence of a switch the reader can turn off.
-            The switch's own hint states the forward direction; this is the
-            reverse, in the one place it matters.
-            Not a "check again" button: the round trip already ran, and the
-            engine is deterministic, so a retry returns the same answer. */}
+        {/* The link back to the control that produced this tier. Without it
+            the tier reads as a property of the MOLECULE rather than a
+            consequence of a switch the reader can turn off. The switch's own
+            hint states the forward direction; this is the reverse, in the one
+            place it matters.
+
+            TWO switches can produce a best-effort row now, and they need
+            different sentences -- naming the wrong one sends the reader to a
+            control that will not do what the sentence promises. The row itself
+            says which: a genuine best-effort name (the escalated namer
+            produced it) still HAD its round trip run, so it carries a
+            roundtrip_smiles. A null one means no round trip ran at all, which
+            is the OPSIN-verify switch being off -- or OPSIN being unreachable,
+            which is why the sentence says what did not happen rather than
+            asserting which switch it was.
+
+            Derived from the ROW, deliberately, not from the live switch
+            position passed down as a prop: this tile may be from an earlier
+            submission, or served from cache, and the switch may have been
+            flipped since. The row's own data is the truth about the row.
+
+            Not a "check again" button either: the engine is deterministic, so
+            a retry returns the same answer. */}
         {!isPending && status === 'best_effort' && (
           <span className="tile__origin">
-            Shown because best-effort mode is on. Turn it off for a verified name or an
-            honest abstain.
+            {roundtrip_smiles
+              ? 'Shown because best-effort mode is on. Turn it off for a verified name or an honest abstain.'
+              : 'No round-trip check ran, so nothing confirmed this name. Turn OPSIN verify on to check it.'}
           </span>
         )}
         {!isPending && status === 'abstain' && formula && (

@@ -244,6 +244,32 @@ request and every cap is void; with the header untrusted behind nginx, the whole
 bucket and a single script 429s the site. Read the comment block in `docker-compose.yml` before
 changing either.
 
+**Home carries TWO switches, and they are one decision in two halves.** `best_effort` (how hard to
+try) and **`verify`** (whether to prove it) — both default ON, side by side in `.workbench__switches`.
+`verify` runs the OPSIN round-trip check, which is what earns a result its `pin` or `fallback`
+status. Turning it off **cannot make a name look better than it is**, and that is load-bearing
+rather than lucky: with no round trip `roundtrip_smiles` is None, and `openstout_service`'s existing
+downgrade demotes every verified tier to `best_effort` (or, with `best_effort=False`, to an honest
+abstain). Measured cost of the check: 0.60 ms/molecule, ~6 s on a full 10,000-molecule job.
+
+Three things about it that are easy to break:
+- **`tier` moves with `status`.** The downgrade used to change only `status`, so a row went out as
+  `status="best_effort"` with `tier="pin_verified"` still attached — two fields of one payload
+  disagreeing about whether OPSIN confirmed anything. `status` is what the UI draws, which is why
+  nobody saw it; `tier` is what an API or CSV consumer reads. `pin_unverified` is the exact tier for
+  this and had no producer until now.
+- **`verify` is in the name-cache key** (`be=…,v=…`). An unverified row is strictly weaker, so one
+  unverified request sharing the key would poison the entry for its 7-day TTL and every later caller
+  who *asked* for verification would be told their molecule could not be verified.
+- **Every `verify` parameter defaults to True**, including on the Celery tasks. Redis holds queued
+  task messages across a deploy, and a message enqueued before the flag existed carries no argument
+  for it — defaulting True reads such a message as "verify", the safe direction.
+
+`Tile.jsx` picks which switch to blame **from the row, never from the live switch position**: a
+genuine best-effort name had its round trip run and carries a `roundtrip_smiles`, a downgraded one
+does not. A tile may be from an earlier submission or served from cache, and the switch may have
+been flipped since — the row's own data is the truth about the row.
+
 **Confidence tiers are the product's whole point, not an implementation detail.** Every naming
 result is one of: verified **PIN** → verified **fallback** (general engine, OPSIN round-trip
 confirmed) → **best-effort** (a real name, but OPSIN-unverified) → honest **abstain**. These tiers

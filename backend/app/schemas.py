@@ -50,6 +50,21 @@ class TranslateRequest(BaseModel):
     # so an unverified name can never be produced and such a molecule comes
     # back as an honest abstain instead.
     best_effort: bool = True
+    # OPSIN round-trip verification. True (the default, and the app's shipped
+    # behaviour) parses every produced name back through OPSIN and compares
+    # full InChIKeys, which is what earns a result the "pin" or "fallback"
+    # status. False skips that check.
+    #
+    # Turning it off does NOT quietly relax the tiers -- it costs every name
+    # its verified status, automatically, through the machinery that was
+    # already there: with no round trip, `roundtrip_smiles` is None, and
+    # openstout_service's existing downgrade demotes any verified tier to
+    # "best_effort" (or, with best_effort=False, to an honest abstain). So the
+    # switch cannot produce a name that CLAIMS more than was checked. That is
+    # the point of exposing it at all: PRODUCT.md principle 1 says determinism
+    # must be provable, and being able to turn the proof off and watch every
+    # claim downgrade is a stronger demonstration than a paragraph saying so.
+    verify: bool = True
 
 
 class ResultItem(BaseModel):
