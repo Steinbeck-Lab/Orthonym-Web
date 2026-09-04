@@ -385,3 +385,22 @@
   font-family: var(--font-body);
   text-transform: none;
 }
+
+/* Denser rows, owner instruction 2026-09-04 ("reduce all these unnecessary
+   padding, keep things sleek"). The shared rule gives the picture a 200px box
+   in a 232px cell with 8px of padding, which makes a row ~226px tall and puts
+   barely two rows on a screen. Scoped to .name-results so Home's own results
+   table, which shares .results-cell--pic, is untouched -- the owner's
+   complaint was about this page. */
+.name-results .results-cell--pic {
+  width: 148px;
+}
+
+.name-results .results-cell--pic img {
+  height: 104px;
+  padding: var(--s-xxs);
+}
+
+.name-results .results-table td {
+  padding: var(--s-xs) var(--s-sm);
+}
