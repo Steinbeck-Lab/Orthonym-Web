@@ -179,14 +179,13 @@ function IupacToSmiles() {
             </div>
           </form>
 
-          {/* The card's foot: what you get and who parsed it, then the shared
-              pointer to About. One hairline divider INSIDE the card, which is
-              the only place a seam survives in this system. */}
+          {/* The card's foot: the shared pointer to About. What this parse
+              returns and who verifies it now lives only in the info drawer
+              (`OpsinNote`, below) -- this sentence used to repeat that same
+              fact in prose right above it, which is the exact duplication
+              the owner flagged. One hairline divider INSIDE the card, which
+              is the only place a seam survives in this system. */}
           <div className="from-name-panel__foot">
-            <p className="prose-sm">
-              You get a SMILES string plus a 2D depiction, read by OPSIN &mdash; an
-              independent name-to-structure parser.
-            </p>
             <p className="page-about-note">
               Read how this works, and STITCH&rsquo;s measured accuracy, on the{' '}
               <Link to="/about" className="about-link">
