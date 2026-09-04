@@ -525,3 +525,60 @@
 .name-results .results-table {
   width: 100%;
 }
+
+/* -------------------- second line: canonical SMILES + InChI -------------------- */
+/* Owner instruction 2026-09-04: "Where is inchi? only inchikey you are
+   displaying." `canonical_smiles` and `inchi` already ride in the CSV and on
+   the single-result card (`.idlist` above) -- this table was the one place
+   they were missing. A second `<tr>` inside the SAME `<tbody>` as the
+   molecule's row (NameResultsTable.jsx), so `.results-group`'s hairline
+   still falls between molecules, never between a molecule and its own
+   second line. Reuses `.idlist__label`/`.idlist__value` rather than
+   inventing a new label treatment -- same mono-uppercase-muted label, same
+   mono wrapping value, as the single-result card already uses. */
+
+.name-results__meta-row td {
+  padding: 0 var(--s-sm) var(--s-xs);
+  vertical-align: top;
+}
+
+.name-results__meta-spacer {
+  padding: 0;
+}
+
+/* Two labelled groups on one compact line; wraps onto its own line only if
+   the card is too narrow to hold both. */
+.name-results__meta-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-xs) var(--s-lg);
+}
+
+.name-results__meta-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-xs);
+  min-width: 0;
+}
+
+.name-results__meta-item .idlist__label {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* `.idlist__value` has no min-width of its own -- fine in the single-column
+   grid it was built for, but a bare flex item here would refuse to shrink
+   below its content's intrinsic width and force the row wider than the
+   card. */
+.name-results__meta-item .idlist__value {
+  min-width: 0;
+}
+
+/* The InChI is the one unbroken 60+ character token this row exists for. It
+   gets first claim on the spare width (`.idlist__value code`'s own
+   `overflow-wrap: anywhere` does the actual wrapping) instead of sizing to
+   the shorter canonical SMILES. */
+.name-results__meta-item--inchi {
+  flex: 1 1 32ch;
+}
