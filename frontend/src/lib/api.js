@@ -7,7 +7,13 @@
 //                                  server's fast-path timeout, a job
 //                                  envelope { job_id, molecule_count, status }
 //                                  -- see TranslateJobQueuedError below.
-//   GET  /api/iupac-to-smiles  -> { smiles: string|null, depiction_svg: string|null, error: string|null }
+//   GET  /api/iupac-to-smiles  -> { smiles, canonical_smiles, inchi, inchikey,
+//                                   molblock, depiction_svg, error } -- every
+//                                   field string|null. The four identifier
+//                                   fields are independently optional: RDKit's
+//                                   InChI writer and 2D coordinate generation
+//                                   are not total, and losing one must not
+//                                   cost the others.
 //   GET  /api/explain          -> { smiles, name, svg, total_atoms, segments: ExplainSegment[], error }
 //   GET  /api/explain-name     -> same shape, decomposing a typed IUPAC name directly
 //
