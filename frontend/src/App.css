@@ -3165,3 +3165,390 @@ input.field__control {
   background: var(--card);
   color: var(--ink);
 }
+
+
+/* -------------------- the info notch -------------------- */
+/* A tab on a card's edge and a drawer behind it. Generic chrome: Home wears it
+   for the confidence key, /from-name for the OPSIN note. It sat in Home.css and
+   worked cross-page only because App.jsx imports every page eagerly -- the same
+   accident that moved .copy-btn, .processing*, .results-table* and
+   .field--framed here. The five-rung ladder stays in Home.css: those rungs are
+   confidence tiers, which /from-name does not compute. */
+
+/* --- the disclosure ------------------------------------------------- */
+
+/* Two rows: the notch, then a drawer that opens from 0fr to 1fr.
+   grid-template-rows is the one technique that animates TO the content's own
+   height. `height: auto` does not interpolate at all, and a scaleY transform
+   would squash the type it is revealing. */
+.info {
+  /* ONE duration, three consumers: the drawer's row below, the tab's flip,
+     and the drawer's visibility delay. They must agree exactly, and the
+     visibility delay is the one that fails silently -- leave it short and
+     the panel blinks out before the drawer has finished closing.
+     520ms, up from 360: the flip reads as a movement rather than a state
+     change, and a 180-degree rotation at 360ms is over before the eye has
+     followed it. Still inside the 300-500ms band a layout change is allowed,
+     and the reveal inside it is deliberately slower still. */
+  --info-ms: 520ms;
+
+  display: grid;
+  grid-template-rows: auto 0fr;
+  transition: grid-template-rows var(--info-ms) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.info--open {
+  grid-template-rows: auto 1fr;
+}
+
+/* SIDE MODE. On the empty page there is room to the right of the centred card,
+   so the key opens INTO that space rather than pushing the card taller (owner
+   instruction 2026-09-03: to the right when there is no output, at the bottom
+   once there is). The panel is absolutely positioned, so opening it never
+   extends the card or the column beside it -- which is the "boxes extending"
+   the owner rejected. It animates on opacity + transform (composited, per the
+   motion budget), not on a layout property. */
+/* Side mode: the notch rides the card's RIGHT edge near the top and is turned
+   90 degrees anticlockwise (owner instruction 2026-09-03, marked in live mode).
+   Absolute within the position:relative input-col; top = the card's top edge
+   (tabs height). Only the notch position/rotation change here. */
+.info--side {
+  position: absolute;
+  top: 142px;
+  right: -92px;
+  z-index: 5;
+}
+
+.info--side .info__notch {
+  /* Centre pivot so the 180 turn on open spins in place like the bottom notch. */
+  transform-origin: center;
+  transform: rotate(-90deg);
+  margin-right: 0;
+}
+
+.info--side .info__drawer {
+  /* Anchored to the CARD's right edge and emerges rightward from there (owner
+     instruction 2026-09-03: fade in and slide out from the right, where the main
+     box ends). Absolute against .info (the card's width), bottom-aligned so the
+     bar rises beside the card. The card itself does not move. */
+  position: absolute;
+  left: calc(100% + var(--gap));
+  /* Top-aligned with the notch, which now rides the card's upper-right edge, so
+     the bar opens DOWN the right side instead of up off the top of the screen. */
+  top: 0;
+  width: min(380px, 32vw);
+  z-index: 20;
+  overflow: visible;
+  opacity: 0;
+  /* Starts tucked at the card's edge, then slides OUT to the right as it fades
+     in. Composited (opacity + transform), per the motion budget. */
+  transform: translateX(-22px);
+  pointer-events: none;
+  visibility: hidden;
+  transition:
+    opacity var(--info-ms) cubic-bezier(0.22, 1, 0.36, 1),
+    transform var(--info-ms) cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear var(--info-ms);
+}
+
+.info--side.info--open .info__drawer {
+  opacity: 1;
+  /* Docked (X: 0) and lifted UP so the box's top lines up with the tabs' top
+     edge (owner instruction 2026-09-03). */
+  transform: translate(0, -142px);
+  pointer-events: auto;
+  visibility: visible;
+  /* The box appears and lifts AS the notch turns (no delay), not after it
+     (owner instruction 2026-09-03). */
+  transition-delay: 0s, 0s, 0s;
+}
+
+/* The side panel floats free, so it drops the top margin the bottom drawer used
+   to clear the card edge, and keeps its own card chrome. */
+.info--side .info__panel {
+  margin-top: 0;
+}
+
+/* No flip in side mode: the 180-degree tab flip exists to re-attach the tab to a
+   panel that opens BELOW it. Here the panel is beside the card, so the tab stays
+   put and only lifts to ink on open. */
+.info--side.info--open .info__notch {
+  /* Turns a further 180 degrees from the vertical rest (-90deg) on open and
+     slides right to dock flush against the info box (owner instruction
+     2026-09-03). The translate closes the gap to the panel's left edge; the
+     value accounts for the centre pivot's offset. */
+  transform: translateX(70px) rotate(90deg);
+}
+
+.info--side.info--open .info__notch-label {
+  transform: none;
+}
+
+.info--side .info__caption {
+  padding: var(--s-md) var(--s-md) var(--s-sm);
+  color: var(--ink);
+  border-bottom: 1px solid var(--hairline);
+}
+
+/* THE NOTCH. The header's shape, mirrored: App.css carves three white
+   islands out of the TOP of the window and welds each one to that edge with
+   a pair of concave fillets; this one is carved out of the BOTTOM of the
+   input card the same way. Same tokens, same mask trick, upside down. That
+   is why it reads as part of the card rather than a pill stuck under it.
+   Right-hand side, and inset by more than its own fillet plus the card's
+   22px corner so neither collides with the card's rounded end. */
+.info__notch {
+  position: relative;
+  justify-self: end;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 1.4ch;
+  height: var(--info-notch-h);
+  margin-top: -1px;
+  margin-right: clamp(var(--s-xl), 4vw, 72px);
+  /* Wide enough that --r-notch reads as two corners on a shelf rather than
+     as one lozenge: at 82px the two 24px arcs met in the middle and the tab
+     had no flat bottom edge at all. The header's island has the same radius
+     over a much longer run, which is why it reads as a shelf. */
+  padding-inline: var(--s-lg);
+  min-width: 148px;
+  justify-content: center;
+  background: var(--card);
+  border: 0;
+  border-end-start-radius: var(--r-notch);
+  border-end-end-radius: var(--r-notch);
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color 200ms cubic-bezier(0.16, 1, 0.3, 1),
+    /* Matched to the drawer's own duration so the tab lands exactly as the
+       panel finishes arriving. Ease-out-QUART rather than the expo the row
+       uses: expo front-loads almost the whole curve into the first 150ms,
+       which on a 180-degree rotation reads as a snap however long the
+       duration says it is. Quart spreads the spin across the movement. */
+    transform var(--info-ms) cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* THE FLIP. On open the tab lets go of the card and re-attaches to the
+   panel, upside down -- because a tab belongs to whatever it is attached to,
+   and the panel is the thing it just opened. An earlier version kept it
+   welded to the card while butting the panel underneath, which gave a tab
+   pointing the wrong way at the box it belonged to.
+   ONE declaration does all the geometry, and this is why the idea is good:
+     - the rounded corners are border-end-* (bottom); rotated, they paint at
+       the top, where an up-sticking island wants them;
+     - both .notch__wing fillets flip with it. The left wing (right: 100%,
+       top: 0, mask circle at its own bottom-left) lands to the RIGHT of the
+       tab, bottom-aligned, with its white now hugging its bottom edge and
+       the tab's flank -- exactly what an island welded to an edge BELOW it
+       needs. Hand-writing that mirrored mask is what produced a pair of ears
+       the first time; rotation cannot get it wrong.
+   The arithmetic: the tab's box is y -1..39 inside .info (--info-notch-h is
+   40px, less the 1px weld), the drawer starts at 39, and .info__panel
+   carries margin-top: var(--gap), so the panel's top edge is at 53.
+   translateY(14px) puts the tab at 13..53. It welds, and 14px of ground
+   opens above it. No margin anywhere has to change. */
+.info--open .info__notch {
+  /* The flip is unchanged; the notch moves down 2px MORE than the gap so its
+     flipped bottom overlaps the panel top and welds flush, closing the hairline
+     the owner saw between the notch and the info box (owner instruction
+     2026-09-03: nudge the notch ~2px lower and it flushes). */
+  transform: translateY(calc(var(--gap) + 2px)) rotate(180deg);
+}
+
+.info__notch:hover,
+.info--open .info__notch {
+  color: var(--ink);
+}
+
+.info__notch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.info__notch-label {
+  /* inline-block, because a transform does nothing to an inline box, and
+     this label has to counter-rotate. */
+  display: inline-block;
+  line-height: 1;
+  /* The same curve and duration as its parent, or the word visibly
+     counter-spins out of step with the tab carrying it. */
+  transition: transform var(--info-ms) cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Counter-rotated so the word stays upright inside a tab that is upside
+   down. Only the LABEL needs it: the bulb is a circle inside a circle and
+   is rotationally symmetric, and putting a transform on it would sit in the
+   way of the glow's own scale animation. */
+.info--open .info__notch-label {
+  transform: rotate(180deg);
+}
+
+/* ...and row-reverse restores the reading order. The parent's rotation
+   mirrors the flex axis, so without this the lamp jumps to the right of the
+   word for as long as the panel is open. */
+.info--open .info__notch {
+  flex-direction: row-reverse;
+}
+
+/* The fillets are .notch__wing from App.css, used as-is. See the note in
+   ConfidenceLegend.jsx: the header's islands and this one both hang downward
+   from their edge, so the concave sweep is identical and there is nothing to
+   mirror. .info__notch is position: relative so they anchor to it, which is
+   the only thing this surface has to provide.
+   Two consequences worth stating: --notch-wing is BOTH the fillet's size and
+   its arc radius (one token, by definition), so the tab must stay inset from
+   the card's right edge by more than 20px or the right fillet hangs off it. */
+
+/* --- the bulb ------------------------------------------------------- */
+
+/* A lamp, and it reports state rather than decorating: it breathes while
+   there is something here nobody has opened, and goes steady the moment it
+   has been. Crimson is legal on it because it is CHROME -- an attention
+   signal, the same job the active nav pill does -- and it never touches a
+   confidence tier.
+   Two elements, because the glow has to be a separate box: a filter on the
+   dot would blur the dot's own edge, and animating the dot's box-shadow
+   repaints instead of compositing. */
+.info__bulb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 8px;
+  height: 8px;
+  flex: none;
+}
+
+.info__bulb-dot {
+  position: relative;
+  z-index: 1;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  transition: background-color 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.info__bulb-glow {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--accent) 46%, transparent) 0%,
+    transparent 68%
+  );
+  opacity: 0;
+  transform: scale(0.55);
+}
+
+/* Unopened: two and a half seconds of breath, slow enough to read as a
+   pulse rather than a blink. Opacity and transform only, so it runs on the
+   compositor and costs nothing while it sits there. */
+.info--unseen .info__bulb-glow {
+  animation: bulb-breathe 2600ms cubic-bezier(0.37, 0, 0.63, 1) infinite;
+}
+
+@keyframes bulb-breathe {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(0.55);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Opened: the lamp is ink, and still. It has done its job and it is now
+   just the tab's mark. */
+.info:not(.info--unseen) .info__bulb-dot {
+  background: var(--ink);
+}
+
+.info__notch:hover .info__bulb-glow {
+  opacity: 0.7;
+  transform: scale(1);
+  transition:
+    opacity 240ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* The clip the 0fr row needs, plus the thing a clip does NOT do.
+   overflow: hidden hides the closed panel and stops it being clicked, but it
+   leaves the content in the accessibility tree and in the tab order -- a
+   screen reader would read out five tiers nobody has opened. visibility
+   takes it out of both. The 0s transition DELAYED by the drawer's own
+   duration is what keeps it on screen while it closes; without the delay the
+   panel vanishes on the first frame and the drawer collapses over nothing. */
+.info__drawer {
+  overflow: hidden;
+  visibility: hidden;
+  transition: visibility 0s linear var(--info-ms);
+}
+
+.info--open .info__drawer {
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+/* Its own lifted card, below the notch rather than welded to it. The
+   fillets already make the tab part of the input card; the panel is the
+   thing the tab reveals, so it gets the full card radius and its own
+   shadow, exactly like the mobile menu panel the header drops. */
+.info__panel {
+  margin-top: var(--gap);
+  padding: var(--s-xs) clamp(var(--s-sm), 1.6vw, var(--s-md)) var(--s-sm);
+  background: var(--card);
+  border: var(--card-border);
+  border-radius: var(--r-card);
+  box-shadow: var(--card-shadow);
+}
+
+.info__caption {
+  margin: 0 0 2px;
+  /* Aligned over the ordinals, not to the panel's own padding: the head of a
+     column belongs on that column's axis. 30px is the thread's gutter and
+     --s-sm is the rung's own padding, so this is the same sum the ordinals
+     resolve to rather than a number that happens to match today. */
+  padding-left: calc(30px + var(--s-sm));
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  line-height: 1.3;
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Reduced motion keeps every STATE and drops every transition: the drawer
+   still opens. Nothing moves. Split from Home.css's original single block
+   when the notch chrome was promoted here (2026-09-04) -- the rung ladder's
+   own half of this rule stays in Home.css, guarded by the same media query. */
+@media (prefers-reduced-motion: reduce) {
+  .info,
+  .info__notch,
+  .info__notch-label,
+  .info__bulb-glow {
+    transition: none;
+  }
+
+  /* The flip itself STAYS. It is not decoration: it is the statement of
+     which box the tab is attached to, and an upside-down tab welded to the
+     panel is information. Only the movement goes. */
+
+  /* The lamp stays LIT rather than going dark: it is a state signal, and
+     dropping it entirely would remove information, not motion. */
+  .info--unseen .info__bulb-glow {
+    animation: none;
+    opacity: 0.8;
+    transform: scale(1);
+  }
+}

@@ -25,10 +25,44 @@
 
 /* -------------------- input card -------------------- */
 
+/* The info notch (2026-09-04) needs the grey ground behind it for its
+   concave fillets to read at all -- they cut a hole in a white shape to
+   reveal what is BEHIND it, and there is nothing to reveal if the notch
+   sits nested inside the same white padding as its own background. So this
+   section split into an OUTER unstyled grid cell and an INNER
+   `.from-name-panel__card` carrying the actual card chrome, the same way
+   Home's `.input-col` wraps `.workbench__input` and sits the notch beside
+   it rather than inside it. `.workspace > *` (App.css) gives every direct
+   child of `.workspace` the card look automatically; the override below
+   strips it back off `.from-name-panel` itself (two classes beats one
+   class + universal on specificity alone, the same technique
+   `.workspace > .from-name-results` already uses below) and the inner div
+   picks it up instead. No `gap` on the outer flex column: the notch has to
+   weld flush against the card's bottom edge (`.info__notch`'s own
+   `margin-top: -1px` in App.css), not sit a gap below it. */
+.workspace > .from-name-panel {
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+
 .from-name-panel {
   display: flex;
   flex-direction: column;
+}
+
+.from-name-panel__card {
+  display: flex;
+  flex-direction: column;
   gap: var(--s-lg);
+  min-width: 0;
+  padding: var(--s-xl);
+  background: var(--card);
+  border-radius: var(--r-card);
+  box-shadow: var(--card-shadow);
+  border: var(--card-border);
 }
 
 .from-name-panel form {

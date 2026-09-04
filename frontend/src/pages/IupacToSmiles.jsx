@@ -7,6 +7,7 @@ import './IupacToSmiles.css'
 import Icon from '../components/Icon'
 import CopyButton from '../components/CopyButton'
 import NameResultsTable from '../components/NameResultsTable'
+import OpsinNote from '../components/OpsinNote'
 
 // Curated names verified live against the real /api/iupac-to-smiles
 // endpoint (OPSIN-backed) before shipping -- simple, well-known IUPAC
@@ -105,6 +106,17 @@ function IupacToSmiles() {
 
       <main className="workspace workspace--flow" aria-label="IUPAC to Structure">
         <section className="from-name-panel" aria-label="Convert an IUPAC name">
+          {/* An outer, unstyled grid cell (`.workspace > .from-name-panel`
+              strips the card chrome `.workspace > *` gives it by default)
+              plus an inner `.from-name-panel__card` that now carries it
+              instead -- the same split Home uses (`.input-col` wrapping
+              `.workbench__input`), needed here because the info notch below
+              has to sit on the grey ground outside the card's own white
+              padding: its concave fillets cut a hole in a white shape to
+              reveal what is BEHIND it, and there is nothing to reveal if
+              the notch is nested inside the same white fill as its own
+              background. */}
+          <div className="from-name-panel__card">
           <form onSubmit={handleSubmit} noValidate>
             {/* BOTH classes are required: the flex column comes from the base
                 `.field` (App.css:1132) and `.field--framed`'s own `gap` only applies
@@ -183,6 +195,9 @@ function IupacToSmiles() {
               page.
             </p>
           </div>
+          </div>
+
+          <OpsinNote />
         </section>
 
         <section className="from-name-results" aria-label="Structure result">
