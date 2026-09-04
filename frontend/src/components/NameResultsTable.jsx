@@ -32,7 +32,7 @@ export default function NameResultsTable({ rows }) {
         <div className="name-results__actions">
           <button
             type="button"
-            className="btn"
+            className="btn btn--pastel btn--sm"
             onClick={() => downloadText('stitch-from-name.csv', rowsToCsv(rows), 'text/csv')}
           >
             <Icon name="download" />
@@ -40,7 +40,7 @@ export default function NameResultsTable({ rows }) {
           </button>
           <button
             type="button"
-            className="btn"
+            className="btn btn--pastel btn--sm"
             disabled={sdf.written === 0}
             onClick={() =>
               downloadText('stitch-from-name.sdf', sdf.text, 'chemical/x-mdl-sdfile')

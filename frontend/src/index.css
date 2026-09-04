@@ -117,6 +117,10 @@
      5.95:1 on white. Owner instruction 2026-09-03. */
   --olive: #556b2f;
 
+  /* The download/export accent. Owner instruction 2026-09-04. Carries a DARK
+     label, never white -- see .btn--pastel in App.css. */
+  --accent-pastel: #ff6961;
+
   /* -- glass: the ChemAudit header floats as a blurred panel over the
      canvas. This is the one place a shadow and a >0 radius are allowed;
      the rest of the system stays flat with radius 0. */

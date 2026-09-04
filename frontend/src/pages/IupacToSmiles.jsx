@@ -286,7 +286,7 @@ function SingleResult({ row }) {
           <div className="from-name-patch__downloads">
             <button
               type="button"
-              className="btn"
+              className="btn btn--pastel btn--sm"
               disabled={!d.molblock}
               onClick={() =>
                 downloadText(

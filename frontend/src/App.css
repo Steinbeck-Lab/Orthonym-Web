@@ -1067,6 +1067,60 @@
   color: var(--muted);
 }
 
+/* --- a smaller box, for utility actions -------------------------------
+   A smaller button box for utility actions -- downloads, row actions --
+   where the base 44px/30px pill is louder than the action deserves. Owner
+   instruction 2026-09-04 ("reduce the button sizes as well too big").
+   36px, not smaller: WCAG 2.2 AA Target Size (Minimum) is 24x24 CSS px, so
+   this clears it comfortably while still reading as a real control. The
+   base .btn keeps 44px, which is the Apple/AAA touch target, for primary
+   actions like Convert and Translate. */
+.btn--sm {
+  min-height: 36px;
+  padding: 9px 18px;
+  gap: 0.75ch;
+}
+
+/* --- the download colour --------------------------------------------
+   Owner instruction 2026-09-04: a pastel #FF6961, filled and glossy like
+   the primary rather than a frosted secondary.
+   THE LABEL IS DARK, NOT WHITE, AND THAT IS LOAD-BEARING. Measured: white
+   on #FF6961 is 2.82:1 -- far under AA and simply unreadable. The same
+   fill with a near-black label is 7.45:1.
+   It also inverts the usual second-check risk. On a dark fill the white
+   gloss highlight LIGHTENS the composite and eats into a white label's
+   contrast -- that is how the amber first failed at 4.44:1. Here the
+   label is dark, so the gloss lightening the fill makes it EASIER to
+   read, not harder. There is no second check to fail.
+   Being light where crimson is dark is also what stops the two reading as
+   one colour: they differ in lightness, not just hue. */
+.btn--pastel {
+  --gloss: 0.34;
+  --sheen: 0.55;
+  --sheen-blend: normal;
+
+  background: var(--accent-pastel);
+  border-color: color-mix(in srgb, var(--accent-pastel) 78%, #000000);
+  color: var(--ink);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 1px 2px rgba(158, 51, 45, 0.16);
+}
+
+.btn--pastel:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-pastel) 88%, #000000);
+}
+
+.btn--pastel:active:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-pastel) 82%, #000000);
+}
+
+.btn--pastel:disabled {
+  background: color-mix(in srgb, var(--accent-pastel) 40%, transparent);
+  border-color: color-mix(in srgb, var(--accent-pastel) 30%, transparent);
+  color: var(--muted);
+}
+
 /* Every button icon. flex: none so a long label never squeezes it, and the
    optical nudge is because a 24-unit stroke grid centres on its box while an
    uppercase mono label sits on its baseline -- without it the icon reads a
