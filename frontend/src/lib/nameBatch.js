@@ -41,6 +41,16 @@ export async function convertNames(names, { fetchOne, onProgress, concurrency = 
   let next = 0
   let done = 0
 
+  // The one shape a row can be, built from whichever kind of failure (or
+  // success) the caller reached -- rather than that `{ ok: false, data: null,
+  // error }` literal spelled out twice below, once for an API-level error and
+  // once for a thrown exception.
+  function toRow(index, name, data, error) {
+    return error
+      ? { index, name, ok: false, data: null, error }
+      : { index, name, ok: true, data, error: null }
+  }
+
   async function worker() {
     while (true) {
       const index = next
@@ -50,17 +60,9 @@ export async function convertNames(names, { fetchOne, onProgress, concurrency = 
       const name = names[index]
       try {
         const data = await fetchOne(name)
-        rows[index] = data?.error
-          ? { index, name, ok: false, data: null, error: data.error }
-          : { index, name, ok: true, data, error: null }
+        rows[index] = toRow(index, name, data, data?.error)
       } catch (err) {
-        rows[index] = {
-          index,
-          name,
-          ok: false,
-          data: null,
-          error: err?.message || 'Could not convert this name',
-        }
+        rows[index] = toRow(index, name, null, err?.message || 'Could not convert this name')
       }
       done += 1
       // A failure advances the bar too, or a batch containing one bad name
