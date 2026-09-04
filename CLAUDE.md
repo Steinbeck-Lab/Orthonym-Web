@@ -283,10 +283,11 @@ version-fragile). **That check now runs in the Celery worker, not the web proces
 longer imports `opsin_decompose`, and `celery_app.py` calls `self_check()` when each forked child
 starts its JVM. A web process on its own never runs it.
 
-**Frontend routes share components deliberately, not by accident.** There are **seven** routes:
-`/` (Home), `/from-name`, `/explain`, `/health`, `/about`, plus `/structure` and `/teach`, which are
-`<Navigate>` redirects to `/explain?input=draw`, because both were the same capability reached a
-different way. `/explain` now carries the input choice itself —
+**Frontend routes share components deliberately, not by accident.** There are **four** pages:
+`/` (Home), `/from-name`, `/explain` and `/about`, plus three `<Navigate>` redirects: `/structure`
+and `/teach` to `/explain?input=draw`, because both were the same capability reached a different
+way, and `/health` to `/about` since 2026-09-04, when the Health Check page became a status board
+on About at the owner's instruction — a redirect rather than a deletion so existing links survive. `/explain` now carries the input choice itself —
 **IUPAC name | SMILES | Draw** tabs in the input card — plus a **Learn/Expert** switch in the
 output card, Expert by default (PRODUCT.md principle 1: a proof you must hunt for a switch to see
 is not offered). Learn drops the SMILES tab entirely rather than mislabel it, per the teach-mode
@@ -358,8 +359,9 @@ A few things about this page that are easy to get wrong:
 - **`.workspace--flow` gives `/from-name` Home's normal-scroll shell.** `align-items: start` inside
   it is load-bearing and NOT redundant with dropping the clamp: `.workspace` declares no
   `align-items` at all, so the grid default `stretch` survives on its own and the dead white space
-  stays. It is a modifier rather than a change to `.workspace` itself because **three** routes render
-  that class — `/from-name`, `/explain` and `/health`. `.page` has not clamped since the
+  stays. It is a modifier rather than a change to `.workspace` itself because **two** routes render
+  that class — `/from-name` and `/explain`. It was three until `/health` became a redirect on
+  2026-09-04. `.page` has not clamped since the
   normal-scroll pass (`min-height: 100dvh; overflow-x: clip`); do not "restore" a clamp there.
 - **`--ink-soft` does not exist.** The secondary/label token is `--muted`; `--muted-soft` is
   restricted by its own comment to text on `--canvas` and drops below AA on a card.
@@ -451,8 +453,8 @@ DOCUMENT scrolls rather than an inner box), and `.workbench` is `align-content: 
 align-items: start` with no `flex: 1` and no clamp, so each column is as tall as its own content —
 the hard clamp forced every cell to scroll inside itself, which is the inner card scrollbar the
 owner rejected. `.workbench > *` keeps only `min-height: 0`. `.workspace` is still the one-screen
-clamp (`flex: 1; min-height: 0` on the grid, `overflow-y: auto` on every cell) because /explain and
-/health still wear it; /from-name opts out with `.workspace--flow` (`flex: none; min-height: auto;
+clamp (`flex: 1; min-height: 0` on the grid, `overflow-y: auto` on every cell) because /explain still
+wears it; /from-name opts out with `.workspace--flow` (`flex: none; min-height: auto;
 align-content: start; align-items: start`, cells `overflow-y: visible`). Where a cell still clips,
 that clipping is what makes it a scroll container, which is also what lets an auto grid row shrink. Two related facts: `.batch` sits in the output column rather
 than spanning both, and `.tile__depiction` has **no `aspect-ratio`** (a 4:3 box at card width was
