@@ -122,16 +122,21 @@ export async function translateBatch(smilesList, { bestEffort = true, verify = t
 /**
  * Looks up the structure for a single IUPAC name via the backend's OPSIN-
  * backed converter. A name that fails to parse is not a thrown error here —
- * it comes back as a normal 2xx response with `error` set and `smiles` /
- * `depiction_svg` both null; only a network-level failure or non-2xx status
- * rejects the promise.
+ * it comes back as a normal 2xx response with `error` set and `smiles`,
+ * `canonical_smiles`, `inchi`, `inchikey`, `molblock` and `depiction_svg` all
+ * null; only a network-level failure or non-2xx status rejects the promise.
+ * The rejection's `status` carries the HTTP status code (when one exists —
+ * a genuine network failure has none) so a caller can tell a rate limit or a
+ * degraded backend apart from real unreachability.
  * @param {string} name
- * @returns {Promise<{smiles:string|null, depiction_svg:string|null, error:string|null}>}
+ * @returns {Promise<{smiles:string|null, canonical_smiles:string|null, inchi:string|null, inchikey:string|null, molblock:string|null, depiction_svg:string|null, error:string|null}>}
  */
 export async function fetchStructureFromName(name) {
   const res = await fetch(`/api/iupac-to-smiles?name=${encodeURIComponent(name)}`)
   if (!res.ok) {
-    throw new Error(`GET /api/iupac-to-smiles failed with ${res.status}`)
+    const err = new Error(`GET /api/iupac-to-smiles failed with ${res.status}`)
+    err.status = res.status
+    throw err
   }
   return res.json()
 }

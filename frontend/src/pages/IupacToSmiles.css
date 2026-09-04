@@ -110,7 +110,8 @@
    flex-grow's share of the flex container's free space, not from `height`
    at all, unless that free space is nonzero. `.from-name-panel form`'s
    height is itself shrink-to-fit (this card is only ever its own content
-   height, per the foot's own comment below), so there is no free space to
+   height under `.workspace--flow` -- see `.from-name-results__live`'s
+   comment below), so there is no free space to
    grow into and the box was silently pinned to its `min-height` floor no
    matter what the `height` clamp said -- measured: 120px before this fix,
    in a viewport where 32vh is 320px. `flex: 0 0 auto` is the exact
@@ -120,7 +121,14 @@
 .from-name-panel .field--framed {
   position: relative;
   flex: 0 0 auto;
-  height: clamp(260px, 42vh, 460px);
+  /* Reduced 25% (owner instruction, 2026-09-04): 260/42/460 -> 195/31.5/345,
+     each value taken straight off the prior one with no re-judged number.
+     `min-height` stays 180px, still below the clamp's new 195px floor, so it
+     does not become the thing that actually governs the box -- see the
+     comment above about the box being silently pinned to `min-height`
+     before `flex: 0 0 auto` was added; a floor above the clamp minimum
+     would quietly reintroduce that exact trap. */
+  height: clamp(195px, 31.5vh, 345px);
   min-height: 180px;
 }
 
@@ -197,27 +205,14 @@
   }
 }
 
-/* The card's foot. `.workspace--flow` un-stretches the cell (`align-items:
-   start`), so this card is only ever its own content height and `margin-top:
-   auto` has nothing to push against -- it no longer pins to a taller sibling,
-   it is simply a no-op. Explicit spacing instead. The hairline is an
-   INTERNAL divider inside a card, which is the only seam this system still
-   allows.
-
-   Tightened 2026-09-04: the foot used to carry two paragraphs -- what the
-   parse returns and who verifies it, then the About pointer -- and the
-   first is gone (IupacToSmiles.jsx; it duplicated the info drawer's own
-   copy). One short line no longer needs the wider margin/padding that used
-   to separate two lines of prose from the hairline above and from each
-   other. */
-.from-name-panel__foot {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-xs);
-  margin-top: var(--s-lg);
-  padding-top: var(--s-md);
-  border-top: 1px solid var(--hairline);
-}
+/* The card's foot (the About pointer, and before it a second paragraph of
+   OPSIN-explanation prose) is gone -- owner instruction 2026-09-04. The
+   OPSIN explanation lives only in the info drawer now (`OpsinNote`, and
+   `components/OpsinNote.jsx`); the accuracy figures it used to point at
+   remain on About ONLY, not duplicated here. `.from-name-panel__foot`
+   carried its own hairline divider as a `border-top` on itself (no separate
+   divider rule existed), so removing the element removed the seam with it --
+   there is nothing left here to delete. */
 
 /* -------------------- results card -------------------- */
 
@@ -402,9 +397,9 @@
   padding-block: var(--s-sm);
   /* `--hairline` is a colour token, not a border shorthand -- every other
      hairline rule in this system pairs it with `1px solid` (index.css:395,
-     this file's own `.from-name-panel__foot`/`.from-name-patch__top`). Without
-     it there is no border-style, which defaults to `none`, and the divider
-     between identifier rows renders invisible. */
+     this file's own `.from-name-patch__top`). Without it there is no
+     border-style, which defaults to `none`, and the divider between
+     identifier rows renders invisible. */
   border-top: 1px solid var(--hairline);
 }
 
@@ -620,16 +615,9 @@
    using too much padding" was two frames doing one frame's job. Only the
    decoration goes; `overflow-x: auto` stays, because a wide table must still
    scroll inside its own box rather than push the page sideways (CLAUDE.md,
-   already learned the hard way once). */
-.name-results .results-table-wrap {
-  background: none;
-  border: none;
-  box-shadow: none;
-  border-radius: 0;
-  padding: 0;
-}
+   already learned the hard way once).
 
-/* Owner instruction 2026-09-04, third pass: "why so much space?" on the
+   Owner instruction 2026-09-04, third pass: "why so much space?" on the
    left and right of the table at a wide window. App.css's shared
    `.results-table-wrap` HUGS its content (`width: fit-content`) and centres
    it -- a DELIBERATE fix from one day earlier, for a full-width table that
@@ -653,6 +641,11 @@
    columns stayed 0 -- the width went INTO the two elastic columns, not into
    new gaps between them. */
 .name-results .results-table-wrap {
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
   width: 100%;
   max-width: 100%;
   margin-inline: 0;
@@ -678,14 +671,25 @@
    inventing a new label treatment -- same mono-uppercase-muted label, same
    mono wrapping value, as the single-result card already uses. */
 
-.name-results__meta-row td {
-  padding: 0 var(--s-sm) var(--s-xs);
-  vertical-align: top;
-}
-
-.name-results__meta-spacer {
-  padding: 0;
-}
+/* `.name-results__meta-row td` (padding + vertical-align: top) and
+   `.name-results__meta-spacer` (padding: 0) used to live here and did
+   nothing: `.name-results .results-table td` (0,2,1, above) already sets
+   `padding` for every `<td>` in this table at higher specificity than
+   either rule (0,1,1 and 0,1,0), and `App.css`'s `.results-table td {
+   vertical-align: middle }` beats the row rule's `top` at equal
+   specificity because App.css is imported after this file. Verified in the
+   browser (2026-09-04): scoping both rules to actually win
+   (`.name-results .results-table .name-results__meta-row td` for the first,
+   and `.name-results .results-table .name-results__meta-row
+   .name-results__meta-spacer` -- one class more specific again, needed
+   because the row-td rule above would otherwise still outrank a
+   same-depth spacer-only selector -- for the second) changed the
+   computed padding and vertical-align exactly as written, but produced no
+   visible difference on the rendered InChI line -- a single line of text
+   does not show top-vs-middle alignment, and the few px of padding delta
+   was absorbed by the row's own content height. Deleted rather than fixed:
+   the shipped rendering is already what was reviewed and approved, and
+   there is no visible gain to spend a more specific selector on. */
 
 .name-results__meta-item {
   display: flex;

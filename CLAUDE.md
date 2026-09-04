@@ -346,9 +346,15 @@ A few things about this page that are easy to get wrong:
 - **CSV quoting is load-bearing**: IUPAC names and InChIs contain commas as a matter of course, and
   an unquoted writer shifts every column after the first comma.
 - **`.copy-btn`, `.processing*`, `.results-table*` and `.field--framed` now live in `App.css`, not
-  `Home.css`**, because two routes use them. The `ProcessingBar` block carries its own
-  `@keyframes processing-sweep` and its own reduced-motion block; `.btn__spin` stayed behind in
-  `Home.css` because it belongs only to Home's submit button.
+  `Home.css`.** `.copy-btn`, `.results-table*` and `.field--framed` moved because two routes
+  genuinely use them. `.processing*` does not earn that reason — it has exactly one consumer,
+  `Home.jsx`'s inline wait state; `/from-name` renders its own determinate `ConvertProgress`
+  (`.from-name-progress*`) instead, a later, deliberate choice of a real bar over Home's
+  indeterminate stripe. `.processing*` moved for a narrower reason that still holds: it is a style
+  for a component that lives in `src/components/` (`ProcessingBar`), so it belongs beside its peers
+  rather than inside one page's stylesheet, independent of how many routes render it. The
+  `ProcessingBar` block carries its own `@keyframes processing-sweep` and its own reduced-motion
+  block; `.btn__spin` stayed behind in `Home.css` because it belongs only to Home's submit button.
 - **`.workspace--flow` gives `/from-name` Home's normal-scroll shell.** `align-items: start` inside
   it is load-bearing and NOT redundant with dropping the clamp: `.workspace` declares no
   `align-items` at all, so the grid default `stretch` survives on its own and the dead white space
@@ -432,7 +438,12 @@ holds the card and the notch as one grid cell), 40px at rest against the old ban
 closed drawer takes `visibility: hidden` so a screen reader is not read five tiers nobody opened.
 Two structural facts still
 hold: every interactive page puts its input beside its own output (`.workspace`), and each page's
-"how this works" copy lives on the About page.
+"how this works" copy lives on the About page — **except `/from-name`, by owner instruction on
+2026-09-04**: its input card's foot (the "Read how this works... on the About page" pointer) was
+removed outright, because the OPSIN explanation this page needs lives directly on the page, in its
+own info drawer (`components/OpsinNote.jsx`), not behind a link elsewhere. The accuracy figures are
+NOT in that drawer and remain on About only — do not assume the drawer covers them, and do not
+re-add the About link to `/from-name` on the theory that the convention above still applies to it.
 
 **Home scrolls normally now; the one-screen clamp survives only on `.workspace`.** `.page` is
 `min-height: 100dvh; overflow-x: clip` (clip, not hidden, so `overflow-y` stays `visible` and the

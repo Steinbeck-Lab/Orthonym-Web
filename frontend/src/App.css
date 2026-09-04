@@ -2088,15 +2088,24 @@ input.field__control {
 }
 
 /* -------------------- shared input and result vocabulary -------------------- */
-/* These style things used by more than one route: the components in
-   `src/components/` (CopyButton, ProcessingBar, ResultsTable) and the
-   `.field--framed` input frame. They sat in `pages/Home.css`, which happened
-   to work only because `App.jsx` imports every page eagerly, so Home's
-   stylesheet is in the document on every route. That is an accident, not a
-   design: the day any route is lazily loaded, /from-name loses its copy
-   buttons and its input frame with no error anywhere. Same move, same reason,
-   as `.explain__editor` becoming `.structure-editor` when Home gained a
-   second embed of the editor. */
+/* Styles for components that live in `src/components/` (CopyButton,
+   ProcessingBar, ResultsTable) plus the `.field--framed` input frame. They
+   sat in `pages/Home.css`, which happened to work only because `App.jsx`
+   imports every page eagerly, so Home's stylesheet is in the document on
+   every route. That is an accident, not a design: the day any route is
+   lazily loaded, a page that renders one of these components with no copy
+   of Home.css of its own loses its styling with no error anywhere. Same
+   move, same reason, as `.explain__editor` becoming `.structure-editor`
+   when Home gained a second embed of the editor.
+
+   `.copy-btn*`, `.results-table*` and `.field--framed` also have a second,
+   more concrete reason: two real routes render them today (`/from-name`
+   alongside Home). `.processing*` does not — it has exactly one consumer,
+   Home's own inline wait state; `/from-name` renders a separate, determinate
+   `ConvertProgress` under `.from-name-progress*` instead of reusing this
+   component. It moved anyway, on the belongs-beside-its-peers reason alone:
+   `ProcessingBar` lives in `src/components/`, and a component's styling
+   belongs there regardless of how many routes currently render it. */
 
 /* -------------------- processing (inline wait) -------------------- */
 /* Shown while the blocking fast-path request is in flight, so the wait reads as
@@ -2441,7 +2450,19 @@ input.field__control {
 .field--framed {
   flex: 1;
   min-height: 0;
-  gap: var(--s-xxs);
+  /* No `gap` here on purpose -- it used to be `var(--s-xxs)`, and it is
+     gone rather than corrected to a new value. In `Home.css`, this rule sat
+     BEFORE `.field { gap: var(--s-xs) }` in cascade order, so at equal
+     specificity `.field` always won: the declaration was dead for its
+     entire life there, and every field--framed box (Home's paste box
+     included) rendered with `.field`'s 8px gap. Promoting this rule into
+     App.css moved it to AFTER `.field` (App.css:1216) in the same cascade,
+     which silently turned the dead declaration live and dropped Home's
+     label-to-textarea gap to 4px -- a regression a "verbatim cut and paste"
+     commit did not catch because nobody measured the 4px delta on a
+     screenshot. Deleting it restores the rendering every `.field--framed`
+     box has always actually had. Do not re-add a `gap` here without
+     checking what it does to Home. */
   padding: var(--s-sm) var(--s-md);
   background: var(--card-soft);
   border: var(--card-border);
