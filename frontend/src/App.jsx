@@ -4,7 +4,6 @@ import Footer from './components/Footer'
 import Home from './pages/Home'
 import IupacToSmiles from './pages/IupacToSmiles'
 import Explain from './pages/Explain'
-import HealthCheck from './pages/HealthCheck'
 import About from './pages/About'
 import './App.css'
 
@@ -67,7 +66,14 @@ function App() {
           <Route path="/teach" element={<Navigate to="/explain?input=draw" replace />} />
           <Route path="/from-name" element={<IupacToSmiles />} />
           <Route path="/explain" element={<Explain />} />
-          <Route path="/health" element={<HealthCheck />} />
+          {/* Health Check folded into About as a compact status board
+              (Task 18, owner instruction: "move the health check to about
+              and keep it as a message board rather than a whole page").
+              Redirect, not a deletion, for the same reason /structure and
+              /teach redirect above: months of bookmarks and links to
+              /health should not 404. `replace` so the back button does not
+              bounce off the redirect. */}
+          <Route path="/health" element={<Navigate to="/about" replace />} />
           <Route path="/about" element={<About />} />
         </Route>
       </Routes>

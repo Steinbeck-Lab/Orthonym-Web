@@ -195,3 +195,201 @@
     padding: var(--s-xl) var(--s-lg);
   }
 }
+
+/* -------------------- service status board -------------------- */
+/* The old /health page folded in here (Task 18). Same title-row rhythm as
+   "At a glance" / "Acknowledgments" above, except this one heading also
+   carries the page's one utility action -- so `--status` is a MODIFIER on
+   `.about-band__title-row` rather than a change to the shared rule: every
+   other consumer renders only an <h2> in there and stays unaffected. */
+.about-band__title-row--status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s-md);
+}
+
+/* The board itself is one white card -- the same frame `.about-card` and
+   `.about-band--split` use (--card, --r-card, --card-shadow, --card-border)
+   -- since `.about-band` is transparent by default and expects its content
+   to carry the card. */
+.status-board {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-lg);
+  padding: var(--s-lg) var(--s-xl);
+  background: var(--card);
+  border-radius: var(--r-card);
+  box-shadow: var(--card-shadow);
+  border: var(--card-border);
+}
+
+.status-board__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-md);
+}
+
+/* A FIXED slot, scaled down from the old full-page board's 320x24 swatch: it
+   sat above the state word there because the page had a whole card column to
+   itself, and reads inline before the sentence here because the board does
+   not. Still fixed-size so the four marks do not change the row's height as
+   they swap. */
+.status-board__mark {
+  display: flex;
+  align-items: center;
+  width: 88px;
+  height: 20px;
+  flex: none;
+}
+
+/* Reachable: one solid, unbroken ink rule -- a continuous line for a
+   continuous connection. Deliberately NOT the double rule; paired ink lines
+   already mean a verified PIN elsewhere in this system. */
+.status-board__fill {
+  display: block;
+  width: 100%;
+  height: 2px;
+  background: var(--ink);
+}
+
+/* Degraded: the SAME rule, stopping short. The backend answered, so the line
+   is real; it cannot verify a name, so the line does not reach the end. A
+   measure change, not a new mark -- the dashed or dotted rule already means
+   "fallback" or "best-effort", which are claims about a NAME, not a server. */
+.status-board__fill--partial {
+  width: 45%;
+}
+
+/* Checking: the site's waiting mark, three hairline dashes at 70/45/58%
+   shimmering out of step (the shared `dash-wait` keyframe, App.css). */
+.status-board__pending {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xxs);
+  width: 100%;
+}
+
+.status-board__pending-dash {
+  display: block;
+  height: 1px;
+  background: var(--hairline-strong);
+  animation: dash-wait 1.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.status-board__pending-dash:nth-child(1) {
+  width: 70%;
+}
+
+.status-board__pending-dash:nth-child(2) {
+  width: 45%;
+  animation-delay: 160ms;
+}
+
+.status-board__pending-dash:nth-child(3) {
+  width: 58%;
+  animation-delay: 320ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-board__pending-dash {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+/* Unreachable: the struck pair, two hairlines 5px apart centre to centre --
+   the same spacing Home's result tile uses for its error mark, so the two
+   read as the same statement. The gap below is 4px, not 5px: these are 1px
+   rules in a flex column, so `gap` is edge-to-edge while the spacing that has
+   to match is centre-to-centre. 4 + 1 = 5. */
+.status-board__snip-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.status-board__snip {
+  display: block;
+  width: 100%;
+  height: 1px;
+  background: var(--ink);
+}
+
+.status-board__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xxs);
+  min-width: 0;
+}
+
+.status-board__label {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--t-title-md);
+  font-weight: 400;
+  line-height: 1.3;
+  letter-spacing: var(--track-display-md);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* Only ever rendered for `degraded`, where the word alone ("Reachable, but
+   degraded") does not say what is degraded. Composes `.prose-sm` (App.css)
+   for the type; only the measure is local. */
+.status-board__reason {
+  max-width: 52ch;
+}
+
+.status-board__meta {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* -------------------- the raw-payload disclosure -------------------- */
+/* A native <details>, per the brief: it needs no state and no ARIA of its
+   own, which is this codebase's preference for the platform doing the work.
+   Its own hairline separates it from the row above rather than relying on
+   the card's `gap`, since a closed <details> is only one line tall and the
+   gap alone read as uneven against the taller row above it. */
+.status-board__details {
+  padding-top: var(--s-md);
+  border-top: 1px solid var(--hairline);
+}
+
+.status-board__details summary {
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.status-board__details[open] summary {
+  margin-bottom: var(--s-sm);
+}
+
+/* Arbitrary server text (the JSON payload, or an error message on
+   `unreachable`), capped so one long value can neither stretch the card nor
+   take the screen. */
+.status-board__raw {
+  margin: 0;
+  padding: var(--s-md);
+  background: var(--card-soft);
+  border-radius: var(--r-card-sm);
+  max-height: 200px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: var(--t-body-sm);
+  line-height: 1.6;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

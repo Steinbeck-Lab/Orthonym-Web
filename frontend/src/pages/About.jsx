@@ -1,4 +1,150 @@
+import { useCallback, useEffect, useState } from 'react'
+import { checkHealth } from '../lib/api'
+import Icon from '../components/Icon'
 import './About.css'
+
+// Four phases, not three. `degraded` is the one that was missing when this
+// board was still its own /health page, and its absence was a lie the page
+// told out loud: GET /api/health answers 200 with
+// {"status":"DEGRADED","opsin":"no worker has a live JVM"} whenever no worker
+// can verify a name, and the old page rendered that as "Reachable & healthy"
+// under its single strongest positive mark, because it branched on whether
+// the FETCH resolved and never read the payload. Measured live, not
+// theorised. PRODUCT.md principle 1 says determinism must be provable rather
+// than asserted; a status board that asserts health it did not check is the
+// same failure in a smaller frame. Folded into About on 2026-09-04 (Task 18,
+// owner instruction: "move the health check to about and keep it as a
+// message board rather than a whole page") — the fix below is the thing that
+// had to survive the move, not merely the feature.
+const STATE_LABEL = {
+  checking: 'Checking…',
+  healthy: 'Reachable & healthy',
+  degraded: 'Reachable, but degraded',
+  unreachable: 'Unreachable',
+}
+
+// The mark grammar is deliberate and carried over byte-for-byte from the old
+// page: checking = three shimmering hairline dashes, reachable = ONE solid
+// 2px ink rule, degraded = that same rule at a shorter measure, unreachable =
+// the struck pair. Reachable is deliberately NOT the double rule -- paired
+// ink lines already mean a verified PIN elsewhere in this system (DESIGN.md's
+// Don't list), and a state signal that borrows another state's shape carries
+// no information at all. No hue is ever used for health. The board only
+// scales the marks down for a compact strip; it does not substitute a shape.
+//
+// Scope, by the owner's own instruction when asked how much of the old page
+// should survive: "status line + details" -- the state mark and sentence, a
+// Check again button, and the raw /api/health payload behind a small
+// <details> toggle. The endpoint name and the "same call the app itself
+// relies on" aside did not make the cut; the payload speaks for itself here.
+function ServiceStatus() {
+  const [phase, setPhase] = useState('checking')
+  const [raw, setRaw] = useState(null)
+  const [error, setError] = useState(null)
+  const [checkedAt, setCheckedAt] = useState(null)
+
+  const runCheck = useCallback(() => {
+    setPhase('checking')
+    checkHealth()
+      .then((data) => {
+        setRaw(data)
+        setError(null)
+        setCheckedAt(new Date())
+        // Read the payload, not merely the fact that one arrived. Anything
+        // other than "OK" is degraded: an unrecognised status is reported as
+        // less-than-healthy rather than as healthy, which is the fail-closed
+        // direction for a claim about health.
+        setPhase(data?.status === 'OK' ? 'healthy' : 'degraded')
+      })
+      .catch((err) => {
+        setRaw(null)
+        setError(err?.message || 'network error')
+        setCheckedAt(new Date())
+        setPhase('unreachable')
+      })
+  }, [])
+
+  useEffect(() => {
+    runCheck()
+  }, [runCheck])
+
+  const isChecking = phase === 'checking'
+  const rawDisplay = isChecking ? '—' : raw !== null ? JSON.stringify(raw, null, 2) : error
+
+  return (
+    <section className="about-band" aria-label="Service status">
+      <div className="about-band__title-row about-band__title-row--status">
+        <h2>Service status</h2>
+        {/* A utility action beside a heading, not this surface's one primary
+            action -- so the plain frosted `.btn`, not `.btn--accent`, and
+            `.btn--sm` per the owner's 2026-09-04 instruction to size utility
+            controls down from the 44px touch target. */}
+        <button type="button" className="btn btn--sm" onClick={runCheck} disabled={isChecking}>
+          <Icon name="refresh" />
+          {isChecking ? 'Checking…' : 'Check again'}
+        </button>
+      </div>
+
+      <div
+        className="status-board"
+        role="status"
+        aria-live="polite"
+        aria-busy={isChecking}
+      >
+        <div className="status-board__row">
+          <span className="status-board__mark" aria-hidden="true">
+            {phase === 'checking' && (
+              <span className="status-board__pending">
+                <span className="status-board__pending-dash" />
+                <span className="status-board__pending-dash" />
+                <span className="status-board__pending-dash" />
+              </span>
+            )}
+            {phase === 'healthy' && <span className="status-board__fill" />}
+            {/* Degraded reuses the reachable rule at a SHORTER measure rather
+                than borrowing a mark that already means something else (the
+                dashed and dotted rules mean fallback and best-effort, which
+                are claims about a NAME, not about a server). The connection
+                really is there, so the line is really there; it just does
+                not reach the end. */}
+            {phase === 'degraded' && (
+              <span className="status-board__fill status-board__fill--partial" />
+            )}
+            {phase === 'unreachable' && (
+              <span className="status-board__snip-wrap">
+                <span className="status-board__snip" />
+                <span className="status-board__snip" />
+              </span>
+            )}
+          </span>
+
+          <div className="status-board__text">
+            <p className="status-board__label">{STATE_LABEL[phase]}</p>
+            {phase === 'degraded' && raw?.opsin && (
+              <p className="prose-sm status-board__reason">
+                {raw.opsin}. Naming endpoints answer 503 until a worker reports one.
+              </p>
+            )}
+            <p className="status-board__meta">
+              {checkedAt ? `Checked ${checkedAt.toLocaleString()}` : '—'}
+            </p>
+          </div>
+        </div>
+
+        {/* A native <details>/<summary> disclosure: it needs no state and no
+            ARIA of its own, which matches this codebase's preference for
+            letting the platform do the work. Closed by default -- there is
+            no `open` attribute. On `unreachable` this shows the error text
+            where the payload would otherwise be (`rawDisplay` above already
+            resolves to `error` in that case). */}
+        <details className="status-board__details">
+          <summary>Raw response</summary>
+          <pre className="status-board__raw">{rawDisplay}</pre>
+        </details>
+      </div>
+    </section>
+  )
+}
 
 // About Orthonym: what it is, how it works, its measured accuracy, and the
 // verified facts (author, license, acknowledgments) behind the naming
@@ -212,6 +358,14 @@ function About() {
             </p>
           </div>
         </section>
+
+        {/* The live board sits here rather than at the very top or bottom:
+            after the static facts it is a sibling to ("At a glance" states
+            what the engine IS; this states whether it is UP right now), and
+            before "Acknowledgments" so the page still closes on credits to
+            the other software it depends on, which reads as the natural
+            last word on an About page. */}
+        <ServiceStatus />
 
         <section className="about-band" aria-label="Acknowledgments">
           <div className="about-band__title-row">

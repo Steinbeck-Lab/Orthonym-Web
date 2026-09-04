@@ -7,7 +7,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 // briefly three separate islands; the owner asked for one ("I don't want 3
 // notches, move Orthonym and github to center, keep single notch").
 //
-// AT REST it shows the crimson brand mark and the five route labels, and
+// AT REST it shows the crimson brand mark and the four route labels, and
 // nothing else. ON HOVER (or on focus, or on any pointer that cannot hover)
 // it GROWS OUTWARD from its centre to reveal the Orthonym wordmark on the left
 // and GitHub on the right, each fenced off by a hairline "|". Confirmed with
@@ -40,7 +40,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 // The active route is marked three ways at once, and colour is only one of
 // them: aria-current (assistive tech), a crimson text step, and a crimson
 // dot — now riding a single faint pill that SLIDES between routes instead of
-// one pill per link blinking on and off. Below 960px the five routes collapse
+// one pill per link blinking on and off. Below 960px the four routes collapse
 // behind a single menu button instead of wrapping onto three lines.
 
 const NAV_LINKS = [
@@ -51,7 +51,11 @@ const NAV_LINKS = [
   // page's own Input tabs (name / SMILES / draw) are what used to be separate
   // routes. See spec section 12.
   { to: '/explain', label: 'Explain' },
-  { to: '/health', label: 'Health Check' },
+  // Health Check folded into /about as a compact board (Task 18) rather than
+  // its own page; /health now redirects there (App.jsx), so the nav no
+  // longer needs a separate item. The sliding pill below is measured off the
+  // DOM (`measurePill`), never indexed by NAV_LINKS.length, so removing an
+  // entry needs no other change here.
   { to: '/about', label: 'About' },
 ]
 
