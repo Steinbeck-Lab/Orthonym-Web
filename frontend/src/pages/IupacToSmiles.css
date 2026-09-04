@@ -92,11 +92,109 @@
    box comes from `.workbench__input .field:first-of-type` (Home.css:468),
    which is scoped to Home and inert on this page, and the modifier's own
    `flex: 1` needs a height-constrained flex parent that this card is not. So
-   the height is stated outright. Same clamp as Home's, so the two pages'
-   input boxes read as the same control. */
+   the height is stated outright.
+
+   Enlarged 2026-09-04 (owner instruction: "make the box bigger"), which the
+   removal of the foot's first sentence (below) frees the vertical room for
+   -- the card no longer needs to reserve a line of prose it used to hold.
+   No longer matched to Home's own clamp: Home's paste box answers to a
+   different instruction (CLAUDE.md's `pages/Home.css` sizing) and this is
+   the one page allowed to diverge, since the two boxes are not required to
+   read as identical, only each to fit its own card. `position: relative` is
+   new too -- the floating label below is positioned against THIS box, not
+   the page.
+
+   `flex: 0 0 auto` is not decorative -- without it this `height` is DEAD.
+   The base `.field--framed` rule (App.css) is `flex: 1`, whose shorthand
+   sets `flex-basis: 0%`; a flex item's main size then comes from
+   flex-grow's share of the flex container's free space, not from `height`
+   at all, unless that free space is nonzero. `.from-name-panel form`'s
+   height is itself shrink-to-fit (this card is only ever its own content
+   height, per the foot's own comment below), so there is no free space to
+   grow into and the box was silently pinned to its `min-height` floor no
+   matter what the `height` clamp said -- measured: 120px before this fix,
+   in a viewport where 32vh is 320px. `flex: 0 0 auto` is the exact
+   escape Home.css already uses for its own paste box, for the identical
+   reason (App.css's comment on `.field--framed` names it): it takes the
+   item OUT of flex-basis-driven sizing so `height` governs directly. */
 .from-name-panel .field--framed {
-  height: clamp(180px, 32vh, 320px);
-  min-height: 120px;
+  position: relative;
+  flex: 0 0 auto;
+  height: clamp(260px, 42vh, 460px);
+  min-height: 180px;
+}
+
+/* -------------------- floating label (2026-09-04) -------------------- */
+/* Owner instruction, with a shadcn/Tailwind reference: the label should sit
+   INSIDE the field and animate up + shrink on focus or once the field has
+   content, like a Material/shadcn floating label. That toolchain is not
+   adopted (CLAUDE.md: no Tailwind, no shadcn, no `cn()`, no new dependency)
+   -- only the behaviour is borrowed, built in this system's own CSS.
+
+   Mechanics, scoped to `.from-name-panel .field--framed` only (Home's own
+   framed field, and any other `.field--framed` on the site, is untouched):
+
+   - The label stays a real `<label for>` (IupacToSmiles.jsx) -- never a
+     decorative span -- so a click on it still focuses the textarea via the
+     browser's native label behaviour, and it is absolutely positioned, so
+     it paints above the plain in-flow textarea without a z-index (a
+     positioned box always paints after its non-positioned in-flow
+     siblings, regardless of source order -- CSS's stacking rules, not a
+     coincidence).
+   - "Focused" is `:focus-within` on the frame -- CSS cannot select a
+     previous sibling by its OWN state, but the wrapper already tracks its
+     descendant's focus.
+   - "Has content" is `:has(.field__control:not(:placeholder-shown))` on
+     the same frame -- the shadcn demo's `has-[+textarea:not(:placeholder-shown)]`
+     with the combinator flipped from "next sibling" to "descendant", since
+     the label sits BEFORE the control here too. `:placeholder-shown` only
+     works because the textarea keeps a real `placeholder` attribute
+     (JSX) -- it reflects the empty/non-empty DOM state regardless of
+     whether the placeholder text is actually painted, which is what lets
+     it double as the "has content" flag below.
+   - The placeholder itself stays invisible (transparent) until focus, so
+     idle the label alone occupies that space; once focused it fades in and
+     teaches the one-per-line format the label no longer has room to spell
+     out at full size. This does not delete the hint, only defers it.
+   - The control's own `padding-top` is enlarged (from the base
+     `.field--framed .field__control` rule's 4px, App.css) so the first
+     typed line clears the floated label's box once it has shrunk into the
+     top-left corner -- sized against the floated label's own metrics (11px
+     mono, 1.4 line-height ~= 15px tall, sitting from 16px to ~31px inside
+     the frame), not guessed. */
+.from-name-panel .field--framed .field__label {
+  position: absolute;
+  top: var(--s-sm);
+  left: var(--s-md);
+  margin: 0;
+  font-size: var(--t-body-sm);
+  transition: top 0.18s cubic-bezier(0.16, 1, 0.3, 1), font-size 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.from-name-panel .field--framed:focus-within .field__label,
+.from-name-panel .field--framed:has(.field__control:not(:placeholder-shown)) .field__label {
+  top: var(--s-xxs);
+  font-size: var(--t-caption);
+}
+
+.from-name-panel .field--framed .field__control {
+  padding-top: calc(var(--s-lg) + var(--s-xxs));
+}
+
+.from-name-panel .field--framed .field__control::placeholder {
+  color: transparent;
+  transition: color 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.from-name-panel .field--framed .field__control:focus::placeholder {
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .from-name-panel .field--framed .field__label,
+  .from-name-panel .field--framed .field__control::placeholder {
+    transition: none;
+  }
 }
 
 /* The card's foot. `.workspace--flow` un-stretches the cell (`align-items:
@@ -104,19 +202,23 @@
    auto` has nothing to push against -- it no longer pins to a taller sibling,
    it is simply a no-op. Explicit spacing instead. The hairline is an
    INTERNAL divider inside a card, which is the only seam this system still
-   allows. */
+   allows.
+
+   Tightened 2026-09-04: the foot used to carry two paragraphs -- what the
+   parse returns and who verifies it, then the About pointer -- and the
+   first is gone (IupacToSmiles.jsx; it duplicated the info drawer's own
+   copy). One short line no longer needs the wider margin/padding that used
+   to separate two lines of prose from the hairline above and from each
+   other. */
 .from-name-panel__foot {
   display: flex;
   flex-direction: column;
   gap: var(--s-xs);
-  margin-top: var(--s-xl);
-  padding-top: var(--s-lg);
+  margin-top: var(--s-lg);
+  padding-top: var(--s-md);
   border-top: 1px solid var(--hairline);
 }
 
-/* What the parse actually returns, and who did the parsing. This sentence
-   used to be the back half of the `.page-head` lede; a hero takes one
-   sentence, so it moved here rather than being deleted. */
 /* -------------------- results card -------------------- */
 
 .from-name-results {
