@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { fetchStructureFromName } from '../lib/api'
 import { MAX_NAMES, parseNameLines, convertNames } from '../lib/nameBatch'
 import { rowsToSdf, downloadText } from '../lib/molExport'
@@ -52,18 +51,30 @@ function IupacToSmiles() {
     setRows([])
 
     // TWO KINDS OF FAILURE, and the page has always told them apart. OPSIN
-    // declining a name is a 2xx body with `error` set; the backend being down is
-    // a THROW from fetchStructureFromName, which rejects only on a non-2xx
-    // status (api.js:125-131). convertNames flattens both into ok:false rows, so
-    // the transport case is captured here on its way past -- otherwise "is the
-    // backend running on localhost:8000?" would be shown for a simple typo, or
-    // never shown at all when the server is genuinely down.
+    // declining a name is a 2xx body with `error` set; a non-2xx status is a
+    // THROW from fetchStructureFromName (api.js). convertNames flattens both
+    // into ok:false rows, so the transport case is captured here on its way
+    // past -- otherwise every non-2xx status would render the same "is the
+    // backend running on localhost:8000?" notice.
+    //
+    // That notice is wrong for anything but a genuine network failure. This
+    // page fires one GET per name (up to MAX_NAMES=25) against the shared
+    // 60/min fast-path budget (nameBatch.js), so a third submission inside a
+    // minute 429s BY DESIGN -- not because the backend is down. A 503 means
+    // the backend is reachable but no worker has reported a live JVM
+    // (jvm_guard); a 504 means the fast path timed out. `err.status` (set by
+    // fetchStructureFromName) is what lets `transportNotice` below tell these
+    // apart instead of accusing a healthy, merely busy or rate-limiting
+    // backend of being unreachable.
     let transportError = null
     const fetchOne = async (name) => {
       try {
         return await fetchStructureFromName(name)
       } catch (err) {
-        transportError = transportError || err?.message || 'unknown network error'
+        transportError = transportError || {
+          message: err?.message || 'unknown network error',
+          status: err?.status ?? null,
+        }
         throw err
       }
     }
@@ -178,22 +189,6 @@ function IupacToSmiles() {
               </ul>
             </div>
           </form>
-
-          {/* The card's foot: the shared pointer to About. What this parse
-              returns and who verifies it now lives only in the info drawer
-              (`OpsinNote`, below) -- this sentence used to repeat that same
-              fact in prose right above it, which is the exact duplication
-              the owner flagged. One hairline divider INSIDE the card, which
-              is the only place a seam survives in this system. */}
-          <div className="from-name-panel__foot">
-            <p className="page-about-note">
-              Read how this works, and Orthonym&rsquo;s measured accuracy, on the{' '}
-              <Link to="/about" className="about-link">
-                About
-              </Link>{' '}
-              page.
-            </p>
-          </div>
           </div>
 
           <OpsinNote />
@@ -202,8 +197,7 @@ function IupacToSmiles() {
         <section className="from-name-results" aria-label="Structure result">
           {fetchError && (
             <p className="notice" role="alert">
-              Could not reach Orthonym&rsquo;s backend ({fetchError}). Is it running on{' '}
-              <code>localhost:8000</code>?
+              <TransportNotice error={fetchError} />
             </p>
           )}
           <div className="from-name-results__live" aria-live="polite">
@@ -214,6 +208,52 @@ function IupacToSmiles() {
           </div>
         </section>
       </main>
+    </>
+  )
+}
+
+// Four transport failures, one wrongly worded as "the backend is down" until
+// now. This page fires one GET per name (up to MAX_NAMES=25) against the
+// shared 60/min fast-path budget, so a THIRD submission inside a minute
+// 429s by design (nameBatch.js) -- that is not the backend being offline,
+// and telling a visitor their local server is down when it is in fact
+// working exactly as designed is the wrong direction to be wrong in. A 503
+// means the backend answered but no worker has a live JVM yet (jvm_guard);
+// its wording below is lifted from the app's own degraded-backend copy
+// (see the 503 branch) rather than invented fresh, so every surface
+// describes the same backend state the same way. A 504 means the fast path
+// itself timed out. Anything
+// else -- including a real network failure, where `status` is null --
+// keeps the original "is it running on localhost:8000?" text unchanged.
+function TransportNotice({ error }) {
+  if (error.status === 429) {
+    return (
+      <>
+        Orthonym&rsquo;s request limit was hit &mdash; this page sends one request per name, and
+        converting a lot of names in a short span can use it up. Wait a minute, then try again.
+      </>
+    )
+  }
+  if (error.status === 503) {
+    // Wording lifted verbatim from the app's own degraded-backend copy
+    // (About.jsx's Service status section: `{raw.opsin}. Naming endpoints
+    // answer 503 until a worker reports one.`, backed by main.py's
+    // `opsin="no worker has a live JVM"`) rather than invented fresh, so
+    // every surface describes the same backend state the same way.
+    return (
+      <>
+        Orthonym&rsquo;s backend is up, but no worker has a live JVM. Naming endpoints answer 503
+        until a worker reports one.
+      </>
+    )
+  }
+  if (error.status === 504) {
+    return <>This conversion took too long rather than failed. Try again in a moment.</>
+  }
+  return (
+    <>
+      Could not reach Orthonym&rsquo;s backend ({error.message}). Is it running on{' '}
+      <code>localhost:8000</code>?
     </>
   )
 }
