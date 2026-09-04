@@ -65,7 +65,19 @@ export async function convertNames(names, { fetchOne, onProgress, concurrency = 
       done += 1
       // A failure advances the bar too, or a batch containing one bad name
       // stalls short of its total and reads as hung.
-      onProgress?.(done, names.length)
+      //
+      // Guarded on its own, and NOT moved inside the try above: this module
+      // promises it never rejects, and a caller's progress callback is the one
+      // piece of code here that this module does not own. Without this guard a
+      // throwing onProgress escapes worker(), rejects the Promise.all, and takes
+      // the whole batch down -- losing rows that had already succeeded. Inside
+      // the fetch try instead, a caught fetch error would skip the call and the
+      // bar would stall short of its total.
+      try {
+        onProgress?.(done, names.length)
+      } catch {
+        // A broken progress display is not a reason to lose the results.
+      }
     }
   }
 
