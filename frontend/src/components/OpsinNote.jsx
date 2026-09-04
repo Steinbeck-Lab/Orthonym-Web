@@ -1,11 +1,12 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useDisclosure } from '../lib/useDisclosure'
 
 // THE OPSIN NOTE: the same notch-and-drawer chrome ConfidenceLegend.jsx
 // wears on Home (`.info`, `.info__notch`, `.info__drawer`, `.info__panel`,
 // the bulb, the flip, the fillets -- all promoted to App.css on 2026-09-04
-// for exactly this reuse), carrying different content. Read
-// ConfidenceLegend.jsx for the mechanism's own long-form reasoning; this
-// file only adds what belongs on THIS page.
+// for exactly this reuse; the state/effect mechanism behind it is shared
+// too, via `lib/useDisclosure.js`), carrying different content. Read that
+// hook for the mechanism's own long-form reasoning; this file only adds
+// what belongs on THIS page.
 //
 // /from-name computes no confidence tier -- OPSIN's parse either succeeds
 // or it does not -- so there is no rung ladder here, only four short
@@ -20,34 +21,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 // gutter to open a side panel into, so the drawer only ever opens downward,
 // the same as Home's own bottom mode once results share its row.
 export default function OpsinNote() {
-  const [open, setOpen] = useState(false)
-  // The bulb breathes until the note has been opened once, then goes
-  // steady for the rest of the session -- same rule as ConfidenceLegend's.
-  const [seen, setSeen] = useState(false)
-  const panelId = useId()
-  const rootRef = useRef(null)
-
-  // Escape closes it, and so does a click anywhere else -- bound only while
-  // OPEN, so the closed state costs no listeners.
-  useEffect(() => {
-    if (!open) return undefined
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') setOpen(false)
-    }
-    const onPointerDown = (event) => {
-      if (!rootRef.current?.contains(event.target)) setOpen(false)
-    }
-    document.addEventListener('keydown', onKeyDown)
-    document.addEventListener('pointerdown', onPointerDown)
-    return () => {
-      document.removeEventListener('keydown', onKeyDown)
-      document.removeEventListener('pointerdown', onPointerDown)
-    }
-  }, [open])
-
-  const classes = ['info']
-  if (open) classes.push('info--open')
-  if (!seen) classes.push('info--unseen')
+  const { open, panelId, rootRef, toggle, classes } = useDisclosure()
 
   return (
     <div className={classes.join(' ')} ref={rootRef}>
@@ -59,10 +33,7 @@ export default function OpsinNote() {
         className="info__notch"
         aria-expanded={open}
         aria-controls={panelId}
-        onClick={() => {
-          setOpen((was) => !was)
-          setSeen(true)
-        }}
+        onClick={toggle}
       >
         <span className="notch__wing notch__wing--left" aria-hidden="true" />
         <span className="notch__wing notch__wing--right" aria-hidden="true" />

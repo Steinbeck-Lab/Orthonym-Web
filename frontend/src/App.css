@@ -770,12 +770,11 @@
    on /from-name: dropping only the clamp leaves the dead white space exactly
    where it was.
 
-   A MODIFIER rather than a change to `.workspace`, because THREE routes render
-   that class -- /from-name (IupacToSmiles.jsx:94), /explain (Explain.jsx:271)
-   and /health (HealthCheck.jsx:97, whose own stylesheet documents the
-   dependency at HealthCheck.css:25-31). Editing the base rules silently
-   restyles two routes nobody asked about. If they are ever migrated, this
-   modifier becomes a no-op and should be deleted. */
+   A MODIFIER rather than a change to `.workspace`, because TWO routes render
+   that class -- /from-name (IupacToSmiles.jsx:125) and /explain
+   (Explain.jsx:271). Editing the base rules silently restyles the other
+   route nobody asked about. If it is ever migrated, this modifier becomes a
+   no-op and should be deleted. */
 .workspace--flow {
   flex: none;
   min-height: auto;
@@ -2998,8 +2997,8 @@ input.field__control {
    contract: it breaks the moment Home is lazy-loaded, and it made every one
    of these rules un-editable from the page that actually renders them.
 
-   dash-wait: the waiting mark's pulse. Consumed by Explain.css,
-   IupacToSmiles.css and HealthCheck.css as well as Home.
+   dash-wait: the waiting mark's pulse. Consumed by Explain.css and
+   About.css (`.status-board__pending-dash`) as well as Home.
    .tile__state-label / .tile__roundtrip*: rendered by
    components/ConfidenceReport.jsx, which /explain shows and Home does not.
    ================================================================== */

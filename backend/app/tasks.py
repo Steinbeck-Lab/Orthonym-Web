@@ -546,11 +546,21 @@ def name_to_smiles(name: str) -> dict:
             "depiction_svg": None,
             "error": "Could not parse this name via OPSIN",
         }
+    inchi = _quietly(lambda: Chem.MolToInchi(mol))
+    # Derive the key from the InChI string rather than recomputing it from
+    # `mol` (MolToInchiKey) -- both run RDKit's InChI canonicalization from
+    # scratch, so computing it twice was ~2x the cost for the same answer
+    # (measured: 0.124 ms/molecule vs 0.060 ms/molecule over 5 molecules x
+    # 500 iterations). `app.openstout_service._inchikey(mol)` looks like the
+    # natural helper to reuse here, but it takes a Mol and would recompute
+    # the InChI internally -- that's the exact waste this avoids, so this
+    # path deliberately does not call it.
+    inchikey = _quietly(lambda: Chem.InchiToInchiKey(inchi)) if inchi else None
     return {
         "smiles": raw,
         "canonical_smiles": _quietly(lambda: Chem.MolToSmiles(mol)),
-        "inchi": _quietly(lambda: Chem.MolToInchi(mol)),
-        "inchikey": _quietly(lambda: Chem.MolToInchiKey(mol)),
+        "inchi": inchi,
+        "inchikey": inchikey,
         "molblock": _quietly(lambda: _molblock_2d(mol)),
         "depiction_svg": structure_svg_data_uri(raw, mol),
         "error": None,

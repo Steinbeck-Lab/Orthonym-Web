@@ -19,11 +19,20 @@ const EXAMPLES = [
 
 function IupacToSmiles() {
   const [nameText, setNameText] = useState('')
-  const [phase, setPhase] = useState('idle') // 'idle' | 'converting' | 'done'
   const [rows, setRows] = useState([]) // Row[] from convertNames
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [fetchError, setFetchError] = useState(null)
   const [validationNote, setValidationNote] = useState(null)
+
+  // Derived, not its own state: convert() below always clears `rows` and
+  // sets `progress.total` to a non-zero count in the same batch before it
+  // starts, and calls setRows(settled) exactly once with a NON-EMPTY array
+  // when it finishes -- convertNames never returns an empty array once
+  // `names.length` is non-zero (nameBatch.js: every index gets a row,
+  // success or failure, and the function never rejects), so a batch where
+  // every name fails still lands on 'done', not stuck on 'converting'.
+  // 'idle' | 'converting' | 'done'
+  const phase = rows.length > 0 ? 'done' : progress.total > 0 ? 'converting' : 'idle'
 
   // The one conversion path, parameterised on the text to convert rather than
   // reading `nameText` off state -- an example chip calls this in the same
@@ -46,7 +55,6 @@ function IupacToSmiles() {
     )
 
     setFetchError(null)
-    setPhase('converting')
     setProgress({ done: 0, total: names.length })
     setRows([])
 
@@ -85,7 +93,6 @@ function IupacToSmiles() {
     })
     setRows(settled)
     setFetchError(transportError)
-    setPhase('done')
   }
 
   function handleSubmit(event) {

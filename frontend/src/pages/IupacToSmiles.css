@@ -351,7 +351,7 @@
 /* -------------------- waiting and failure marks -------------------- */
 
 /* The old indeterminate shimmer (`.from-name-patch__pending-cloth` /
-   `__pending-dash`, the same `dash-wait` mark Explain/Home/HealthCheck still
+   `__pending-dash`, the same `dash-wait` mark Explain/Home/About still
    use) is gone from this page: the 'converting' phase now renders
    `ConvertProgress`, a real determinate bar (`.from-name-progress*`, below),
    because this loop runs in the browser and genuinely knows how many names
@@ -585,18 +585,19 @@
 
 /* An InChIKey is always 27 characters (14-10-1, two hyphens) -- a known
    quantity, not a guess. It shares `.results-cell--smiles` with the SMILES
-   column (both wrap the same "code + copy button" markup), so the shared
-   18ch width and 10-line clamp built for an UNBOUNDED SMILES was wrapping a
-   fixed 27-char key onto two lines and leaving empty table width unused.
-   `:last-child` isolates it -- the InChIKey cell is structurally the last
-   `<td>` in each row, the SMILES cell is not -- so the SMILES column keeps
-   its own wrap/clamp exactly as it was. */
-.name-results .results-cell--smiles:last-child {
+   column (both wrap the same "code + copy button" markup) for that shared
+   treatment, plus its own `.results-cell--key` for what makes it different:
+   the shared 18ch width and 10-line clamp built for an UNBOUNDED SMILES was
+   wrapping a fixed 27-char key onto two lines and leaving empty table width
+   unused. Keying off `.results-cell--key` rather than `:last-child` means
+   this column's own class carries its own rule, not its position in the
+   row -- a column appended after it would not silently inherit this. */
+.name-results .results-cell--key {
   width: 30ch;
   white-space: nowrap;
 }
 
-.name-results .results-cell--smiles:last-child code {
+.name-results .results-cell--key code {
   display: inline;
   width: auto;
   max-width: none;
