@@ -110,6 +110,46 @@ export default function NameResultsTable({ rows }) {
                   )}
                 </td>
               </tr>
+              {/* The second, compact line: canonical SMILES and InChI, the two
+                  identifiers the backend returns that the top row has no room
+                  for. Only for a row that parsed AND has at least one of the
+                  two -- a failure has no identifiers, and an empty labelled
+                  line would be noise (requirement 5). Spans the row past the
+                  narrow InChIKey column so the InChI, one unbroken 60+
+                  character token, has room to wrap instead of forcing the
+                  page sideways. */}
+              {row.ok && (row.data.canonical_smiles || row.data.inchi) && (
+                <tr className="name-results__meta-row">
+                  <td className="name-results__meta-spacer" aria-hidden="true" />
+                  <td className="name-results__meta-cell" colSpan={4}>
+                    <span className="name-results__meta-item">
+                      <span className="idlist__label">Canonical</span>
+                      {row.data.canonical_smiles ? (
+                        <span className="idlist__value">
+                          <code>{row.data.canonical_smiles}</code>
+                          <CopyButton
+                            text={row.data.canonical_smiles}
+                            label="Copy canonical SMILES"
+                          />
+                        </span>
+                      ) : (
+                        <span className="results-cell__none">—</span>
+                      )}
+                    </span>
+                    <span className="name-results__meta-item name-results__meta-item--inchi">
+                      <span className="idlist__label">InChI</span>
+                      {row.data.inchi ? (
+                        <span className="idlist__value">
+                          <code>{row.data.inchi}</code>
+                          <CopyButton text={row.data.inchi} label="Copy InChI" />
+                        </span>
+                      ) : (
+                        <span className="results-cell__none">—</span>
+                      )}
+                    </span>
+                  </td>
+                </tr>
+              )}
             </tbody>
           ))}
         </table>
