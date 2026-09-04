@@ -2194,24 +2194,6 @@
   cursor: pointer;
 }
 
-/* -------------------- the framed text input -------------------- */
-/* The grey box marks WHERE YOU TYPE, and nothing else. It wraps the textarea
-   and its label; the switches and the Translate button stay on the white card
-   outside it, because a control inside the frame reads as part of the field.
-
-   Paste only. Upload and Draw already carry their own frames -- the drop zone
-   has its dashed seam, the Ketcher iframe has `.structure-editor` -- and
-   wrapping those again would be a frame inside a frame.
-
-   The treatment is the system's existing one for inner content: --card-soft
-   ground, --card-border keyline, --r-card-sm corners, and NO shadow, which is
-   what separates a frame from a card here (DESIGN.md: framed content inside a
-   card, never a card in a card).
-
-   flex: 1 + min-height: 0 because this is the part of the input card that
-   gives. The card is a flex column in a one-screen page; the tabs, switches
-   and action row are fixed, and the field takes what is left. */
-
 /* The count rides beside the button, in the mono caption voice every other
    piece of machine metadata on this page uses. */
 .workbench__count {
