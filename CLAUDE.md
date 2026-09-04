@@ -94,11 +94,12 @@ assuming the sibling repo exists on the build host (on this machine it does not;
 changes with `./scripts/vendor-openstout.sh`, then re-check `backend/vendor/openstout/README.md`
 for updated accuracy numbers before touching any copy that cites them (see below).
 
-**Refreshing: clone fresh, and check the version before you vendor anything.** Verified 2026-09-02:
-the snapshot is already byte-identical to upstream `main` at `52f7afe` (2026-08-31) — 253 files,
-same tree digest, same README, pyproject, NOTICE, LICENSE and both jars (`opsin-cli-2.9.0`,
-`centres-cli-1.5`) — and the installed copies in `backend/.venv-mac` and inside the running
-`stitch-worker-*` containers match it too. **The local checkout on this machine is a trap**: it lives
+**Refreshing: clone fresh, and check the version before you vendor anything.** Refreshed 2026-09-03 (commit `170174b`):
+the snapshot now tracks upstream `main` at `404b69e` (2026-09-02) — 265 files, 254 of them `.py`,
+still version `1.0.0`, same two jars (`opsin-cli-2.9.0`, `centres-cli-1.5`), and a README whose
+Accuracy section moved from 94.8% to 96.1%. `backend/.venv-mac` carries the refreshed copy (254
+`.py` files); the running `stitch-worker-*` containers were NOT reconfirmed after the refresh —
+rebuild and recreate them before trusting a manual test. **The local checkout on this machine is a trap**: it lives
 at `/Volumes/Data_Drive/My_Projects/2026/OpenSTOUT/Project` (not `~/OpenSTOUT/Project`, which does not
 exist), sits on `main` at 2026-05-19, carries uncommitted work, and reports `__version__ = "0.1.0"` —
 vendoring from it would **downgrade** the engine from 1.0.0. `gh` is authenticated with `repo` scope,
@@ -230,7 +231,7 @@ Two consequences that bite immediately:
 job meta/chunks/rows (`JOB_RESULT_TTL_SECONDS`, 24 h), the shared name cache
 (`NAME_CACHE_TTL_SECONDS`, 7 days) and the per-IP rate-limit counters. **The name cache now
 invalidates itself on a vendor refresh** — `name_cache._engine_fingerprint()` hashes the OpenSTOUT
-source actually installed in the process (40 ms over 253 files, paid once at import) into the key,
+source actually installed in the process (40 ms over 254 files, paid once at import) into the key,
 because upstream develops on a static version `1.0.0` and `_ENGINE_VERSION` therefore cannot
 notice a refresh. `_KEY_VERSION` survives as a manual belt for the fallback case (a zipimport or
 stripped image where the source cannot be read); bumping it by hand is no longer the only thing
@@ -282,9 +283,10 @@ version-fragile). **That check now runs in the Celery worker, not the web proces
 longer imports `opsin_decompose`, and `celery_app.py` calls `self_check()` when each forked child
 starts its JVM. A web process on its own never runs it.
 
-**Frontend routes share components deliberately, not by accident.** There are five routes, not
-seven: `/structure` and `/teach` are `<Navigate>` redirects to `/explain?input=draw`, because both
-were the same capability reached a different way. `/explain` now carries the input choice itself —
+**Frontend routes share components deliberately, not by accident.** There are **seven** routes:
+`/` (Home), `/from-name`, `/explain`, `/health`, `/about`, plus `/structure` and `/teach`, which are
+`<Navigate>` redirects to `/explain?input=draw`, because both were the same capability reached a
+different way. `/explain` now carries the input choice itself —
 **IUPAC name | SMILES | Draw** tabs in the input card — plus a **Learn/Expert** switch in the
 output card, Expert by default (PRODUCT.md principle 1: a proof you must hunt for a switch to see
 is not offered). Learn drops the SMILES tab entirely rather than mislabel it, per the teach-mode
@@ -318,6 +320,54 @@ gained a second embed of the same editor). `sanitizeSvg`'s
 DOMPurify config now lives in exactly one place, because two copies of a sanitiser config is exactly
 the kind of thing that drifts silently into an XSS hole.
 
+**`/from-name` is the reverse direction, IUPAC name → structure, and it draws no confidence tier by
+design.** `GET /api/iupac-to-smiles` returns seven fields (`smiles`, `canonical_smiles`, `inchi`,
+`inchikey`, `molblock`, `depiction_svg`, `error`); the four identifier fields — `inchi`, `inchikey`,
+`molblock`, `depiction_svg` — are independently optional because RDKit's InChI writer and 2D
+coordinate generation are not total, and a molecule that loses one identifier still returns the
+others rather than becoming an error row. `smiles` is OPSIN's own output, kept verbatim;
+`canonical_smiles` is RDKit's canonical form of the same molecule; the two are deliberately both
+present so a caller can compare them. `MAX_NAMES = 25` (`lib/nameBatch.js`) is derived from
+`RATE_LIMIT_FAST_PER_MINUTE = 60`, not chosen — each name is one `GET /api/iupac-to-smiles`, which
+calls `check_fast_allowed(ip)` against that same shared budget, so raising one without the other
+breaks the page. `convertNames` resolves rows in **input order**, never rejects, and turns a failure
+into a row rather than a thrown error, because a partial answer to 25 names beats no answer.
+
+A few things about this page that are easy to get wrong:
+- **It computes no confidence tier and no round-trip verdict, on purpose** — OPSIN either parses a
+  name or it doesn't, and borrowing Home's PIN/fallback/best-effort grammar here would claim a check
+  that never ran. `NameResultsTable.jsx` uses `.results-group` **bare**, with no tier modifier, which
+  resolves `--tier-accent` to `--muted`.
+- **The failure contract is two-branched, and always has been.** `fetchStructureFromName` rejects
+  only on a non-2xx status: an OPSIN refusal comes back as a 2xx body with `error` set and shows in
+  the result row, while a transport failure (the backend is down) throws and should raise the "is
+  the backend running?" notice. `convertNames` flattens both into `ok:false` rows, so the page
+  captures the transport case itself, in its own `fetchOne` wrapper, before that flattening happens.
+- **CSV quoting is load-bearing**: IUPAC names and InChIs contain commas as a matter of course, and
+  an unquoted writer shifts every column after the first comma.
+- **`.copy-btn`, `.processing*`, `.results-table*` and `.field--framed` now live in `App.css`, not
+  `Home.css`**, because two routes use them. The `ProcessingBar` block carries its own
+  `@keyframes processing-sweep` and its own reduced-motion block; `.btn__spin` stayed behind in
+  `Home.css` because it belongs only to Home's submit button.
+- **`.workspace--flow` gives `/from-name` Home's normal-scroll shell.** `align-items: start` inside
+  it is load-bearing and NOT redundant with dropping the clamp: `.workspace` declares no
+  `align-items` at all, so the grid default `stretch` survives on its own and the dead white space
+  stays. It is a modifier rather than a change to `.workspace` itself because **three** routes render
+  that class — `/from-name`, `/explain` and `/health`. `.page` has not clamped since the
+  normal-scroll pass (`min-height: 100dvh; overflow-x: clip`); do not "restore" a clamp there.
+- **`--ink-soft` does not exist.** The secondary/label token is `--muted`; `--muted-soft` is
+  restricted by its own comment to text on `--canvas` and drops below AA on a card.
+- **`Icon` returns `null` for an unknown name, silently** (`components/Icon.jsx`). An unregistered
+  icon renders an invisible button with no console error. `download` is now registered — this page's
+  SDF and CSV download buttons depend on it.
+- **`.results-row` has no CSS rule anywhere.** The table's separators, accent colour and hover all
+  hang off `.results-group`, which `NameResultsTable.jsx` renders as one `<tbody>` **per molecule**,
+  not one for the whole table.
+- **`App.css` owns two rules keyed to this page's existing class names**:
+  `.from-name-results .from-name-patch` (which stops the result reading as a card inside a card) and
+  the shared framed-picture rule for `.from-name-patch__depiction`. Renaming either class, or moving
+  the patch out of `.from-name-results`, silently regresses both.
+
 **Read `DESIGN.md` before any visual change.** It's not aspirational — it documents the shipped
 system as of 2026-08-26, a **TechX-style card bento** (dribbble shot 23855252, user-pinned "like
 this") wearing **ChemAudit chrome**. The body is a **soft cool-grey ground** (`--ground: #d5d8dc`,
@@ -341,7 +391,11 @@ rendered chemical name stays 400 — IUPAC weight and case are semantic.
 **Buttons are all crimson and all glossy as of 2026-09-02**, by three owner instructions, which
 supersedes the one-crimson-action rule *for buttons*: secondary = pale frosted crimson pill,
 primary = filled crimson glass, `/explain` = filled dark-orange glass (`--accent-amber: #9c4109`,
-the system's only second accent, dressing one button and nothing else). The gloss is **one
+which since 2026-09-03 also tints the best-effort rung of the side-mode confidence key). It is no
+longer the system's only second accent: `--olive: #556b2f` (`index.css`, 5.95:1 on white, owner
+instruction 2026-09-03) carries the PIN/round-trip verdict line under a result name, the verified
+rungs of that key, and the verified rows of the results table. Neither colour touches the
+monochrome confidence rule itself. The gloss is **one
 mechanism** on `.btn` with two per-variant dials (`--gloss`, `--sheen`); icons come from
 **lucide-react** via `components/Icon.jsx`. **Every fill is a measured contrast decision and has to
 clear AA twice** — at the fill, and again with the `::before` highlight over the label's cap
@@ -362,7 +416,11 @@ abstain, two struck rules = error), at a constant `min(100%, 30ch)` — a measur
 **mark** (drawn as an `::after`) and never to the name, which takes the full width of its card.
 The **key** to that vocabulary is no longer a band above the footer: it is a **fourth notch island**
 (`.info`, `components/ConfidenceLegend.jsx`) carved out of the BOTTOM of Home's input card with the
-same concave fillets the header uses, right-hand side, with a crimson **bulb** that breathes until
+same concave fillets the header uses, right-hand side — but only once there are results. On the
+empty landing state (`openToSide={!hasResults && !job}`) `ConfidenceLegend` wears `.info--side`, an
+absolutely positioned vertical tab on the card's RIGHT edge (`top: 142px; right: -92px`, fixed
+magic numbers still being tuned) that turns 180° on its centre pivot and docks to the drawer, with
+`.workbench--info-aside` sliding the input card left to make room, with a crimson **bulb** that breathes until
 the key has been opened once and then goes steady ink. Clicking it **flips the tab 180°** so it lets go of the card and rides on the
 panel's top edge instead — the rotation moves the rounded corners and flips both concave fillets
 for free, which is exactly the geometry that went wrong when it was hand-mirrored. `--info-ms`
@@ -376,15 +434,20 @@ Two structural facts still
 hold: every interactive page puts its input beside its own output (`.workspace`), and each page's
 "how this works" copy lives on the About page.
 
-**The one-screen shell only works because every cell clips.** `.page` is `100dvh; overflow: hidden`
-and `.workbench` is the flexed row that gives — but with `overflow: visible` on its cells, content
-taller than the row painted straight through the key band (121px) and the footer (71px), and a
-batch table sharing the grid crushed the input card to 34px. `.workbench > * { min-height: 0;
-overflow-y: auto }` is the fix: clipping is what makes a cell a scroll container, which is also
-what lets an auto grid row shrink. Two related facts: `.batch` sits in the output column rather
+**Home scrolls normally now; the one-screen clamp survives only on `.workspace`.** `.page` is
+`min-height: 100dvh; overflow-x: clip` (clip, not hidden, so `overflow-y` stays `visible` and the
+DOCUMENT scrolls rather than an inner box), and `.workbench` is `align-content: start;
+align-items: start` with no `flex: 1` and no clamp, so each column is as tall as its own content —
+the hard clamp forced every cell to scroll inside itself, which is the inner card scrollbar the
+owner rejected. `.workbench > *` keeps only `min-height: 0`. `.workspace` is still the one-screen
+clamp (`flex: 1; min-height: 0` on the grid, `overflow-y: auto` on every cell) because /explain and
+/health still wear it; /from-name opts out with `.workspace--flow` (`flex: none; min-height: auto;
+align-content: start; align-items: start`, cells `overflow-y: visible`). Where a cell still clips,
+that clipping is what makes it a scroll container, which is also what lets an auto grid row shrink. Two related facts: `.batch` sits in the output column rather
 than spanning both, and `.tile__depiction` has **no `aspect-ratio`** (a 4:3 box at card width was
-650px tall and pushed the name out of view) — it takes the height the card has left, with a 180px
-floor. Verify a layout change by MEASURING overlap in a browser, in the state that has results:
+650px tall and pushed the name out of view) — it now takes a definite `height: clamp(140px, 20vh,
+200px)`, because two drawings sit side by side in a `.tile__depictions` row and the owner asked the
+panel to hug the drawing rather than frame it in air. Verify a layout change by MEASURING overlap in a browser, in the state that has results:
 the one-screen commit checked only the empty state and shipped both collisions.
 
 The world **began** pinned by the user to the "Bugatti design analysis" template
@@ -410,8 +473,12 @@ against the current design system before trusting one as "what it looks like now
 shown on **About** (Home's accuracy band was removed on the owner's instruction on 2026-09-02;
 Home now links to About for it, and About states the version, the benchmark and the metric's own
 definition, which is what PRODUCT.md principle 2 requires) — **94.8% round-trip exact match**, **0 wrong structures emitted**, over a
-**1,500-molecule** ChEBI+PubChem set — are OpenSTOUT **v1.0.0**'s published numbers
-(`backend/vendor/openstout/README.md` § Accuracy, which matches upstream). v1.0.0 publishes no per-corpus breakdown, so the
+**1,500-molecule** ChEBI+PubChem set — are OpenSTOUT **v1.0.0**'s RELEASE numbers. **The vendored README no longer agrees with them**: the
+snapshot was refreshed to upstream `404b69e` on 2026-09-03 (commit `170174b`) and
+`backend/vendor/openstout/README.md` § Accuracy now reads **96.1%** round-trip on the same
+1,500-molecule ChEBI+PubChem set, with the same **0** wrong structures. About deliberately keeps
+94.8% by owner instruction, so the two differ ON PURPOSE — do not raise the site's figure without
+asking the owner. v1.0.0 publishes no per-corpus breakdown, so the
 site shows none; the earlier four-figure v21.0 split (~30.4% / 29.6% / 16.9% / 92.2%, 7,500
 compounds) is **superseded and must not be restored**.
 When OpenSTOUT ships a new milestone, verify the vendored snapshot and the frontend copy in
