@@ -6,6 +6,7 @@ import { rowsToSdf, downloadText } from '../lib/molExport'
 import './IupacToSmiles.css'
 import Icon from '../components/Icon'
 import CopyButton from '../components/CopyButton'
+import NameResultsTable from '../components/NameResultsTable'
 
 // Curated names verified live against the real /api/iupac-to-smiles
 // endpoint (OPSIN-backed) before shipping -- simple, well-known IUPAC
@@ -195,7 +196,7 @@ function IupacToSmiles() {
             {phase === 'idle' && <IdleNote />}
             {phase === 'converting' && <ConvertProgress done={progress.done} total={progress.total} />}
             {phase === 'done' && rows.length === 1 && <SingleResult row={rows[0]} />}
-            {/* TASK 7 SEAM: {phase === 'done' && rows.length > 1 && <NameResultsTable rows={rows} />} */}
+            {phase === 'done' && rows.length > 1 && <NameResultsTable rows={rows} />}
           </div>
         </section>
       </main>
