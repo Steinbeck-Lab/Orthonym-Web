@@ -16,9 +16,11 @@
    corners that used to sit on the patches were already dead under those two
    rules, and are gone rather than left to look meaningful.
 
-   No state is ever signalled by colour: waiting is three shimmering
-   hairlines, failure is the paired struck rules Translate uses. Crimson is
-   chrome (the one primary button) and touches nothing here.
+   No state is ever signalled by colour: converting is a determinate progress
+   bar (the loop runs in the browser and genuinely knows how many of the
+   pasted names are done, unlike Home's indeterminate stripe), failure is the
+   paired struck rules Translate uses. Crimson is chrome (the one primary
+   button, and the progress fill) and touches nothing else here.
    ============================================================ */
 
 /* -------------------- input card -------------------- */
@@ -52,16 +54,28 @@
   color: var(--ink);
 }
 
-/* The card's foot. `margin-top: auto` pins it to the bottom of the card when
-   the results cell beside it is the taller of the two, so the two cards read
-   as one row rather than one full box and one half-empty one. The hairline
-   is an INTERNAL divider inside a card, which is the only seam this system
-   still allows. */
+/* `.field--framed` alone gives a content-height box here. Home's tall paste
+   box comes from `.workbench__input .field:first-of-type` (Home.css:468),
+   which is scoped to Home and inert on this page, and the modifier's own
+   `flex: 1` needs a height-constrained flex parent that this card is not. So
+   the height is stated outright. Same clamp as Home's, so the two pages'
+   input boxes read as the same control. */
+.from-name-panel .field--framed {
+  height: clamp(180px, 32vh, 320px);
+  min-height: 120px;
+}
+
+/* The card's foot. `.workspace--flow` un-stretches the cell (`align-items:
+   start`), so this card is only ever its own content height and `margin-top:
+   auto` has nothing to push against -- it no longer pins to a taller sibling,
+   it is simply a no-op. Explicit spacing instead. The hairline is an
+   INTERNAL divider inside a card, which is the only seam this system still
+   allows. */
 .from-name-panel__foot {
   display: flex;
   flex-direction: column;
   gap: var(--s-xs);
-  margin-top: auto;
+  margin-top: var(--s-xl);
   padding-top: var(--s-lg);
   border-top: 1px solid var(--hairline);
 }
@@ -77,14 +91,13 @@
   gap: var(--s-lg);
 }
 
-/* The live region is the flex track the result grows in. `flex: 1` +
-   `min-height: 0` is what lets the depiction below take the height the card
-   has left instead of setting the card's height itself. */
+/* Under `.workspace--flow` the card is only ever its own content height, so
+   there is no longer a taller cell for this region to grow into -- `flex: 1`
+   was a no-op once the stretch that gave it a track to fill was removed.
+   `.from-name-patch__depiction` now caps its own height instead (below). */
 .from-name-results__live {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
 }
 
 /* Flat content inside the results card. The fill, border and radius that
@@ -96,18 +109,19 @@
   min-height: 0;
 }
 
-/* Nothing entered yet. Centred in the cell so it does not strand at the top
-   of an output card stretched to the taller input column. */
+/* Nothing entered yet. `.workspace--flow` un-stretches the cell, so there is
+   no taller sibling column to centre against any more -- `margin-block: auto`
+   had nothing left to centre within. Explicit padding instead, so the note
+   still reads as settled rather than jammed against the card edge. */
 .from-name-patch--idle {
-  margin-block: auto;
+  padding-block: var(--s-lg);
 }
 
-/* The parsed state is the one that has to fill the cell — everything else is
-   a line or two of type. */
-.from-name-patch--success {
-  flex: 1;
-  min-height: 0;
-}
+/* Was `flex: 1; min-height: 0`, to grow into a cell stretched to the taller
+   input column. `.workspace--flow` removes that stretch, so this card is only
+   ever its own content height and both declarations were dead weight -- the
+   class stays on the element in IupacToSmiles.jsx as a state hook, unstyled
+   by this rule now that there is nothing left for it to do. */
 
 .from-name-patch__empty-note {
   max-width: 46ch;
@@ -132,109 +146,45 @@
   color: var(--ink);
 }
 
-.from-name-patch__body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-md);
-  flex: 1;
-  min-height: 0;
-}
+/* `.from-name-patch__body`, `.from-name-patch__field`, `.from-name-patch__field-label`
+   and `.from-name-patch__smiles` are gone: the single-SMILES layout they
+   dressed was replaced by `.idlist` below, and nothing in the rewritten
+   IupacToSmiles.jsx renders these classes any more. Left in place they would
+   be exactly the kind of declaration that silently does nothing. */
 
-.from-name-patch__field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-xs);
-  flex: none;
-}
-
-.from-name-patch__field-label {
-  font-family: var(--font-mono);
-  font-size: var(--t-caption);
-  line-height: 1.4;
-  letter-spacing: var(--track-caption);
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-/* A parsed SMILES string is machine data: mono, real case, no tracking,
-   and set at reading size because it is the answer, not a label. */
-.from-name-patch__smiles {
-  font-family: var(--font-mono);
-  font-size: var(--t-body-sm);
-  line-height: 1.6;
-  letter-spacing: 0;
-  color: var(--ink);
-  overflow-wrap: anywhere;
-}
-
-/* NO aspect-ratio, and this is load-bearing rather than tidying: a 4:3 box
-   at the full width of this card measured 650px tall, which pushed the
-   result out of view and broke the page's zero-overflow budget. The frame
-   takes the height the card has left and the drawing scales inside it.
-   `flex: 1` — basis 0%, exactly as Home.css's `.tile__depiction` does it. An
-   earlier pass here wrote `flex: 1 1 240px`, reasoning that the basis would
-   ask the row for a picture worth looking at; what it actually does is
-   contribute 240px to the auto grid row's max-content height instead of the
-   180px floor, which is 60px of growth on a route DESIGN.md records at zero
-   overflow, for no visible gain once the card is taller than 240px anyway.
-   180px is the floor Home's tiles use — below it the drawing stops being
-   legible.
+/* The two numbers ARE the fix. This card previously let the drawing take the
+   whole cell -- measured ~700px tall at 1600x1000, with nothing beside it --
+   via a `flex: 1` chain that `align-items: start` has now made inert anyway.
+   Explicitly NO `aspect-ratio`: CLAUDE.md records that a 4:3 box at card width
+   measured 650px and pushed the content out of view, which is the same
+   failure. A floor so a small molecule still reads, a cap so a large one
+   cannot regrow. The `object-fit: contain` on the image is load-bearing
+   against CIP-labelled CDK output, which is wider than RDKit's.
    The fill, border and radius come from App.css's framed-depiction rule and
-   are deliberately not repeated here.
-   The CDK depiction carries CIP stereo labels ((R)/(S), (E)/(Z)) and can be
-   taller than the old RDKit picture; `object-fit: contain` is what absorbs
-   that, which is exactly why no ratio may be pinned. */
+   are deliberately not repeated here. */
 .from-name-patch__depiction {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  flex: 1;
   min-height: 180px;
+  max-height: 340px;
+  display: grid;
+  place-items: center;
   padding: var(--s-md);
 }
 
 .from-name-patch__depiction img {
   width: 100%;
   height: 100%;
+  max-height: 320px;
   object-fit: contain;
 }
 
 /* -------------------- waiting and failure marks -------------------- */
 
-.from-name-patch__pending-cloth {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-xs);
-}
-
-.from-name-patch__pending-dash {
-  display: block;
-  height: 1px;
-  background: var(--hairline-strong);
-  animation: dash-wait 1.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
-}
-
-.from-name-patch__pending-dash:nth-child(1) {
-  width: 70%;
-}
-
-.from-name-patch__pending-dash:nth-child(2) {
-  width: 45%;
-  animation-delay: 160ms;
-}
-
-.from-name-patch__pending-dash:nth-child(3) {
-  width: 58%;
-  animation-delay: 320ms;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .from-name-patch__pending-dash {
-    animation: none;
-    opacity: 0.7;
-  }
-}
+/* The old indeterminate shimmer (`.from-name-patch__pending-cloth` /
+   `__pending-dash`, the same `dash-wait` mark Explain/Home/HealthCheck still
+   use) is gone from this page: the 'converting' phase now renders
+   `ConvertProgress`, a real determinate bar (`.from-name-progress*`, below),
+   because this loop runs in the browser and genuinely knows how many names
+   are done. Nothing renders the old classes any more. */
 
 /* The struck slot: the same two-close-lines mark a failed result cell
    uses on Translate, so failure reads identically across the site. */
@@ -257,4 +207,103 @@
 
 .from-name-patch__snip--b {
   top: 17px;
+}
+
+/* -------------------- identifier list, progress bar, downloads -------------------- */
+/* Every value is data, so JetBrains Mono, and every value wraps -- an InChI
+   is one unbroken 60+ character token that would otherwise force the page
+   sideways. */
+
+.idlist {
+  display: grid;
+  gap: var(--s-sm);
+  margin: var(--s-lg) 0 0;
+}
+
+.idlist__row {
+  display: grid;
+  gap: 2px;
+  padding-block: var(--s-sm);
+  /* `--hairline` is a colour token, not a border shorthand -- every other
+     hairline rule in this system pairs it with `1px solid` (index.css:395,
+     this file's own `.from-name-panel__foot`/`.from-name-patch__top`). Without
+     it there is no border-style, which defaults to `none`, and the divider
+     between identifier rows renders invisible. */
+  border-top: 1px solid var(--hairline);
+}
+
+.idlist__label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.idlist__value {
+  margin: 0;
+  display: flex;
+  align-items: start;
+  gap: var(--s-sm);
+}
+
+.idlist__value code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  /* An InChI is one unbroken token 60+ characters long. Without this it forces
+     the grid column wider than the card and the page scrolls sideways. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
+}
+
+.idlist__none {
+  color: var(--muted);
+}
+
+.from-name-panel__count,
+.from-name-progress__head {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.from-name-progress {
+  display: grid;
+  gap: var(--s-sm);
+}
+
+.from-name-progress__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.from-name-progress__track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--card-soft);
+  overflow: hidden;
+}
+
+.from-name-progress__fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+  transition: width 220ms ease-out;
+}
+
+.from-name-patch__downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-sm);
+  margin-top: var(--s-lg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .from-name-progress__fill {
+    transition: none;
+  }
 }
