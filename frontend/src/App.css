@@ -746,8 +746,9 @@
      `min-height: 0` alone is not enough. A grid item's automatic minimum size
      is its content, so without it the cell refuses to shrink; and an auto grid
      row sizes to its cells' content unless a cell is a scroll container, which
-     is what `overflow-y: auto` makes it. Home's `.workbench > *` has carried
-     both since the one-screen pass; `.workspace` had neither, and MEASURED on
+     is what `overflow-y: auto` makes it. Home's `.workbench > *` carried both
+     from the one-screen pass until its 2026-09-03 overhaul dropped the clamp;
+     `.workspace` had neither, and MEASURED on
      /from-name showing a result at 1440x900 the row went to 789px inside a
      763px content box -- 149px of the page pushed below the fold, on a route
      DESIGN.md records at zero overflow. CLAUDE.md states the rule outright:
@@ -2168,7 +2169,7 @@ input.field__control {
 }
 
 /* -------------------- results table (3+ molecules) -------------------- */
-/* The 3-or-more inline view, full width below the input box: a scannable table
+/* The 3-or-more inline view, hugged and centred below the input box: a scannable table
    drawn as # | SMILES | input structure | IUPAC name | retranslated structure,
    with the confidence verdict on its own tinted row beneath the name and the
    retranslated structure. Each molecule is one <tbody> of two rows, tinted by
@@ -2385,8 +2386,11 @@ input.field__control {
    card, never a card in a card).
 
    flex: 1 + min-height: 0 because this is the part of the input card that
-   gives. The card is a flex column in a one-screen page; the tabs, switches
-   and action row are fixed, and the field takes what is left. */
+   gives. The card is a flex column, so on a route that leaves the field room it
+   takes what the tabs, switches and action row do not. Home is no longer
+   such a route: `.workbench__input .field:first-of-type` (Home.css) pins the
+   slot to `flex: 0 0 auto; height: clamp(180px, 32vh, 320px)` so switching
+   tabs cannot resize the card, and the page scrolls normally. */
 .field--framed {
   flex: 1;
   min-height: 0;

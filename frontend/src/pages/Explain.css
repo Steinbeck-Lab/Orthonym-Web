@@ -362,8 +362,9 @@
    one of the routes DESIGN.md records at zero scroll overflow, and the
    depiction is drawn by CDK since 2026-09-02 with CIP stereo labels round
    the edges, so its natural proportions are not the ones this ratio assumed.
-   `flex: 1` with a 180px floor is Home's proven pattern: take the height the
-   card has left, never demand more. */
+   `flex: 1` with a 180px floor is the pattern the result tiles proved before
+   Home traded it for a definite `height: clamp(140px, 20vh, 200px)` on its
+   side-by-side pair: take the height the card has left, never demand more. */
 .explain-result__diagram {
   display: flex;
   align-items: center;
