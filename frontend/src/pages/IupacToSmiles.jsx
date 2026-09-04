@@ -263,33 +263,44 @@ function SingleResult({ row }) {
       <div className="from-name-patch__top">
         <span className="from-name-patch__state-label">Parsed successfully</span>
       </div>
-      {d.depiction_svg && (
-        <div className="from-name-patch__depiction">
-          <img src={d.depiction_svg} alt={`2D structure depiction for "${row.name}"`} />
+      {/* Two columns: the picture and the strings it stands for. They are two
+          different kinds of content and reading one does not mean reading the
+          other, so they sit side by side rather than stacked -- which also stops
+          the depiction band eating a full card-width row of empty grey. */}
+      <div className="from-name-split">
+        <div className="from-name-split__figure">
+          {d.depiction_svg && (
+            <div className="from-name-patch__depiction">
+              <img src={d.depiction_svg} alt={`2D structure depiction for "${row.name}"`} />
+            </div>
+          )}
         </div>
-      )}
-      <dl className="idlist">
-        <IdRow label="SMILES (OPSIN)" value={d.smiles} />
-        <IdRow label="SMILES (canonical)" value={d.canonical_smiles} />
-        <IdRow label="InChI" value={d.inchi} />
-        <IdRow label="InChIKey" value={d.inchikey} />
-      </dl>
-      <div className="from-name-patch__downloads">
-        <button
-          type="button"
-          className="btn"
-          disabled={!d.molblock}
-          onClick={() =>
-            downloadText(
-              `${sdfFilename(row.name)}.sdf`,
-              rowsToSdf([row]).text,
-              'chemical/x-mdl-sdfile'
-            )
-          }
-        >
-          <Icon name="download" />
-          Download SDF
-        </button>
+
+        <div className="from-name-split__data">
+          <dl className="idlist">
+            <IdRow label="SMILES (OPSIN)" value={d.smiles} />
+            <IdRow label="SMILES (canonical)" value={d.canonical_smiles} />
+            <IdRow label="InChI" value={d.inchi} />
+            <IdRow label="InChIKey" value={d.inchikey} />
+          </dl>
+          <div className="from-name-patch__downloads">
+            <button
+              type="button"
+              className="btn"
+              disabled={!d.molblock}
+              onClick={() =>
+                downloadText(
+                  `${sdfFilename(row.name)}.sdf`,
+                  rowsToSdf([row]).text,
+                  'chemical/x-mdl-sdfile'
+                )
+              }
+            >
+              <Icon name="download" />
+              Download SDF
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )

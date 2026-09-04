@@ -177,6 +177,34 @@
   object-fit: contain;
 }
 
+/* Structure left, identifiers right (owner instruction 2026-09-04). One column
+   until 1000px -- the same breakpoint `.workspace` uses -- because an InChI is
+   one unbroken 60+ character token and half a narrow viewport is not enough to
+   read it in. */
+.from-name-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-lg);
+  align-items: start;
+}
+
+@media (min-width: 1000px) {
+  .from-name-split {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  }
+}
+
+.from-name-split__figure,
+.from-name-split__data {
+  min-width: 0;
+}
+
+/* The first identifier row's top rule would otherwise draw a hairline directly
+   under the column's top edge, level with nothing on the left. */
+.from-name-split__data .idlist {
+  margin-top: 0;
+}
+
 /* -------------------- waiting and failure marks -------------------- */
 
 /* The old indeterminate shimmer (`.from-name-patch__pending-cloth` /
