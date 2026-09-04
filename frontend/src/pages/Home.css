@@ -512,7 +512,18 @@
    same tab-on-a-card's-edge chrome for OpsinNote. What stays here is Home's
    own CONTENT inside that drawer: the five-rung confidence ladder, and the
    side-mode positioning of its rungs (`.info--side .rung*`) -- `/from-name`
-   computes no confidence, so it has no ladder to draw. */
+   computes no confidence, so it has no ladder to draw.
+
+   Every rule below that touches `.info--side` or `.info--open` is scoped
+   under `.input-col` -- the wrapper Home alone renders around its
+   ConfidenceLegend (Home.jsx). `.info__panel` is shared markup (OpsinNote.jsx
+   wears the exact same class on /from-name), so without that ancestor the
+   tier-coloured wash a few rules down would leak onto a page that computes no
+   confidence at all the moment /from-name's drawer ever opens in side mode.
+   The `.rung*`-only rules are technically already safe on content alone --
+   OpsinNote renders no `.rung` -- but every rule in the group is scoped
+   anyway so the split reads as one consistent boundary, not one special
+   case among seventeen unscoped ones. */
 
 
 /* THE SIDE BAR IS FIVE BOXES, divided vertically (owner instruction
@@ -523,7 +534,7 @@
    monochrome because that mark is the exact grammar the result tiles speak, and
    crimson never touches a tier. The bottom drawer's wide horizontal ladder and
    its running thread do not belong in a narrow right-hand bar, so both go. */
-.info--side .info__panel {
+.input-col .info--side .info__panel {
   padding: 0;
   overflow: hidden;
   /* A faint olive-to-white wash down the panel: the bar reads "verified at the
@@ -535,18 +546,18 @@
   );
 }
 
-.info--side .info__rungs {
+.input-col .info--side .info__rungs {
   display: flex;
   flex-direction: column;
   padding: 0;
 }
 
-.info--side .info__rungs::before,
-.info--side .rung::before {
+.input-col .info--side .info__rungs::before,
+.input-col .info--side .rung::before {
   display: none;
 }
 
-.info--side .rung {
+.input-col .info--side .rung {
   --tier-accent: var(--muted);
   grid-template-columns: auto 1fr;
   grid-template-areas:
@@ -562,36 +573,36 @@
   transition: background-color 240ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.info--side .rung:first-child {
+.input-col .info--side .rung:first-child {
   border-top: 0;
 }
 
 /* Verified tiers wear olive; the unverified one wears amber; the last two stay
    neutral -- the palette's two real accents, put to a meaning. */
-.info--side .rung--pin,
-.info--side .rung--fallback {
+.input-col .info--side .rung--pin,
+.input-col .info--side .rung--fallback {
   --tier-accent: var(--olive);
 }
 
-.info--side .rung--best-effort {
+.input-col .info--side .rung--best-effort {
   --tier-accent: var(--accent-amber);
 }
 
 /* The ordinal carries the tier colour, big and confident. */
-.info--side .rung__ordinal {
+.input-col .info--side .rung__ordinal {
   color: var(--tier-accent);
   font-weight: 700;
   opacity: 1;
 }
 
-.info--side .rung__name {
+.input-col .info--side .rung__name {
   color: var(--ink);
 }
 
 /* A short accent underline beneath the label, in the tier colour -- the one bit
    of colour that says which family this tier belongs to without touching the
    monochrome specimen. */
-.info--side .rung__name::after {
+.input-col .info--side .rung__name::after {
   content: '';
   display: block;
   width: 2.2ch;
@@ -601,12 +612,12 @@
   background: var(--tier-accent);
 }
 
-.info--side .rung__specimen {
+.input-col .info--side .rung__specimen {
   width: 100%;
 }
 
 /* Hover lifts a whisper of the tier colour into the box. */
-.info--side .rung:hover {
+.input-col .info--side .rung:hover {
   background: color-mix(in srgb, var(--tier-accent) 7%, transparent);
 }
 
@@ -842,7 +853,7 @@
   opacity: 0;
 }
 
-.info--open .rung {
+.input-col .info--open .rung {
   animation: rung-in 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
   /* 60ms apart, up from 45: at five rungs the whole ladder used to assemble
      inside 180ms, which is quick enough that it read as one movement rather
@@ -867,16 +878,16 @@
    the name is already legible when its rule appears under it. 1200 is
    comfortably longer than any stroke here, so one dash covers the whole line
    before it retracts. */
-.info--open .rung__stroke {
+.input-col .info--open .rung__stroke {
   animation: rung-draw 660ms cubic-bezier(0.16, 1, 0.3, 1) both;
   animation-delay: calc(var(--i) * 60ms + 120ms);
 }
 
-.info--open .rung__stroke:nth-child(2) {
+.input-col .info--open .rung__stroke:nth-child(2) {
   animation-delay: calc(var(--i) * 60ms + 190ms);
 }
 
-.info--open .rung__stroke:nth-child(3) {
+.input-col .info--open .rung__stroke:nth-child(3) {
   animation-delay: calc(var(--i) * 60ms + 260ms);
 }
 
@@ -911,8 +922,8 @@
     opacity: 1;
   }
 
-  .info--open .rung,
-  .info--open .rung__stroke,
+  .input-col .info--open .rung,
+  .input-col .info--open .rung__stroke,
   .rung:hover .rung__stroke,
   .rung:focus-within .rung__stroke {
     animation: none;
