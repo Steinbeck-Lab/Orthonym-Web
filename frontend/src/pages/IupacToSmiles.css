@@ -307,3 +307,53 @@
     transition: none;
   }
 }
+
+/* -------------------- multi-name results table -------------------- */
+
+.name-results {
+  display: grid;
+  gap: var(--s-md);
+}
+
+.name-results__bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-md);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.name-results__count,
+.name-results__note {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+
+.name-results__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-sm);
+}
+
+.name-results__value {
+  display: flex;
+  align-items: center;
+  gap: var(--s-xs);
+  min-width: 0;
+}
+
+.name-results__value code {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+/* NOT uppercased and NOT mono: this column holds the IUPAC name the user
+   typed, and IUPAC case is semantic (CLAUDE.md, load-bearing). */
+.name-cell {
+  font-family: var(--font-body);
+  text-transform: none;
+}
