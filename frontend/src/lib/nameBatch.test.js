@@ -100,3 +100,25 @@ test('convertNames on an empty list resolves to an empty array', async () => {
   const rows = await convertNames([], { fetchOne: () => Promise.reject(new Error('never')) })
   assert.deepEqual(rows, [])
 })
+
+test('a throwing onProgress cannot take the batch down with it', async () => {
+  // convertNames promises it never rejects. onProgress is caller-supplied and
+  // is the one piece of code in the loop this module does not own, so it is
+  // the one place that promise could be broken from outside.
+  const fetchOne = (name) =>
+    name === 'bad' ? Promise.reject(new Error('boom')) : Promise.resolve({ smiles: 'X' })
+
+  const rows = await convertNames(['a', 'bad', 'c'], {
+    fetchOne,
+    concurrency: 2,
+    onProgress: () => {
+      throw new Error('the progress display exploded')
+    },
+  })
+
+  // Not just "it resolved" -- the results must be intact. A guard that
+  // swallowed the callback but lost rows would pass a resolve-only assertion.
+  assert.deepEqual(rows.map((r) => r.name), ['a', 'bad', 'c'])
+  assert.deepEqual(rows.map((r) => r.ok), [true, false, true])
+  assert.equal(rows[1].error, 'boom')
+})
