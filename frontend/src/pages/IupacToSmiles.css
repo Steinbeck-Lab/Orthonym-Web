@@ -492,3 +492,36 @@
   border-radius: 0;
   padding: 0;
 }
+
+/* Owner instruction 2026-09-04, third pass: "why so much space?" on the
+   left and right of the table at a wide window. App.css's shared
+   `.results-table-wrap` HUGS its content (`width: fit-content`) and centres
+   it -- a DELIBERATE fix from one day earlier, for a full-width table that
+   flung its five columns apart with big empty gaps between them. Simply
+   reverting to `width: 100%` there would re-create that exact defect, so
+   this stays scoped to `.name-results` (this page only -- Home's own table
+   keeps hugging/centering untouched) and routes the width into the table
+   instead of the gaps between columns.
+   Three of the five columns are pinned by an explicit `width` on the `<td>`
+   itself, so `table-layout: auto` leaves them alone regardless of how much
+   spare width the table gains: `#` (content-sized, a single digit),
+   Structure (148px, two rules up), and InChIKey (30ch/nowrap, one rule up).
+   SMILES has no such width on its own `<td>` -- only its inner `code`
+   carries an 18ch/clamp-10 (App.css) -- so it is NOT pinned the same way;
+   measured, it grows along with Name. That is fine here, not a regression:
+   the task this fixes explicitly allows SMILES as a second beneficiary
+   alongside Name, since a SMILES is unbounded and both genuinely read
+   better with more room. Verified in the browser (2026-09-04, 1900x1000):
+   Name grew 152px->410px, SMILES 213px->430px, while `#`/Structure/InChIKey
+   stayed exactly at 41/148/294px and the gap between every pair of adjacent
+   columns stayed 0 -- the width went INTO the two elastic columns, not into
+   new gaps between them. */
+.name-results .results-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  margin-inline: 0;
+}
+
+.name-results .results-table {
+  width: 100%;
+}
