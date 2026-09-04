@@ -110,42 +110,35 @@ export default function NameResultsTable({ rows }) {
                   )}
                 </td>
               </tr>
-              {/* The second, compact line: canonical SMILES and InChI, the two
-                  identifiers the backend returns that the top row has no room
-                  for. Only for a row that parsed AND has at least one of the
-                  two -- a failure has no identifiers, and an empty labelled
-                  line would be noise (requirement 5). Spans the row past the
-                  narrow InChIKey column so the InChI, one unbroken 60+
+              {/* The second, compact line: the InChI, the one identifier the
+                  backend returns that the top row has no room for (canonical
+                  SMILES stays off this table -- owner instruction 2026-09-04
+                  -- it's still on the single-result card and in the CSV).
+                  Only for a row that parsed AND has an InChI -- a failure has
+                  no identifiers, and RDKit's InChI writer is not total, so an
+                  empty labelled line would be noise. THREE spacer cells (for
+                  `#`, Name and Structure -- owner correction, same day: the
+                  InChI sits under SMILES and InChIKey, not Structure) push
+                  the content to start under the SMILES column, matching
+                  ResultsTable.jsx's confidence row; the cell then spans the
+                  remaining two columns so the InChI, one unbroken 60+
                   character token, has room to wrap instead of forcing the
-                  page sideways. */}
-              {row.ok && (row.data.canonical_smiles || row.data.inchi) && (
+                  page sideways. That's less room than a Structure-aligned
+                  start would give it, so a long InChI (caffeine's,
+                  aspirin's) wraps onto more lines here -- expected, not a
+                  bug. */}
+              {row.ok && row.data.inchi && (
                 <tr className="name-results__meta-row">
                   <td className="name-results__meta-spacer" aria-hidden="true" />
-                  <td className="name-results__meta-cell" colSpan={4}>
+                  <td className="name-results__meta-spacer" aria-hidden="true" />
+                  <td className="name-results__meta-spacer" aria-hidden="true" />
+                  <td className="name-results__meta-cell" colSpan={2}>
                     <span className="name-results__meta-item">
-                      <span className="idlist__label">Canonical</span>
-                      {row.data.canonical_smiles ? (
-                        <span className="idlist__value">
-                          <code>{row.data.canonical_smiles}</code>
-                          <CopyButton
-                            text={row.data.canonical_smiles}
-                            label="Copy canonical SMILES"
-                          />
-                        </span>
-                      ) : (
-                        <span className="results-cell__none">—</span>
-                      )}
-                    </span>
-                    <span className="name-results__meta-item name-results__meta-item--inchi">
                       <span className="idlist__label">InChI</span>
-                      {row.data.inchi ? (
-                        <span className="idlist__value">
-                          <code>{row.data.inchi}</code>
-                          <CopyButton text={row.data.inchi} label="Copy InChI" />
-                        </span>
-                      ) : (
-                        <span className="results-cell__none">—</span>
-                      )}
+                      <span className="idlist__value">
+                        <code>{row.data.inchi}</code>
+                        <CopyButton text={row.data.inchi} label="Copy InChI" />
+                      </span>
                     </span>
                   </td>
                 </tr>
