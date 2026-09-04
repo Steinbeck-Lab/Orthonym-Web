@@ -3,6 +3,27 @@ import Icon from './Icon'
 import { downloadText, rowsToCsv, rowsToSdf } from '../lib/molExport'
 
 /**
+ * The shared "code plus copy button, else a dash" unit behind the SMILES
+ * cell, the InChIKey cell and the InChI meta-row -- three near-identical
+ * renderings collapsed into one. `fallback` is a node, not always the plain
+ * em dash: the SMILES cell's fallback is the row's error message.
+ *
+ * `className` defaults to the two table cells' wrapper class; the InChI
+ * meta-row passes `idlist__value` instead so its rendered class names --
+ * and the CSS that targets them -- stay exactly as they were. This is a
+ * refactor, not a redesign.
+ */
+function IdValue({ value, label, title, fallback = '—', className = 'name-results__value' }) {
+  if (!value) return <span className="results-cell__none">{fallback}</span>
+  return (
+    <span className={className}>
+      <code title={title}>{value}</code>
+      <CopyButton text={value} label={`Copy ${label}`} />
+    </span>
+  )
+}
+
+/**
  * The two-or-more-names view for /from-name.
  *
  * It borrows the `.results-table` SKIN from the naming side but none of its
@@ -20,7 +41,13 @@ import { downloadText, rowsToCsv, rowsToSdf } from '../lib/molExport'
  * it is.
  */
 export default function NameResultsTable({ rows }) {
-  const sdf = rowsToSdf(rows)
+  // Counts only -- cheap to derive on every render. The actual SDF text is
+  // built inside the Download button's onClick below; building it here too
+  // (rowsToSdf(rows)) would re-run for every re-render of the page that
+  // holds this table, including keystrokes elsewhere on the page, just to
+  // read two numbers off it.
+  const written = rows.filter((r) => r.data?.molblock).length
+  const skipped = rows.length - written
   const parsed = rows.filter((r) => r.ok).length
 
   return (
@@ -41,10 +68,11 @@ export default function NameResultsTable({ rows }) {
           <button
             type="button"
             className="btn btn--pastel btn--sm"
-            disabled={sdf.written === 0}
-            onClick={() =>
+            disabled={written === 0}
+            onClick={() => {
+              const sdf = rowsToSdf(rows)
               downloadText('orthonym-from-name.sdf', sdf.text, 'chemical/x-mdl-sdfile')
-            }
+            }}
           >
             <Icon name="download" />
             Download SDF
@@ -55,9 +83,9 @@ export default function NameResultsTable({ rows }) {
       {/* Said out loud rather than left to be discovered when the file opens
           short: a row with no molblock cannot be written to an SDF. The CSV
           keeps every row, so the two counts genuinely differ. */}
-      {sdf.skipped > 0 && (
+      {skipped > 0 && (
         <p className="name-results__note">
-          The SDF holds {sdf.written} of {rows.length} — {sdf.skipped} could not be given a
+          The SDF holds {written} of {rows.length} — {skipped} could not be given a
           structure. The CSV holds every row.
         </p>
       )}
@@ -87,27 +115,18 @@ export default function NameResultsTable({ rows }) {
                   )}
                 </td>
                 <td className="results-cell--smiles">
-                  {row.ok ? (
-                    <span className="name-results__value">
-                      <code title={row.data.smiles}>{row.data.smiles}</code>
-                      <CopyButton text={row.data.smiles} label="Copy SMILES" />
-                    </span>
-                  ) : (
-                    /* The failure sits in the widest cell so the message is
-                       readable, and the row keeps its number so it still
-                       matches the line the user pasted. */
-                    <span className="results-cell__none">{row.error}</span>
-                  )}
+                  {/* The failure sits in the widest cell so the message is
+                      readable, and the row keeps its number so it still
+                      matches the line the user pasted. */}
+                  <IdValue
+                    value={row.ok ? row.data.smiles : null}
+                    label="SMILES"
+                    title={row.data?.smiles}
+                    fallback={row.error}
+                  />
                 </td>
-                <td className="results-cell--smiles">
-                  {row.data?.inchikey ? (
-                    <span className="name-results__value">
-                      <code>{row.data.inchikey}</code>
-                      <CopyButton text={row.data.inchikey} label="Copy InChIKey" />
-                    </span>
-                  ) : (
-                    <span className="results-cell__none">—</span>
-                  )}
+                <td className="results-cell--smiles results-cell--key">
+                  <IdValue value={row.data?.inchikey} label="InChIKey" />
                 </td>
               </tr>
               {/* The second, compact line: the InChI, the one identifier the
@@ -135,10 +154,7 @@ export default function NameResultsTable({ rows }) {
                   <td className="name-results__meta-cell" colSpan={2}>
                     <span className="name-results__meta-item">
                       <span className="idlist__label">InChI</span>
-                      <span className="idlist__value">
-                        <code>{row.data.inchi}</code>
-                        <CopyButton text={row.data.inchi} label="Copy InChI" />
-                      </span>
+                      <IdValue value={row.data.inchi} label="InChI" className="idlist__value" />
                     </span>
                   </td>
                 </tr>

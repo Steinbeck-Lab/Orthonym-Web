@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect } from 'react'
+import { useDisclosure } from '../lib/useDisclosure'
 
 // The confidence key, as a DRAWER behind an INFO notch on the input card.
 //
@@ -156,44 +157,16 @@ function Specimen({ tier }) {
 }
 
 export default function ConfidenceLegend({ openToSide = false, onOpenChange }) {
-  const [open, setOpen] = useState(false)
+  const { open, panelId, rootRef, toggle, classes } = useDisclosure()
 
   // Report the open state up so the page can move the input card aside to make
   // room for the side bar (owner instruction 2026-09-03: the box may move).
+  // Home-only wiring -- useDisclosure doesn't know about side mode, so this
+  // stays here rather than in the shared hook.
   useEffect(() => {
     onOpenChange?.(open)
   }, [open, onOpenChange])
-  // The bulb breathes until the key has been opened ONCE, then goes steady
-  // for the rest of the session. Its job is to point out something you have
-  // not seen; a lamp that keeps pulsing at someone who has already read the
-  // thing is a nervous tic, not a signal.
-  const [seen, setSeen] = useState(false)
-  const panelId = useId()
-  const rootRef = useRef(null)
 
-  // Escape closes it, and so does a click anywhere else. Both are what a
-  // disclosure that covers part of a working card owes the person using it:
-  // it must never be the reason they cannot get back to the textarea.
-  // Bound only while OPEN, so the closed state costs no listeners at all.
-  useEffect(() => {
-    if (!open) return undefined
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') setOpen(false)
-    }
-    const onPointerDown = (event) => {
-      if (!rootRef.current?.contains(event.target)) setOpen(false)
-    }
-    document.addEventListener('keydown', onKeyDown)
-    document.addEventListener('pointerdown', onPointerDown)
-    return () => {
-      document.removeEventListener('keydown', onKeyDown)
-      document.removeEventListener('pointerdown', onPointerDown)
-    }
-  }, [open])
-
-  const classes = ['info']
-  if (open) classes.push('info--open')
-  if (!seen) classes.push('info--unseen')
   if (openToSide) classes.push('info--side')
 
   return (
@@ -210,10 +183,7 @@ export default function ConfidenceLegend({ openToSide = false, onOpenChange }) {
         className="info__notch"
         aria-expanded={open}
         aria-controls={panelId}
-        onClick={() => {
-          setOpen((was) => !was)
-          setSeen(true)
-        }}
+        onClick={toggle}
       >
         {/* The header's own fillets, reused rather than mirrored. Both
             islands hang DOWNWARD from their edge -- the header's from the top
