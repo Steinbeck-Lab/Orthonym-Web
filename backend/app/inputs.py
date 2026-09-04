@@ -400,7 +400,7 @@ def parse_preview_sample(
     data: bytes, fmt: InputFormat, sample_size: int
 ) -> tuple[list[ParsedMolecule], int]:
     """The first `sample_size` records, RDKit-parsed (for a real preview:
-    canonical SMILES, per-record errors), plus a cheap structural total
+    the SMILES each row will be named as, per-record errors), plus a cheap structural total
     that never touches RDKit. Never raises TooManyMolecules -- a
     `sample_size`-only parse hitting that limit just means "there were
     more than the sample," which TooManyMolecules.partial already carries.

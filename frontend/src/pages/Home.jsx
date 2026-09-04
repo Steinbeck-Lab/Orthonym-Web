@@ -608,10 +608,10 @@ function Home() {
                 <textarea
                   id="smiles-input"
                   className="field__control"
-                  /* 4, not 8: the field is flex: 1 inside a card that is
-                     itself the flexible row of a one-screen page, so this is
-                     a floor rather than a size -- it grows into whatever the
-                     viewport leaves. */
+                  /* 4, not 8: the field slot is a fixed `height: clamp(180px, 32vh,
+                     320px)` (Home.css) and the textarea is `flex: 1` inside
+                     it, so this is a floor rather than a size -- it stretches
+                     to fill the slot. */
                   rows={4}
                   spellCheck={false}
                   autoCorrect="off"

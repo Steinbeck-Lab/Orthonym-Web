@@ -144,13 +144,13 @@ def test_parse_csv_without_smiles_column_raises():
         parse(b"structure,id\nCCO,a\n", InputFormat.CSV, 100)
 
 
-def test_parse_stops_canonicalising_lines_once_it_is_over_the_limit():
+def test_parse_stops_rdkit_parsing_lines_once_it_is_over_the_limit():
     """TEST-4, the SMILES-list half. Same correction: _parse_smiles_list does
     `_decode(data).splitlines()`, which materialises every line in the input
     before the loop starts, so nothing here avoids reading the file.
 
-    What it does avoid is the per-line RDKit work -- MolFromSmiles and
-    MolToSmiles -- which is the part that actually costs, and which is
+    What it does avoid is the per-line RDKit work -- the MolFromSmiles
+    parse -- which is the part that actually costs, and which is
     bounded to `limit` calls.
     """
     data = b"CCO\n" * 50
@@ -158,7 +158,7 @@ def test_parse_stops_canonicalising_lines_once_it_is_over_the_limit():
         parse(data, InputFormat.SMILES_LIST, 10)
     assert excinfo.value.limit == 10
     assert len(excinfo.value.partial) == 10, (
-        "more lines were canonicalised than the limit allows"
+        "more lines were RDKit-parsed than the limit allows"
     )
 
 

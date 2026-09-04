@@ -1909,8 +1909,8 @@
    point is that it is quiet. `:has(:focus-visible)` asks the question the
    browser already answers well: was this reached by keyboard?
    And an `outline` with a POSITIVE offset extends past the tab, where
-   `.input-col`'s `overflow-y: auto` (the one-screen clamp, which cannot be
-   given up) clipped it -- which is the "tabs getting cropped" that was
+   `.input-col`'s inherited `overflow-y: auto` (the one-screen clamp
+   `.workbench > *` carried until the normal-scroll shell dropped it) clipped it -- which is the "tabs getting cropped" that was
    actually a cropped ring. An inset box-shadow is drawn inside the box and
    follows the tab's own radius, so there is nothing to clip and nothing to
    spill over the neighbour tucked behind it. */
