@@ -91,6 +91,18 @@
   gap: var(--s-lg);
 }
 
+/* Owner instruction 2026-09-04: "outer table using too much padding". The
+   shared `.workspace > *` rule gives every workspace card 40px on all sides,
+   generous for a card whose whole job (once results land) is holding a
+   table. `.workspace > .from-name-results` (two classes) outranks
+   `.workspace > *` (one class + universal, which contributes nothing) on
+   specificity alone, so this wins regardless of import order and only this
+   page's results card changes -- Home's own results card is a different
+   element and stays at 40px. */
+.workspace > .from-name-results {
+  padding: var(--s-lg);
+}
+
 /* Under `.workspace--flow` the card is only ever its own content height, so
    there is no longer a taller cell for this region to grow into -- `flex: 1`
    was a no-op once the stretch that gave it a track to fill was removed.
@@ -338,9 +350,13 @@
 
 /* -------------------- multi-name results table -------------------- */
 
+/* Owner instruction 2026-09-04, second pass ("still too much white space").
+   16px between the count bar, the optional skipped-note and the table read
+   as a full blank line separating three things that are one unit -- the
+   summary of the table beneath it. */
 .name-results {
   display: grid;
-  gap: var(--s-md);
+  gap: var(--s-xs);
 }
 
 .name-results__bar {
@@ -396,11 +412,83 @@
   width: 148px;
 }
 
+/* The grey ring, in the table only (2026-09-04 follow-up). The shared rule
+   frames every thumbnail with `--card-soft` + `--card-border` + `--r-card-sm`
+   -- a second, smaller frame around a picture that already sits on the SVG's
+   own white ground, inside a cell, inside the (now single) card. Stripped
+   here so the drawing sits directly in its cell; `.from-name-patch__depiction`
+   keeps its frame untouched (App.css) -- there it marks one large drawing as
+   a figure, which is real work a small thumbnail isn't doing. */
+/* Second pass, same day: a two-bond molecule (ethanol) and a xanthine
+   (caffeine) were drawn into the SAME fixed box, so the row height was set
+   by the box, not by either drawing -- the empty space sat inside the
+   picture cell, above and below the strokes. 72px is a RECOGNITION
+   thumbnail, not a figure (the single-result card, `.from-name-patch__depiction`,
+   is where a molecule gets looked at properly); benzene's ring and
+   caffeine's fused bicyclic are both still tellable apart at this size. Not
+   pushed lower -- the strokes start to mush below ~56px. */
 .name-results .results-cell--pic img {
-  height: 104px;
-  padding: var(--s-xxs);
+  height: 72px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
 }
 
+/* Vertical rhythm: a dense list, not a stack of cards (owner instruction
+   2026-09-04, two passes). First pass evened the shared rule's 3-value
+   shorthand (which put an odd 2px on the bottom) to 4px all round; with the
+   thumbnail now 72px instead of 104px the cell content is shorter still, so
+   the second pass takes the vertical inset down again. */
 .name-results .results-table td {
-  padding: var(--s-xs) var(--s-sm);
+  padding: 2px var(--s-sm);
+}
+
+/* The header row was sized by the SAME shared padding as a data row's
+   thumbnail cell used to be -- 16px top, 12px bottom, plus its own 2px
+   bottom border -- which read as a bigger gap before row 1 than between any
+   two data rows. Trimmed to match the now-tighter body. */
+.name-results .results-table thead th {
+  padding: var(--s-xs) var(--s-md) var(--s-xxs);
+}
+
+/* An InChIKey is always 27 characters (14-10-1, two hyphens) -- a known
+   quantity, not a guess. It shares `.results-cell--smiles` with the SMILES
+   column (both wrap the same "code + copy button" markup), so the shared
+   18ch width and 10-line clamp built for an UNBOUNDED SMILES was wrapping a
+   fixed 27-char key onto two lines and leaving empty table width unused.
+   `:last-child` isolates it -- the InChIKey cell is structurally the last
+   `<td>` in each row, the SMILES cell is not -- so the SMILES column keeps
+   its own wrap/clamp exactly as it was. */
+.name-results .results-cell--smiles:last-child {
+  width: 30ch;
+  white-space: nowrap;
+}
+
+.name-results .results-cell--smiles:last-child code {
+  display: inline;
+  width: auto;
+  max-width: none;
+  overflow: visible;
+  white-space: nowrap;
+  word-break: normal;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+}
+
+/* Collapse the doubled frame (owner instruction 2026-09-04). This section is
+   already `.workspace > .from-name-results`, itself the white card (fill,
+   border, radius, shadow, padding, all from `.workspace > *`) -- so
+   `.results-table-wrap`'s own copies of the same four properties (App.css)
+   drew a second box inside the first: "inner table is tight and outer table
+   using too much padding" was two frames doing one frame's job. Only the
+   decoration goes; `overflow-x: auto` stays, because a wide table must still
+   scroll inside its own box rather than push the page sideways (CLAUDE.md,
+   already learned the hard way once). */
+.name-results .results-table-wrap {
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
 }
