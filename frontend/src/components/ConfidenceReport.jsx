@@ -14,40 +14,32 @@ import { NAMED_STATUSES, STATE_LABEL, VERIFIED_STATUSES } from '../lib/statuses'
  * has nothing to render here -- that is why this takes a whole result row and
  * returns null without one, rather than being handed loose fields.
  *
- * `level` changes the WORDS, never the verdict. Learn mode may not name a tool
- * or a format (teach-mode spec section 5: no OPSIN, no SMILES, no "parser"),
- * but it still has to show the proof -- PRODUCT.md principle 1 says
- * determinism must be provable, not asserted, and a reader who is new to this
- * needs that more than an expert does, not less. So Learn says what the check
- * DID and drops the machinery, rather than dropping the check.
+ * ONE VOICE, not two. This used to take a `level` prop and carry two
+ * spellings of the same verdict: a plain-English one for /explain's Learn
+ * mode and a terse technical one for Expert. The switch that chose between
+ * them is gone (owner instruction: the setting was confusing), and the two
+ * spellings are merged rather than one of them deleted. The sentence says in
+ * plain words what the check DID -- a reader new to this needs that more than
+ * an expert does, not less -- and still prints the round-trip SMILES itself,
+ * because PRODUCT.md principle 1 says determinism is proven, not asserted,
+ * and the proof is the string.
  */
-export default function ConfidenceReport({ row, level = 'expert' }) {
+export default function ConfidenceReport({ row }) {
   if (!row || !NAMED_STATUSES.has(row.status)) return null
   const { status, roundtrip_smiles, roundtrip_match } = row
 
   return (
     <div className="confidence-report">
       <span className="tile__state-label">{STATE_LABEL[status]}</span>
-      {roundtrip_smiles && level === 'learn' && (
+      {roundtrip_smiles && (
         <p className="tile__roundtrip">
-          We read this name back to see which molecule it describes.{' '}
+          Round-trip check: we read this name back and it gives{' '}
           <span
             className={`tile__roundtrip-result${roundtrip_match ? '' : ' tile__roundtrip-result--mismatch'}`}
           >
-            {roundtrip_match
-              ? 'It gives back the same molecule ✓'
-              : 'It gives back a different molecule ✗'}
-          </span>
-        </p>
-      )}
-      {roundtrip_smiles && level !== 'learn' && (
-        <p className="tile__roundtrip">
-          round-trip check: <code className="tile__roundtrip-smiles">{roundtrip_smiles}</code>{' '}
-          <span
-            className={`tile__roundtrip-result${roundtrip_match ? '' : ' tile__roundtrip-result--mismatch'}`}
-          >
-            {roundtrip_match ? '— matches ✓' : '— does not match ✗'}
-          </span>
+            {roundtrip_match ? 'the same molecule ✓' : 'a different molecule ✗'}
+          </span>{' '}
+          <code className="tile__roundtrip-smiles">{roundtrip_smiles}</code>
         </p>
       )}
       {/* This tier's rule (double/dashed) claims an OPSIN round-trip
@@ -56,20 +48,11 @@ export default function ConfidenceReport({ row, level = 'expert' }) {
           would look identical to a tier that carries no such claim. */}
       {!roundtrip_smiles && VERIFIED_STATUSES.has(status) && (
         <p className="tile__roundtrip">
-          {level === 'learn' ? (
-            <>
-              We could not read this name back to double-check it, so we cannot promise it
-              is right.
-            </>
-          ) : (
-            <>
-              round-trip check:{' '}
-              <span className="tile__roundtrip-result tile__roundtrip-result--unavailable">
-                unavailable
-              </span>{' '}
-              — could not confirm this result
-            </>
-          )}
+          Round-trip check:{' '}
+          <span className="tile__roundtrip-result tile__roundtrip-result--unavailable">
+            unavailable
+          </span>{' '}
+          — we could not read this name back, so this result is not confirmed.
         </p>
       )}
     </div>

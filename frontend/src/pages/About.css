@@ -135,6 +135,19 @@
   padding-block: var(--s-md) 0;
 }
 
+/* This foot sits on the BARE GROUND, outside the card above it, which makes
+   it the one inline link on the site with no white behind it. MEASURED off a
+   1440x900 screenshot of the 2026-09-05 ground: `--link` (#c41e3a) lands
+   between 3.4:1 and 4.96:1 across the four fields -- under AA at the darker
+   corners, and it was already only 4.06:1 on the flat grey that preceded the
+   new ground, so this is an old failure rather than a new one. `--accent-deep`
+   measures 4.69:1 at the worst point and 8.06:1 on white. Scoped to this foot
+   ON PURPOSE: every other `.about-link` is inside a card, where `--link` on
+   white is 5.84:1 and is the colour DESIGN.md specifies. */
+.about-band__foot .about-link {
+  color: var(--accent-deep);
+}
+
 /* -------------------- fact mosaic -------------------- */
 /* The verified facts and the acknowledgments both render as a bento
    mosaic of the site's standard cards: white fill, --r-card corners,

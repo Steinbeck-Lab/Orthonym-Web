@@ -35,12 +35,58 @@
   gap: var(--s-lg);
 }
 
+/* A sibling of the input slot, not a child of it (Explain.jsx): the submit
+   button must not sit INSIDE the `.field--framed` box the typed tabs now
+   draw. `.explain-panel form` is a flex column, so its own gap spaces this
+   row -- the `margin-top` this rule used to add was for its old life nested
+   inside the field, and stacked on top of that gap here. */
 .explain-panel__actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s-md) var(--s-lg);
-  margin-top: var(--s-md);
+}
+
+/* The Draw tab's editor has to size ITSELF here. `.structure-editor`
+   (App.css) is `flex: 1; min-height: 180px` -- it FILLS its slot rather than
+   demanding a height, which was right while `.workspace` clamped every cell
+   to the viewport and wrong the moment that clamp was folded away: a cell is
+   its own content height now, so there is no free space to grow into and
+   Ketcher collapsed onto its 180px floor, with the canvas squeezed to a strip
+   between two toolbars. An explicit height gives the whole editor -- top
+   toolbar, left tool rail, canvas and bottom status bar -- room to render,
+   and it is viewport-relative so a laptop and a large monitor each get a
+   sensible one. */
+.explain-panel .structure-editor {
+  flex: none;
+  /* MEASURED at 1440x900, and both bounds are real. Too TALL (64vh = 576px)
+     and the Explain button falls below the fold. Too SHORT (56vh = 504px) and
+     Ketcher's own left tool rail overflows: it grows a scroll chevron and
+     hides its last tool, which is not "the whole editor". 60vh = 540px shows
+     every tool and keeps the button on screen. The floor is 540px rather than
+     the 520 first tried, because the chevron is what the floor exists to
+     prevent and 520 is inside the band where it appears. */
+  height: clamp(540px, 60vh, 720px);
+  /* Picking Draw is the one moment on this page where the LAYOUT changes:
+     the grid flips 4fr/8fr to 8fr/4fr (`.workspace--draw`, App.css) and an
+     instrument appears in the widened cell. Animating one half and snapping
+     the other would read as a glitch, so the editor unfolds downward on the
+     same 420ms and the same curve the column widens on -- one gesture, the
+     card opening like a lid, not two effects stacked for spectacle.
+     A clip-path wipe rather than a height animation on purpose: height would
+     relayout the Ketcher document on every frame. */
+  animation: editor-unfold 420ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes editor-unfold {
+  from {
+    clip-path: inset(0 0 100% 0);
+    opacity: 0.4;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
 }
 
 .explain-panel__note {
@@ -52,8 +98,11 @@
   color: var(--ink);
 }
 
+/* `margin-top: auto` used to push this to the foot of a card the one-screen
+   clamp had stretched. `.workspace` cards are their own content height since
+   the clamp was folded away (App.css), so there is no slack left to push
+   into and the declaration is gone rather than left claiming an effect. */
 .explain-panel .page-about-note {
-  margin-top: auto;
   padding-top: var(--s-lg);
   border-top: 1px solid var(--hairline);
 }
@@ -96,33 +145,92 @@
    The <input type="radio"> stays in the DOM and is only visually hidden --
    never display:none, which removes it from the accessibility tree and from
    keyboard focus. Arrow-key navigation, the radio group semantics and the
-   focus ring all still come from the real control; the pill is its label. */
+   focus ring all still come from the real control; the pill is its label.
+
+   CLAYMORPHIC, by owner instruction ("tabs can be claymorphism style", "use
+   different red shades"). Not the first clay in the system: Home's fanned
+   notch tabs (`.input-tab`, Home.css) already carry claymorphism insets under
+   their pastel hues, so clay is the vocabulary for a TAB STRIP on both routes
+   that have one. It stops there -- the nav route pills, the example chips and
+   every button keep the flat vocabulary, so the site does not become a clay
+   site on the strength of two tab strips.
+
+   Clay is a BODY, not a border. Each pill is a soft puffed shape with a light
+   top edge, a shaded lower edge and a drop shadow that sits under it -- so
+   the strip reads as three physical keys, and the selected one is the key
+   that has been pressed IN rather than a rectangle that changed colour.
+
+   Every shade is the crimson already in the system (`--accent-wash`,
+   `--accent`, `--accent-deep`, mixed with `color-mix` so it tracks the token
+   rather than hardcoding a second copy of it). NO new hue enters the
+   palette, which is what keeps DESIGN.md's rule intact: a confidence tier is
+   monochrome line-work inside the result card, and nothing over here can be
+   mistaken for one.
+
+   The shadows are on the pill itself, not on a translucent `::before`
+   overlay, so the label's contrast is measured once against a solid ground:
+   `--accent-deep` on the rest wash is 7.1:1, and white on `--accent` is
+   5.84:1. Both clear AA for the 11px mono label. */
 .explain-mode__option {
   position: relative;
   display: inline-flex;
   align-items: center;
-  min-height: 30px;
-  padding: 0.3rem 0.85rem;
+  min-height: 36px;
+  padding: 0.42rem 1.05rem;
   border-radius: 999px;
-  background: var(--surface-soft);
-  border: 1px solid transparent;
+  background: linear-gradient(
+    180deg,
+    var(--card) 0%,
+    var(--accent-wash) 100%
+  );
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow:
+    /* the light that catches the top of a soft body */
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    /* the mass of the body, shading toward its underside */
+    inset 0 -3px 4px -2px color-mix(in srgb, var(--accent-deep) 26%, transparent),
+    /* the pill's own contact shadow, then its cast shadow */
+    0 1px 2px color-mix(in srgb, var(--accent-deep) 14%, transparent),
+    0 7px 12px -7px color-mix(in srgb, var(--accent-deep) 34%, transparent);
   font-family: var(--font-mono);
   font-size: var(--t-caption);
   line-height: 1.4;
   letter-spacing: var(--track-caption);
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--accent-deep);
   cursor: pointer;
-  /* Colour and border-colour only, at the system's state duration and
-     easing. Nothing here translates or scales. */
+  /* Clay's whole argument is that the key MOVES, so `transform` is on the
+     list here where the rest of the system keeps to colour. It is 1px, at
+     the system's own state duration and easing, and it is off entirely
+     under `prefers-reduced-motion` (bottom of this file). */
   transition:
     color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
     background-color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
-    border-color 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    border-color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Lifts off the surface: the shadow lengthens as the body rises. */
 .explain-mode__option:hover {
-  color: var(--ink);
+  transform: translateY(-1px);
+  color: var(--accent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -3px 4px -2px color-mix(in srgb, var(--accent-deep) 30%, transparent),
+    0 2px 3px color-mix(in srgb, var(--accent-deep) 16%, transparent),
+    0 11px 18px -9px color-mix(in srgb, var(--accent-deep) 40%, transparent);
+}
+
+/* A pill cannot be pressed while a request is in flight. It reads as clay
+   that has gone cold: no lift, no cast shadow, the label greyed. */
+.explain-mode__option:has(input:disabled) {
+  cursor: not-allowed;
+  transform: none;
+  background: var(--surface-soft);
+  border-color: transparent;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  color: var(--muted);
 }
 
 .explain-mode__option input {
@@ -137,11 +245,36 @@
 
 /* :has() carries the checked state to the pill. Supported in every browser
    this app targets; without it the selected pill simply stays quiet, which
-   is a degradation and not a failure -- the radio itself is still correct. */
+   is a degradation and not a failure -- the radio itself is still correct.
+
+   The SELECTED key is pressed INTO the surface: it sits 1px lower, its cast
+   shadow all but disappears (nothing casts far when it is against the
+   board), and the highlight moves inside as a rim of light around a recess.
+   That inversion is the whole reason clay is worth using on a tab strip --
+   the current tab is legible as a shape, not only as a colour. */
 .explain-mode__option:has(input:checked) {
-  background: var(--accent-wash);
-  border-color: var(--accent-line);
-  color: var(--accent);
+  transform: translateY(1px);
+  background: linear-gradient(
+    180deg,
+    var(--accent) 0%,
+    var(--accent-deep) 100%
+  );
+  border-color: var(--accent-deep);
+  box-shadow:
+    inset 0 2px 5px -1px rgba(0, 0, 0, 0.3),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.22),
+    0 1px 1px color-mix(in srgb, var(--accent-deep) 22%, transparent);
+  color: var(--on-primary);
+}
+
+/* Hovering the pill that is already pressed must not lift it back out. */
+.explain-mode__option:has(input:checked):hover {
+  transform: translateY(1px);
+  color: var(--on-primary);
+  box-shadow:
+    inset 0 2px 5px -1px rgba(0, 0, 0, 0.26),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.26),
+    0 1px 1px color-mix(in srgb, var(--accent-deep) 22%, transparent);
 }
 
 /* The focus ring belongs on the PILL, since the input it comes from is
@@ -177,14 +310,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--s-lg);
-}
-
-/* Pushes the empty note off the top of a result card that is otherwise all
-   air. NOT centring: the parent is a plain block box, where an `auto` block
-   margin resolves to 0 and only the flex/grid case would centre. It reads as
-   deliberate spacing either way, so the rule stays and the claim goes. */
-.explain-patch--idle {
-  margin-block: auto;
 }
 
 /* This route shows how a name decomposes; it does not report the name's
@@ -531,5 +656,36 @@
   .explain-name__part,
   .explain-segment {
     transition: none;
+  }
+
+  /* Reduced motion means less movement, not less feedback. The clay keys
+     keep every colour and shadow change and lose only the 1px travel, and
+     the editor still announces its arrival -- as a fade, with no wipe. */
+  .explain-mode__option,
+  .explain-mode__option:hover,
+  .explain-mode__option:has(input:checked),
+  .explain-mode__option:has(input:checked):hover {
+    transform: none;
+  }
+
+  .explain-mode__option {
+    transition:
+      color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+      background-color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+      border-color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .explain-panel .structure-editor {
+    animation: editor-appear 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes editor-appear {
+    from {
+      opacity: 0.4;
+    }
+    to {
+      opacity: 1;
+    }
   }
 }

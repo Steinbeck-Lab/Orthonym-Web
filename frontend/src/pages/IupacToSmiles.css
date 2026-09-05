@@ -110,7 +110,7 @@
    flex-grow's share of the flex container's free space, not from `height`
    at all, unless that free space is nonzero. `.from-name-panel form`'s
    height is itself shrink-to-fit (this card is only ever its own content
-   height under `.workspace--flow` -- see `.from-name-results__live`'s
+   height under `.workspace` -- see `.from-name-results__live`'s
    comment below), so there is no free space to
    grow into and the box was silently pinned to its `min-height` floor no
    matter what the `height` clamp said -- measured: 120px before this fix,
@@ -234,7 +234,7 @@
   padding: var(--s-lg);
 }
 
-/* Under `.workspace--flow` the card is only ever its own content height, so
+/* Under `.workspace` the card is only ever its own content height, so
    there is no longer a taller cell for this region to grow into -- `flex: 1`
    was a no-op once the stretch that gave it a track to fill was removed.
    `.from-name-patch__depiction` now caps its own height instead (below). */
@@ -252,7 +252,7 @@
   min-height: 0;
 }
 
-/* Nothing entered yet. `.workspace--flow` un-stretches the cell, so there is
+/* Nothing entered yet. `.workspace` un-stretches the cell, so there is
    no taller sibling column to centre against any more -- `margin-block: auto`
    had nothing left to centre within. Explicit padding instead, so the note
    still reads as settled rather than jammed against the card edge. */
@@ -261,7 +261,7 @@
 }
 
 /* Was `flex: 1; min-height: 0`, to grow into a cell stretched to the taller
-   input column. `.workspace--flow` removes that stretch, so this card is only
+   input column. `.workspace` no longer stretches cells, so this card is only
    ever its own content height and both declarations were dead weight -- the
    class stays on the element in IupacToSmiles.jsx as a state hook, unstyled
    by this rule now that there is nothing left for it to do. */
