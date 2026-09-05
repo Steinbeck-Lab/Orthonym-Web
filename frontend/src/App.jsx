@@ -7,10 +7,23 @@ import Explain from './pages/Explain'
 import About from './pages/About'
 import './App.css'
 
-// The page's ground. Three very large, very soft crimson-and-grey fields that
-// drift across each other, fixed behind everything, so the grey bench the
-// cards sit on is a gradient rather than a flat fill. Decorative and
-// aria-hidden.
+// The page's ground: FOUR corner fields, a centre glow and a fine dot grid,
+// fixed behind everything, so the bench the cards sit on is a composition
+// rather than a flat fill. Decorative and aria-hidden throughout.
+//
+// Rebuilt 2026-09-05 on an owner-supplied reference ("aurora dream corner
+// whispers" + a soft centre glow + a noise-dot texture), at the BOLD strength
+// the owner picked and in STITCH's own ramp -- crimson, its wash and its deep
+// shade, plus the cool greys. The reference's lilac, cream, pink and blue do
+// not survive the translation; four DIFFERENT hues would put colour on the
+// ground that a reader could mistake for a confidence tier, which the whole
+// system forbids. Four different WEIGHTS of the one accent do the same
+// compositional job and cannot be misread.
+//
+// The yellow in the second reference is refused outright and deliberately:
+// `--glow` is functional here. It means "you are pointing at these atoms
+// right now", and spending it on the page background would spend the one
+// signal /explain's whole interaction rests on.
 //
 // Why it is here in the shell and not in index.css: the drift is done with
 // transforms on separate layers, which the compositor can move without
@@ -22,6 +35,9 @@ function GradientGround() {
       <span className="ground__field ground__field--a" />
       <span className="ground__field ground__field--b" />
       <span className="ground__field ground__field--c" />
+      <span className="ground__field ground__field--d" />
+      <span className="ground__glow" />
+      <span className="ground__grain" />
     </div>
   )
 }

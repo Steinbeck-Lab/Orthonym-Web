@@ -708,10 +708,28 @@
 }
 
 /* -------------------- workspace bento -------------------- */
-/* Every interactive route (Structure→IUPAC, IUPAC→Structure, Explain,
-   Learn) puts its input beside its own output as two rounded cards in a
-   contained gapped grid. The split still sits on the shared 1/3 line
-   (2/3 for the editor-led draw pages), so the rhythm is consistent. */
+/* Both interactive sub-routes (IUPAC→Structure, Explain) put their input
+   beside their own output as two rounded cards in a contained gapped grid.
+   The split sits on the shared 1/3 line (2/3 for the editor-led draw tab), so
+   the rhythm matches Home.
+
+   IT SCROLLS LIKE A DOCUMENT, and that is the whole shape of this rule. It
+   used to be a ONE-SCREEN CLAMP -- `flex: 1; min-height: 0` on the grid and
+   `min-height: 0; overflow-y: auto` on every cell -- so each card kept its own
+   inner scrollbar and the page never grew. Home dropped that on 2026-09-03,
+   /from-name followed via a `.workspace--flow` modifier, and on 2026-09-05
+   /explain followed too. With both routes on it the modifier was a no-op
+   wrapper around the base class, exactly as its own comment said it would
+   become, so it is folded in here and deleted.
+
+   Two declarations below are load-bearing and NOT tidy-up:
+     * `flex: none` -- `.page__content` is a flex column, so the default
+       `0 1 auto` lets this grid be SHRUNK below its content by the footer
+       underneath it. `none` is `0 0 auto`: it may not shrink.
+     * `align-items: start` -- `.workspace` sets no alignment otherwise, so
+       the grid default `stretch` pulls the shorter card down to the taller
+       one. Measured on /from-name: dropping the clamp alone leaves the dead
+       white space in the short card exactly where it was. */
 
 .workspace {
   display: grid;
@@ -721,80 +739,55 @@
   max-width: var(--shell-max);
   margin-inline: auto;
   padding-inline: var(--shell-pad);
-  /* The flexible row of the page, exactly as Home's `.workbench` is: the hero
-     above it is fixed, this takes what is left of the one screen. Both halves
-     are needed and neither works alone -- `min-height: 0` is what gives the
-     grid a DEFINITE height to size its auto row against (a flex item's
-     automatic minimum size is otherwise its content, so it simply refuses to
-     shrink), and the cell rule below is what makes each cell clip so the row
-     can actually take that height.
-     MEASURED: with the cell rule alone, /from-name showing a result at
-     1440x900 still overflowed by 149px, because the grid itself was still
-     sizing to content. Both, and the same route overflows by 0. */
-  flex: 1;
-  min-height: 0;
+  flex: none;
+  align-content: start;
+  align-items: start;
 }
 
 .workspace > * {
+  /* `min-width: 0` stays and is not symmetric with the dropped
+     `min-height: 0`: a grid item's automatic minimum size is its content in
+     BOTH axes, and a wide code string or SMILES inside a cell would otherwise
+     push the column wider than its track. The vertical half was only ever
+     there to let a cell shrink under the clamp, and there is no clamp now. */
   min-width: 0;
   padding: var(--s-xl);
   background: var(--card);
   border-radius: var(--r-card);
   box-shadow: var(--card-shadow);
   border: var(--card-border);
-  /* The pair that makes a one-screen route stay one screen, and it is a PAIR:
-     `min-height: 0` alone is not enough. A grid item's automatic minimum size
-     is its content, so without it the cell refuses to shrink; and an auto grid
-     row sizes to its cells' content unless a cell is a scroll container, which
-     is what `overflow-y: auto` makes it. Home's `.workbench > *` carried both
-     from the one-screen pass until its 2026-09-03 overhaul dropped the clamp;
-     `.workspace` had neither, and MEASURED on
-     /from-name showing a result at 1440x900 the row went to 789px inside a
-     763px content box -- 149px of the page pushed below the fold, on a route
-     DESIGN.md records at zero overflow. CLAUDE.md states the rule outright:
-     "clipping is what makes a cell a scroll container, which is also what lets
-     an auto grid row shrink." */
-  min-height: 0;
-  overflow-y: auto;
-}
-
-/* /from-name's shell. `.workspace` (App.css:716-756) is still the ONE-SCREEN
-   CLAMP: `flex: 1; min-height: 0` on the grid and `overflow-y: auto` on every
-   cell. Home's overhaul replaced that with `align-content: start;
-   align-items: start` and no clamp (`.workbench`, Home.css:193-219) so each
-   column is as tall as its own content and the page scrolls normally.
-
-   `align-items: start` is NOT optional and NOT redundant with dropping the
-   clamp: `.workspace` declares no `align-items` at all, so the grid default
-   `stretch` pulls the shorter card down to the taller one on its own. Measured
-   on /from-name: dropping only the clamp leaves the dead white space exactly
-   where it was.
-
-   A MODIFIER rather than a change to `.workspace`, because TWO routes render
-   that class -- /from-name (IupacToSmiles.jsx:125) and /explain
-   (Explain.jsx:271). Editing the base rules silently restyles the other
-   route nobody asked about. If it is ever migrated, this modifier becomes a
-   no-op and should be deleted. */
-.workspace--flow {
-  flex: none;
-  min-height: auto;
-  align-content: start;
-  align-items: start;
-}
-
-.workspace--flow > * {
-  overflow-y: visible;
 }
 
 @media (min-width: 1000px) {
   .workspace {
     grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
-  }
-}
+    /* /explain's Draw tab flips this to 8fr/4fr, and the flip is the one
+       moment on that page where the layout itself changes: the input card
+       takes the wide cell so Ketcher is usable, and the results card yields.
+       Snapping teleports both cards, so the grid GROWS instead.
 
-@media (min-width: 1000px) {
+       Animating a layout property is normally the wrong answer, and this is
+       the same exception the header notch already takes (`.notch`): the card
+       must physically change size here, which IS a layout change -- there is
+       no transform that widens one grid track and narrows another. It is one
+       grid, two tracks, once per tab press, and both endpoints are plain
+       `fr` pairs, which is what makes them interpolable. A browser that
+       cannot interpolate them simply snaps, exactly as today.
+       420ms is the layout-transition band, and /explain's editor unfolds on
+       the same duration and curve so the two read as one gesture.
+       Declared inside the >=1000px query on purpose: below it the grid is a
+       single column and there is no flip to explain. */
+    transition: grid-template-columns 420ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
   .workspace--draw {
     grid-template-columns: minmax(0, 8fr) minmax(0, 4fr);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .workspace {
+      transition: none;
+    }
   }
 }
 
@@ -1698,13 +1691,22 @@ input.field__control {
   padding-block: var(--s-sm);
 }
 
+/* `--body`, not `--muted`, and this is a contrast fix rather than a taste
+   one. This line is the only micro-copy on the site that sits on the BARE
+   ground with no card under it. MEASURED off a 1440x900 screenshot of the
+   2026-09-05 ground: `--muted` (#666) lands between 2.87:1 and 4.13:1 across
+   the four fields -- under AA everywhere, and it was already 3.99:1 on the
+   flat grey that preceded it, so this was a pre-existing failure the bolder
+   ground merely made obvious. `--body` (#333) measures 6.31:1 at the worst
+   point (the deep field, bottom-left) and 9.1:1 at the best. PRODUCT.md
+   names WCAG 2.2 AA as the required standard. */
 .site-footer__copyright {
   margin: 0;
   font-family: var(--font-mono);
   font-size: 0.7rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--body);
 }
 
 /* The credit, as a floating pill — the one place the footer lifts, matching
@@ -1915,30 +1917,6 @@ input.field__control {
 }
 
 
-/* The Learn/Expert switch, in the output card's head. It sits apart from the
-   Input tabs deliberately: they control different cards (what goes in vs how
-   the result reads), and merging them would read as one four-way control. */
-.explain-level {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  border: 0;
-  margin: 0 0 var(--gap);
-  padding: 0;
-}
-
-.explain-level__legend {
-  float: left;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-  padding: 0;
-  margin-right: var(--gap);
-}
-
 /* The tier and its round-trip proof, shown under a decomposed name. Inherits
    tile__state-label / tile__roundtrip so the confidence grammar is identical
    to a Translate tile -- the same verdict must not look different here. */
@@ -1973,80 +1951,154 @@ input.field__control {
   z-index: -1;
   overflow: hidden;
   pointer-events: none;
-  /* The flat colour stays underneath as the floor: if a browser drops the
-     blur or the gradients, the page is still the grey bench it always was. */
-  background: var(--ground);
+  /* The base wash, and the floor if everything above it fails: a pale
+     accent-wash sky settling onto the grey bench the site has always had.
+     The reference's `#f7eaff -> #fde2ea` in our own two colours.
+     The sky is only HALF wash since the owner asked for less red -- it is
+     mixed back toward the card white so the top of the page starts nearly
+     neutral and the colour arrives from the corner fields instead. */
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent-wash) 55%, var(--card)) 0%,
+    var(--ground) 100%
+  );
 }
 
-/* Each field is a soft radial wash, far larger than the viewport so its edge
-   never enters the frame, blurred so the gradient has no seams, and moved with
-   transforms only. Crimson sits at 6-9% -- enough to tint the grey, nowhere
-   near enough to read as colour. */
+/* Each field is ONE soft ellipse on its own full-viewport layer, positioned
+   the way the reference positions its corners. No `filter: blur()` anywhere:
+   a radial gradient is already seamless, and three viewport-scale blur layers
+   used to be this site's only always-on GPU cost, paid on every route for as
+   long as the tab was open. Dropping them is free -- nothing about the
+   composition depended on the blur, only on the falloff.
+
+   `inset: -12%` on the drifting layers, not 0: field A's ellipse actually
+   reaches the top-left corner, so a layer that drifts 5vmax with no overscan
+   would drag that corner out of frame and leave a bare wedge. 12% of the
+   viewport comfortably exceeds the 5vmax of travel. */
 .ground__field {
   position: absolute;
-  width: 90vmax;
-  height: 90vmax;
-  border-radius: 50%;
-  /* 70px, not 90: three viewport-scale blurred layers are the one always-on
-     GPU cost on this site, paid on every route for as long as the tab is
-     open, and at this size the difference is not visible.
-     No `will-change` either -- it pinned three huge textures in VRAM for the
-     whole session to hint at a transform the compositor already handles. */
-  filter: blur(70px);
+  inset: 0;
 }
 
+/* Top-left, the heaviest field: the accent itself. 20%, down from the 35% the
+   bold pass first shipped -- owner instruction, "reduce the redness". The
+   COMPOSITION is unchanged; only the saturation came down, so the four
+   corners still read as four corners. */
 .ground__field--a {
-  top: -32vmax;
-  left: -18vmax;
+  inset: -12%;
   background: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--accent) 9%, transparent) 0%,
-    color-mix(in srgb, var(--accent) 3%, transparent) 45%,
-    transparent 70%
+    ellipse 85% 65% at 8% 8%,
+    color-mix(in srgb, var(--accent) 20%, transparent),
+    transparent 60%
   );
-  animation: ground-drift-a 64s ease-in-out infinite alternate;
+  animation: ground-drift-a 88s ease-in-out infinite alternate;
 }
 
-/* The counterweight does NOT drift. Three animated layers cost three times
-   one and read almost identically: with the crimson fields moving against a
-   fixed grey, the gradient still shifts, and a laptop reading a results table
-   pays a third less for it. */
+/* Right of centre, the LIGHT field -- the reference's cream, which is our
+   accent-wash. It is what keeps the composition from reading as one pink
+   cloud with a dark corner. */
 .ground__field--b {
-  bottom: -40vmax;
-  right: -22vmax;
-  /* The cool counterweight: the card-soft grey, which keeps the crimson from
-     reading as a single pink cloud. */
+  inset: -12%;
   background: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--card-soft) 85%, transparent) 0%,
-    color-mix(in srgb, var(--card-soft) 40%, transparent) 40%,
-    transparent 72%
+    ellipse 75% 60% at 75% 35%,
+    color-mix(in srgb, var(--accent-wash) 70%, transparent),
+    transparent 62%
   );
+  animation: ground-drift-b 112s ease-in-out infinite alternate;
 }
 
+/* Lower-left, the DEEP field: the same crimson, further down its own ramp.
+   Four weights of one accent, never four hues -- a second hue on the ground
+   is a colour a reader could mistake for a confidence tier. */
 .ground__field--c {
-  top: 22vmax;
-  right: -26vmax;
-  width: 70vmax;
-  height: 70vmax;
+  inset: -12%;
   background: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--accent) 6%, transparent) 0%,
-    transparent 65%
+    ellipse 70% 60% at 15% 80%,
+    color-mix(in srgb, var(--accent-deep) 15%, transparent),
+    transparent 62%
   );
   animation: ground-drift-c 96s ease-in-out infinite alternate;
 }
 
-.ground__field--b {
-  transform: scale(1.06);
+/* Bottom-right, the COOL counterweight, standing in for the reference's blue:
+   the ground grey pulled toward ink, so it stays inside the neutral ramp.
+   The ONE field that does not drift, and deliberately: by owner instruction
+   the RED hues move ("make the red hues moving slowly"), and they need
+   something to move against. Three crimson clouds sliding over a fixed cool
+   anchor reads as weather; four clouds sliding together reads as the whole
+   page wobbling. It also holds the always-on cost at three transforms.
+   Its weight went UP when the crimson came down, so the composition still
+   has a bottom-right corner rather than fading into the base. */
+.ground__field--d {
+  background: radial-gradient(
+    ellipse 70% 60% at 92% 92%,
+    color-mix(
+      in srgb,
+      color-mix(in srgb, var(--ink) 14%, var(--ground)) 58%,
+      transparent
+    ),
+    transparent 62%
+  );
 }
 
+/* The centre glow, in the crimson wash rather than the reference's yellow --
+   see GradientGround in App.jsx for why the yellow is refused.
+   `mix-blend-mode: multiply` works here and would NOT work one level up:
+   `.ground` already carries `z-index: -1` and `overflow: hidden`, so it is a
+   stacking context, and this multiplies against the fields inside it. Given
+   to an element outside that context it would take the page as its backdrop
+   and paint a grey rectangle -- the same failure the hero flare hit twice. */
+.ground__glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at center,
+    color-mix(in srgb, var(--accent-wash) 100%, transparent) 0%,
+    transparent 70%
+  );
+  opacity: 0.3;
+  mix-blend-mode: multiply;
+}
+
+/* The dot grid, from the second reference. A 1px dot every 20px in ink at 9%,
+   which lands between `--hairline` and nothing: it reads as the tooth of
+   graph paper when you look for it and disappears when you do not. It sits
+   ABOVE the gradients and takes no blur, because a blurred grid is just dirt.
+   The whole ground is `position: fixed`, so the grid never scrolls against
+   the content and cannot moire. */
+.ground__grain {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    color-mix(in srgb, var(--ink) 9%, transparent) 1px,
+    transparent 0
+  );
+  background-size: 20px 20px;
+}
+
+/* The three crimson fields drift, slowly, in three different directions, over
+   periods that do not divide into each other (88s / 112s / 96s) so the
+   composition never visibly returns to a pose you have already seen.
+   Transform only -- the compositor moves these layers without repainting,
+   which is the whole reason the drift lives on separate layers instead of one
+   animated background-position. Travel is 5-6vmax against `inset: -12%` of
+   overscan, so a field's own falloff never slides into frame. */
 @keyframes ground-drift-a {
   from {
     transform: translate3d(0, 0, 0) scale(1);
   }
   to {
-    transform: translate3d(12vmax, 8vmax, 0) scale(1.12);
+    transform: translate3d(6vmax, 4vmax, 0) scale(1.08);
+  }
+}
+
+@keyframes ground-drift-b {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.02);
+  }
+  to {
+    transform: translate3d(-5vmax, 4vmax, 0) scale(1.1);
   }
 }
 
@@ -2055,12 +2107,12 @@ input.field__control {
     transform: translate3d(0, 0, 0) scale(1);
   }
   to {
-    transform: translate3d(-10vmax, 14vmax, 0) scale(1.18);
+    transform: translate3d(5vmax, -5vmax, 0) scale(1.09);
   }
 }
 
-/* A still gradient is still a gradient: the composition survives, the drift
-   does not. */
+/* A still composition is still a composition: the four fields, the glow and
+   the grid all survive, the drift does not. */
 @media (prefers-reduced-motion: reduce) {
   .ground__field {
     animation: none;
