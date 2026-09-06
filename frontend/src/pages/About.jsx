@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { checkHealth } from '../lib/api'
 import Icon from '../components/Icon'
+import ChartedName from '../components/ChartedName'
+import BrushCross from '../components/BrushCross'
+import RoundTripProof from '../components/RoundTripProof'
+import ThreadCard from '../components/ThreadCard'
+import useReducedMotion from '../lib/useReducedMotion'
+import useReveal from '../lib/useReveal'
 import './About.css'
 
 // Four phases, not three. `degraded` is the one that was missing when this
@@ -10,12 +16,8 @@ import './About.css'
 // can verify a name, and the old page rendered that as "Reachable & healthy"
 // under its single strongest positive mark, because it branched on whether
 // the FETCH resolved and never read the payload. Measured live, not
-// theorised. PRODUCT.md principle 1 says determinism must be provable rather
-// than asserted; a status board that asserts health it did not check is the
-// same failure in a smaller frame. Folded into About on 2026-09-04 (Task 18,
-// owner instruction: "move the health check to about and keep it as a
-// message board rather than a whole page") — the fix below is the thing that
-// had to survive the move, not merely the feature.
+// theorised. A status board that asserts health it did not check is the same
+// failure the product exists to avoid, in a smaller frame.
 const STATE_LABEL = {
   checking: 'Checking…',
   healthy: 'Reachable & healthy',
@@ -23,20 +25,12 @@ const STATE_LABEL = {
   unreachable: 'Unreachable',
 }
 
-// The mark grammar is deliberate and carried over byte-for-byte from the old
-// page: checking = three shimmering hairline dashes, reachable = ONE solid
-// 2px ink rule, degraded = that same rule at a shorter measure, unreachable =
-// the struck pair. Reachable is deliberately NOT the double rule -- paired
-// ink lines already mean a verified PIN elsewhere in this system (DESIGN.md's
-// Don't list), and a state signal that borrows another state's shape carries
-// no information at all. No hue is ever used for health. The board only
-// scales the marks down for a compact strip; it does not substitute a shape.
-//
-// Scope, by the owner's own instruction when asked how much of the old page
-// should survive: "status line + details" -- the state mark and sentence, a
-// Check again button, and the raw /api/health payload behind a small
-// <details> toggle. The endpoint name and the "same call the app itself
-// relies on" aside did not make the cut; the payload speaks for itself here.
+// The mark grammar is carried over byte-for-byte: checking = three shimmering
+// hairline dashes, reachable = ONE solid 2px ink rule, degraded = that same
+// rule at a shorter measure, unreachable = the struck pair. Reachable is
+// deliberately NOT the double rule -- paired ink lines already mean a verified
+// PIN in this system, and a state signal that borrows another state's shape
+// carries no information at all. No hue is ever used for health.
 function ServiceStatus() {
   const [phase, setPhase] = useState('checking')
   const [raw, setRaw] = useState(null)
@@ -51,9 +45,8 @@ function ServiceStatus() {
         setError(null)
         setCheckedAt(new Date())
         // Read the payload, not merely the fact that one arrived. Anything
-        // other than "OK" is degraded: an unrecognised status is reported as
-        // less-than-healthy rather than as healthy, which is the fail-closed
-        // direction for a claim about health.
+        // other than "OK" is degraded -- the fail-closed direction for a claim
+        // about health.
         setPhase(data?.status === 'OK' ? 'healthy' : 'degraded')
       })
       .catch((err) => {
@@ -72,328 +65,377 @@ function ServiceStatus() {
   const rawDisplay = isChecking ? '—' : raw !== null ? JSON.stringify(raw, null, 2) : error
 
   return (
-    <section className="about-band" aria-label="Service status">
-      <div className="about-band__title-row about-band__title-row--status">
-        <h2>Service status</h2>
-        {/* A utility action beside a heading, not this surface's one primary
-            action -- so the plain frosted `.btn`, not `.btn--accent`, and
-            `.btn--sm` per the owner's 2026-09-04 instruction to size utility
-            controls down from the 44px touch target. */}
+    <div className="status-board" role="status" aria-live="polite" aria-busy={isChecking}>
+      <div className="status-board__row">
+        {/* THE LAMP. A live-status light, the way a status page shows one --
+            and it reports LIVENESS, not the verdict: it says a real check is
+            running and how recently it answered. The verdict stays where it
+            was, in the rule beside it and in the words, so colour is never the
+            only thing carrying a health claim (DESIGN.md's rule, kept). The
+            one state it does encode by itself is the honest one: when nothing
+            answers, the light goes out. */}
+        <span className={`status-lamp status-lamp--${phase}`} aria-hidden="true">
+          <span className="status-lamp__glow" />
+          <span className="status-lamp__core" />
+        </span>
+
+        <span className="status-board__mark" aria-hidden="true">
+          {phase === 'checking' && (
+            <span className="status-board__pending">
+              <span className="status-board__pending-dash" />
+              <span className="status-board__pending-dash" />
+              <span className="status-board__pending-dash" />
+            </span>
+          )}
+          {phase === 'healthy' && <span className="status-board__fill" />}
+          {phase === 'degraded' && (
+            <span className="status-board__fill status-board__fill--partial" />
+          )}
+          {phase === 'unreachable' && (
+            <span className="status-board__snip-wrap">
+              <span className="status-board__snip" />
+              <span className="status-board__snip" />
+            </span>
+          )}
+        </span>
+
+        <div className="status-board__text">
+          <p className="status-board__label">{STATE_LABEL[phase]}</p>
+          {phase === 'degraded' && raw?.opsin && (
+            <p className="prose-sm status-board__reason">
+              {raw.opsin}. Naming endpoints answer 503 until a worker reports one.
+            </p>
+          )}
+          <p className="status-board__meta">
+            {checkedAt ? `Checked ${checkedAt.toLocaleString()}` : '—'}
+          </p>
+        </div>
+
         <button type="button" className="btn btn--sm" onClick={runCheck} disabled={isChecking}>
           <Icon name="refresh" />
           {isChecking ? 'Checking…' : 'Check again'}
         </button>
       </div>
 
-      <div
-        className="status-board"
-        role="status"
-        aria-live="polite"
-        aria-busy={isChecking}
-      >
-        <div className="status-board__row">
-          <span className="status-board__mark" aria-hidden="true">
-            {phase === 'checking' && (
-              <span className="status-board__pending">
-                <span className="status-board__pending-dash" />
-                <span className="status-board__pending-dash" />
-                <span className="status-board__pending-dash" />
-              </span>
-            )}
-            {phase === 'healthy' && <span className="status-board__fill" />}
-            {/* Degraded reuses the reachable rule at a SHORTER measure rather
-                than borrowing a mark that already means something else (the
-                dashed and dotted rules mean fallback and best-effort, which
-                are claims about a NAME, not about a server). The connection
-                really is there, so the line is really there; it just does
-                not reach the end. */}
-            {phase === 'degraded' && (
-              <span className="status-board__fill status-board__fill--partial" />
-            )}
-            {phase === 'unreachable' && (
-              <span className="status-board__snip-wrap">
-                <span className="status-board__snip" />
-                <span className="status-board__snip" />
-              </span>
-            )}
-          </span>
+      <details className="status-board__details">
+        <summary>Raw response</summary>
+        <pre className="status-board__raw">{rawDisplay}</pre>
+      </details>
+    </div>
+  )
+}
 
-          <div className="status-board__text">
-            <p className="status-board__label">{STATE_LABEL[phase]}</p>
-            {phase === 'degraded' && raw?.opsin && (
-              <p className="prose-sm status-board__reason">
-                {raw.opsin}. Naming endpoints answer 503 until a worker reports one.
-              </p>
-            )}
-            <p className="status-board__meta">
-              {checkedAt ? `Checked ${checkedAt.toLocaleString()}` : '—'}
-            </p>
-          </div>
-        </div>
-
-        {/* A native <details>/<summary> disclosure: it needs no state and no
-            ARIA of its own, which matches this codebase's preference for
-            letting the platform do the work. Closed by default -- there is
-            no `open` attribute. On `unreachable` this shows the error text
-            where the payload would otherwise be (`rawDisplay` above already
-            resolves to `error` in that case). */}
-        <details className="status-board__details">
-          <summary>Raw response</summary>
-          <pre className="status-board__raw">{rawDisplay}</pre>
-        </details>
-      </div>
+// A sheet of the pattern. Every section is a numbered sheet with a title
+// block, because that is how a chart is bound: the reader always knows which
+// sheet they are on and what it is for.
+function Sheet({ id, index, title, note, children, reduced }) {
+  const [ref, shown] = useReveal({ reduced })
+  return (
+    <section
+      id={id}
+      ref={ref}
+      className={`sheet${shown ? ' is-shown' : ''}`}
+      aria-labelledby={`${id}-title`}
+    >
+      <header className="sheet__head">
+        <span className="sheet__index" aria-hidden="true">
+          {index}
+        </span>
+        <h2 className="sheet__title" id={`${id}-title`}>
+          {title}
+        </h2>
+        {note && <p className="sheet__note">{note}</p>}
+      </header>
+      <div className="sheet__body">{children}</div>
     </section>
   )
 }
 
-// About STITCH: what it is, how it works, its measured accuracy, and the
-// verified facts (author, license, acknowledgments) behind the naming
-// engine it showcases. Every claim here traces to the engine's own repo
-// (pyproject.toml, LICENSE, README) or to this app's own shipped copy —
-// nothing invented. The three figures in the spec band below are the same
-// measured numbers the accuracy paragraph cites, not new claims. They come
-// from OpenSTOUT v1.0.0's README; the earlier four-figure v21.0 split is
-// gone because v1.0.0 publishes no per-corpus breakdown to cite.
+// The four tier marks, drawn as a pattern chart's symbol key.
 //
-// EXACTLY TWO top-level children: the hero, then the reading column.
-// App.css's `.page__content > * + *:not(.site-footer)` is what supplies the
-// 14px between them, so a third box here would add a stray gap and a single
-// merged box would lose it.
+// This is the single best fit between the two worlds and the reason the world
+// works at all: STITCH's confidence tiers were ALREADY a set of monochrome
+// line symbols with fixed meanings -- double rule, dashed, dotted, faint --
+// which is precisely what a chart's key is. Nothing was invented to make them
+// fit. A reader who learns the key here recognises the same mark under a name
+// on every other page, which is what the product needs and what a key is for.
+const KEY_ROWS = [
+  {
+    mark: 'pin',
+    name: 'Preferred IUPAC Name',
+    body: 'Worked to the strict rule, and read back clean.',
+  },
+  {
+    mark: 'fallback',
+    name: 'Fallback',
+    body: 'Reads back clean, but is not the preferred name.',
+  },
+  {
+    mark: 'best',
+    name: 'Best effort',
+    body: 'The engine worked it. OPSIN could not confirm it.',
+  },
+  {
+    mark: 'abstain',
+    name: 'Left unworked',
+    body: 'No name — it declined rather than guess.',
+  },
+]
+
+// The thread list. Real marks where the project publishes one; a typographic
+// lockup where it does not. See ThreadCard for why that distinction is drawn
+// rather than smoothed over.
+const THREADS = [
+  {
+    code: '01',
+    name: 'OPSIN',
+    role: 'Reads a name back into a structure. Every verification on this site is its answer, not ours.',
+    href: 'https://github.com/dan2097/opsin',
+  },
+  {
+    code: '02',
+    name: 'RDKit',
+    role: 'Molecular perception, and the drawings.',
+    logo: '/logos/rdkit.png',
+    alt: 'RDKit',
+    href: 'https://www.rdkit.org/',
+  },
+  {
+    code: '03',
+    name: 'IUPAC Blue Book',
+    role: 'The 2013 recommendations — the rules the engine works to, not a style of its own.',
+    href: 'https://iupac.org/what-we-do/books/bluebook/',
+  },
+]
+
+// The three routes, written as a pattern's working instructions: what you do,
+// in order, on each. Row language rather than paragraph language, because a
+// chart tells you to work a row, not about working rows.
+const ROWS = [
+  {
+    n: 'I',
+    title: 'Translate',
+    body: 'Paste, upload or draw a structure. The engine works the name and marks it with one of the four symbols opposite.',
+  },
+  {
+    n: 'II',
+    title: 'IUPAC → Structure',
+    body: 'The reverse. This one runs on OPSIN rather than the engine backwards, because reading a name is a different craft from writing one.',
+  },
+  {
+    n: 'III',
+    title: 'Explain',
+    body: 'Unpicks a finished name into the parts it was worked from, each mapped to the atoms it covers. Anything it cannot place, it says so.',
+  },
+]
+
+// About STITCH, worked as a pattern chart.
+//
+// The world was chosen by the owner from a hand of four (2026-09-06) and it is
+// the one that fits the product's own name: STITCH, worked from parts, in a
+// fixed order, to a written rule. The footer already sews itself shut and the
+// nav pulls a stitch tight on arrival, so the page is not importing a metaphor
+// -- it is finally speaking the one the site already had.
+//
+// The page had been rebuilt twice before as a document in cards and failed on
+// four counts at once (too plain, too little imagery, wrong order, too
+// sparse), so this replaces the composition rather than passing over it again.
+//
+// The mapping is not decoration laid over content; every region of a real
+// chart already had a tenant here:
+//   the KEY      <- the four confidence tiers, already a set of line symbols
+//   the THREADS  <- the dependency credits, with their real marks as swatches
+//   the ROWS     <- the three routes, as working instructions
+//   the PIECE    <- the live round-trip, which is the finished thing itself
+//   the GAUGE    <- engine, version, licence, author, and whether it is up
 function About() {
+  const reduced = useReducedMotion()
+
   return (
     <>
-      {/* The opening is NOT a card. It was `.page-head` — a wide white
-          rectangle stacked directly under the white header notch — until
-          Home dropped that shape on 2026-09-02 for a wordmark sitting
-          straight on the grey ground. `.page-hero` (App.css) is that same
-          move for a route that has a title instead of a wordmark: no fill,
-          no border, no shadow, no radius, and no stacking context, so the
-          gradient ground shows through and the page begins with the floor.
-          It self-insets to the shell column, so it must NOT also take
-          `page-shell` — that would pad it twice. */}
-      <section className="page-hero" aria-label="Introduction">
-        <h1 className="page-hero__title">About Stitch</h1>
-        {/* One sentence. The rest of the old lede — the acronym's expansion
-            and the succeeds / falls back / declines clause — was not deleted,
-            it moved down into "How it works", where the same three outcomes
-            are already the subject. */}
-        <p className="page-hero__lede">
-          A public showcase for a deterministic, rule-based SMILES-to-IUPAC-name engine.
-        </p>
+      {/* The pattern's cover sheet. */}
+      <section className="chart-cover" aria-label="Introduction">
+        <div className="chart-cover__plate">
+          {/* The name first, worked across the full measure. It is the
+              masthead of the pattern, so it leads. */}
+          <ChartedName />
+
+          <h1 className="chart-cover__title">How a name is worked</h1>
+          <p className="chart-cover__lede">
+            STITCH builds an IUPAC name the way a chart builds a piece: from named parts, in a
+            fixed order, to a written rule. Nothing is guessed, and the finished work is checked
+            against the pattern before you are shown it.
+          </p>
+
+          <dl className="chart-cover__gauge">
+            <div>
+              <dt>Worked to</dt>
+              <dd>IUPAC 2013</dd>
+            </div>
+            <div>
+              <dt>Engine</dt>
+              <dd>OpenSTOUT v1.0.0</dd>
+            </div>
+            <div>
+              <dt>Method</dt>
+              <dd>Rule-based</dd>
+            </div>
+          </dl>
+        </div>
       </section>
 
-      <main className="about-page">
-        {/* OpenSTOUT v1.0.0's published figures (its README § Accuracy),
-            shown at full size rather than tucked into fine print. v1.0.0
-            publishes no per-corpus breakdown, so none is shown. */}
-        <section className="about-band" aria-label="Measured accuracy">
-          <div className="spec">
-            <div className="spec__cell">
-              <span className="spec__value">94.8%</span>
-              <span className="spec__label">Round-trip exact match</span>
-            </div>
-            <div className="spec__cell">
-              <span className="spec__value">0</span>
-              <span className="spec__label">Wrong structures emitted</span>
-            </div>
-            <div className="spec__cell">
-              <span className="spec__value">1,500</span>
-              <span className="spec__label">Molecules benchmarked</span>
-            </div>
-          </div>
-          {/* PRODUCT.md principle 2: a figure travels with its version, its
-              benchmark and its metric's own definition — never as a bare
-              percentage. All three restate what the accuracy band below
-              already says; nothing new is claimed here. A caption, not a
-              paragraph, so the mono face is legal. */}
-          <p className="about-spec-source">
-            OpenSTOUT v1.0.0 &middot; 1,500 molecules from ChEBI and PubChem &middot; a refusal to
-            name counts as a failure
-          </p>
-        </section>
+      <main className="chart">
+        {/* THE PIECE — the live proof, worked in front of the reader. */}
+        <Sheet
+          id="piece"
+          index="Sheet 1"
+          title="The finished piece"
+          note="Worked live, on this server, while you watch."
+          reduced={reduced}
+        >
+          <RoundTripProof />
+        </Sheet>
 
-        <section className="about-band about-band--split" aria-label="How accurate is it">
-          <div className="about-band__head">
-            <h2>How accurate is it?</h2>
-          </div>
-          <div className="about-band__body">
-            <p className="prose">
-              STITCH&rsquo;s naming engine is rule-based, so the same input always gives the same
-              output, and it will tell you when it isn&rsquo;t sure.
-            </p>
-            <p className="prose">
-              The headline metric is round-trip exact match: name the structure, parse the name
-              back with OPSIN, and compare canonical identifiers, counting any refusal to name as
-              a failure. It is reference-free &mdash; it does not depend on a possibly-noisy
-              database name. On a 1,500-molecule benchmark drawn from ChEBI and PubChem,
-              OpenSTOUT v1.0.0 scores 94.8% round-trip exact match and emitted 0 wrong
-              structures.
-            </p>
-            <p className="prose">
-              That second figure is the design priority: never emit a name for the wrong
-              molecule. When a preferred name cannot be built with confidence, the engine drops
-              to a less-preferred but still correct systematic name, or abstains &mdash; it does
-              not guess. A lower-confidence name is always shown as such, never hidden.
-            </p>
-          </div>
-        </section>
+        {/* THE KEY — the symbols, which the product already had. */}
+        <Sheet
+          id="key"
+          index="Sheet 2"
+          title="Key"
+          note="Every name on this site carries one of these four marks."
+          reduced={reduced}
+        >
+          <dl className="key">
+            {KEY_ROWS.map((row) => (
+              <div className="key__row" key={row.mark}>
+                <dt>
+                  <span className={`key__mark key__mark--${row.mark}`} aria-hidden="true" />
+                  <span className="key__name">{row.name}</span>
+                </dt>
+                <dd>{row.body}</dd>
+              </div>
+            ))}
+          </dl>
+        </Sheet>
 
-        <section className="about-band about-band--split" aria-label="How it works">
-          <div className="about-band__head">
-            <h2>How it works</h2>
-          </div>
-          <div className="about-band__body">
-            {/* Moved down out of the old title card's lede, unchanged in
-                substance: the acronym's expansion, and the three outcomes
-                the paragraph after it then names one by one. */}
-            <p className="prose">
-              STITCH &mdash; SMILES To IUPAC name Translator for Chemistry &mdash; is built so
-              visitors can try the engine on real molecules and see exactly how it behaves,
-              including where it succeeds, where it falls back, and where it honestly declines to
-              guess.
-            </p>
-            <p className="prose">
-              Every SMILES string you submit goes through a fixed set of IUPAC nomenclature rules
-              &mdash; there&rsquo;s no model and no training data involved, so the same input
-              always produces the same output. Internally, the engine checks its own answer: it
-              names the structure, then feeds that name into OPSIN, an independent
-              name-to-structure parser, to see whether the round trip lands back on the same
-              molecule. A name that round-trips cleanly under the engine&rsquo;s strict
-              preferred-name rules is shown as a Preferred IUPAC Name (PIN). A name that
-              round-trips but doesn&rsquo;t meet that strict standard is still shown, but labeled
-              as a fallback rather than presented as equivalent to a PIN. When the engine
-              isn&rsquo;t confident enough to produce a name at all, it abstains instead of
-              guessing &mdash; and says so.
-            </p>
-          </div>
-        </section>
+        {/* THE ROWS — the three routes as working instructions. */}
+        <Sheet
+          id="rows"
+          index="Sheet 3"
+          title="Working instructions"
+          note="Three ways in. The same engine behind each."
+          reduced={reduced}
+        >
+          <ol className="rows" role="list">
+            {ROWS.map((row) => (
+              <li className="row" key={row.n}>
+                <span className="row__n" aria-hidden="true">
+                  {row.n}
+                </span>
+                <h3 className="row__title">{row.title}</h3>
+                <p className="row__body">{row.body}</p>
+              </li>
+            ))}
+          </ol>
+        </Sheet>
 
-        <section className="about-band about-band--split" aria-label="How each page works">
-          <div className="about-band__head">
-            <h2>How each page works</h2>
-          </div>
-          <div className="about-band__body">
-            <div className="about-sub">
-              <h3>Structure &rarr; IUPAC</h3>
-              <p className="prose">
-                Draw a molecule, then press Translate &mdash; the drawn structure is read straight
-                out of the editor as a SMILES string and sent to the same engine behind the
-                Translate page. The result lands in the same register entry you&rsquo;d see there:
-                a double-ruled name means a confirmed Preferred IUPAC Name (PIN), a dashed
-                underline is a lower-confidence but round-trip&ndash;verified fallback, a faint
-                dotted underline means a name the engine could produce but not verify, and an
-                empty ruled slot means it honestly couldn&rsquo;t name it at all.
-              </p>
-            </div>
-            <div className="about-sub">
-              <h3>IUPAC &rarr; Structure</h3>
-              <p className="prose">
-                This direction runs through OPSIN, not STITCH&rsquo;s own naming engine in
-                reverse. STITCH&rsquo;s naming engine turns structures into names; going the other
-                way needs a name-to-structure parser instead, so this page hands your text
-                straight to OPSIN. If OPSIN can&rsquo;t resolve a name &mdash; a trade name, a
-                misspelling, or anything outside strict IUPAC nomenclature &mdash; STITCH says so
-                plainly rather than guessing.
-              </p>
-            </div>
-            <div className="about-sub">
-              <h3>Explain and Learn</h3>
-              <p className="prose">
-                Every highlight comes from OPSIN&rsquo;s own parse of the name, never a guess. The
-                name is broken into the parts OPSIN itself found &mdash; the parent skeleton, each
-                substituent, the ending that names the main group, and prefixes that only move
-                hydrogens around &mdash; and each part carries the atoms OPSIN built it from.
-                Failure is per part: anything STITCH can&rsquo;t pin to specific atoms is marked
-                &ldquo;could not work out which atoms,&rdquo; and the parts around it are
-                unaffected. Explain takes a typed SMILES or a typed name; Learn takes a drawn
-                structure. Same breakdown, different way in.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* At a glance — verified facts as a row of small cards on the grey
-            ground, the same rounded-card vocabulary every other surface on
-            the site uses. `role="list"` is not optional: index.css sets
-            `list-style: none` globally, which strips the list semantics from
-            a bare <ul> in Safari/VoiceOver. */}
-        <section className="about-band" aria-label="At a glance">
-          <div className="about-band__title-row">
-            <h2>At a glance</h2>
-          </div>
-          <ul className="about-cards" role="list">
-            <li className="about-card">
-              <span className="about-card__label">Engine</span>
-              <p className="about-card__body">
-                Deterministic and rule-based &mdash; not a language model.
-              </p>
-            </li>
-            <li className="about-card">
-              <span className="about-card__label">Version</span>
-              <p className="about-card__body">
-                OpenSTOUT v1.0.0 &mdash; its first public release.
-              </p>
-            </li>
-            <li className="about-card">
-              <span className="about-card__label">License</span>
-              <p className="about-card__body">MIT</p>
-            </li>
-            <li className="about-card">
-              <span className="about-card__label">Author</span>
-              <p className="about-card__body">Kohulan Rajan</p>
-            </li>
+        {/* THE THREADS — the credits, where a floss list belongs. */}
+        <Sheet
+          id="threads"
+          index="Sheet 4"
+          title="Threads"
+          note="What the work is made from. None of it is ours alone."
+          reduced={reduced}
+        >
+          <ul className="threads" role="list">
+            {THREADS.map((t) => (
+              <ThreadCard key={t.code} {...t} />
+            ))}
           </ul>
-          <div className="about-band__foot">
-            <p className="prose-sm">
-              STITCH&rsquo;s naming engine is open source, released under the MIT License.{' '}
-              <a
-                className="about-link"
-                href="https://github.com/Kohulan/OpenSTOUT"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                View the naming engine&rsquo;s source code
-              </a>
-              .
-            </p>
-          </div>
-        </section>
+        </Sheet>
 
-        {/* The live board sits here rather than at the very top or bottom:
-            after the static facts it is a sibling to ("At a glance" states
-            what the engine IS; this states whether it is UP right now), and
-            before "Acknowledgments" so the page still closes on credits to
-            the other software it depends on, which reads as the natural
-            last word on an About page. */}
-        <ServiceStatus />
+        {/* WHO WORKED IT. The two institutions get their own sheet rather than
+            a row in the thread list: a partnership is not a dependency, and
+            filing it as one undersold it.
+            The join is BrushCross -- a painted mark at signature scale, NOT the
+            footer's stitched hairline. They are deliberately different: the
+            footer's × is punctuation inside a sentence, this one is the thing
+            the sheet is about. Same letter, different drawing, different job. */}
+        <Sheet
+          id="collaboration"
+          index="Sheet 5"
+          title="Worked together"
+          reduced={reduced}
+        >
+          <div className="collab">
+            <a
+              className="collab__org"
+              href="https://www.beilstein-institut.de/en/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img
+                src="/Logo_Beilstein_schmal_RGB.svg"
+                alt="Beilstein-Institut"
+                width={876}
+                height={202}
+              />
+            </a>
 
-        <section className="about-band" aria-label="Acknowledgments">
-          <div className="about-band__title-row">
-            <h2>Acknowledgments</h2>
+            <span className="sr-only">and</span>
+            <BrushCross className="collab__x" />
+
+            <a
+              className="collab__org"
+              href="https://cheminf.uni-jena.de"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img
+                src="/logos/steinbeck.png"
+                alt="Natural Products Cheminformatics, Friedrich Schiller University Jena — the Steinbeck Lab"
+                width={1666}
+                height={400}
+              />
+            </a>
           </div>
-          <ul className="about-cards" role="list">
-            <li className="about-card">
-              <span className="about-card__label">IUPAC Blue Book 2013</span>
-              <p className="about-card__body">
-                Source of the nomenclature rules the naming engine implements.
-              </p>
-            </li>
-            <li className="about-card">
-              <span className="about-card__label">OPSIN</span>
-              <p className="about-card__body">
-                Used for name-to-structure conversion, to validate names.
-              </p>
-            </li>
-            <li className="about-card">
-              <span className="about-card__label">RDKit</span>
-              <p className="about-card__body">Used for molecular perception.</p>
-            </li>
-            <li className="about-card">
-              <span className="about-card__label">ChEBI</span>
-              <p className="about-card__body">Source of a validation dataset.</p>
-            </li>
-          </ul>
-        </section>
+
+          <p className="collab__line">An official collaboration for open science.</p>
+        </Sheet>
+
+        {/* THE GAUGE — the maker's block that closes a pattern. */}
+        <Sheet id="gauge" index="Sheet 6" title="Maker's notes" reduced={reduced}>
+          <dl className="gauge">
+            <div className="gauge__row">
+              <dt>Engine</dt>
+              <dd>OpenSTOUT v1.0.0 — deterministic and rule-based, not a language model.</dd>
+            </div>
+            <div className="gauge__row">
+              <dt>Source</dt>
+              <dd>
+                MIT licence.{' '}
+                <a
+                  className="about-link"
+                  href="https://github.com/Kohulan/OpenSTOUT"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Read the pattern itself
+                </a>
+                .
+              </dd>
+            </div>
+            <div className="gauge__row">
+              <dt>Worked by</dt>
+              <dd>Kohulan Rajan</dd>
+            </div>
+            <div className="gauge__row gauge__row--status">
+              <dt>Right now</dt>
+              <dd>
+                <ServiceStatus />
+              </dd>
+            </div>
+          </dl>
+        </Sheet>
       </main>
     </>
   )

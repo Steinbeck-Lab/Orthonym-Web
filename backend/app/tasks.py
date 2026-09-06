@@ -413,20 +413,15 @@ def translate_fast(
             # Already-canonical-or-error, same convention translate_one
             # itself uses for an unparseable string: echo the raw input
             # back as `smiles`, no RDKit call.
-            rows.append(
-                ResultItem(
-                    smiles=item["raw_input"],
-                    status="error",
-                    name=None,
-                    tier=None,
-                    formula=None,
-                    limit_code=None,
-                    error=item["error"],
-                    depiction_svg=None,
-                    roundtrip_smiles=None,
-                    roundtrip_match=None,
-                ).model_dump()
-            )
+            #
+            # Via the helper, not a second hand-built ResultItem. The two were
+            # field-for-field identical, but only _fast_error_item carried the
+            # reason this shape must be a ResultItem and never a BatchRow --
+            # main.py validates every row with ResultItem.model_validate, so a
+            # BatchRow here 500s the request the per-molecule guard exists to
+            # protect. A copy without that reasoning attached is the copy a
+            # future edit gets wrong.
+            rows.append(_fast_error_item(item["raw_input"], item["error"]))
             continue
 
         smiles = item["smiles"]

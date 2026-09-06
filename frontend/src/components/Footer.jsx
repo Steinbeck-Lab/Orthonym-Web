@@ -1,3 +1,5 @@
+import StitchCross from './StitchCross'
+
 // Site-wide footer — appears once, beneath every page, via the router shell.
 //
 // Three parts and nothing else: copyright + the rights-holder mark, a credit
@@ -45,37 +47,6 @@ function CoffeeMark() {
       <path d="M3.5 8h14v5.5a5 5 0 0 1-5 5h-4a5 5 0 0 1-5-5V8Z" />
       {/* handle */}
       <path d="M17.5 9.5h1.6a2.4 2.4 0 0 1 0 4.8h-1.6" />
-    </svg>
-  )
-}
-
-// The mark between the two labs. It was a typed multiplication sign; it is now
-// two crimson strokes that SEW THEMSELVES on hover, staggered, one after the
-// other -- a stitch, on a site called STITCH, at the exact point where two
-// institutions are joined. That is the whole joke and the whole reason it is
-// allowed to move: it says something true about the thing it sits inside.
-//
-// Rules it keeps: crimson lives in chrome, and a footer is chrome (DESIGN.md's
-// One-Accent Rule; it never touches a confidence tier). It is aria-hidden with
-// an sr-only "and" beside it, so the pill still reads as a sentence. It runs
-// only on hover of the whole pill, in 420 ms on the project's standard
-// ease-out-expo, and prefers-reduced-motion switches it off -- delight that
-// blocks or nags is not delight.
-function StitchCross() {
-  return (
-    <svg
-      className="credit__x"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      aria-hidden="true"
-    >
-      {/* Each stroke is 12.73 units long (9-9-root-2), which is why the CSS
-          dasharray is 13: one dash covers the whole path exactly once. */}
-      <path className="credit__x-stroke" d="M3.5 3.5 12.5 12.5" />
-      <path className="credit__x-stroke" d="M12.5 3.5 3.5 12.5" />
     </svg>
   )
 }

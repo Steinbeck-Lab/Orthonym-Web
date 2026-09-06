@@ -36,6 +36,6 @@ export const NAMED_STATUSES = new Set(['pin', 'fallback', 'best_effort'])
 
 // Statuses whose confidence rule (double / dashed) claims an OPSIN round-trip
 // confirmed the name. best_effort makes no such claim -- its own state label
-// already says "could not round-trip check this" -- so only these two need an
+// already says OPSIN did not confirm it -- so only these two need an
 // explicit call-out when roundtrip_smiles is missing.
 export const VERIFIED_STATUSES = new Set(['pin', 'fallback'])

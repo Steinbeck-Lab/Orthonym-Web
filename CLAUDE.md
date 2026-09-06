@@ -1,34 +1,36 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## What this is
 
-STITCH is a public showcase web app for **OpenSTOUT** (private upstream `github.com/Kohulan/OpenSTOUT`;
-`scripts/vendor-openstout.sh` takes `OPENSTOUT_SRC`. **Clone it fresh rather than pointing at a local
-checkout** — see the refresh warning below), a deterministic,
-rule-based SMILES→IUPAC naming engine — as opposed to STOUT-V2, the neural model shown by the
-separate sibling repo `~/STOUT_WebApp` (Vue 3 stack, unrelated codebase). **The two repos are easy
-to confuse; a shell may open in `~/STOUT_WebApp` by mistake — `cd`/verify the path before editing.**
+STITCH is the public showcase web app for **OpenSTOUT**, a deterministic, rule-based SMILES→IUPAC
+naming engine (private upstream `github.com/Kohulan/OpenSTOUT`, vendored as a snapshot under
+`backend/vendor/openstout`). It is not STOUT-V2: that neural model has its own unrelated sibling
+repo, `~/STOUT_WebApp` (Vue 3). Shells open there by mistake, so check `pwd` before editing.
 
-Stack: **React 19 + Vite** (frontend) / **FastAPI + Celery + Redis + RDKit + OpenSTOUT + OPSIN
-(via JPype/a real JRE)** (backend). No database, no auth, no accounts — but the backend is **not a
-single process any more**: naming runs in Celery workers, and Redis carries the broker, the job
-results, the shared name cache and the per-IP rate-limit counters. See "The job layer" below.
+Stack: React 19 + Vite frontend; FastAPI + Celery + Redis + RDKit + OpenSTOUT + OPSIN (JPype on a
+real JRE) backend. No database, no auth. Naming runs in Celery workers; Redis is the broker, the job
+store, the shared name cache and the rate-limit counters at once.
+
+The detail lives in files you load when you need them:
+
+- `DESIGN.md` — the shipped visual system and every load-bearing CSS decision with its reason. Read it before a visual change; `.impeccable/design.json` is its token sidecar, keep both in sync.
+- `PRODUCT.md` — the four product principles (summarised at the end of this file).
+- `docs/architecture-notes.md` — backend and frontend internals with the measured numbers: job layer, confidence tiers, the verify switch, `/from-name`, name cache, CDK.
+- `backend/app/cdk_bridge.py` docstring — why CDK loads through its own classloader and in which jar order.
+- `docker-compose.yml` comments — the Redis eviction policy, and the `127.0.0.1` binding + `TRUST_PROXY_HEADERS` pair.
+- `README.md` "Regression check" — the SELF-01 fail-open check to run after any JRE, jar or image change.
 
 ## Commands
 
 ```bash
-# Redis first — everything below needs it (tests included).
-docker compose up -d redis           # container stitch-redis, localhost:6379, volatile-lru
+# Redis first — everything below needs it, tests included.
+docker compose up -d redis           # container stitch-redis, localhost:6379
 
-# tests — from the repo root. This script is the ONLY correct way to run them.
-backend/scripts/run-tests.sh                            # full suite
+# tests — from the repo root; this script is the only correct way to run them
+backend/scripts/run-tests.sh                              # full suite
 backend/scripts/run-tests.sh tests/test_name_spans.py -v  # one file
 
-# backend — from backend/. Three processes, not one: uvicorn alone answers
-# /api/health with DEGRADED and 503s every naming endpoint, because no worker
-# has recorded a live JVM. Each command wants its own terminal.
+# backend — from backend/, three processes in three terminals
 REDIS_URL=redis://localhost:6379/0 .venv-mac/bin/python -m uvicorn app.main:app --port 8001
 REDIS_URL=redis://localhost:6379/0 .venv-mac/bin/python -m celery -A app.celery_app worker -Q fast  -c 2 -n fast@%h
 REDIS_URL=redis://localhost:6379/0 .venv-mac/bin/python -m celery -A app.celery_app worker -Q batch -c 2 -n batch@%h
@@ -37,471 +39,64 @@ REDIS_URL=redis://localhost:6379/0 .venv-mac/bin/python -m celery -A app.celery_
 cd backend && PYTHONPATH="$(pwd)" REDIS_URL=redis://localhost:6379/0 .venv-mac/bin/python <script.py>
 
 # frontend — from frontend/
-npm run dev      # vite dev server, proxies /api -> http://localhost:8000
+npm run dev        # proxies /api -> http://localhost:8000
 npm run build
-npm test         # node --test over src/**/*.test.js -- `node --test src/lib/` fails,
-                 # it globs non-test files too; use the script
-npx oxlint src/  # full-project `npm run lint` has pre-existing warnings in vendored public/standalone/ — out of scope
+npm test           # node --test over src/**/*.test.js; `node --test src/lib/` globs non-test files
+npx oxlint src/    # `npm run lint` also lints vendored public/standalone/, which has old warnings
 
-# whole stack
+# whole stack: frontend :8080, backend 127.0.0.1:8000, redis, worker-fast, worker-batch
 docker compose up -d --build
-# -> frontend :8080, backend 127.0.0.1:8000, plus redis, worker-fast, worker-batch
 ```
 
-**Gotchas that cost real time:**
-- **`backend/.venv` is a Linux venv and cannot run here.** Its `pyvenv.cfg` records
-  `/home/kohulan/STITCH/backend/.venv` and its `bin/python` is a dangling symlink to
-  `/usr/bin/python3.12`. Use **`backend/.venv-mac/bin/python`** on macOS. This trap defeated three
-  separate review agents; check the interpreter before you believe an import error.
-- **Never run a bare `pytest`; run `backend/scripts/run-tests.sh`.** JPype's JVM refuses to let the
-  process exit, so a bare `pytest` looks like a 10-minute hang ending in exit 144 *after* it has
-  already printed a correct summary. The script waits for pytest's own summary line, kills the
-  corpse, picks the right interpreter and points `REDIS_URL` at localhost. Its exit codes: `0` all
-  passed, `1` tests failed, `2` no summary appeared (a real hang).
-- **Kill every Celery worker before running the suite.** A worker left listening on the same
-  Redis CONSUMES the jobs the tests submit, which silently breaks the tests that
-  turn eager mode off on purpose — the concurrent cap reads as broken (10 admitted against a cap
-  of 2) on correct code. `pkill -9 -f "celery -A app.celery_app"`, then confirm with `pgrep -fl`.
-  **`pkill` does not reach a worker in a container**, and the compose stack publishes its Redis on
-  the same `localhost:6379` the suite uses — so if `docker compose up` is running, also
-  `docker stop stitch-worker-fast stitch-worker-batch` (check with `docker ps`).
-- **The suite needs Redis running** (`docker compose up -d redis`, which is what `conftest.py`
-  prints). There is no `stitch-redis-dev` container any more; the compose service is
-  `stitch-redis`. `conftest.py` deliberately `pytest.fail`s with instructions rather than
-  skipping when Redis is missing.
-- **`REDIS_URL` defaults to `redis://redis:6379/0`**, the compose-internal hostname. Anything run
-  outside compose must override it to `redis://localhost:6379/0`.
-- **Port 8000 is held by an unrelated project's container** (`bchemxtractweb-backend-1`), and it
-  collides with STITCH's own `127.0.0.1:8000` compose binding — so `:8000` may be a different
-  application's API entirely. Run a fresh backend on **8001** for manual testing; `vite.config.js`
-  proxies `/api` to 8000, so temporarily repoint it at 8001 for a real browser check, then revert.
-- **`.venv-mac` has no `pip`** — it was built with `uv venv --python 3.12`, so install into it with
-  `uv pip install -r requirements.txt`, not `pip install`. It *does* have working console-script
-  shims (`celery`, `pytest`, `uvicorn`, `openstout`, ...), each with a correct absolute shebang, so
-  `.venv-mac/bin/celery --version` works; `.venv-mac/bin/python -m <tool>` is equally fine.
-- **Playwright is reachable as an MCP server**, not a local install. `/home/kohulan/node_modules/playwright`
-  does not exist on this machine.
-- **`.env` and `.env.*` are unreadable** — a user-global deny rule in `~/.claude/settings.json`
-  blocks them. Hand the text to the owner rather than narrowing the guard.
+## Gotchas
 
-## Architecture
+Things the repo does not tell you, or tells you only after they cost time.
 
-**The OpenSTOUT dependency is vendored, not live-pathed.** `backend/requirements.txt` installs
-`openstout` from `backend/vendor/openstout` (a snapshot), not from a live checkout — Docker
-builds can't reach outside their build context, and this keeps the backend reproducible without
-assuming the sibling repo exists on the build host (on this machine it does not; point
-`OPENSTOUT_SRC` at a clone). Refresh the snapshot after upstream OpenSTOUT
-changes with `./scripts/vendor-openstout.sh`, then re-check `backend/vendor/openstout/README.md`
-for updated accuracy numbers before touching any copy that cites them (see below).
+**Environment**
+- Address paths absolutely, not with `cd`. `cd <dir> && grep -rn x app/` prompts for approval every time: a relative path after a `cd` resolves to a directory the permission check cannot determine, so with any `Read()` deny rule configured it cannot prove the search misses a denied file. `grep -rn x /abs/path/app/` is the identical search and runs unprompted. Same for git — `git -C <dir> status`, never `cd <dir> && git status`, because a `cd` into a different directory before `git` always prompts (that directory's hooks could run).
+- `backend/.venv` is a Linux venv with a dangling `python` symlink. Use `backend/.venv-mac/bin/python`. It has no `pip`: install with `uv pip install -r requirements.txt`. Its console shims (`celery`, `pytest`, `uvicorn`) work.
+- `REDIS_URL` defaults to `redis://redis:6379/0`, the compose hostname. Outside compose, set `redis://localhost:6379/0`.
+- Port 8000 may be STITCH's own compose backend or another project's container. Run a manual backend on 8001; `vite.config.js` proxies to 8000, so repoint it for a browser check and revert.
+- `.env` and `.env.*` are unreadable by a user-global deny rule, anchored at the filesystem root (`Read(//**/.env)`) so it holds whatever the working directory is. Hand the text to the owner instead of loosening the rule.
+- Playwright is an MCP server, not a local install. Its browser is shared: a subagent can navigate it away or resize it mid-measurement.
+- Docker Desktop stops on its own. A 502 through the Vite proxy plus a `docker.sock` error means the daemon is down, not the code.
 
-**Refreshing: clone fresh, and check the version before you vendor anything.** Refreshed 2026-09-03 (commit `170174b`):
-the snapshot now tracks upstream `main` at `404b69e` (2026-09-02) — 265 files, 254 of them `.py`,
-still version `1.0.0`, same two jars (`opsin-cli-2.9.0`, `centres-cli-1.5`), and a README whose
-Accuracy section moved from 94.8% to 96.1%. `backend/.venv-mac` carries the refreshed copy (254
-`.py` files); the running `stitch-worker-*` containers were NOT reconfirmed after the refresh —
-rebuild and recreate them before trusting a manual test. **The local checkout on this machine is a trap**: it lives
-at `/Volumes/Data_Drive/My_Projects/2026/OpenSTOUT/Project` (not `~/OpenSTOUT/Project`, which does not
-exist), sits on `main` at 2026-05-19, carries uncommitted work, and reports `__version__ = "0.1.0"` —
-vendoring from it would **downgrade** the engine from 1.0.0. `gh` is authenticated with `repo` scope,
-so `gh repo clone Kohulan/OpenSTOUT <dir> -- --depth 1` is the reliable source.
+**Tests**
+- Only `backend/scripts/run-tests.sh`. A bare `pytest` prints a correct summary and then hangs about 10 minutes because JPype's JVM will not let the process exit. Script exit codes: 0 passed, 1 failed, 2 no summary (a real hang).
+- The suite needs Redis; `conftest.py` fails with instructions instead of skipping.
+- Kill every Celery worker first: `pkill -9 -f "celery -A app.celery_app"`, and `docker stop stitch-worker-fast stitch-worker-batch` when compose is up, because `pkill` does not reach containers. A live worker consumes the jobs the tests submit and the concurrency-cap tests then fail on correct code.
+- Tests share the Redis DB with manual runs and are not namespaced. Leftover keys fail `test_rate_limit.py` and `test_jobs_api.py` on unmodified code; check `docker exec stitch-redis redis-cli --scan --pattern 'stitch:*' | wc -l` and `FLUSHDB` before trusting a before/after.
 
-**SELF-01 needs a real JVM, or it silently fails open.** OpenSTOUT's self-consistency gate (does a
-candidate name round-trip back through OPSIN to the same structure?) requires JPype + a real JRE +
-two vendored jars (OPSIN, `centres`). Without them, a name that should downgrade to `fallback` can
-ship mislabeled as a verified `pin` — confirmed by direct testing, not theoretical. This is why the
-Dockerfile installs `default-jre-headless` and why `backend/scripts/place_opsin_resources.py` runs
-on every build/`pip install`. Don't strip either "to slim the image" without re-running the
-regression check in `README.md` first (a fused polycyclic SMILES must come back `"fallback"`,
-never `"pin"`).
+**Backend**
+- uvicorn alone is not a backend: `/api/health` reports `DEGRADED` and every naming endpoint 503s until a worker records a live JVM. This is deliberate. Without a JVM, OpenSTOUT's SELF-01 round-trip gate fails open and a `fallback` ships labelled `pin`.
+- Do not call `startJVM`, and do not reorder the CDK/centres jar URLs; `cdk_bridge.py`'s docstring explains what each measured. `cdk_bridge.self_check()` asserts on the answer (L-alanine labelled `S`) because a CIP pass that stops labelling still returns a good SVG.
+- JVM, font and native-library checks that pass on macOS can fail inside the slim Debian image and degrade silently (CDK drew nothing, RDKit fallback hid it). Probe inside the built container.
+- Refresh the OpenSTOUT snapshot with `scripts/vendor-openstout.sh` from a fresh clone: `gh repo clone Kohulan/OpenSTOUT <dir> -- --depth 1`. The local checkout at `/Volumes/Data_Drive/My_Projects/2026/OpenSTOUT/Project` reports `0.1.0` and would downgrade the vendored `1.0.0`. Upstream has no tags; `name_cache._engine_fingerprint()` hashes the installed source so a refresh invalidates the cache.
+- Redis runs `volatile-lru`, not `allkeys-lru`, because broker messages carry no TTL. Rate limits are per IP; the `127.0.0.1` binding and `TRUST_PROXY_HEADERS` are a pair and neither is safe alone. Both reasons are in `docker-compose.yml`.
+- Deployment profiles are `backend/config/{small,medium,large}.yml`, selected by `DEPLOYMENT_PROFILE`. Precedence env > profile > code default is hand-implemented in `backend/app/core/config.py` because pydantic-settings' order is the opposite. Profiles must stay under `backend/`, the Docker build context.
+- `SoftTimeLimitExceeded` subclasses `Exception` directly, so a per-molecule `except Exception` swallows it. Celery's `Signal.send` catches and discards exceptions from handlers; only `SystemExit` stops a worker booting.
 
-**CDK is the third jar, and it is loaded by a classloader rather than by the classpath.**
-Since 2026-09-02 CDK 2.12 (`backend/vendor/cdk/cdk-2.12.jar`, 42 MB, LGPL — see its `NOTICE`) draws
-**every structure picture on the site**, with **CIP stereo descriptors** annotated: `(R)`/`(S)` on
-tetrahedral centres, `(E)`/`(Z)` on double bonds, and `(?)` on a centre that is genuinely
-stereogenic but undefined in the input. RDKit remains the fallback and nothing else. It is also a
-**second SMILES parser**: a string RDKit refuses is offered to CDK, whose valence and aromaticity
-models are more permissive.
+**Frontend**
+- Four pages (`/`, `/from-name`, `/explain`, `/about`) plus redirects, all in `App.jsx`. Home uses the `.workbench` shell; the others use `.workspace`. There is exactly one `.workspace` rule in `App.css`; a second copy is a stale leftover that wins the cascade.
+- `components/Icon.jsx` returns `null` for an unknown icon name, silently.
+- `frontend/node_modules` may hold only Linux native bindings; a fresh worktree needs its own `npm install`.
+- Verify layout in the loaded state (results on screen, a job running) and by screenshot. `getComputedStyle` asserts what CSS declares, not what renders. Settle transitions before measuring.
+- Contrast on translucent fills must clear AA twice: at the fill and again under the `::before` highlight. Chrome reports `color(srgb 0.76 0.11 0.22 / 0.9)` with fractional channels; a 0-255 parser reports nonsense ratios.
 
-`backend/app/cdk_bridge.py` is the whole mechanism and its docstring is the long version. Four
-facts that are easy to "simplify" back into a broken state, each measured rather than reasoned:
+**Product truth**
+- Confidence tiers (verified PIN, verified fallback, best-effort, abstain, error) are the product. Each is a monochrome rule under the name, is never coloured with the crimson chrome accent, never conflated, and never reduced to a word in a column. In a payload, `tier` moves with `status`.
+- The rendered chemical name is never uppercased or bolded; IUPAC case and weight are semantic.
+- About cites **94.8%** round-trip exact match, 0 wrong structures, 1,500 ChEBI+PubChem molecules, OpenSTOUT v1.0.0, on purpose. The vendored README now says 96.1%. Raising the site's figure is the owner's call; ask.
+- `/from-name` computes no tier and no verdict: OPSIN either parses a name or does not, and borrowing Home's grammar there would claim a check that never ran.
+- Choices that look arbitrary (light theme, sans body, all-crimson glossy buttons, bandless footer, a Health Check that is a board on About) are owner instructions with reasons in `DESIGN.md`. If one seems wrong, say so and let the owner decide.
 
-- **We must not call `startJVM`.** OpenSTOUT's `jvm_bridge` owns the only one, boots with a FIXED
-  classpath (OPSIN + centres), and refuses a JVM started by any other pid — which would drop OPSIN
-  back to a `java -jar` subprocess per call, 216 ms instead of 0.8 ms.
-- **`CLASSPATH` does not help.** `jpype.startJVM(classpath=[...])` overrides the environment
-  variable rather than merging it, and a running JVM's classpath cannot be extended.
-- So CDK is loaded in our own `java.net.URLClassLoader`, reached with `JClass(name, loader=...)`.
-  **Its parent must be the bootstrap loader (a typed Java `null`), not the system loader**:
-  `centres-cli-1.5.jar` already carries 859 CDK classes (a partial CDK with no `depict` package),
-  so with the default parent half of CDK resolves to that old copy and
-  `StructureDiagramGenerator` dies with `IllegalAccessError`.
-- **URL order is load-bearing**: the CDK jar FIRST so it wins every `org.openscience.cdk` name,
-  the centres jar second so it contributes only `com.simolecule.centres` — which CIP labelling
-  needs, operating on the same `IAtomContainer` classes. Reversing them resurrects the partial CDK.
+## Scope
 
-`cdk_bridge.self_check()` runs at each Celery child's JVM boot and asserts on the ANSWER (L-alanine
-must come back labelled `S`), because a CIP pass that quietly stopped labelling still returns a
-perfectly good SVG. **Two web-process entry points boot a JVM in uvicorn**, both deliberate and
-both documented at the call site: `GET /api/depict` (so a batch row is not the one picture missing
-CIP labels) and `app.inputs._canonical_or_error` (reached from `main._canonicalize` on every
-`/api/translate`). Measured: +275 MB RSS and 0.48 s once, then 2 ms per picture. This does **not**
-make the web process able to name anything — `jvm_guard` still asks Redis whether a *worker* has a
-JVM.
+Do the task asked. When you find an unrelated bug or a tempting cleanup, list it in your report; the owner decides whether it becomes work.
 
-**The parse fallback had to go in `app/inputs.py`, not in `translate_one`.** Every path into the
-namer — paste box, upload, fast path — routes through `_canonicalize` first, so a string that dies
-there never reaches `openstout_service` at all and a fallback added only there is unreachable code.
-Both sites now have one; the `translate_one` one handles `mol is None` for a molecule `inputs`
-rescued. The user-visible gain is a **verdict, not a picture**: such a molecule almost always
-abstains, and an abstain carries no depiction by design — but "I read your structure and declined
-to name it" is true where "Could not parse this SMILES string" was not. It also **cannot claim a
-verified tier**: with no RDKit Mol there is no InChIKey to compare OPSIN's re-parse against, so the
-round-trip is `(None, None)` and the existing downgrade demotes it to `best_effort`.
+## Product principles (from `PRODUCT.md`)
 
-**The job layer: naming happens in workers, and the web process refuses when they are missing.**
-`POST /api/translate` still answers inline for **10 molecules or fewer** — it dispatches
-`translate_fast` to the `fast` queue and blocks for up to `FAST_PATH_TIMEOUT` (30 s). Above that
-limit, or when the fast path times out, it returns a `JobEnvelope` (`job_id`, `molecule_count`,
-`status`) and the caller polls `GET /api/jobs/{id}` and `.../results`, or streams
-`.../results.csv`. `POST .../cancel` stops a running job and `DELETE` discards a finished one;
-both require the `owner_token` the JobEnvelope returned once, since a shared results URL carries
-the id but not the token. Cancellation is cooperative — `redis_store.begin_chunk` already refuses
-a terminal job, so writing status `cancelled` is the entire mechanism and no task ids are tracked. `POST /api/jobs` takes an uploaded `.sdf` / `.mol` / `.csv` (needs a `smiles`
-column) / plain SMILES list, up to `MAX_BATCH_SIZE` (10,000) molecules and `MAX_FILE_SIZE_MB`
-(50 MB); `frontend/nginx.conf` sets `client_max_body_size 210m`, and its default of 1 MB would
-otherwise silently cap the advertised limit. Work is chunked (`BATCH_CHUNK_SIZE`, 25) onto the
-`batch` queue so a long job cannot occupy the slot someone naming ethanol needs. **Home drives all of this
-as of 2026-09-02** (it was API-only until then): the input card has **Paste | Upload file | Draw**
-tabs (Draw embeds the same Ketcher iframe `/explain` uses, through the same `useKetcher` handshake,
-with `.workbench--draw` flipping the split so the editor gets the wide cell),
-pasting more than `FAST_PATH_MAX_MOLECULES` submits a job instead of refusing the eleventh line, a
-file gets a `parse-preview` count first, and `components/BatchResults.jsx` shows progress, a paged
-table, Stop, Delete and a per-row **Draw** (`/api/depict`, one molecule at a time — batch rows
-carry no picture on purpose). The Upload tab is a **drop zone**
-(`components/Dropzone.jsx`, its CSS in `App.css` beside Switch's and ExampleChips'), not a bare
-`Choose File` button: the whole slot is the target, the native input stays in the markup (hidden, so
-the label, keyboard and platform picker still work — one rule in `App.css` hides it and the
-input-tab radios, since both need the same `pointer-events: none` that `.sr-only` does not give),
-and the SVG seam around it runs its dashes while a file is over it and goes solid once one lands.
-A dropped file's extension is checked in the browser, because a drop never passes through the
-picker's `accept` — and **one `ACCEPTED_EXTENSIONS` array derives all four statements of that fact**
-(the `accept` attribute, the drop pattern, the format pills and the rejection sentence), which were
-four literals that had already drifted.
-
-`lib/jobStore.js` keeps `job_id` + `owner_token` in **localStorage**,
-because the token is issued once and a reload would otherwise lose the ability to stop a
-10,000-molecule job. **It holds only jobs that might still need stopping**: `BatchResults` calls
-`forgetJob` the moment a job goes terminal, which is what makes a reload CLEAR the page. Keeping a
-finished job (v1's behaviour) restored the batch panel on every load and survived a hard reload —
-which cannot clear localStorage — so the panel could not be dismissed at all. The key is
-`stitch.jobs.v2` and the bump is part of that fix: it retires every v1 entry rather than restoring
-one last stale panel. **`rememberJob` enforces that rule itself** — a terminal `status` deletes the
-entry instead of writing it — because leaving it to one caller meant the next caller to remember a
-job without checking would silently bring the bug back, and Home already calls it from two places. Entries prune at `expires_at`, or at `rememberedAt + 24 h` when the first
-status poll never landed and there is no `expires_at` to check.
-
-Three things about that UI were **measured against the running backend**, not assumed, and each
-would be easy to "simplify" back into a lie:
-- **A cancelled job's rows do not exist immediately.** For as long as its in-flight chunks take to
-  finish, `/results` answers `retrievable: 0` and `results.csv` answers **409**. Two measured
-  cancels took over 13 s to produce 125 and 100 rows. So the panel waits (20 × 3 s), never offers
-  the CSV link in that window, and when the wait is spent it says "no rows have appeared yet" with
-  a **Check again** — it cannot know the job is empty.
-- **`formula` is only ever set on an abstain** (`openstout_service.py`), so it rides inside the
-  name cell rather than in a column that would be blank on every named row.
-- **Every row carries its confidence rule** (double / dashed / dotted / faint / struck), because a
-  table is exactly where PRODUCT.md principle 3 would be tempting to reduce to a word in a column.
-
-Two consequences that bite immediately:
-
-- **`jvm_guard.require_a_live_jvm()` 503s every naming endpoint when no worker has a live JVM**,
-  including `POST /api/jobs`. That is deliberate — SELF-01 fails *open*, so dispatching work nobody
-  can verify would ship a fallback labelled `pin`. It means **uvicorn on its own is not a working
-  backend**: `/api/health` reports `DEGRADED` and naming returns 503 until a worker boots and writes
-  its status. Workers refresh that status on a heartbeat; a stale entry is treated as "no JVM".
-- **`backend/config/{small,medium,large}.yml` are deployment profiles**, selected by
-  `DEPLOYMENT_PROFILE` (default `medium`). Precedence is environment variable > profile > code
-  default, implemented explicitly in `core/config.py` because pydantic-settings' own order is the
-  opposite. Profiles must live under `backend/` — the Docker build context is `./backend`, so a
-  repo-root `config/` is unreachable.
-
-**Redis is load-bearing in four separate roles**, and `docker-compose.yml` runs it with
-`--maxmemory-policy volatile-lru`, *not* `allkeys-lru`: Celery broker messages carry no TTL, so
-`allkeys-lru` would evict queued work and silently lose jobs. The four roles are the Celery broker,
-job meta/chunks/rows (`JOB_RESULT_TTL_SECONDS`, 24 h), the shared name cache
-(`NAME_CACHE_TTL_SECONDS`, 7 days) and the per-IP rate-limit counters. **The name cache now
-invalidates itself on a vendor refresh** — `name_cache._engine_fingerprint()` hashes the OpenSTOUT
-source actually installed in the process (40 ms over 254 files, paid once at import) into the key,
-because upstream develops on a static version `1.0.0` and `_ENGINE_VERSION` therefore cannot
-notice a refresh. `_KEY_VERSION` survives as a manual belt for the fallback case (a zipimport or
-stripped image where the source cannot be read); bumping it by hand is no longer the only thing
-standing between a vendor refresh and a stale name.
-
-**Rate limiting exists and is per-IP** (`ratelimit.py`): 60/min for the naming endpoints, 300/min
-for job polling, 1200/min for `/api/depict`, plus 2 concurrent jobs and 20 jobs/hour per IP. The
-backend's `127.0.0.1:8000` binding and `TRUST_PROXY_HEADERS=true` are a **pair, and neither is safe
-alone** — published on `0.0.0.0` while trusting the header, an attacker sets a fresh `X-Real-IP` per
-request and every cap is void; with the header untrusted behind nginx, the whole internet shares one
-bucket and a single script 429s the site. Read the comment block in `docker-compose.yml` before
-changing either.
-
-**Home carries TWO switches, and they are one decision in two halves.** `best_effort` (how hard to
-try) and **`verify`** (whether to prove it) — both default ON, side by side in `.workbench__switches`.
-`verify` runs the OPSIN round-trip check, which is what earns a result its `pin` or `fallback`
-status. Turning it off **cannot make a name look better than it is**, and that is load-bearing
-rather than lucky: with no round trip `roundtrip_smiles` is None, and `openstout_service`'s existing
-downgrade demotes every verified tier to `best_effort` (or, with `best_effort=False`, to an honest
-abstain). Measured cost of the check: 0.60 ms/molecule, ~6 s on a full 10,000-molecule job.
-
-Three things about it that are easy to break:
-- **`tier` moves with `status`.** The downgrade used to change only `status`, so a row went out as
-  `status="best_effort"` with `tier="pin_verified"` still attached — two fields of one payload
-  disagreeing about whether OPSIN confirmed anything. `status` is what the UI draws, which is why
-  nobody saw it; `tier` is what an API or CSV consumer reads. `pin_unverified` is the exact tier for
-  this and had no producer until now.
-- **`verify` is in the name-cache key** (`be=…,v=…`). An unverified row is strictly weaker, so one
-  unverified request sharing the key would poison the entry for its 7-day TTL and every later caller
-  who *asked* for verification would be told their molecule could not be verified.
-- **Every `verify` parameter defaults to True**, including on the Celery tasks. Redis holds queued
-  task messages across a deploy, and a message enqueued before the flag existed carries no argument
-  for it — defaulting True reads such a message as "verify", the safe direction.
-
-`Tile.jsx` picks which switch to blame **from the row, never from the live switch position**: a
-genuine best-effort name had its round trip run and carries a `roundtrip_smiles`, a downgraded one
-does not. A tile may be from an earlier submission or served from cache, and the switch may have
-been flipped since — the row's own data is the truth about the row.
-
-**Confidence tiers are the product's whole point, not an implementation detail.** Every naming
-result is one of: verified **PIN** → verified **fallback** (general engine, OPSIN round-trip
-confirmed) → **best-effort** (a real name, but OPSIN-unverified) → honest **abstain**. These tiers
-must never be visually or textually conflated — see DESIGN.md's border/texture grammar, which
-encodes exactly this state machine and nothing else. `openstout_service.py` implements the
-escalation between tiers; `explain.py` / `opsin_decompose.py` / `name_spans.py` implement the
-`/explain` and `/teach` per-substituent breakdown (reflecting into OPSIN's package-private parse
-tree — `opsin_decompose.self_check()` verifies this still works, since it's inherently
-version-fragile). **That check now runs in the Celery worker, not the web process**: `main.py` no
-longer imports `opsin_decompose`, and `celery_app.py` calls `self_check()` when each forked child
-starts its JVM. A web process on its own never runs it.
-
-**Frontend routes share components deliberately, not by accident.** There are **four** pages:
-`/` (Home), `/from-name`, `/explain` and `/about`, plus three `<Navigate>` redirects: `/structure`
-and `/teach` to `/explain?input=draw`, because both were the same capability reached a different
-way, and `/health` to `/about` since 2026-09-04, when the Health Check page became a status board
-on About at the owner's instruction — a redirect rather than a deletion so existing links survive. `/explain` now carries the input choice itself —
-**IUPAC name | SMILES | Draw** tabs in the input card — plus a **Learn/Expert** switch in the
-output card, Expert by default (PRODUCT.md principle 1: a proof you must hunt for a switch to see
-is not offered). Learn drops the SMILES tab entirely rather than mislabel it, per the teach-mode
-spec's rule against naming a format. Home (`/`, "Translate") renders results through
-`SamplerGrid`/`Tile`. Four
-routes open with the same `.page-head` card (a wide title+lede card); **Home does not** — since
-2026-09-02 it opens with `.home-hero`, which is deliberately **not a card** (no fill, border,
-shadow — or `isolation`; the owner asked for no white background there): the wordmark on the bare
-grey ground **lit by a real WebGPU flare** (`frontend/src/lib/flare/`, vendored from vgpu's
-`nextjs-flare` example, vercel-labs/vgpu, MIT — a 48-step ray walk in WGSL that rakes light along
-the letter outlines, with the live `<h1>` as its light source and the frame inverted into a crimson
-veil composited `multiply`, because light-on-light is invisible on grey). It is a dynamic import
-(180 kB chunk) behind `'gpu' in navigator` and `prefers-reduced-motion`; without those, no canvas
-mounts and the wordmark keeps a CSS halo. **Read DESIGN.md's `.home-hero` entry before touching
-it** — four of its choices are departures from upstream that look arbitrary and are not. Plus a
-tagline whose bold letters spell STITCH, and its old title+lede card and its accuracy band were both removed at
-the owner's request. Every route closes on the same footer.
-The working part of each route is a **contained** `.workspace` card grid (two rounded cards, input
-| output, inside the `--shell-max` column — Home's is named `.workbench`; `/explain` adds
-`.workspace--draw` **on the Draw tab only**, which flips the split so the structure editor takes the wide cell — Ketcher is unusable in the narrow column). `useKetcher` takes an `enabled` flag for the same reason: its 20 s readiness clock must start when the iframe mounts, not when the page does, or picking Draw late finds the editor already declared broken. There is
-one `.workspace` definition in `App.css` — if you ever see two, the later one is a stale leftover
-and wins the cascade; delete it. `Explain.jsx` and `Teach.jsx` no longer carry independent copies of
-anything — a claim that was written one commit early and is now true: they shared **113
-byte-identical lines** of SVG-injection and atom-highlight effects until those moved to
-`frontend/src/lib/useAtomHighlight.js`, whose pure half (`highlightTargets`, `shouldHighlight`) is
-the tested part. Both also import `sanitizeSvg`/`atomRefsOf`/`ATOM_REF_RE` from
-`frontend/src/lib/svgHighlight.js` and share `frontend/src/lib/useKetcher.js`'s Ketcher
-iframe-readiness handshake — which **Home's Draw tab now uses too**, along with the shared
-`.structure-editor` iframe frame in `App.css` (it was `.explain__editor`, promoted when Home
-gained a second embed of the same editor). `sanitizeSvg`'s
-DOMPurify config now lives in exactly one place, because two copies of a sanitiser config is exactly
-the kind of thing that drifts silently into an XSS hole.
-
-**`/from-name` is the reverse direction, IUPAC name → structure, and it draws no confidence tier by
-design.** `GET /api/iupac-to-smiles` returns seven fields (`smiles`, `canonical_smiles`, `inchi`,
-`inchikey`, `molblock`, `depiction_svg`, `error`); the four identifier fields — `inchi`, `inchikey`,
-`molblock`, `depiction_svg` — are independently optional because RDKit's InChI writer and 2D
-coordinate generation are not total, and a molecule that loses one identifier still returns the
-others rather than becoming an error row. `smiles` is OPSIN's own output, kept verbatim;
-`canonical_smiles` is RDKit's canonical form of the same molecule; the two are deliberately both
-present so a caller can compare them. `MAX_NAMES = 25` (`lib/nameBatch.js`) is derived from
-`RATE_LIMIT_FAST_PER_MINUTE = 60`, not chosen — each name is one `GET /api/iupac-to-smiles`, which
-calls `check_fast_allowed(ip)` against that same shared budget, so raising one without the other
-breaks the page. `convertNames` resolves rows in **input order**, never rejects, and turns a failure
-into a row rather than a thrown error, because a partial answer to 25 names beats no answer.
-
-A few things about this page that are easy to get wrong:
-- **It computes no confidence tier and no round-trip verdict, on purpose** — OPSIN either parses a
-  name or it doesn't, and borrowing Home's PIN/fallback/best-effort grammar here would claim a check
-  that never ran. `NameResultsTable.jsx` uses `.results-group` **bare**, with no tier modifier, which
-  resolves `--tier-accent` to `--muted`.
-- **The failure contract is two-branched, and always has been.** `fetchStructureFromName` rejects
-  only on a non-2xx status: an OPSIN refusal comes back as a 2xx body with `error` set and shows in
-  the result row, while a transport failure (the backend is down) throws and should raise the "is
-  the backend running?" notice. `convertNames` flattens both into `ok:false` rows, so the page
-  captures the transport case itself, in its own `fetchOne` wrapper, before that flattening happens.
-- **CSV quoting is load-bearing**: IUPAC names and InChIs contain commas as a matter of course, and
-  an unquoted writer shifts every column after the first comma.
-- **`.copy-btn`, `.processing*`, `.results-table*` and `.field--framed` now live in `App.css`, not
-  `Home.css`.** `.copy-btn`, `.results-table*` and `.field--framed` moved because two routes
-  genuinely use them. `.processing*` does not earn that reason — it has exactly one consumer,
-  `Home.jsx`'s inline wait state; `/from-name` renders its own determinate `ConvertProgress`
-  (`.from-name-progress*`) instead, a later, deliberate choice of a real bar over Home's
-  indeterminate stripe. `.processing*` moved for a narrower reason that still holds: it is a style
-  for a component that lives in `src/components/` (`ProcessingBar`), so it belongs beside its peers
-  rather than inside one page's stylesheet, independent of how many routes render it. The
-  `ProcessingBar` block carries its own `@keyframes processing-sweep` and its own reduced-motion
-  block; `.btn__spin` stayed behind in `Home.css` because it belongs only to Home's submit button.
-- **`.workspace--flow` gives `/from-name` Home's normal-scroll shell.** `align-items: start` inside
-  it is load-bearing and NOT redundant with dropping the clamp: `.workspace` declares no
-  `align-items` at all, so the grid default `stretch` survives on its own and the dead white space
-  stays. It is a modifier rather than a change to `.workspace` itself because **two** routes render
-  that class — `/from-name` and `/explain`. It was three until `/health` became a redirect on
-  2026-09-04. `.page` has not clamped since the
-  normal-scroll pass (`min-height: 100dvh; overflow-x: clip`); do not "restore" a clamp there.
-- **`--ink-soft` does not exist.** The secondary/label token is `--muted`; `--muted-soft` is
-  restricted by its own comment to text on `--canvas` and drops below AA on a card.
-- **`Icon` returns `null` for an unknown name, silently** (`components/Icon.jsx`). An unregistered
-  icon renders an invisible button with no console error. `download` is now registered — this page's
-  SDF and CSV download buttons depend on it.
-- **`.results-row` has no CSS rule anywhere.** The table's separators, accent colour and hover all
-  hang off `.results-group`, which `NameResultsTable.jsx` renders as one `<tbody>` **per molecule**,
-  not one for the whole table.
-- **`App.css` owns two rules keyed to this page's existing class names**:
-  `.from-name-results .from-name-patch` (which stops the result reading as a card inside a card) and
-  the shared framed-picture rule for `.from-name-patch__depiction`. Renaming either class, or moving
-  the patch out of `.from-name-results`, silently regresses both.
-
-**Read `DESIGN.md` before any visual change.** It's not aspirational — it documents the shipped
-system as of 2026-08-26, a **TechX-style card bento** (dribbble shot 23855252, user-pinned "like
-this") wearing **ChemAudit chrome**. The body is a **soft cool-grey ground** (`--ground: #d5d8dc`,
-since 2026-09-02 a slow **gradient** ground — a fixed `.ground` layer of three blurred radial
-fields, crimson at 6–9% plus one grey counterweight, drifting over 64–96s; **`.page` must stay
-transparent and nothing may take a positive `z-index`**, or the layer is covered or the hero
-flare's `multiply` breaks — see DESIGN.md)
-carrying **rounded cards** (`--r-card: 22px`, inner tiles `--r-card-sm: 14px`) — white
-(`--card`), quiet grey (`--card-soft`), and one or two **near-black feature cards** (`--card-dark`,
-via the `.card--dark` primitive — as of 2026-09-02 **no surface uses one**, since Home's accuracy
-band, which carried the only instance, was removed at the owner's request; the primitive stays in
-the system) — separated by a modest `--gap: 14px`, in a **contained** column
-(`--shell-max: 2200px`, not full-bleed — it was 1600, widened 2026-09-01). **Every card lifts** on a soft two-part `--card-shadow`;
-a generic `.card` and `.bento` primitive live in `App.css`. Hairline seams survive only as
-*internal* dividers inside a card (a tile's head/foot rule). Type is the three-face trinity —
-**Saira Condensed** (display/wordmark/name), **Public Sans** (body), **JetBrains Mono**
-(nav/labels/data) — at weight 400, with **three bold exceptions and no others**: Public Sans **700**
-for the big stat figures (`.spec__value`, up to 2.75rem), the header's route labels, and the six
-hero-tagline letters that spell STITCH (the last two by direct instruction, 2026-09-02). The
-rendered chemical name stays 400 — IUPAC weight and case are semantic.
-**Buttons are all crimson and all glossy as of 2026-09-02**, by three owner instructions, which
-supersedes the one-crimson-action rule *for buttons*: secondary = pale frosted crimson pill,
-primary = filled crimson glass, `/explain` = filled dark-orange glass (`--accent-amber: #9c4109`,
-which since 2026-09-03 also tints the best-effort rung of the side-mode confidence key). It is no
-longer the system's only second accent: `--olive: #556b2f` (`index.css`, 5.95:1 on white, owner
-instruction 2026-09-03) carries the PIN/round-trip verdict line under a result name, the verified
-rungs of that key, and the verified rows of the results table. Neither colour touches the
-monochrome confidence rule itself. The gloss is **one
-mechanism** on `.btn` with two per-variant dials (`--gloss`, `--sheen`); icons come from
-**lucide-react** via `components/Icon.jsx`. **Every fill is a measured contrast decision and has to
-clear AA twice** — at the fill, and again with the `::before` highlight over the label's cap
-heights. The amber's first value passed the first check and failed the second at 4.44:1. Re-measure
-in a browser before touching any alpha, and parse `color(srgb …)` properly when you do: a probe that
-read those fractional channels as 0-255 reported 17.45:1 for a crimson button.
-
-Otherwise the **one crimson accent** (`--accent: #c41e3a`) is confined to chrome — active nav, the logo mark,
-inline links, the focus ring, the one primary button per surface, the sliding active-route pill, the hero's flare
-and the footer's self-sewing join — and **never touches a confidence tier or the round-trip
-verdict**. The **header is one white notch island** cut into the top edge of the window (flush at
-`top: 0`, 24px bottom corners, a concave CSS fillet on each flank, no shadow) and the **footer has
-no band at all** (a transparent strip carrying two lifted pills). Both replaced ChemAudit's
-floating glass on 2026-09-02 by instruction; the glass tokens now dress only the mobile menu
-panel. Confidence stays a **monochrome rule beneath the name**
-inside the white cards (double = PIN, dashed = fallback, dotted = best-effort, one faint rule =
-abstain, two struck rules = error), at a constant `min(100%, 30ch)` — a measure that belongs to the
-**mark** (drawn as an `::after`) and never to the name, which takes the full width of its card.
-The **key** to that vocabulary is no longer a band above the footer: it is a **fourth notch island**
-(`.info`, `components/ConfidenceLegend.jsx`) carved out of the BOTTOM of Home's input card with the
-same concave fillets the header uses, right-hand side — but only once there are results. On the
-empty landing state (`openToSide={!hasResults && !job}`) `ConfidenceLegend` wears `.info--side`, an
-absolutely positioned vertical tab on the card's RIGHT edge (`top: 142px; right: -92px`, fixed
-magic numbers still being tuned) that turns 180° on its centre pivot and docks to the drawer, with
-`.workbench--info-aside` sliding the input card left to make room, with a crimson **bulb** that breathes until
-the key has been opened once and then goes steady ink. Clicking it **flips the tab 180°** so it lets go of the card and rides on the
-panel's top edge instead — the rotation moves the rounded corners and flips both concave fillets
-for free, which is exactly the geometry that went wrong when it was hand-mirrored. `--info-ms`
-(520ms) is one duration with three consumers: the drawer row, the flip, and the drawer's
-`visibility` delay, which fails silently if it drifts short. It opens the five-row ladder on a
-`grid-template-rows: 0fr → 1fr` transition; each rung is a miniature of a real result (name over
-its rule), stitched onto a thread that fades where confidence runs out. It is the card's width by construction (`.input-col`
-holds the card and the notch as one grid cell), 40px at rest against the old band's 135, and the
-closed drawer takes `visibility: hidden` so a screen reader is not read five tiers nobody opened.
-Two structural facts still
-hold: every interactive page puts its input beside its own output (`.workspace`), and each page's
-"how this works" copy lives on the About page — **except `/from-name`, by owner instruction on
-2026-09-04**: its input card's foot (the "Read how this works... on the About page" pointer) was
-removed outright, because the OPSIN explanation this page needs lives directly on the page, in its
-own info drawer (`components/OpsinNote.jsx`), not behind a link elsewhere. The accuracy figures are
-NOT in that drawer and remain on About only — do not assume the drawer covers them, and do not
-re-add the About link to `/from-name` on the theory that the convention above still applies to it.
-
-**Home scrolls normally now; the one-screen clamp survives only on `.workspace`.** `.page` is
-`min-height: 100dvh; overflow-x: clip` (clip, not hidden, so `overflow-y` stays `visible` and the
-DOCUMENT scrolls rather than an inner box), and `.workbench` is `align-content: start;
-align-items: start` with no `flex: 1` and no clamp, so each column is as tall as its own content —
-the hard clamp forced every cell to scroll inside itself, which is the inner card scrollbar the
-owner rejected. `.workbench > *` keeps only `min-height: 0`. `.workspace` is still the one-screen
-clamp (`flex: 1; min-height: 0` on the grid, `overflow-y: auto` on every cell) because /explain still
-wears it; /from-name opts out with `.workspace--flow` (`flex: none; min-height: auto;
-align-content: start; align-items: start`, cells `overflow-y: visible`). Where a cell still clips,
-that clipping is what makes it a scroll container, which is also what lets an auto grid row shrink. Two related facts: `.batch` sits in the output column rather
-than spanning both, and `.tile__depiction` has **no `aspect-ratio`** (a 4:3 box at card width was
-650px tall and pushed the name out of view) — it now takes a definite `height: clamp(140px, 20vh,
-200px)`, because two drawings sit side by side in a `.tile__depictions` row and the owner asked the
-panel to hug the drawing rather than frame it in air. Verify a layout change by MEASURING overlap in a browser, in the state that has results:
-the one-screen commit checked only the empty state and shipped both collisions.
-
-The world **began** pinned by the user to the "Bugatti design analysis" template
-(getdesign.md/bugatti) and has since been steered, by successive user instructions, into a
-**ChemAudit-chrome + TechX-card-bento** hybrid. Recorded departures from the Bugatti source —
-each user-instructed or forced by product truth, do not "fix" them back: light inversion; substitute
-open-source faces; a sans body (Public Sans) in place of the source's Garamond serif; WCAG 2.2 AA
-contrast repairs; real hover states; the **ChemAudit chrome** (light-only, theme toggle dropped) —
-whose floating-glass header and footer band were themselves replaced on 2026-09-02 by a notch
-island and a bandless pill footer, also by instruction; the **one crimson chrome accent**; the **TechX card bento body** (grey
-ground, rounded lifted cards, contained `--shell-max`, selective bold) that replaced the
-flat 0-radius hairline-seam full-bleed body; and (load-bearing) **the chemical name is never
-uppercased**, because IUPAC case is semantic. DESIGN.md records each with its reason. Two earlier worlds are **historical, not current**: the warm ecru/dot-grid "Citation" system
-(Inter + Silkscreen, citation register, bracketed chips, citation-red margin rule) and the
-"Source Serif 4 / codex paper / italic name" pass. If you find references to either anywhere
-(comments, a stray screenshot filename), treat them as history.
-
-`.impeccable/design.json` is DESIGN.md's machine-readable sidecar; keep both in sync if you change
-a token. `.impeccable/review/*.png` are prior visual-audit screenshots — check the filename/mtime
-against the current design system before trusting one as "what it looks like now."
-
-**Accuracy claims cite a real, versioned benchmark — never round them up.** The three figures,
-shown on **About** (Home's accuracy band was removed on the owner's instruction on 2026-09-02;
-Home now links to About for it, and About states the version, the benchmark and the metric's own
-definition, which is what PRODUCT.md principle 2 requires) — **94.8% round-trip exact match**, **0 wrong structures emitted**, over a
-**1,500-molecule** ChEBI+PubChem set — are OpenSTOUT **v1.0.0**'s RELEASE numbers. **The vendored README no longer agrees with them**: the
-snapshot was refreshed to upstream `404b69e` on 2026-09-03 (commit `170174b`) and
-`backend/vendor/openstout/README.md` § Accuracy now reads **96.1%** round-trip on the same
-1,500-molecule ChEBI+PubChem set, with the same **0** wrong structures. About deliberately keeps
-94.8% by owner instruction, so the two differ ON PURPOSE — do not raise the site's figure without
-asking the owner. v1.0.0 publishes no per-corpus breakdown, so the
-site shows none; the earlier four-figure v21.0 split (~30.4% / 29.6% / 16.9% / 92.2%, 7,500
-compounds) is **superseded and must not be restored**.
-When OpenSTOUT ships a new milestone, verify the vendored snapshot and the frontend copy in
-`Home.jsx`/`About.jsx` all cite the same version before changing any number.
-
-## Product principles (from `PRODUCT.md`, load-bearing for any UX decision)
-
-1. Determinism must be provable, not asserted — hence the visible OPSIN round-trip line on every
-   named tile.
-2. Never overstate measured accuracy; cite the version and benchmark, and state the metric's own definition (a refusal counts as a failure). The accuracy band is load-bearing, not fine print.
-3. PIN-vs-fallback-vs-best-effort status must be visible wherever a name appears, never a footnote.
-4. Image→SMILES (DECIMER/OCSR) is the one permanent exclusion — everything else from STOUT_WebApp
-   is fair game to borrow as a UX reference, but STITCH has its own separate codebase and identity.
+1. Determinism is proven, not asserted: the OPSIN round-trip line is visible on every named tile.
+2. Accuracy is never overstated: cite the version, the benchmark and the metric's definition.
+3. PIN vs fallback vs best-effort is visible wherever a name appears, never a footnote.
+4. Image→SMILES (OCSR) is the one permanent exclusion; everything else in STOUT_WebApp is fair to borrow as a UX reference.
