@@ -1,4 +1,5 @@
 import CopyButton from './CopyButton'
+import ChemName from './Typeset'
 import Icon from './Icon'
 import { downloadText, rowsToCsv, rowsToSdf } from '../lib/molExport'
 
@@ -106,7 +107,9 @@ export default function NameResultsTable({ rows }) {
             <tbody className="results-group" key={row.index}>
               <tr>
                 <td className="results-cell--num">{row.index + 1}</td>
-                <td className="name-cell">{row.name}</td>
+                <td className="name-cell">
+            <ChemName name={row.name} />
+          </td>
                 <td className="results-cell--pic">
                   {row.data?.depiction_svg ? (
                     <img src={row.data.depiction_svg} alt={`2D structure for "${row.name}"`} />

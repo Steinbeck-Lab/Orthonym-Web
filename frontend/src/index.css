@@ -421,6 +421,37 @@ code {
   font-variant-numeric: tabular-nums;
 }
 
+/* IUPAC TYPOGRAPHY. The raised and lowered marks inside a chemical name or a
+   molecular formula -- the locant of `N`1, the count of C`8`H`10`, the bridge
+   locants of a von Baeyer cage. Which characters get one is decided in
+   src/lib/nameTypography.js; this is only how they sit.
+
+   The browser default for <sup>/<sub> is `vertical-align: super|sub`, which
+   grows the LINE BOX: a name carrying one raised locant would then sit on a
+   taller line than the name beside it, and a results table would have rows of
+   two different heights for no reason a reader could see. Zero line-height
+   plus a relative offset raises the mark without the line noticing it.
+
+   0.68em is the smallest size at which Saira Condensed's numerals still read
+   at the tile name's clamp minimum; the offsets are eyeballed against the cap
+   height of both faces, since a name renders in the display face on three
+   surfaces and the body face on three others. */
+sup.chem-mark,
+sub.chem-mark {
+  font-size: 0.68em;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+}
+
+sup.chem-mark {
+  top: -0.42em;
+}
+
+sub.chem-mark {
+  bottom: -0.16em;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

@@ -4,6 +4,8 @@ import ConfidenceReport from '../components/ConfidenceReport'
 import { verdictKindFor } from '../lib/explainVerdict'
 import { explainMolecule, explainName, translateBatch } from '../lib/api'
 import { nameTargets, sliceName } from '../lib/nameTargets'
+import { nameRuns, applyRuns } from '../lib/nameTypography'
+import { Pieces } from '../components/Typeset'
 import { segmentAtPath } from '../lib/svgHighlight'
 import { useAtomHighlight } from '../lib/useAtomHighlight'
 import { useKetcher } from '../lib/useKetcher'
@@ -252,6 +254,12 @@ function Explain() {
   // groups five atoms behind a span that has no room for its own `4`) -- it
   // simply renders as inert text, never as a reason to blank the page.
   const spansAvailable = segments.length > 0 && segments.every((segment) => segment.name_range)
+  // IUPAC typography, read off the WHOLE name string. It has to be computed
+  // here and not inside a piece, because a hover span can cut a token in half
+  // -- caffeine's "1H-" is one segment's span and the italic H is inside it --
+  // and half a token matches no rule. Each piece below then asks for the runs
+  // that fall in its own [start, end).
+  const nameStyle = name ? nameRuns(name) : []
   const activeSegment = segmentAtPath(segments, activePath)
 
   return (
@@ -461,7 +469,7 @@ function Explain() {
                     <p className="explain-result__name explain-name" aria-live="polite">
                       {sliceName(name, nameTargets(segments)).map((piece, index) =>
                         piece.path === null ? (
-                          <span key={index}>{piece.text}</span>
+                          <span key={index}><Pieces pieces={applyRuns(name, nameStyle, piece.start, piece.end)} /></span>
                         ) : (
                           <span
                             key={index}
@@ -493,14 +501,14 @@ function Explain() {
                             // focused part as "pressed" would be false.
                             aria-pressed={pinnedPath === piece.path}
                           >
-                            {piece.text}
+                            <Pieces pieces={applyRuns(name, nameStyle, piece.start, piece.end)} />
                           </span>
                         )
                       )}
                     </p>
                   ) : (
                     <p className="explain-result__name" aria-live="polite">
-                      {name && renderAnnotatedName(name, segments, activePath)}
+                      {name && renderAnnotatedName(name, segments, activePath, nameStyle)}
                     </p>
                   )}
                   {/* /api/explain returns the name and its decomposition but
@@ -604,18 +612,30 @@ function Explain() {
 // is updated here to the same segmentAtPath lookup used everywhere else,
 // for consistency with the activeIndex -> activePath change made throughout
 // the rest of this file.
-function renderAnnotatedName(name, segments, activePath) {
+function renderAnnotatedName(name, segments, activePath, style) {
   const segment = segmentAtPath(segments, activePath)
   const range = segment?.name_range
+  // NOTHING ACTIVE IS STILL A RENDER. This used to `return name` here, which
+  // is the raw string -- so on every name that reaches this fallback (spans
+  // unproven, or `segments` empty, which is the partial result documented
+  // above) the typography simply vanished: a von Baeyer name printed its
+  // literal `^` caret, a stereodescriptor stayed roman, and the marks blinked
+  // back on the moment a part was hovered and off again when it was not.
+  // The highlight is the only thing a hover changes; the typography is not.
   if (!range) {
-    return name
+    return <Pieces pieces={applyRuns(name, style)} />
   }
   const [start, end] = range
+  // The same typography, cut at the highlight's two boundaries. The square
+  // brackets are this renderer's own marks, not part of the name, so they
+  // stay outside the typeset run.
   return (
     <>
-      {name.slice(0, start)}
-      <span className="explain-result__name-highlight">[{name.slice(start, end)}]</span>
-      {name.slice(end)}
+      <Pieces pieces={applyRuns(name, style, 0, start)} />
+      <span className="explain-result__name-highlight">
+        [<Pieces pieces={applyRuns(name, style, start, end)} />]
+      </span>
+      <Pieces pieces={applyRuns(name, style, end, name.length)} />
     </>
   )
 }
