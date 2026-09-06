@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import ConfidenceReport from '../components/ConfidenceReport'
+import { verdictKindFor } from '../lib/explainVerdict'
 import { explainMolecule, explainName, translateBatch } from '../lib/api'
 import { nameTargets, sliceName } from '../lib/nameTargets'
 import { segmentAtPath } from '../lib/svgHighlight'
@@ -91,6 +92,16 @@ function Explain() {
   // runExplain. Null in 'name' mode on purpose: the user supplied the name,
   // so there is no Orthonym verdict on it to report.
   const [tierRow, setTierRow] = useState(null)
+  // The mode the DISPLAYED result was fetched with, which is not the same thing
+  // as the tab currently selected. The tier disclosure below used to branch on
+  // `mode` itself, so switching tabs after a result had landed rewrote the
+  // verdict without re-running anything: explain a SMILES, then click the
+  // IUPAC name tab, and a real "verified PIN" was replaced by "there is no
+  // Orthonym confidence tier for it" -- a false statement about a name Orthonym
+  // produced, and a tier hidden that PRODUCT.md principle 3 requires wherever
+  // a name appears. The reverse lost the honest disclosure instead. Set by
+  // runExplain alongside the request it describes.
+  const [resultMode, setResultMode] = useState(null)
   // enabled only on the Draw tab: the iframe does not exist otherwise, and an
   // armed readiness clock would time out against nothing and report the editor
   // broken before the user ever opened it.
@@ -131,10 +142,13 @@ function Explain() {
     setPinnedPath((current) => (current === path ? null : path))
   }
 
-  // requestMode defaults to the current mode state, but callers that need
-  // to force a specific endpoint in the SAME tick (see handleExamplePick)
-  // must pass it explicitly -- setMode() would not be visible to this
-  // function's `mode` closure until the next render.
+  // requestMode defaults to the current tab, but a caller whose tab does not
+  // NAME an endpoint must pass one explicitly. `handleDraw` is that caller and
+  // now the only one: a drawing is a structure once Ketcher hands back its
+  // SMILES, so it asks for 'smiles' while `mode` still reads 'draw'.
+  // (It also matters for any caller that sets the tab in the same tick --
+  // setMode() is not visible to this function's `mode` closure until the next
+  // render. handleExamplePick used to be that caller and no longer is.)
   function runExplain(value, requestMode = mode) {
     setFetchError(null)
     setPhase('loading')
@@ -154,6 +168,7 @@ function Explain() {
     // leaves tierRow null and the breakdown still renders; a breakdown is
     // never blocked by the tier.
     setTierRow(null)
+    setResultMode(requestMode)
     if (requestMode !== 'name') {
       translateBatch([value])
         .then((rows) => setTierRow(rows?.[0] ?? null))
@@ -499,7 +514,7 @@ function Explain() {
                       whether it is a PIN. Saying so plainly is the honest
                       option; inventing a tier mark would misrepresent
                       confidence, which the product forbids. */}
-                  {mode === 'name' ? (
+                  {verdictKindFor(resultMode) === 'user-supplied' ? (
                     <p className="explain-tier-note">
                       This breakdown is of the name <em>you</em> supplied, so there is no
                       Orthonym confidence tier for it. Draw or paste a structure instead, or

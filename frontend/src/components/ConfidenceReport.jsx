@@ -1,4 +1,5 @@
-import { NAMED_STATUSES, STATE_LABEL, VERIFIED_STATUSES } from '../lib/statuses'
+import { NAMED_STATUSES, STATE_LABEL } from '../lib/statuses'
+import { roundtripLine } from '../lib/explainVerdict'
 
 /**
  * The confidence tier and its round-trip proof, for one named result.
@@ -23,36 +24,38 @@ import { NAMED_STATUSES, STATE_LABEL, VERIFIED_STATUSES } from '../lib/statuses'
  * an expert does, not less -- and still prints the round-trip SMILES itself,
  * because PRODUCT.md principle 1 says determinism is proven, not asserted,
  * and the proof is the string.
+ *
+ * The WORDS themselves live in `lib/explainVerdict.js` rather than here, and
+ * that is not tidiness: `npm test` runs bare `node --test`, which cannot
+ * import a file containing JSX, so a sentence written inline in this
+ * component is a sentence no test in the repo can reach. This one states how
+ * confident the engine is, so it is worth proving.
  */
 export default function ConfidenceReport({ row }) {
   if (!row || !NAMED_STATUSES.has(row.status)) return null
-  const { status, roundtrip_smiles, roundtrip_match } = row
+  const line = roundtripLine(row)
 
   return (
     <div className="confidence-report">
-      <span className="tile__state-label">{STATE_LABEL[status]}</span>
-      {roundtrip_smiles && (
+      <span className="tile__state-label">{STATE_LABEL[row.status]}</span>
+      {line && (
         <p className="tile__roundtrip">
-          Round-trip check: we read this name back and it gives{' '}
+          {line.lead}{' '}
           <span
-            className={`tile__roundtrip-result${roundtrip_match ? '' : ' tile__roundtrip-result--mismatch'}`}
+            className={
+              line.available
+                ? `tile__roundtrip-result${line.match ? '' : ' tile__roundtrip-result--mismatch'}`
+                : 'tile__roundtrip-result tile__roundtrip-result--unavailable'
+            }
           >
-            {roundtrip_match ? 'the same molecule ✓' : 'a different molecule ✗'}
-          </span>{' '}
-          <code className="tile__roundtrip-smiles">{roundtrip_smiles}</code>
-        </p>
-      )}
-      {/* This tier's rule (double/dashed) claims an OPSIN round-trip
-          confirmed the name, but no proof came back with this result.
-          The proof must never go missing silently -- an absent line here
-          would look identical to a tier that carries no such claim. */}
-      {!roundtrip_smiles && VERIFIED_STATUSES.has(status) && (
-        <p className="tile__roundtrip">
-          Round-trip check:{' '}
-          <span className="tile__roundtrip-result tile__roundtrip-result--unavailable">
-            unavailable
-          </span>{' '}
-          — we could not read this name back, so this result is not confirmed.
+            {line.result}
+          </span>
+          {/* The proof, when there is one: the SMILES OPSIN read the name back
+              into. Absent only when the check could not run, in which case
+              `line.tail` says so instead -- a tier whose rule claims a
+              round-trip must never fall silent about a missing one. */}
+          {line.smiles && <> <code className="tile__roundtrip-smiles">{line.smiles}</code></>}
+          {line.tail && <> {line.tail}</>}
         </p>
       )}
     </div>

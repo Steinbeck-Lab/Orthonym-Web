@@ -187,14 +187,20 @@ def tokenize(name: str) -> Optional[list]:
 
     whole = _tokenize_raw(name)
     if whole is not None:
-        tokens, end_pos = to_tokens(whole, 0)
-        if end_pos == len(name) and name[: end_pos if tokens else 0] == "".join(
-            t.text for t in tokens
-        ):
-            # Full reconstruction confirmed character-for-character.
-            reconstructed = "".join(t.text for t in tokens)
-            if reconstructed == name:
-                return tokens
+        tokens, _ = to_tokens(whole, 0)
+        # Full reconstruction confirmed character-for-character -- a PARTIAL
+        # parse ("methyl acetate" consumes only "methyl") has to fall through to
+        # the multi-word path below.
+        #
+        # This was three spellings of that one comparison -- an `end_pos ==
+        # len(name)` guard, a sliced-prefix comparison, and then the join again
+        # -- which read as three separate conditions and joined the token text
+        # twice per call. They collapse because `end_pos` is the sum of the
+        # token lengths: if the joined text equals `name` then `end_pos ==
+        # len(name)` follows, and the empty-token case reduces to `"" == name`
+        # on both sides.
+        if "".join(t.text for t in tokens) == name:
+            return tokens
 
     # Multi-word fallback (e.g. ester names like "methyl acetate"): tokenize
     # each space-separated word independently, re-joining with the real

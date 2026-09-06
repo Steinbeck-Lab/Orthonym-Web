@@ -95,6 +95,17 @@ _CENTRES_PKG = "com.simolecule.centres"
 # that do not care what it is.
 _SELF_CHECK_SIZE = (240, 180)
 
+# ONE probe molecule for self_check(), which uses it twice -- once to prove CIP
+# labelling still runs, once to prove drawing still runs. It was written out at
+# both call sites; the docstring below promises "L-alanine must draw AND must
+# come back labelled (S)", and that promise is only true while both sites name
+# the SAME molecule. Two literals could drift into label-checking alanine and
+# drawing something else, with nothing failing to say so.
+#
+# L-alanine: the smallest molecule with a defined tetrahedral centre, so a CIP
+# pass that stopped labelling shows up as a missing (S).
+_SELF_CHECK_SMILES = "C[C@H](N)C(=O)O"
+
 
 def _log_unavailable_once(reason: str) -> None:
     global _LOGGED_UNAVAILABLE
@@ -481,8 +492,8 @@ def self_check() -> bool:
     """
     if not available():
         return False
-    if "S" not in cip_labels("C[C@H](N)C(=O)O"):
+    if "S" not in cip_labels(_SELF_CHECK_SMILES):
         logger.warning("CDK self-check: L-alanine did not label as (S); CIP path is broken")
         return False
-    svg = depict_svg("C[C@H](N)C(=O)O", *_SELF_CHECK_SIZE)
+    svg = depict_svg(_SELF_CHECK_SMILES, *_SELF_CHECK_SIZE)
     return bool(svg) and svg.lstrip().startswith("<")

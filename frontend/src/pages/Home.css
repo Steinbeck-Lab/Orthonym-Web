@@ -396,8 +396,12 @@
   height: clamp(480px, 62vh, 680px);
 }
 
-/* Home's editor takes the slot it is given. /explain keeps the 180px floor
-   from App.css, where the workspace can afford it. */
+/* Home's editor takes the slot it is given, and floors it per state so a
+   collapsed slot cannot collapse the editor with it. /explain no longer
+   contrasts with this: since 2026-09-05 it sets an explicit height of its own
+   (Explain.css) rather than keeping App.css's 180px floor, because its cells
+   stopped being viewport-tall and `flex: 1` had nothing to fill. Both hosts
+   own their editor's height now; the shared rule is only the fallback. */
 .workbench__input .structure-editor {
   min-height: 120px;
 }

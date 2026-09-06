@@ -1,30 +1,248 @@
 /* ============================================================
-   Orthonym — About (Read mode)
+   Orthonym — About, worked as a PATTERN CHART
 
-   The one route whose job is comprehension, and the one route allowed to
-   run past a single screen: it scrolls inside `.page__content` by design
-   (DESIGN.md's scroll budget records this route as the one that overflows,
-   against 0
-   for Home, /from-name, /explain and /health).
+   The world was chosen by the owner from a hand of four (2026-09-06). It is
+   the one the site already half-spoke: the footer sews itself shut and the nav
+   pulls a thread tight on arrival. This page
+   finishes the motif.
 
-   It opens the way Home does — a `.page-hero` (App.css) on the bare grey
-   ground, NOT the white `.page-head` card it carried until 2026-09-02 —
-   and everything below it is the shared card vocabulary: rounded
-   `--r-card` cards on the ground, `--gap` between them, `--card-shadow`
-   as the only lift. The prose bands hold a display heading in a narrow
-   left column beside a measured sans column; the measured accuracy
-   figures open the page as full-size spec cells, because the numbers are
-   not fine print here.
+   The grammar of a real chart, and what each part holds here:
+     the GRID     the ruled ground everything is worked on
+     the KEY      the four confidence tiers -- already line symbols
+     the THREADS  the dependency credits, real marks as swatches
+     the ROWS     the three routes, as working instructions
+     the PIECE    the live round-trip: the finished thing itself
+     the GAUGE    engine, version, licence, maker, and whether it is up
 
-   Nothing on this page is interactive except one inline link, so there is
-   no button and no `.workspace` — the crimson accent appears here only as
-   `--link`, which is chrome.
+   The palette does NOT change: crimson, ink, the greys. Crimson simply stops
+   being an accent and becomes the THREAD, which is what a red thread on a
+   ruled ground has always been. Two earlier attempts at this page were a
+   document in cards; this is a replacement, not a third pass.
    ============================================================ */
 
-.about-page {
+/* -------------------- the ruled ground -------------------- */
+/* A chart is squares. This is the one place a two-axis grid overlay is not
+   decoration: the measuring tool IS the subject, and every alignment on the
+   page answers to it. The cell is 22px so a symbol, a numeral and a line of
+   mono all sit on it without fractional rounding. */
+.chart,
+.chart-cover {
+  --cell: 22px;
+  --grid-ink: color-mix(in srgb, var(--ink) 9%, transparent);
+  --thread: var(--accent);
+}
+
+.chart-cover {
+  position: relative;
+  padding-block: clamp(3rem, 12vh, 7rem) clamp(2rem, 6vh, 4rem);
+  padding-inline: var(--shell-pad);
+}
+
+/* The cover plate: a worked swatch pinned to the ground, ruled like the chart
+   it introduces. Its grid is the same cell as the sheets below, so the whole
+   page reads as one piece of squared paper. */
+/* FULL MEASURE, and the band is what earns it. Every earlier arrangement put
+   the copy in columns beside a motif and left a 300-800px void, so the plate
+   was narrowed to hide the problem. The real fix is the one the owner asked
+   for: the charted name runs the full width at the top, and the title and lede
+   each sit on ONE line beneath it. A single line of type spanning 1600px is
+   the thing that actually uses a wide measure -- three wrapped lines in a
+   column never will.
+   The width is also a legibility requirement now, not just a look: the lede is
+   199 characters, and one line of it inside a 76rem plate would be 11px type.
+   At the full measure it is 16px. */
+.chart-cover__plate {
+  position: relative;
+  width: 100%;
+  max-width: var(--shell-max);
+  margin-inline: auto;
+  padding: clamp(var(--s-xl), 5vw, 3.5rem);
+  border-radius: var(--r-card);
+  box-shadow: var(--card-shadow);
+  /* A RUNNING SEAM edge, not a border: dashes at the cell pitch, in thread
+     crimson. This is the page's signature and it is drawn with border-style
+     rather than an image so it stays crisp at any zoom. */
+  border: 2px dashed color-mix(in srgb, var(--thread) 42%, transparent);
+}
+
+/* THE HOLE IN THE MIDDLE, and how it was finally closed. Three arrangements
+   measured one at 1890px: ~800px with the motif pinned to the far right,
+   ~440px with it in a fraction column, ~339px with content-sized columns. The
+   cause never changed -- a 1762px plate holding roughly 1030px of content puts
+   the surplus somewhere, and every two-column version put it between the two
+   halves.
+   A single column with a FULL-MEASURE band underneath cannot leave one: the
+   band is 47 cells wide and takes whatever the plate gives it. The layout that
+   worked is simpler than all three grids that failed, which is usually the
+   tell. */
+
+/* The sampler band: the plate's full measure, at its own 47:7 proportion. */
+.charted {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 0 clamp(var(--s-xl), 4vw, 3rem);
+  overflow: visible;
+}
+
+.charted__grid line {
+  /* `--grid-ink` inherits into SVG children from `.chart-cover`, so the band's
+     squares are the same value the three plates use, not a second copy of it. */
+  stroke: var(--grid-ink);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The thread. This is where the accent stops being an accent and becomes the
+   material -- a red thread on squared paper, which is the oldest version of
+   this page's own idea. */
+/* NO `vector-effect: non-scaling-stroke` here, and that is required rather
+   than an omission: non-scaling-stroke resolves the dash pattern in viewport
+   pixels instead of user units, which would make the `stroke-dasharray` below
+   unrelated to the length of the leg it is meant to cover. In user units the
+   leg is exactly 9.05 long (6.4 across and 6.4 down), so a dasharray of 9.1
+   covers it once and can be pulled on. The stroke scaling with the band is
+   also the better look: thread gets thicker as the piece gets bigger. */
+.charted__leg {
+  stroke: var(--thread);
+  stroke-width: 1.9;
+  stroke-linecap: round;
+}
+
+/* The ring works itself in, one knot at a time, then stops. Not a loop: a
+   piece is worked once. Off under reduced motion, where it is simply there. */
+/* SEWN, one knot at a time, in the order a hand works them: row by row,
+   left to right (`--n`, set row-major in ChartedName). Each cross lays its
+   first diagonal, then crosses it -- which is what a needlework cross IS, and why
+   this is two staggered strokes rather than one fade.
+   The thread is pulled through by animating `stroke-dashoffset` from the leg's
+   full length to zero: the line does not appear, it arrives from one hole and
+   travels to the other. */
+.charted__leg {
+  stroke-dasharray: 9.1;
+  stroke-dashoffset: 0;
+}
+
+.charted__leg--first {
+  animation: charted-pull 150ms ease-out backwards;
+  animation-delay: calc(var(--n, 0) * 26ms);
+}
+
+.charted__leg--second {
+  animation: charted-pull 150ms ease-out backwards;
+  /* Crosses the first only after it has landed. */
+  animation-delay: calc(var(--n, 0) * 26ms + 90ms);
+}
+
+@keyframes charted-pull {
+  from {
+    stroke-dashoffset: 9.1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* The piece is simply already finished. */
+@media (prefers-reduced-motion: reduce) {
+  .charted__leg--first,
+  .charted__leg--second {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
+
+.chart-cover__title {
+  margin: 0;
+  font-family: var(--font-display);
+  /* ONE LINE, by instruction. `nowrap` states the intent and the vw-scaled
+     size is what keeps it honest at every width -- a nowrap title with a fixed
+     size would simply overflow instead of wrapping. */
+  white-space: nowrap;
+  font-size: clamp(1.5rem, 5.4vw, 5rem);
+  font-weight: 400;
+  line-height: 0.95;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* The title owns its own column now, so it needs no clearing measure -- only
+   a reading one, which the column already gives it. */
+
+/* Also one line, and it holds it the same way: the full measure, no cap, and
+   a size that scales with the viewport rather than a fixed one that would
+   overflow. Below the breakpoint where 199 characters stop fitting legibly it
+   is allowed to wrap again -- an unreadable single line is not the ask. */
+.chart-cover__lede {
+  margin: var(--s-md) 0 0;
+  max-width: none;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.6;
+  color: var(--body);
+}
+
+@media (min-width: 1200px) {
+  .chart-cover__lede {
+    white-space: nowrap;
+    font-size: clamp(0.82rem, 1.02vw, 1rem);
+  }
+}
+
+/* The gauge block a pattern carries on its cover: what it is worked to, on
+   what, by what method. Real chart furniture, holding real facts. */
+.chart-cover__gauge {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-lg) var(--s-xxl);
+  margin: var(--s-lg) 0 0;
+  padding-top: var(--s-lg);
+  border-top: 1px solid var(--hairline);
+}
+
+.chart-cover__gauge dt {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.chart-cover__gauge dd {
+  margin: var(--s-xxs) 0 0;
+  font-family: var(--font-display);
+  font-size: var(--t-title-md);
+  letter-spacing: var(--track-display-md);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* THE SQUARED GROUND, in one place. Three surfaces are worked on squares --
+   the cover plate, each working-instruction swatch and the collaboration plate
+   -- and each carried its own copy of these five declarations. The copies had
+   already drifted before the paint was dry: `.row` was missing
+   `background-position: center`, so its grid started from its own corner while
+   the other two started from their centre, and the three surfaces did not
+   agree about where a square begins.
+   Centring is what makes a plate's squares symmetric about it, so it belongs
+   to all three. */
+.chart-cover__plate,
+.row,
+.collab {
+  background-color: var(--card);
+  background-image:
+    linear-gradient(var(--grid-ink) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-ink) 1px, transparent 1px);
+  background-size: var(--cell) var(--cell);
+  background-position: center;
+}
+
+/* -------------------- the sheets -------------------- */
+.chart {
   display: flex;
   flex-direction: column;
-  gap: var(--gap);
+  gap: var(--s-xxl);
   width: 100%;
   max-width: var(--shell-max);
   margin-inline: auto;
@@ -32,213 +250,567 @@
   padding-bottom: var(--s-xxl);
 }
 
-/* Bands are transparent by default; their content (spec cards, about-cards)
-   carries the card frame. The prose bands (--split) are the exception and
-   become cards themselves, below. */
-.about-band {
-  width: 100%;
+.sheet {
+  opacity: 0;
+  transform: translateY(12px);
+  transition:
+    opacity 560ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 560ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* -------------------- the figures' provenance -------------------- */
-/* PRODUCT.md principle 2: never show a measured figure without the version,
-   the benchmark and the metric's own definition. This line sits directly
-   under the three spec cells so a reader who only scans the numbers still
-   gets all three; the accuracy band below states the same facts in prose.
-
-   Mono is legal because this is a CAPTION, not a paragraph — the one
-   unbreakable trinity rule is that the monospace face never sets a
-   paragraph of running prose.
-
-   Colour is `--body`, NOT the `--muted` a mono caption normally takes.
-   This line sits on the bare grey ground, not inside a card, and #666666
-   on --ground (#d5d8dc) measures 4.02:1 — under AA. #333333 on the same
-   ground is 8.84:1. `--muted-soft` is even further out of bounds here: it
-   is canvas-only. */
-.about-spec-source {
-  padding-block: var(--s-sm) 0;
-  font-family: var(--font-mono);
-  font-size: var(--t-caption);
-  line-height: 1.5;
-  letter-spacing: var(--track-caption);
-  text-transform: uppercase;
-  color: var(--body);
+.sheet.is-shown {
+  opacity: 1;
+  transform: none;
 }
 
-/* -------------------- split bands -------------------- */
-/* Heading left, prose right — the editorial arrangement, using the width
-   rather than stacking a heading on top of a full-bleed paragraph. */
-
-.about-band--split {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-lg);
-  padding: clamp(var(--s-lg), 3vw, var(--s-xl));
-  background: var(--card);
-  border-radius: var(--r-card);
-  box-shadow: var(--card-shadow);
-  border: var(--card-border);
-}
-
-.about-band__head h2 {
-  font-size: var(--t-display-md);
-  line-height: 1.2;
-  letter-spacing: var(--track-display-md);
-  text-wrap: balance;
-}
-
-.about-band__body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-lg);
-  min-width: 0;
-}
-
-.about-sub {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-xs);
-  padding-top: var(--s-lg);
-  border-top: 1px solid var(--hairline);
-}
-
-.about-sub:first-child {
-  padding-top: 0;
-  border-top: none;
-}
-
-.about-sub h3 {
-  font-size: var(--t-title-md);
-  line-height: 1.3;
-  letter-spacing: 0.0625rem;
-}
-
-@media (min-width: 1000px) {
-  .about-band--split {
-    grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
-    gap: var(--s-xxl);
+@media (prefers-reduced-motion: reduce) {
+  .sheet {
+    opacity: 1;
+    transform: none;
+    transition: none;
   }
 }
 
-/* -------------------- title rows -------------------- */
-
-.about-band__title-row {
-  padding-block: var(--s-sm) var(--s-md);
-}
-
-.about-band__title-row h2 {
-  font-size: var(--t-display-md);
-  line-height: 1.2;
-  letter-spacing: var(--track-display-md);
-}
-
-.about-band__foot {
-  padding-block: var(--s-md) 0;
-}
-
-/* This foot sits on the BARE GROUND, outside the card above it, which makes
-   it the one inline link on the site with no white behind it. MEASURED off a
-   1440x900 screenshot of the 2026-09-05 ground: `--link` (#c41e3a) lands
-   between 3.4:1 and 4.96:1 across the four fields -- under AA at the darker
-   corners, and it was already only 4.06:1 on the flat grey that preceded the
-   new ground, so this is an old failure rather than a new one. `--accent-deep`
-   measures 4.69:1 at the worst point and 8.06:1 on white. Scoped to this foot
-   ON PURPOSE: every other `.about-link` is inside a card, where `--link` on
-   white is 5.84:1 and is the colour DESIGN.md specifies. */
-.about-band__foot .about-link {
-  color: var(--accent-deep);
-}
-
-/* -------------------- fact mosaic -------------------- */
-/* The verified facts and the acknowledgments both render as a bento
-   mosaic of the site's standard cards: white fill, --r-card corners,
-   --card-shadow, --gap between them, on the grey ground. (This block used
-   to describe 1px hairline seams and 0px corners — the flat full-bleed
-   world that the TechX card bento replaced on 2026-08-26. The rules below
-   have carried the card frame since then; only the comment lagged.)
-   A cell is a label in mono caption over one line of prose — never an
-   icon-plus-heading-plus-text card. */
-
-.about-cards {
+/* A sheet's title block, ruled off from its body the way a chart rules its
+   header off from its squares. */
+.sheet__head {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--gap);
-  background: transparent;
+  gap: var(--s-xxs);
+  padding-bottom: var(--s-md);
+  margin-bottom: var(--s-xl);
+  /* The running thread again, on the rule this time -- one motif, used
+     wherever an edge or a division occurs. */
+  border-bottom: 2px dashed color-mix(in srgb, var(--thread) 34%, transparent);
 }
 
-.about-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-xs);
-  min-width: 0;
-  padding: var(--s-lg) var(--s-xl);
-  background: var(--card);
-  border-radius: var(--r-card);
-  box-shadow: var(--card-shadow);
-  border: var(--card-border);
-}
-
-.about-card__label {
+.sheet__index {
   font-family: var(--font-mono);
   font-size: var(--t-caption);
-  line-height: 1.4;
   letter-spacing: var(--track-caption);
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--thread);
 }
 
-.about-card__body {
-  font-family: var(--font-body);
-  font-size: var(--t-body-md);
-  line-height: 1.4;
+.sheet__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: var(--track-display-md);
+  text-transform: uppercase;
   color: var(--ink);
 }
 
+.sheet__note {
+  margin: var(--s-xxs) 0 0;
+  max-width: 60ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+/* -------------------- the key -------------------- */
+/* Four symbols, FOUR ACROSS, each on its own claymorphic block (owner
+   instruction 2026-09-06). The clay physics are the ones already established
+   on /explain's input tabs -- a light top edge, a shaded underside, a contact
+   shadow and a cast shadow -- so the site has one idea of what clay is rather
+   than two. The tabs are pills that press IN when chosen; these are static
+   cards that never press, so the two are separate rules rather than one
+   parameterised block pretending they are the same control.
+   The symbols themselves stay monochrome on their own white cell: a tier is
+   carried by its mark and its words, never by the crimson, because an accent
+   on a tier reads as endorsement of a result the engine may be unsure of. */
+.key {
+  margin: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-lg);
+}
+
 @media (min-width: 640px) {
-  .about-cards {
+  .key {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (min-width: 1100px) {
-  .about-cards {
+  .key {
     grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .about-card {
-    padding: var(--s-xl) var(--s-lg);
   }
 }
 
-/* -------------------- service status board -------------------- */
-/* The old /health page folded in here (Task 18). Same title-row rhythm as
-   "At a glance" / "Acknowledgments" above, except this one heading also
-   carries the page's one utility action -- so `--status` is a MODIFIER on
-   `.about-band__title-row` rather than a change to the shared rule: every
-   other consumer renders only an <h2> in there and stays unaffected. */
-.about-band__title-row--status {
+.key__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-sm);
+  padding: var(--s-lg);
+  border-radius: var(--r-card);
+
+  /* Clay: a body, not a border. */
+  background: linear-gradient(180deg, var(--card) 0%, var(--accent-wash) 100%);
+  border: 1px solid color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow:
+    /* the light catching the top of a soft body */
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    /* the mass of the body, shading toward its underside */
+    inset 0 -4px 6px -3px color-mix(in srgb, var(--accent-deep) 22%, transparent),
+    /* contact, then cast */
+    0 1px 2px color-mix(in srgb, var(--accent-deep) 12%, transparent),
+    0 10px 18px -10px color-mix(in srgb, var(--accent-deep) 30%, transparent);
+  transition:
+    transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Lifts, the way a soft body does when you reach for it. */
+.key__row:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -4px 6px -3px color-mix(in srgb, var(--accent-deep) 26%, transparent),
+    0 2px 4px color-mix(in srgb, var(--accent-deep) 14%, transparent),
+    0 16px 26px -12px color-mix(in srgb, var(--accent-deep) 36%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .key__row {
+    transition: none;
+  }
+  .key__row:hover {
+    transform: none;
+  }
+}
+
+.key__row dt {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
   gap: var(--s-md);
 }
 
-/* The board itself is one white card -- the same frame `.about-card` and
-   `.about-band--split` use (--card, --r-card, --card-shadow, --card-border)
-   -- since `.about-band` is transparent by default and expects its content
-   to carry the card. */
+/* The symbol's own printed cell, sunk INTO the clay rather than sitting on it
+   -- the one inset here is what makes the block read as a moulded body with a
+   stamp pressed into its face. */
+.key__mark {
+  flex: 0 0 auto;
+  width: calc(var(--cell) * 2.2);
+  height: calc(var(--cell) * 2.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--canvas);
+  border-radius: var(--r-card-sm);
+  box-shadow: inset 0 1px 3px color-mix(in srgb, var(--accent-deep) 22%, transparent);
+}
+
+.key__mark::before {
+  content: '';
+  width: 66%;
+}
+
+.key__mark--pin::before {
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  height: 4px;
+}
+
+.key__mark--fallback::before {
+  border-top: 1px dashed var(--ink);
+}
+
+.key__mark--best::before {
+  border-top: 1px dotted var(--ink);
+}
+
+.key__mark--abstain::before {
+  border-top: 1px solid var(--hairline-strong);
+}
+
+.key__name {
+  font-family: var(--font-display);
+  font-size: var(--t-title-md);
+  line-height: 1.2;
+  letter-spacing: var(--track-display-md);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.key__row dd {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.55;
+  color: var(--body);
+}
+
+/* -------------------- the rows -------------------- */
+.rows {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-lg);
+  margin: 0;
+  padding: 0;
+}
+
+@media (min-width: 900px) {
+  .rows {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--s-xl);
+  }
+}
+
+/* Each instruction is worked on its own squared swatch. */
+.row {
+  padding: var(--s-lg);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-card-sm);
+}
+
+.row__n {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  color: var(--thread);
+}
+
+.row__title {
+  margin: var(--s-xs) 0 var(--s-sm);
+  font-family: var(--font-display);
+  font-size: var(--t-title-md);
+  font-weight: 400;
+  letter-spacing: var(--track-display-md);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.row__body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.6;
+  color: var(--body);
+}
+
+/* -------------------- the threads -------------------- */
+/* A floss list: code, swatch, name, and what it is used for. The logos live
+   here because this is where a pattern puts its materials, and because a
+   credit given its own row reads as a credit rather than as a logo wall. */
+.threads {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.thread {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    'code swatch'
+    'name name'
+    'role role';
+  align-items: center;
+  gap: var(--s-xs) var(--s-md);
+  padding-block: var(--s-lg);
+  border-top: 1px solid var(--hairline);
+}
+
+.thread:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+@media (min-width: 800px) {
+  .thread {
+    grid-template-columns: 3rem 9rem minmax(0, 14rem) minmax(0, 1fr);
+    grid-template-areas: 'code swatch name role';
+    gap: var(--s-lg);
+  }
+}
+
+.thread__code {
+  grid-area: code;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  color: var(--thread);
+}
+
+/* The swatch well. A logo is someone else's mark, so it is shown unaltered on
+   a neutral plate and never recoloured, masked or tinted to match this page. */
+.thread__swatch {
+  grid-area: swatch;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: calc(var(--cell) * 2);
+}
+
+.thread__logo {
+  max-height: calc(var(--cell) * 2);
+  max-width: 9rem;
+  width: auto;
+  object-fit: contain;
+}
+
+/* Used where a project publishes no mark at all -- IUPAC's site refuses
+   scripted downloads and OPSIN, a Java library, has never had one. Set in this
+   page's own face so it reads as this page's typography, never as a logo
+   somebody invented for them. */
+.thread__lockup {
+  font-family: var(--font-display);
+  font-size: var(--t-title-md);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 2px dashed color-mix(in srgb, var(--thread) 40%, transparent);
+  padding-bottom: 2px;
+}
+
+.thread__name {
+  grid-area: name;
+  font-family: var(--font-display);
+  font-size: var(--t-title-md);
+  letter-spacing: var(--track-display-md);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.thread__name a {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid var(--hairline-strong);
+}
+
+.thread__name a:hover {
+  border-bottom-color: var(--ink);
+}
+
+.thread__role {
+  grid-area: role;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.6;
+  color: var(--body);
+}
+
+/* -------------------- the collaboration -------------------- */
+/* Two institutions, joined by the site's own sewn cross. It gets its own
+   sheet rather than a row in the thread list because a partnership is not a
+   dependency: OPSIN is something the work USES, this is who the work IS.
+   Both marks are shown unaltered, at a shared optical height rather than a
+   shared box height -- the Beilstein mark is 876x202 and the Jena mark
+   1666x400, so matching their boxes would have made one visibly larger than
+   the other. Height-capped, width auto, and neither is recoloured or masked:
+   somebody else's identity is not this page's material to restyle. */
+.collab {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-lg) var(--s-xl);
+  padding: clamp(var(--s-xl), 5vw, 3rem) var(--s-lg);
+  border: 2px dashed color-mix(in srgb, var(--thread) 34%, transparent);
+  border-radius: var(--r-card);
+  transition:
+    border-color 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.collab__org {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  transition: transform 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.collab__org img {
+  display: block;
+  width: auto;
+  height: clamp(38px, 5.5vw, 62px);
+  max-width: min(42vw, 320px);
+  object-fit: contain;
+}
+
+/* The Jena mark carries its own wordmark at a smaller optical size than the
+   Beilstein one, so it is given slightly more height to sit level with it. */
+.collab__org:last-of-type img {
+  height: clamp(44px, 6.4vw, 74px);
+}
+
+/* BIG, and painted. The footer's × is punctuation at 0.8rem that sews itself
+   shut; this one is the statement the sheet is about, so it is sized like one.
+   The strokes are filled outlines rather than stroked lines -- see BrushCross
+   for why a brush cannot be a stroke-width. */
+.collab__x {
+  flex: none;
+  width: clamp(3.5rem, 9vw, 7rem);
+  height: clamp(3.5rem, 9vw, 7rem);
+  overflow: visible;
+}
+
+/* The wet head carries full paint; the drying bristles and thrown flecks sit
+   slightly back, which is what stops the split reading as a solid fan. */
+.brush-x__body {
+  fill: var(--thread);
+}
+
+.brush-x__bristle {
+  fill: var(--thread);
+  opacity: 0.82;
+}
+
+.brush-x__fleck {
+  fill: var(--thread);
+  opacity: 0.62;
+}
+
+/* PAINTED ON, one stroke then the other, in the order and direction a hand
+   makes them. A clip sweep, never an opacity fade: paint is laid ACROSS a
+   surface, and a mark that fades up has not been painted, it has appeared.
+   The easing is deliberately fast-in: a brush stroke starts at speed and
+   decelerates as the arm finishes, which `cubic-bezier(0.22, 1, 0.36, 1)`
+   gives and a symmetric ease does not. */
+.sheet.is-shown .brush-x__stroke--1 {
+  animation: brush-lay-right 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.sheet.is-shown .brush-x__stroke--2 {
+  animation: brush-lay-left 460ms cubic-bezier(0.22, 1, 0.36, 1) 200ms both;
+}
+
+/* The mark settles a half-degree after the second stroke lands, the way a
+   hand-made thing is never quite square. Once, on arrival. */
+.sheet.is-shown .brush-x {
+  animation: brush-settle 700ms cubic-bezier(0.16, 1, 0.3, 1) 420ms both;
+}
+
+@keyframes brush-settle {
+  from {
+    transform: rotate(-2.2deg) scale(0.97);
+  }
+  to {
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+@keyframes brush-lay-right {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 -10% 0 0);
+  }
+}
+
+@keyframes brush-lay-left {
+  from {
+    clip-path: inset(0 0 0 100%);
+  }
+  to {
+    clip-path: inset(0 0 0 -10%);
+  }
+}
+
+/* The paint is simply already dry. */
+/* The paint is simply already dry. */
+@media (prefers-reduced-motion: reduce) {
+  .sheet.is-shown .brush-x__stroke--1,
+  .sheet.is-shown .brush-x__stroke--2,
+  .sheet.is-shown .brush-x {
+    animation: none;
+  }
+}
+
+/* The claim, and it is the owner's to make: an official collaboration for
+   open science. Centred under the two marks it describes, in the display face
+   at reading size -- a statement, not a caption. */
+.collab__line {
+  position: relative;
+  display: table;
+  margin: var(--s-lg) auto 0;
+  padding-bottom: var(--s-xs);
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: clamp(1.1rem, 2.2vw, 1.5rem);
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: var(--track-display-md);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* -------------------- the gauge -------------------- */
+.gauge {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.gauge__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-xxs);
+  padding-block: var(--s-md);
+  border-top: 1px solid var(--hairline);
+}
+
+.gauge__row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+@media (min-width: 720px) {
+  .gauge__row {
+    grid-template-columns: 12rem minmax(0, 1fr);
+    gap: var(--s-lg);
+    align-items: baseline;
+  }
+}
+
+.gauge dt {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.gauge dd {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.6;
+  color: var(--body);
+  max-width: 68ch;
+}
+
+.gauge__row--status {
+  align-items: start;
+}
+
+/* -------------------- service status board -------------------- */
+/* The old /health page folded in here (Task 18), and on 2026-09-05 it moved
+   again -- into the colophon's fact list, as the answer to "Right now". It no
+   longer sits under its own <h2>, so `.about-band__title-row--status` went
+   with the heading it modified.
+   It also stops being a card: it is now INSIDE one (`.about-section`), and a
+   card in a card is the one nesting this system refuses. What is left is the
+   board's own vocabulary -- the marks, the label, the disclosure -- on the
+   surface it was dropped onto. The Check again button joined the row rather
+   than the heading, since there is no heading here to sit beside. */
 .status-board {
   display: flex;
   flex-direction: column;
-  gap: var(--s-lg);
-  padding: var(--s-lg) var(--s-xl);
-  background: var(--card);
-  border-radius: var(--r-card);
-  box-shadow: var(--card-shadow);
-  border: var(--card-border);
+  gap: var(--s-md);
+  min-width: 0;
 }
 
 .status-board__row {
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   gap: var(--s-md);
@@ -405,4 +977,738 @@
   color: var(--ink);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* ============================================================
+   The live round-trip proof
+
+   The page's centrepiece and its whole argument. Everything here serves one
+   reading: a molecule goes in, a name comes out by rule, an INDEPENDENT parser
+   reads that name back, and the two structures are put side by side for the
+   reader to judge. The stages are a numbered list in the markup because that
+   is what they are -- an ordered sequence -- and the numbers are suppressed
+   visually because the connector already carries the order.
+   ============================================================ */
+
+/* THE DARK FEATURE CELL. `--card-dark` and its `--on-dark` / `--muted-on-dark`
+   / `--hairline-on-dark` companions have been in the system since the card
+   bento landed and, until now, NO surface used them -- they were kept for the
+   next cell that earned one. This is it: the page has exactly one argument,
+   this is that argument running live, and inverting it is what makes a reader
+   scrolling past stop. One dark cell per view is the documented ceiling, so
+   nothing else on this page takes it.
+   The structures stay on their own light plates inside it: a CDK depiction is
+   black linework on transparency, and inverting the card does not invert the
+   drawing. Plates rather than filters -- a hue-rotate on a chemical structure
+   would recolour the element colours, which are meaning, not decoration. */
+.rtp {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xl);
+  padding: clamp(var(--s-xl), 4vw, 3.5rem);
+  background: var(--card-dark);
+  color: var(--on-dark);
+  border-radius: var(--r-card);
+  box-shadow: var(--card-shadow);
+  border: 1px solid var(--card-dark);
+  overflow: hidden;
+}
+
+/* A single soft crimson bloom in the top-left of the dark cell, so the black
+   reads as lit rather than as a flat rectangle. Behind everything, inert. */
+.rtp::before {
+  content: '';
+  position: absolute;
+  inset: -30% 40% 40% -20%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--accent) 40%, transparent),
+    transparent 65%
+  );
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.rtp > * {
+  position: relative;
+  /* The cell spans the full shell for drama; its CONTENT does not. Without
+     this the pipeline sat in the left third of a 1000px+ black rectangle and
+     the rest read as abandoned -- worst on the abstain slide, which has no
+     structure pair to fill it. A wide band with a measured column inside it
+     reads as deliberate; wide text on a wide band reads as unfinished. */
+  width: 100%;
+  max-width: 60rem;
+  margin-inline: auto;
+}
+
+.rtp__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-sm);
+  max-width: 64ch;
+}
+
+.rtp__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 3.4vw, 2.75rem);
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: var(--track-display-md);
+  text-transform: uppercase;
+  color: var(--on-dark);
+}
+
+.rtp__lede {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--t-body-md);
+  line-height: 1.55;
+  color: var(--muted-on-dark);
+  max-width: 58ch;
+}
+
+.rtp__stage {
+  min-height: 0;
+}
+
+.rtp__flow {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+}
+
+/* Each stage hangs off a vertical spine, and the spine IS the argument's
+   direction -- it is what makes five separate facts read as one sequence.
+   The dot is the joint; the line is the flow between joints. */
+.rtp__step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xs);
+  padding: 0 0 var(--s-lg) var(--s-xl);
+  border-left: 1px solid var(--hairline-on-dark);
+}
+
+.rtp__step::before {
+  content: '';
+  position: absolute;
+  left: -4.5px;
+  top: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--card-dark);
+  border: 1px solid color-mix(in srgb, var(--on-dark) 45%, transparent);
+}
+
+/* The last joint closes the spine: no trailing line past the verdict. */
+.rtp__step--verdict {
+  padding-bottom: 0;
+  border-left-color: transparent;
+}
+
+.rtp__step-label {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  line-height: 1.5;
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted-on-dark);
+}
+
+/* A SMILES is data, so it is set in the mono face and allowed to wrap
+   anywhere -- these strings have no spaces and would otherwise push the card
+   wider than the column on a phone. */
+.rtp__smiles {
+  font-family: var(--font-mono);
+  font-size: var(--t-body-sm);
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--on-dark) 82%, transparent);
+  overflow-wrap: anywhere;
+}
+
+/* The name is the largest thing in the proof, in the display face, at its
+   true case and weight 400 -- a chemical name is never uppercased and never
+   bolded, because case and weight are semantic in nomenclature. */
+.rtp__name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 2.2vw, 1.75rem);
+  font-weight: 400;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+  color: var(--on-dark);
+  overflow-wrap: anywhere;
+}
+
+/* An abstain is a RESULT, and it is set like one -- same weight and presence
+   as a name, not as an error. The engine refusing to guess is the behaviour
+   the product is proudest of. */
+.rtp__declined {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xs);
+  font-family: var(--font-display);
+  font-size: clamp(1.1rem, 1.8vw, 1.4rem);
+  font-weight: 400;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+  color: var(--on-dark);
+}
+
+.rtp__declined-note {
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  letter-spacing: 0;
+  line-height: 1.55;
+  color: var(--muted-on-dark);
+  max-width: 56ch;
+}
+
+/* -------------------- the two structures -------------------- */
+.rtp__pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-md);
+  align-items: center;
+  margin-top: var(--s-xs);
+}
+
+@media (min-width: 700px) {
+  .rtp__pair {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: var(--s-lg);
+  }
+}
+
+.rtp__panel {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-sm);
+  align-items: center;
+  padding: var(--s-lg) var(--s-md) var(--s-md);
+  /* A LIGHT plate on the dark cell. The depiction is black linework with
+     coloured heteroatoms; it needs its own ground, and inverting or filtering
+     it would recolour element colours that carry meaning. */
+  background: var(--canvas);
+  border-radius: var(--r-card-sm);
+}
+
+/* No aspect-ratio: a CDK depiction with CIP labels round the edges does not
+   share one, and forcing a box on it is what pushed the name out of view on
+   the result tiles. A floor and a cap instead. */
+.rtp__panel img {
+  display: block;
+  width: 100%;
+  /* CAPPED, because the panel is not: at 1762px the two panels are ~500px
+     wide each, and a 100%-wide depiction left the molecule as a small mark
+     adrift in a large grey rectangle. A drawing the reader is being asked to
+     COMPARE against another has to be the thing they see, so the image takes
+     the width it needs and centres in whatever the panel has. */
+  max-width: 340px;
+  margin-inline: auto;
+  min-height: 150px;
+  max-height: 220px;
+  object-fit: contain;
+}
+
+.rtp__panel-empty {
+  display: block;
+  width: 100%;
+  min-height: 150px;
+}
+
+.rtp__panel figcaption {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* The join between the two panels: a hairline on a phone (where the panels
+   stack) and a horizontal one on a wide screen. Drawn, not a glyph -- an
+   arrow character here would be an icon made of type. */
+.rtp__pair-join {
+  justify-self: center;
+  width: 1px;
+  height: 24px;
+  background: color-mix(in srgb, var(--on-dark) 40%, transparent);
+}
+
+@media (min-width: 700px) {
+  .rtp__pair-join {
+    width: 28px;
+    height: 1px;
+  }
+}
+
+/* -------------------- the verdict -------------------- */
+/* Monochrome, always. A confidence tier is carried by weight-of-grey and by
+   the words, and it never takes the crimson accent -- the accent belongs to
+   chrome and to one primary button, and a tier wearing it would read as a
+   brand endorsement of a result the engine may not be sure about. */
+/* Monochrome on the dark cell exactly as it is on a light one: a tier is
+   carried by weight and by the words, never by the crimson accent. */
+.rtp__tier {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  line-height: 1.4;
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--on-dark);
+}
+
+.rtp__tier--fallback,
+.rtp__tier--best-effort,
+.rtp__tier--abstain {
+  color: var(--muted-on-dark);
+}
+
+.rtp__verdict {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--t-body-md);
+  line-height: 1.55;
+  color: var(--on-dark);
+  max-width: 60ch;
+}
+
+/* -------------------- waiting -------------------- */
+/* The same three shimmering dashes the rest of the app waits with, so a
+   pending name here reads as the same event as a pending name anywhere else. */
+.rtp__waiting {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-block: var(--s-xs);
+}
+
+.rtp__waiting-dash {
+  height: 2px;
+  background: color-mix(in srgb, var(--on-dark) 35%, transparent);
+  animation: rtp-wait 1.4s ease-in-out infinite;
+}
+
+.rtp__waiting-dash:nth-child(1) {
+  width: 62%;
+}
+.rtp__waiting-dash:nth-child(2) {
+  width: 38%;
+  animation-delay: 160ms;
+}
+.rtp__waiting-dash:nth-child(3) {
+  width: 52%;
+  animation-delay: 320ms;
+}
+
+@keyframes rtp-wait {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+.rtp__offline {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--t-body-md);
+  line-height: 1.55;
+  color: var(--on-dark);
+  max-width: 62ch;
+}
+
+/* -------------------- the picker -------------------- */
+.rtp__picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-xs) var(--s-md);
+  padding-top: var(--s-lg);
+  border-top: 1px solid var(--hairline-on-dark);
+}
+
+/* Tag vocabulary, not buttons: the label IS the control, over a hairline that
+   steps to ink when chosen. Four molecules named in the open, so the reader
+   can see there are four and pick the awkward one. */
+.rtp__pick {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--on-dark) 30%, transparent);
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  line-height: 1.8;
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted-on-dark);
+  cursor: pointer;
+  transition:
+    color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.rtp__pick:hover {
+  color: var(--on-dark);
+  border-bottom-color: var(--on-dark);
+}
+
+.rtp__pick--on {
+  color: var(--on-dark);
+  border-bottom-color: var(--on-dark);
+}
+
+.rtp__pick:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* -------------------- staging the sequence -------------------- */
+/* The one authored moment on this page: the stages arrive in order, so the
+   reader watches the argument being made rather than finding it already
+   finished. From an already-legible default (never invisible), on the
+   system's own exponential ease-out. */
+.rtp--ready .rtp__step {
+  animation: rtp-step-in 520ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+.rtp--ready .rtp__step--in {
+  animation-delay: 0ms;
+}
+.rtp--ready .rtp__step--name {
+  animation-delay: 140ms;
+}
+.rtp--ready .rtp__step--back {
+  animation-delay: 300ms;
+}
+.rtp--ready .rtp__step--compare {
+  animation-delay: 460ms;
+}
+.rtp--ready .rtp__step--verdict {
+  animation-delay: 640ms;
+}
+
+@keyframes rtp-step-in {
+  from {
+    opacity: 0.25;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The structures draw themselves in: a wipe, not a fade, so it reads as
+   drawing rather than as loading. clip-path and opacity only -- nothing here
+   relayouts. */
+.rtp--ready .rtp__panel img {
+  animation: rtp-draw 700ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  animation-delay: 560ms;
+}
+
+@keyframes rtp-draw {
+  from {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0.4;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+
+/* Reduced motion keeps every stage and every word, and loses only the
+   movement: no stagger, no wipe, no shimmer. The proof still proves. */
+.rtp--still .rtp__step,
+.rtp--still .rtp__panel img {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rtp__step,
+  .rtp__panel img,
+  .rtp__waiting-dash {
+    animation: none;
+  }
+  .rtp__pick {
+    transition: none;
+  }
+}
+
+/* -------------------- the live lamp -------------------- */
+/* A status light, and it reports LIVENESS rather than the verdict: it says a
+   real check ran and how it went, while the rule and the sentence beside it
+   carry the actual claim. That split is what keeps DESIGN.md's rule intact --
+   no hue ever carries a health state ON ITS OWN here, because removing the
+   lamp entirely would leave the board just as readable.
+   The one thing the lamp says by itself is the honest one: when nothing
+   answers, the light goes out. */
+.status-lamp {
+  position: relative;
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-lamp__core {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* The halo. Separate from the core so the light can breathe without the dot
+   itself changing size -- a bulb glows, it does not inflate. */
+.status-lamp__glow {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--accent) 55%, transparent) 0%,
+    transparent 70%
+  );
+  opacity: 0;
+}
+
+/* ONLINE: a slow, steady breath. Nothing about a healthy service is urgent, so
+   the pulse is 2.4s and shallow -- a light that throbs reads as an alarm. */
+.status-lamp--healthy .status-lamp__glow {
+  animation: lamp-breathe 2.4s ease-in-out infinite;
+}
+
+.status-lamp--healthy .status-lamp__core {
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+/* CHECKING: a quicker blink, because something is actually happening. */
+.status-lamp--checking .status-lamp__core {
+  animation: lamp-blink 900ms ease-in-out infinite;
+}
+
+/* DEGRADED: still lit -- the service IS answering -- but dimmer and slower,
+   and the reason is spelled out in the sentence beneath. */
+.status-lamp--degraded .status-lamp__core {
+  background: var(--muted);
+}
+
+.status-lamp--degraded .status-lamp__glow {
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--muted) 45%, transparent) 0%,
+    transparent 70%
+  );
+  animation: lamp-breathe 3.6s ease-in-out infinite;
+}
+
+/* UNREACHABLE: out. A dark bulb is the one thing a status light can say on its
+   own without overstating, and it matches the struck-pair mark beside it. */
+.status-lamp--unreachable .status-lamp__core {
+  background: var(--hairline-strong);
+  box-shadow: none;
+}
+
+@keyframes lamp-breathe {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+}
+
+@keyframes lamp-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* The lamp still LIGHTS under reduced motion -- it just stops moving. Killing
+   it outright would remove state a reader is entitled to. */
+@media (prefers-reduced-motion: reduce) {
+  .status-lamp__core,
+  .status-lamp__glow {
+    animation: none !important;
+  }
+  .status-lamp--healthy .status-lamp__glow,
+  .status-lamp--degraded .status-lamp__glow {
+    opacity: 0.7;
+  }
+}
+
+/* -------------------- the join, re-made on hover -------------------- */
+/* Hovering the collaboration RE-PERFORMS it. That is the whole thesis of the
+   interaction: the block is about two parties being joined, so pointing at it
+   makes the join again rather than merely highlighting a box.
+   Four things move, and they are one gesture rather than four effects:
+     the two partners lean IN toward each other
+     the × is re-painted, stroke by stroke, in the order a hand makes them
+     a sewn line sews itself under the claim
+     the plate lifts a little and its running-thread edge draws tighter
+   `:has()` is what lets the caption respond, because it is a SIBLING of the
+   plate rather than a child -- the same selector this codebase already relies
+   on for /explain's clay tabs. */
+
+.sheet__body:has(.collab:hover) .collab {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--thread) 62%, transparent);
+}
+
+/* The partners close the gap. Each moves toward the ×, never past it. */
+.collab:hover .collab__org:first-of-type {
+  transform: translateX(10px);
+}
+
+.collab:hover .collab__org:last-of-type {
+  transform: translateX(-10px);
+}
+
+/* THE × IS PAINTED AGAIN, and this needs its OWN keyframe names rather than
+   the arrival's. MEASURED: pointing these at `brush-lay-right`/`-left` did
+   nothing at all -- the arrival animation had already run under the same name,
+   and a browser that sees an unchanged `animation-name` keeps the finished
+   state instead of restarting it. Renaming is the whole fix.
+   Three things happen together, so the mark is REMADE rather than merely
+   re-revealed: the brush presses into the surface, and each stroke is wiped on
+   again in the order a hand makes them. */
+.collab:hover .brush-x {
+  animation: brush-press 620ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.collab:hover .brush-x__stroke--1 {
+  animation: brush-repaint-right 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.collab:hover .brush-x__stroke--2 {
+  animation: brush-repaint-left 400ms cubic-bezier(0.22, 1, 0.36, 1) 150ms both;
+}
+
+/* Fresh paint: the drying bristles and thrown flecks come up to full strength
+   while the stroke is being remade, then settle back. */
+.collab:hover .brush-x__bristle,
+.collab:hover .brush-x__fleck {
+  animation: brush-wet 620ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes brush-repaint-right {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 -10% 0 0);
+  }
+}
+
+@keyframes brush-repaint-left {
+  from {
+    clip-path: inset(0 0 0 100%);
+  }
+  to {
+    clip-path: inset(0 0 0 -10%);
+  }
+}
+
+/* The press: the brush leans into the paper and comes back. Rotation and
+   scale only -- both composited, neither relayouts. */
+@keyframes brush-press {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  38% {
+    transform: rotate(-3.5deg) scale(1.07);
+  }
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+@keyframes brush-wet {
+  0% {
+    opacity: 0.5;
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.82;
+  }
+}
+
+/* A sewn line, sewn under the claim while the join is being made. Dashes on
+   a gradient rather than a border, so it can be drawn ON: `scaleX` from the
+   left grows the line the way a needle travels. */
+.collab__line::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--thread) 0 6px,
+    transparent 6px 12px
+  );
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.52s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sheet__body:has(.collab:hover) .collab__line::after {
+  transform: scaleX(1);
+}
+
+/* Reduced motion keeps the RELATIONSHIP and drops the travel: the edge still
+   tightens and the sewn line is simply present, so a reader who asked for
+   less movement still gets the feedback that this block is interactive. */
+@media (prefers-reduced-motion: reduce) {
+  .collab,
+  .collab__org,
+  .collab__line::after {
+    transition: none;
+  }
+
+  .sheet__body:has(.collab:hover) .collab {
+    transform: none;
+  }
+
+  .collab:hover .collab__org:first-of-type,
+  .collab:hover .collab__org:last-of-type {
+    transform: none;
+  }
+
+  .collab:hover .brush-x,
+  .collab:hover .brush-x__stroke--1,
+  .collab:hover .brush-x__stroke--2,
+  .collab:hover .brush-x__bristle,
+  .collab:hover .brush-x__fleck {
+    animation: none;
+  }
+
+  .sheet__body:has(.collab:hover) .collab__line::after {
+    transform: scaleX(1);
+    transition: none;
+  }
 }

@@ -413,6 +413,12 @@ function Home() {
   // 3+ molecules render as a table, placed BELOW the input box at full width
   // (owner instruction 2026-09-03) -- a table with two structure columns per row
   // needs the width a split column beside the input cannot give.
+  // Note this drives `splitLayout` and nothing else. It used to also emit a
+  // `workbench--table-below` class, which no stylesheet ever defined -- the
+  // full-width-table layout it named is produced by the ABSENCE of
+  // `.workbench--split`, since `.workbench` is a single column (Home.css) until
+  // that modifier overrides it. The dead class was removed 2026-09-05; the flag
+  // is real and stays.
   const tableBelow = hasResults && !job && rows.length > 2
   const splitLayout = (job || hasResults) && !tableBelow
   // Empty page with the key open: slide the card left, dock the side bar right.
@@ -501,7 +507,7 @@ function Home() {
           centred column until there are results, then an even split, and the
           field area holds a fixed height so the tabs cannot move anything. */}
       <main
-        className={`workbench${splitLayout ? ' workbench--split' : ''}${tableBelow ? ' workbench--table-below' : ''}${infoAside ? ' workbench--info-aside' : ''}`}
+        className={`workbench${splitLayout ? ' workbench--split' : ''}${infoAside ? ' workbench--info-aside' : ''}`}
         aria-label="Translate SMILES to IUPAC names"
       >
         {fetchError && (
@@ -515,7 +521,7 @@ function Home() {
             grid cell rather than two, so the notch and its drawer are the
             card's width by construction -- the key used to be a free box
             below the whole workbench, measured against nothing on the page. */}
-        <div className={`input-col input-col--${inputMode}`}>
+        <div className="input-col">
         {/* The active tab's tint is set as a CSS variable on the CARD, not on
             the tab, because the card's gradient has to START with it -- that
             shared first colour is the entire folder illusion: tab and panel

@@ -729,7 +729,12 @@
      * `align-items: start` -- `.workspace` sets no alignment otherwise, so
        the grid default `stretch` pulls the shorter card down to the taller
        one. Measured on /from-name: dropping the clamp alone leaves the dead
-       white space in the short card exactly where it was. */
+       white space in the short card exactly where it was.
+   `align-content: start` came across with them from the modifier and is NOT
+   here: it distributes ROWS in the grid's leftover block space, and `flex:
+   none` above means a content-height grid with no leftover space to
+   distribute. It was inert in the modifier too. Leaving it beside two
+   measured declarations would only make those two harder to trust. */
 
 .workspace {
   display: grid;
@@ -740,7 +745,6 @@
   margin-inline: auto;
   padding-inline: var(--shell-pad);
   flex: none;
-  align-content: start;
   align-items: start;
 }
 
@@ -1697,8 +1701,11 @@ input.field__control {
    2026-09-05 ground: `--muted` (#666) lands between 2.87:1 and 4.13:1 across
    the four fields -- under AA everywhere, and it was already 3.99:1 on the
    flat grey that preceded it, so this was a pre-existing failure the bolder
-   ground merely made obvious. `--body` (#333) measures 6.31:1 at the worst
-   point (the deep field, bottom-left) and 9.1:1 at the best. PRODUCT.md
+   ground merely made obvious. `--body` (#333) measures 7.34:1 at the worst
+   point (the deep field, bottom-left) and 9.78:1 at the best -- re-measured
+   after the crimson came down, which lifted every reading; the 6.31/9.1 pair
+   this comment carried first was taken on the bolder ground that shipped for
+   one iteration and is not what renders. PRODUCT.md
    names WCAG 2.2 AA as the required standard. */
 .site-footer__copyright {
   margin: 0;
@@ -1918,8 +1925,15 @@ input.field__control {
 
 
 /* The tier and its round-trip proof, shown under a decomposed name. Inherits
-   tile__state-label / tile__roundtrip so the confidence grammar is identical
-   to a Translate tile -- the same verdict must not look different here. */
+   tile__state-label / tile__roundtrip, so the TYPOGRAPHY of a verdict is
+   identical to a Translate tile -- same face, size, rule and colour, because
+   the same verdict must not look different here.
+   The WORDING diverged on 2026-09-05, and knowingly: /explain's Learn/Expert
+   switch was removed and its two spellings merged into one plain-English
+   sentence, while `Tile.jsx` still renders the terse "round-trip check: <code>
+   -- matches" it always did. Two spellings of one verdict is a real debt and
+   it is logged as one; what this rule guarantees is that neither is dressed
+   differently from the other. */
 .confidence-report {
   margin-top: var(--gap);
   padding-top: var(--gap);
@@ -1971,13 +1985,32 @@ input.field__control {
    long as the tab was open. Dropping them is free -- nothing about the
    composition depended on the blur, only on the falloff.
 
-   `inset: -12%` on the drifting layers, not 0: field A's ellipse actually
-   reaches the top-left corner, so a layer that drifts 5vmax with no overscan
-   would drag that corner out of frame and leave a bare wedge. 12% of the
-   viewport comfortably exceeds the 5vmax of travel. */
-.ground__field {
+   EVERY layer in here is a full-viewport positioned box, so that is declared
+   once, on the child rather than on six class names. A new `.ground__*` layer
+   is then a gradient and nothing else -- which matters, because a layer that
+   forgets `position: absolute` does not misalign, it collapses to zero size
+   and paints nothing at all. */
+.ground > * {
   position: absolute;
   inset: 0;
+}
+
+/* The three drifting layers overscan; the still ones do not need to.
+   `inset: -12%`, not 0: field A's ellipse actually reaches the top-left
+   corner, so a layer that drifts 5-6vmax with no overscan drags that corner
+   out of frame and leaves a bare wedge. 12% of the viewport comfortably
+   exceeds the travel.
+
+   ORDER IS LOAD-BEARING. This rule and `.ground > *` above are both
+   specificity (0,1,0), so this one only wins because it comes second. Moved
+   above it -- the instinctive place for a "shared default" -- the three
+   drifting fields silently lose their overscan and field A drags that wedge
+   back. It is invisible in a screenshot at the animation's start and under
+   `prefers-reduced-motion`; it only shows mid-drift. */
+.ground__field--a,
+.ground__field--b,
+.ground__field--c {
+  inset: -12%;
 }
 
 /* Top-left, the heaviest field: the accent itself. 20%, down from the 35% the
@@ -1985,7 +2018,6 @@ input.field__control {
    COMPOSITION is unchanged; only the saturation came down, so the four
    corners still read as four corners. */
 .ground__field--a {
-  inset: -12%;
   background: radial-gradient(
     ellipse 85% 65% at 8% 8%,
     color-mix(in srgb, var(--accent) 20%, transparent),
@@ -1998,7 +2030,6 @@ input.field__control {
    accent-wash. It is what keeps the composition from reading as one pink
    cloud with a dark corner. */
 .ground__field--b {
-  inset: -12%;
   background: radial-gradient(
     ellipse 75% 60% at 75% 35%,
     color-mix(in srgb, var(--accent-wash) 70%, transparent),
@@ -2011,7 +2042,6 @@ input.field__control {
    Four weights of one accent, never four hues -- a second hue on the ground
    is a colour a reader could mistake for a confidence tier. */
 .ground__field--c {
-  inset: -12%;
   background: radial-gradient(
     ellipse 70% 60% at 15% 80%,
     color-mix(in srgb, var(--accent-deep) 15%, transparent),
@@ -2049,11 +2079,9 @@ input.field__control {
    to an element outside that context it would take the page as its backdrop
    and paint a grey rectangle -- the same failure the hero flare hit twice. */
 .ground__glow {
-  position: absolute;
-  inset: 0;
   background: radial-gradient(
     circle at center,
-    color-mix(in srgb, var(--accent-wash) 100%, transparent) 0%,
+    var(--accent-wash) 0%,
     transparent 70%
   );
   opacity: 0.3;
@@ -2067,8 +2095,6 @@ input.field__control {
    The whole ground is `position: fixed`, so the grid never scrolls against
    the content and cannot moire. */
 .ground__grain {
-  position: absolute;
-  inset: 0;
   background-image: radial-gradient(
     circle at 1px 1px,
     color-mix(in srgb, var(--ink) 9%, transparent) 1px,
@@ -2126,11 +2152,18 @@ input.field__control {
 .structure-editor {
   display: block;
   width: 100%;
-  /* FILLS its slot rather than demanding 460px. On /explain the workspace can
-     afford that height; on Home the page must fit one screen, and a 460px
-     floor here silently blew the budget on the Draw tab no matter what the
-     flex layout said -- an iframe's min-height wins over a parent's wish to
-     shrink. 180px is the floor at which Ketcher's toolbars still work. */
+  /* FILLS its slot rather than demanding 460px: an iframe's min-height wins
+     over a parent's wish to shrink, and a 460px floor here silently blew
+     Home's one-screen budget on the Draw tab no matter what the flex layout
+     said.
+     EVERY consumer now sets its own height, and this is the safety net rather
+     than the answer: Home pins its slot (`.workbench__input--draw .field`) and
+     floors the editor at 120/460px, and /explain gives it an explicit
+     `clamp(540px, 60vh, 720px)` (Explain.css) because `flex: 1` had nothing
+     left to grow into once `.workspace` cells became their own content height.
+     The 180px floor is what a consumer that sets neither would fall back to --
+     enough for the toolbars, though NOT for the left tool rail, which needs
+     540px before it stops hiding its last tool behind a chevron. */
   flex: 1;
   min-height: 180px;
   background: var(--canvas);
@@ -2538,6 +2571,25 @@ input.field__control {
   min-height: 0;
   padding-top: var(--s-xxs);
   border-bottom: none;
+  resize: none;
+}
+
+/* A single-line INPUT inside the frame, which /explain's typed tabs are the
+   first of -- every other `.field--framed` wraps a multi-line <textarea>.
+   The rule above was written for one, and on an <input> both of its sizing
+   halves are wrong:
+     * `min-height: 0` is (0,2,0) and beats `input.field__control`'s 44px
+       control floor at (0,1,1). MEASURED before this rule existed: the box
+       rendered 38px, six under the floor every other control on the site
+       keeps.
+     * `flex: 1` is `flex-basis: 0%`, which a textarea wants (it fills the
+       frame) and a single line does not -- the same trap `/from-name` escaped
+       with its own `flex: 0 0 auto` (IupacToSmiles.css).
+   Scoped to the input rather than fixed on the shared rule, because the
+   textarea consumers depend on exactly the behaviour being overridden here. */
+.field--framed input.field__control {
+  flex: 0 0 auto;
+  min-height: 44px;
   resize: none;
 }
 

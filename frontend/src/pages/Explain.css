@@ -59,13 +59,20 @@
    sensible one. */
 .explain-panel .structure-editor {
   flex: none;
-  /* MEASURED at 1440x900, and both bounds are real. Too TALL (64vh = 576px)
-     and the Explain button falls below the fold. Too SHORT (56vh = 504px) and
-     Ketcher's own left tool rail overflows: it grows a scroll chevron and
-     hides its last tool, which is not "the whole editor". 60vh = 540px shows
-     every tool and keeps the button on screen. The floor is 540px rather than
-     the 520 first tried, because the chevron is what the floor exists to
-     prevent and 520 is inside the band where it appears. */
+  /* MEASURED at 1440x900. The CEILING is the fold: at 64vh (576px) the Explain
+     button fell off the bottom of that screen. The FLOOR is Ketcher itself: at
+     56vh (504px), and at the 520px first tried, its left tool rail overflows
+     and grows a scroll chevron that hides the last tool, which is not "the
+     whole editor". 60vh = 540px satisfies both there.
+     On a SHORTER screen it can only satisfy one, and it picks the floor. At a
+     800px viewport 60vh is 504px, the clamp lifts it to 540px, and the button
+     lands below the fold -- roughly 60px below, since the chrome above the
+     editor is a fixed ~330px and 330 + 540 already exceeds 800. There is no
+     value that fits both: the editor needs 540 and the page needs the rest.
+     That is the right trade now and would not have been before, because this
+     page scrolls like a document since the one-screen clamp was folded away
+     (App.css) -- a button below the fold is a scroll, where a broken tool rail
+     is a broken tool rail. */
   height: clamp(540px, 60vh, 720px);
   /* Picking Draw is the one moment on this page where the LAYOUT changes:
      the grid flips 4fr/8fr to 8fr/4fr (`.workspace--draw`, App.css) and an
@@ -167,10 +174,25 @@
    monochrome line-work inside the result card, and nothing over here can be
    mistaken for one.
 
-   The shadows are on the pill itself, not on a translucent `::before`
-   overlay, so the label's contrast is measured once against a solid ground:
-   `--accent-deep` on the rest wash is 7.1:1, and white on `--accent` is
-   5.84:1. Both clear AA for the 11px mono label. */
+   CONTRAST, and the reason it holds is NOT the one first written here. That
+   comment argued the shadows are on the pill rather than on a translucent
+   `::before`, "so the label's contrast is measured once against a solid
+   ground" -- which is wrong about how any of this paints. An `inset`
+   box-shadow composites ABOVE the background and BELOW the text no matter
+   which element declares it, exactly like an overlay would, so CLAUDE.md's
+   rule applies here in full: measure at the fill and again under the
+   highlight.
+   Measured that way, per 3px down the 36px pill, against the 11px mono label
+   that sits in its middle band (roughly y12-y24):
+     * rest, `--accent-deep` on the white-to-wash gradient: 7.71:1 at the top
+       of the label band falling to 7.39:1 at the bottom.
+     * selected, white on the accent-to-deep gradient: 6.49:1 to 7.23:1. Its
+       top inset shadow only darkens that ground, which helps white text.
+   What keeps the underside shadow out of the sum is its `-2px` spread: it is
+   drawn from the bottom edge and has faded by ~5px up, so it never reaches
+   the label. If it did, the worst case there would be 4.47:1 -- under AA. Any
+   future change to that shadow's spread, blur or offset has to be re-measured
+   against the label band, not eyeballed. */
 .explain-mode__option {
   position: relative;
   display: inline-flex;
@@ -282,12 +304,6 @@
 .explain-mode__option:has(input:focus-visible) {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .explain-mode__option {
-    transition: none;
-  }
 }
 
 /* -------------------- results -------------------- */
@@ -658,22 +674,22 @@
     transition: none;
   }
 
-  /* Reduced motion means less movement, not less feedback. The clay keys
-     keep every colour and shadow change and lose only the 1px travel, and
-     the editor still announces its arrival -- as a fade, with no wipe. */
+  /* Reduced motion means less movement, not less feedback. The clay keys keep
+     every colour and shadow change and lose only the 1px travel, and the
+     editor still announces its arrival -- as a fade, with no wipe.
+     Pinning `transform` to `none` in every state is the WHOLE fix: a property
+     that never differs between two states has nothing to animate, so the base
+     rule's transition list can keep naming it. This block used to re-type the
+     other four entries of that list to drop `transform` from it, which was a
+     hand-kept second copy of four timing constants that could not change
+     anything -- and, being 380 lines below an older
+     `.explain-mode__option { transition: none }`, silently overrode it, so
+     one file said two different things about one selector. Both are gone. */
   .explain-mode__option,
   .explain-mode__option:hover,
   .explain-mode__option:has(input:checked),
   .explain-mode__option:has(input:checked):hover {
     transform: none;
-  }
-
-  .explain-mode__option {
-    transition:
-      color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
-      background-color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
-      border-color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
-      box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .explain-panel .structure-editor {
