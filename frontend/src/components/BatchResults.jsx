@@ -20,6 +20,7 @@ import {
 import { forgetJob, rememberJob } from '../lib/jobStore'
 import { STATE_CLASS, STATE_LABEL, VERIFIED_STATUSES } from '../lib/statuses'
 import Icon from './Icon'
+import ChemName, { ChemFormula } from './Typeset'
 
 // One submitted batch: its progress while it runs, then its rows.
 //
@@ -74,7 +75,9 @@ function NameCell({ row }) {
   if (row.name) {
     return (
       <div className={`batch__name batch__name--${stateClass}`}>
-        <span className="batch__name-text">{row.name}</span>
+        <span className="batch__name-text">
+          <ChemName name={row.name} />
+        </span>
         <span className="sr-only">{label ? ` — ${label}` : ''}</span>
       </div>
     )
@@ -91,7 +94,12 @@ function NameCell({ row }) {
     <div className={`batch__name batch__name--${stateClass}`}>
       <span className="batch__name-text batch__name-text--muted">
         {row.status === 'error' ? (row.error ?? 'Could not read this input') : label}
-        {row.formula ? ` · ${row.formula}` : ''}
+        {row.formula ? (
+          <>
+            {' · '}
+            <ChemFormula formula={row.formula} />
+          </>
+        ) : null}
       </span>
     </div>
   )

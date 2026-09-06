@@ -1,6 +1,7 @@
 import { NAMED_STATUSES, STATE_CLASS, STATE_LABEL } from '../lib/statuses'
 import useDepiction from '../lib/useDepiction'
 import CopyButton from './CopyButton'
+import ChemName from './Typeset'
 
 /**
  * The 3-or-more-molecules view: a table with the input and retranslated
@@ -54,7 +55,9 @@ function ResultRow({ row, index }) {
         <td className="results-cell--name">
           {named ? (
             <span className="results-name">
-              <span className="results-name__text">{name}</span>
+              <span className="results-name__text">
+                <ChemName name={name} />
+              </span>
               <CopyButton text={name} />
             </span>
           ) : (

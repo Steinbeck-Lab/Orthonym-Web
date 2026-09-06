@@ -3,6 +3,7 @@ import { translateBatch } from '../lib/api'
 import useDepiction from '../lib/useDepiction'
 import useReducedMotion from '../lib/useReducedMotion'
 import { STATE_CLASS, STATE_LABEL } from '../lib/statuses'
+import ChemName from './Typeset'
 
 /**
  * The About page's centrepiece: STITCH's own round-trip check, RUN LIVE.
@@ -216,7 +217,9 @@ export default function RoundTripProof() {
                   <span className="rtp__waiting-dash" />
                 </span>
               ) : named ? (
-                <p className="rtp__name">{row.name}</p>
+                <p className="rtp__name">
+                  <ChemName name={row.name} />
+                </p>
               ) : (
                 <p className="rtp__declined">
                   It declined to name this one.

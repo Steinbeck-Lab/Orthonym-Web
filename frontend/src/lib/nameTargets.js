@@ -29,7 +29,11 @@ export function sliceName(name, targets) {
   let start = 0
   for (let i = 1; i <= name.length; i += 1) {
     if (i === name.length || owner[i] !== owner[start]) {
-      pieces.push({ text: name.slice(start, i), path: owner[start] })
+      // `start`/`end` are the piece's offsets in the WHOLE name. The
+      // typography of a name is decided over the whole string (a
+      // stereodescriptor cut in half parses as nothing), so a caller that
+      // wants both must ask nameTypography for the runs inside this range.
+      pieces.push({ text: name.slice(start, i), path: owner[start], start, end: i })
       start = i
     }
   }

@@ -86,6 +86,11 @@ Things the repo does not tell you, or tells you only after they cost time.
 **Product truth**
 - Confidence tiers (verified PIN, verified fallback, best-effort, abstain, error) are the product. Each is a monochrome rule under the name, is never coloured with the crimson chrome accent, never conflated, and never reduced to a word in a column. In a payload, `tier` moves with `status`.
 - The rendered chemical name is never uppercased or bolded; IUPAC case and weight are semantic.
+- The rendered name IS typeset the way IUPAC prints it (2026-09-06): italic stereodescriptors,
+  element-symbol locants, `tert-`, indicated hydrogen and fusion letters; superscript bridge locants;
+  subscript formula counts. `lib/nameTypography.js` decides which characters, `components/Typeset.jsx`
+  renders them, and all seven name surfaces go through it. Display only — the string is never rewritten,
+  and every copy/CSV/SDF path reads the data object, so the caret of `0^4,9` still leaves the page.
 - About cites **94.8%** round-trip exact match, 0 wrong structures, 1,500 ChEBI+PubChem molecules, OpenSTOUT v1.0.0, on purpose. The vendored README now says 96.1%. Raising the site's figure is the owner's call; ask.
 - `/from-name` computes no tier and no verdict: OPSIN either parses a name or does not, and borrowing Home's grammar there would claim a check that never ran.
 - Choices that look arbitrary (light theme, sans body, all-crimson glossy buttons, bandless footer, a Health Check that is a board on About) are owner instructions with reasons in `DESIGN.md`. If one seems wrong, say so and let the owner decide.

@@ -163,3 +163,82 @@
   src: url('/fonts/public-sans-b6.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
+
+/* ---------------------------------------------------------------- ITALIC
+   Italics exist in this system for ONE reason: IUPAC typography. A chemical
+   name sets its stereodescriptors, element-symbol locants, indicated
+   hydrogen, fusion letters and prefixes like tert- in italic, and those are
+   not emphasis -- they are the difference between a locant and an element
+   (see src/lib/nameTypography.js).
+
+   Saira Condensed HAS NO ITALIC on Google Fonts -- the family ships upright
+   only. What is loaded here instead is the parent SAIRA variable family,
+   instanced at width 75%, so this is a real drawn italic and not a
+   browser-synthesised slant of the upright face. It is declared under the
+   'Saira Condensed' family name so that `font-style: italic` on a name simply
+   resolves to it, and it carries no font-stretch descriptor because the file
+   is already a static instance at that width.
+
+   75% and not the 62.5% the name "Condensed" suggests. Measured, not guessed:
+   "tert-butylbenzene" set at 40px is 256.20px in the static Saira Condensed,
+   255.76px in Saira at wdth 75%, and 222.76px at wdth 62.5%. The static
+   family is the 75% instance; 62.5% is one width step too narrow and the
+   italic would visibly shrink inside a name. Re-measure the same way if these
+   files are ever refreshed.
+   ------------------------------------------------------------------------ */
+
+/* vietnamese */
+@font-face {
+  font-family: 'Saira Condensed';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/saira-condensed-i1.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Saira Condensed';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/saira-condensed-i2.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Saira Condensed';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/saira-condensed-i3.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* vietnamese */
+@font-face {
+  font-family: 'Public Sans';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/public-sans-i1.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Public Sans';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/public-sans-i2.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Public Sans';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/public-sans-i3.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}

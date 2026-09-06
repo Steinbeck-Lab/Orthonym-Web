@@ -2,6 +2,7 @@ import { NAMED_STATUSES, STATE_CLASS, STATE_LABEL, VERIFIED_STATUSES } from '../
 import useDepiction from '../lib/useDepiction'
 import CopyButton from './CopyButton'
 import StitchedName from './StitchedName'
+import { ChemFormula } from './Typeset'
 
 /**
  * One cell of the sampler grid.
@@ -167,7 +168,9 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
           </span>
         )}
         {!isPending && status === 'abstain' && formula && (
-          <span className="tile__formula">Formula: {formula}</span>
+          <span className="tile__formula">
+            Formula: <ChemFormula formula={formula} />
+          </span>
         )}
       </div>
       )}
