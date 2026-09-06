@@ -492,7 +492,16 @@ function Home() {
           }
           ref={wordmarkRef}
         >
-          Stitch
+          {/* The I is the mark. The letter it stands in for stays in the DOM
+              under display:none, because wordmarkMetrics() reads THIS
+              element's textContent to raster the flare's light source --
+              take the character out and the light spells STTCH. Hidden that
+              way it is out of the accessibility tree too, so the mark's own
+              alt is the only "I" a screen reader meets. */}
+          St
+          <span className="home-hero__word-i">i</span>
+          <img className="home-hero__mark" src="/logos/stitch.svg" alt="I" />
+          tch
         </h1>
 
         {/* The bold letters spell STITCH: S-T-I-T-C-H. "Ch" keeps the word's
