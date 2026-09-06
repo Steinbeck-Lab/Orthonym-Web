@@ -492,7 +492,16 @@ function Home() {
           }
           ref={wordmarkRef}
         >
-          Orthonym
+          {/* The mark stands in for a letter. The letter it stands in for stays in the DOM
+              under display:none, because wordmarkMetrics() reads THIS
+              element's textContent to raster the flare's light source --
+              take the character out and the light drops a letter. Hidden that
+              way it is out of the accessibility tree too, so the mark's own
+              alt is the only "O" a screen reader meets. */}
+          Orth
+          <span className="home-hero__word-o">o</span>
+          <img className="home-hero__mark" src="/logos/orthonym.svg" alt="O" />
+          nym
         </h1>
 
         <p className="home-hero__tagline">Verified IUPAC names for Chemical Structures</p>

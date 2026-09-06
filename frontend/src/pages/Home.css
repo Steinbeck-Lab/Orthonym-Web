@@ -140,8 +140,26 @@
       #000 63%,
       #000 100%
     );
-    -webkit-mask-image: var(--break-bands);
-    mask-image: var(--break-bands);
+    /* THE MARK KEEPS ITS ALPHA. The break is a line running out of light,
+       which is a thing that can only happen to a line -- run it across the
+       mark and the picture just looks half-printed. So a second mask layer
+       adds the mark's column back at full alpha; layered masks composite
+       with `add` by default, which is exactly this.
+       The column is anchored to the CENTRE of the word and offset in `em`,
+       so it holds the mark through every step of the type clamp rather than
+       drifting with the viewport. -0.41em is the measured distance from the
+       word's centre to the mark's, and 0.78em is the mark's own width plus a
+       hair; the letters on either side keep their break because the spill is
+       narrower than the 0.14em tracking. */
+    --mark-column: linear-gradient(#000, #000);
+    -webkit-mask-image: var(--break-bands), var(--mark-column);
+    mask-image: var(--break-bands), var(--mark-column);
+    -webkit-mask-size: auto, 0.78em 100%;
+    mask-size: auto, 0.78em 100%;
+    -webkit-mask-position: 0 0, calc(50% - 0.41em) center;
+    mask-position: 0 0, calc(50% - 0.41em) center;
+    -webkit-mask-repeat: repeat, no-repeat;
+    mask-repeat: repeat, no-repeat;
   }
 }
 
@@ -153,6 +171,31 @@
    behind the real ones. */
 .home-hero__word--lit {
   text-shadow: none;
+}
+
+/* THE MARK STANDS IN FOR A LETTER. The letter it replaces is still in the heading, hidden:
+   wordmark-raster.ts reads the heading's textContent to build the flare's
+   light source, so without it the light would drop a letter. */
+.home-hero__word-o {
+  display: none;
+}
+
+/* Sized to the face's cap height -- Saira Condensed's caps measure 0.688em --
+   so the mark stands exactly as tall as the letters on either side of it, and
+   an inline image already sits its bottom edge on the baseline, which is where
+   a cap starts. The heading's break mask crosses the mark as well; that is
+   deliberate, it is what keeps this a letter in the word rather than a picture
+   dropped into one. */
+.home-hero__mark {
+  display: inline-block;
+  width: auto;
+  height: 0.688em;
+  vertical-align: baseline;
+  /* Nudged left, and the same amount given back on the right so the word's
+     total advance is unchanged: the mark's own art is not centred in its box
+     -- the shards break out to the left of the glass -- so squaring the box
+     with its neighbours leaves the GLASS reading a touch right of centre. */
+  margin-inline: -0.1em 0.1em;
 }
 
 .home-hero__tagline {
