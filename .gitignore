@@ -32,7 +32,31 @@ dist/
 # repository. Publishing the vendored snapshot would publish the engine.
 # A fresh clone populates this directory with that script; see README.
 backend/vendor/orthonym/
-backend/vendor/opsin-resources/
+# `/*`, not `/`: git cannot re-include a file whose parent DIRECTORY is
+# excluded, so the directory has to stay visible and its entries excluded
+# individually for the negation below to bite.
+backend/vendor/opsin-resources/*
+# ...with ONE exception, tracked deliberately. centres-cli-1.5.jar is a local
+# Maven build from an unreleased commit (develop @ d4b3cf0, pom 1.5-SNAPSHOT),
+# so unlike the CDK and opsin-cli jars it cannot be downloaded -- the newest
+# release at github.com/SiMolecule/centres is 1.2.1. Shipping it keeps the CIP
+# stereo-descriptor path reproducible from a clone.
+#
+# Redistribution is permitted: upstream's LICENSE says BSD-2-Clause (which is
+# also what GitHub reports for the repo) while its pom says LGPL-3.0, and the
+# NOTICE treats the stricter reading as binding. Either way the jar is
+# redistributed unmodified, which both licences allow, as do the terms of the
+# CDK (LGPL-2.1) and javax.vecmath (GPLv2 + Classpath) it shades in. The
+# notice travels with it in backend/vendor/orthonym/NOTICE -- which does NOT
+# ship -- so /terms carries the same statement on the site itself.
+#
+# 1.2.1 was measured as a drop-in on 2026-09-07: same Main-Class, and
+# byte-identical labels across 10 hard cases (hexitol, pseudo-asymmetric
+# 2s/5s, an allene, a bridged bicyclic, tetrasubstituted E/Z, tartaric acid).
+# Swapping to the downloadable release is therefore viable later; run
+# Orthonym's tests/integration/test_cip_validation.py first, because 10
+# molecules is a spot-check and the 279/290 figure comes from 290.
+!backend/vendor/opsin-resources/centres-cli-1.5.jar
 # The CDK jar is the one vendored artifact with a public source, so the
 # backend Dockerfile downloads it (pinned version, checked against the
 # SHA-256 in backend/vendor/cdk/NOTICE, which IS tracked).
