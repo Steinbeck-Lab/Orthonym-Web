@@ -122,7 +122,7 @@ function IupacToSmiles() {
         </p>
       </section>
 
-      <main className="workspace" aria-label="IUPAC to Structure">
+      <main className="workspace" aria-label="Name to Structure">
         <section className="from-name-panel" aria-label="Convert an IUPAC name">
           {/* An outer, unstyled grid cell (`.workspace > .from-name-panel`
               strips the card chrome `.workspace > *` gives it by default)

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { atomRefsOf, sanitizeSvg, segmentAtPath } from './svgHighlight.js'
 
@@ -59,7 +59,23 @@ export function shouldHighlight(classAttr, targetSet) {
  * @param {string|null} activePath  dotted path of the hovered/pinned segment
  */
 export function useAtomHighlight(data, activePath) {
-  const svgWrapperRef = useRef(null)
+  // A CALLBACK ref kept in state, not a plain `useRef`, and the difference is
+  // a bug that shipped: explaining the SAME input twice left an empty frame
+  // where the structure had been.
+  //
+  // Why. Explain.jsx renders the whole result only while `phase === 'success'`,
+  // so submitting again unmounts the wrapper div and mounts a fresh, EMPTY one.
+  // The injection effect below is keyed on `data?.svg` -- the SVG string -- and
+  // on a repeat submission the response is byte-identical, so the dependency
+  // never changes, the effect never re-runs, and nothing refills the new node.
+  // React skipped the one effect whose whole job was to put the picture back.
+  //
+  // A callback ref fires with the node on attach and null on detach, so
+  // storing it in state makes the node itself a dependency: a remount
+  // re-injects whether or not the SVG changed. Keying on the node rather than
+  // on the payload also survives the next conditional wrapper someone adds,
+  // which the string dependency could not.
+  const [root, setRoot] = useState(null)
   const originalColorsRef = useRef(new Map())
 
   // Injects the sanitized SVG directly via the DOM, NOT via React's
@@ -72,18 +88,16 @@ export function useAtomHighlight(data, activePath) {
   // if React never silently replaces them out from under it.
   useEffect(() => {
     originalColorsRef.current = new Map()
-    const root = svgWrapperRef.current
     if (!root) return
     root.innerHTML = data?.svg ? sanitizeSvg(data.svg) : ''
     const elements = root.querySelectorAll('[class*="atom-"]')
     elements.forEach((el) => {
       originalColorsRef.current.set(el, { stroke: el.style.stroke, fill: el.style.fill })
     })
-  }, [data?.svg])
+  }, [root, data?.svg])
 
   // Applies (or clears) the accent highlight for the active segment.
   useEffect(() => {
-    const root = svgWrapperRef.current
     if (!root) return
     const targetSet = highlightTargets(data, activePath)
 
@@ -101,9 +115,12 @@ export function useAtomHighlight(data, activePath) {
         el.style.fill = original.fill
       }
     })
-  }, [activePath, data])
+  }, [root, activePath, data])
 
-  return svgWrapperRef
+  // Stable identity, so attaching it does not detach-and-reattach the node on
+  // every render -- an inline arrow would, and each detach would blank the
+  // SVG this hook has just injected.
+  return useCallback((node) => setRoot(node), [])
 }
 
 /**

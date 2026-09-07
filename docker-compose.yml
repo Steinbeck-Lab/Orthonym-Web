@@ -1,3 +1,13 @@
+# Docker's default json-file driver keeps logs forever. The workers log a
+# line per molecule at INFO, so an unattended public deployment fills the
+# host disk in weeks and takes the whole box down with it -- including the
+# containers that were healthy. 30 MB per service is the cap.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   redis:
     image: redis:7-alpine
@@ -17,6 +27,13 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    # Must stay ABOVE REDIS_MAXMEMORY, never equal to it: maxmemory bounds
+    # the dataset, while the process also holds client buffers, replication
+    # backlog and fragmentation on top. A limit at the maxmemory figure gets
+    # redis OOM-killed by the kernel instead of letting its own volatile-lru
+    # eviction run, which is the whole point of the policy above.
+    mem_limit: ${REDIS_MEM_LIMIT:-3g}
+    logging: *default-logging
     networks:
       - stitch-network
 
@@ -53,6 +70,22 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    # Liveness of the WEB PROCESS only. /api/health answers 200 in both
+    # states -- "OK" with a worker's live JVM behind it, "DEGRADED" without
+    # -- and that is the right thing to check here: a backend with no worker
+    # is correctly refusing names, not broken, and marking it unhealthy would
+    # stop the frontend from ever starting and hide the honest DEGRADED
+    # message the operator needs to see. python, not curl: curl is not in the
+    # slim image and adding it for a health check is a package to patch
+    # forever.
+    # interval and retries are omitted: Docker's own defaults are 30s and 3,
+    # which is what this wants. start_period is not (its default is 0s).
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5)"]
+      timeout: 10s
+      start_period: 30s
+    mem_limit: ${BACKEND_MEM_LIMIT:-1500m}
+    logging: *default-logging
     networks:
       - stitch-network
 
@@ -80,6 +113,44 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    # What this proves and what it does NOT, because the difference matters:
+    # it proves this worker's main process is alive and still answering on
+    # the broker, which is the one failure `restart: unless-stopped` cannot
+    # see (a hung process never exits). It does NOT prove the forked children
+    # still hold a live JVM -- ping is answered by the parent.
+    #
+    # JVM liveness is deliberately left to the app, which already does it
+    # better: celery_app._start_status_heartbeat re-stamps each child in
+    # Redis only after _opsin_liveness_probe actually round-trips a name, and
+    # a child that stops passing drops out of any_worker_has_opsin() within
+    # one TTL, so /api/health goes DEGRADED and jvm_guard 503s every naming
+    # endpoint. That is a quarantine, and restarting the container on top of
+    # it would just restart-loop a worker the app has already handled.
+    #
+    # -d and not a bare ping: a bare ping is answered by ANY worker on the
+    # broker, so worker-batch alone would hold this container healthy after
+    # its own process died. The node name is worker-fast@%h with %h the
+    # container hostname, hence CMD-SHELL for the $$HOSTNAME expansion.
+    #
+    # start_period is 120s because a child boots a JVM, loads the OPSIN and
+    # centres jars and runs cdk_bridge.self_check() before it answers
+    # anything; a shorter window restart-loops a worker that was starting
+    # normally, and each restart pays the same cost again.
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.celery_app inspect ping -d worker-fast@$$HOSTNAME --timeout 10"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 120s
+    # Sized from the JVM dial above, not guessed: each forked child holds its
+    # own JVM at OPENSTOUT_JVM_XMX heap plus roughly as much again in
+    # non-heap (metaspace, code cache, the loaded jars), and the parent
+    # carries python and RDKit. At the defaults -- 512m x 2 children -- that
+    # is about 2.3 GB, and 3g leaves the headroom. RAISE THIS whenever
+    # CELERY_WORKERS_FAST or OPENSTOUT_JVM_XMX goes up, or the kernel kills
+    # the worker mid-job instead of the job failing honestly.
+    mem_limit: ${WORKER_MEM_LIMIT:-3g}
+    logging: *default-logging
     networks:
       - stitch-network
 
@@ -102,6 +173,15 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    # See worker-fast for why -d is not optional and why start_period is 120s.
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.celery_app inspect ping -d worker-batch@$$HOSTNAME --timeout 10"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 120s
+    mem_limit: ${WORKER_MEM_LIMIT:-3g}
+    logging: *default-logging
     networks:
       - stitch-network
 
@@ -109,12 +189,37 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      # A BUILD arg, not an `environment:` entry, and the distinction is the
+      # whole point: vite bakes `import.meta.env.VITE_*` into the bundle at
+      # build time, so a runtime variable is ignored silently. The ARG in
+      # frontend/Dockerfile carries the full reasoning.
+      #
+      # Unset ships no GitHub link, which is correct while the engine's
+      # repository is private. Set it to a repository URL and the header
+      # link and the mobile-menu entry return on the next `--build`.
+      args:
+        VITE_GITHUB_URL: ${VITE_GITHUB_URL:-}
     container_name: stitch-frontend
     ports:
+      # The ONLY service published beyond loopback, and still plain HTTP: a
+      # TLS terminator holding the real certificate belongs in front of this
+      # on a public host. frontend/nginx.conf's set_real_ip_from block is the
+      # other half of that arrangement -- without it every visitor collapses
+      # into one rate-limit bucket the moment a terminator is added.
       - "8080:80"
     depends_on:
-      - backend
+      backend:
+        # service_healthy, not a bare list entry: a bare `- backend` waits
+        # only for the container to be created, so nginx could start, fail to
+        # resolve `backend` in its proxy_pass, and cache that failure.
+        condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      timeout: 5s
+      start_period: 10s
+    mem_limit: ${FRONTEND_MEM_LIMIT:-256m}
+    logging: *default-logging
     networks:
       - stitch-network
 

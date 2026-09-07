@@ -1,0 +1,423 @@
+/* ============================================================
+   Legal.css — the three legal routes: /imprint, /privacy, /terms.
+
+   ONE stylesheet for three pages, not three. They are the same object: a
+   hero, then a stack of white cards, each holding a short heading over
+   running prose. Splitting it would have produced three copies of the same
+   list indent and the same code chip — which is the drift the reference
+   implementation's shared `legalShared` module exists to prevent
+   (Beilstein-Institut/BChemXtractWeb, frontend/src/pages/legalShared.tsx).
+
+   Almost nothing here is new vocabulary, deliberately. The cards are
+   `.card`, the text is `.prose` (72ch, App.css) and the headings inherit
+   the global display/uppercase/400 rule. Two things ARE new: a narrower
+   reading column than every other route takes, argued and measured below;
+   and the prose furniture the app has never had to render — a list with a
+   visible marker and a label/value block. DESIGN.md has no token for
+   either.
+
+   Three things a legal page will TRY to import from a reference build and
+   which are wrong here, recorded so they do not creep back:
+     - a crimson eyebrow or a crimson rule under a heading. Crimson is on a
+       closed allowlist (DESIGN.md:318) — chrome, inline links, the focus
+       ring, one primary button. A coloured rule beneath a line of text also
+       borrows the confidence grammar, which is the one place colour may
+       never go. Section labels here are mono captions in `--muted`.
+     - bold. The Selective-Bold Rule (DESIGN.md:359) names three permitted
+       uses and card titles are explicitly not one of them, so there is no
+       `<strong>` anywhere on these pages and no font-weight above 400
+       below.
+     - clay, glass, a nested card, or a one-off shadow. A framed block here
+       is `--card-soft` at `--r-card-sm` with NO shadow: the absence of the
+       shadow is what makes it a frame rather than a second card.
+   ============================================================ */
+
+/* -------------------- the column -------------------- */
+
+/* A READING COLUMN, and the one place these pages depart from the site's
+   layout. Every other route is `--shell-max` (2200px) because every other
+   route puts two things side by side — an input beside a result, a chart
+   beside its key — and fills that width. A legal page has one thing: a
+   paragraph. `.prose` correctly caps the measure at 72ch, so at 2200px the
+   text occupies the left third of a very wide white card and the remaining
+   two thirds are empty. Screenshotted at 1440px before narrowing: the card
+   was ~1200px and the text ~660px of it.
+   1100px is the measure plus the card's 40px padding plus room for the
+   Impressum's label/value pair to sit on one row, which is the widest thing
+   any of these three pages has to lay out. It is still a CONTAINED column
+   on the grey ground, so the Contained-Bento Rule holds; only the number
+   differs, and it differs for a reason the other routes do not have.
+   Gap is the system's own `--gap`, the same rhythm `.page__content` gives
+   top-level bands.
+
+   THE CAP IS ON THE CARD, not on a padded box around it. It was the other
+   way round for one iteration and measuring caught it: `box-sizing:
+   border-box` is global, so `max-width: 1100px` plus `padding-inline:
+   var(--shell-pad)` subtracts the gutter INSIDE the cap and the card came
+   out 972px — not the 1100 the paragraph above describes. `min(100% - 2 *
+   var(--shell-pad), 1100px)` is `.page-hero`'s own shape (App.css): it
+   keeps the viewport gutter and still sizes the card itself. The
+   `min(var(--shell-max), ...)` wrapper went with it — 1100 is below 2200 at
+   every viewport, so that min() never once chose the other branch. */
+.legal {
+  display: grid;
+  gap: var(--gap);
+  width: min(100% - 2 * var(--shell-pad), 1100px);
+  margin-inline: auto;
+  padding-bottom: var(--s-xl);
+}
+
+/* The hero has to take the same cap or the route reads as two columns: it
+   computes its own width from `--shell-max` (App.css), so on these three
+   pages the opening band was 1384px over an 1100px card — measured, and
+   visible as a title overhanging the cards beneath it. Every other route has
+   hero and content at one width and their edges line up.
+
+   `.page-hero.page-hero--legal`, not the modifier alone. Second time in this
+   file: at equal specificity App.css wins because App.jsx imports it after
+   the pages, so a bare `.page-hero--legal` lost to `.page-hero`'s own width
+   and measured 1384px with the override in place. Chaining both classes
+   takes it to (0,2,0). */
+.page-hero.page-hero--legal {
+  width: min(100% - 2 * var(--shell-pad), 1100px);
+}
+
+/* `.card` supplies fill, radius, shadow and border; only the padding is
+   left, and it is the primary-card step (DESIGN.md: 40px on primary cards,
+   24px on tiles). */
+.legal-section {
+  padding: var(--s-xl);
+}
+
+/* -------------------- a section's head -------------------- */
+
+.legal-section__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-xxs);
+  padding-bottom: var(--s-sm);
+  margin-bottom: var(--s-lg);
+  /* The hairline is INTERNAL, which is the only place it survives
+     (DESIGN.md:518) — cards are told apart by the gap and their shadow,
+     never by a seam. 1px solid, not About's 2px dashed: that dashed rule is
+     the cross-stitch motif of the chart page, and a dashed rule under a
+     line of text is also uncomfortably close to a fallback tier mark. */
+  border-bottom: 1px solid var(--hairline);
+}
+
+/* THE MONO CAPTION, once for the three places these pages use it: a
+   section's clause marker ("§ 1", "Contact", "MIT"), a label in the
+   Impressum's fact list, and an SPDX identifier. It is the system's chip
+   treatment (DESIGN.md:571 — the label IS the tag, no fill, no border box,
+   no pill), and it was written out three times identically before being
+   collapsed here. `--muted` is safe for all three because every one of them
+   sits inside a white card; it would fail AA on the bare ground. */
+.legal-section__index,
+.legal-facts dt,
+.legal-party__spdx {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* h2 already inherits the display face, weight 400, uppercase and --ink
+   from index.css; this only sets the step. Deliberately far smaller than
+   About's `.sheet__title` (which clamps to 2.75rem): those are one-word
+   sheet names, these are sentences of law, and the same size would run to
+   three shouted lines. */
+.legal-section__title {
+  font-size: clamp(1.125rem, 1.6vw, 1.375rem);
+  letter-spacing: var(--track-display-sm);
+  text-wrap: balance;
+}
+
+.legal-section__note {
+  margin: var(--s-xxs) 0 0;
+  max-width: 60ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+/* -------------------- prose additions -------------------- */
+
+/* `.prose` (App.css:1634) already gives the body face, --t-body-md, 72ch
+   and the --s-md rhythm. These three rules add only what it has never had
+   to carry, because no route before these has rendered a numbered clause,
+   a bulleted list or a key name inside a sentence.
+
+   Line height is the one override: `.prose` sets 1.5, which is right for
+   the short explanatory paragraphs it was written for. A page of numbered
+   sub-clauses is read line by line and needs the extra leading.
+
+   `.prose.legal-prose`, not `.legal-prose`. At equal specificity (0,1,0)
+   the later stylesheet wins, and App.jsx imports the pages before
+   `./App.css`, so `.prose`'s own `line-height: 1.5` lands last in the
+   bundle and won. Measured in the browser before the fix: 24px on a 16px
+   body, i.e. 1.5 — the declaration below did nothing at all. Chaining the
+   two classes takes it to (0,2,0) and it applies. */
+.prose.legal-prose {
+  line-height: 1.65;
+}
+
+/* Markers are OFF globally (index.css:339-342 sets `list-style: none` and
+   `padding: 0` on every ul and ol), because every list in the app until now
+   has been a layout grid rather than a list of prose. A legal page is the
+   first place where the marker carries meaning — "(3)" in a policy refers
+   to a numbered clause by its number — so it is switched back on inside
+   `.legal-prose` only, and nowhere else. */
+.legal-prose ul,
+.legal-prose ol {
+  padding-left: 1.6em;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xs);
+}
+
+.legal-prose ul {
+  list-style: disc;
+}
+
+.legal-prose ol {
+  list-style: decimal;
+}
+
+.legal-prose li::marker {
+  color: var(--muted);
+}
+
+/* A Redis key, a storage key, an HTTP header name. Mono is permitted here
+   and only here inside prose: the Trinity Rule forbids the monospace face
+   in a PARAGRAPH, and what it is protecting against is running text set in
+   mono — a machine identifier quoted inside a sentence is the same
+   "genuine machine data" the face is reserved for (index.css).
+
+   The treatment is `.notice code`'s (App.css), not a third one invented
+   here. The site had already settled inline code twice, at `.notice code`
+   and `.dropzone__note code`, and a chip that differed only on these pages
+   would be a fourth vocabulary for one idea. Family and the 0.9em step come
+   from the global `code` rule; only the plate is set here — no border, no
+   radius, and never crimson, which would read as a link. */
+.legal-prose code {
+  padding: 0 0.25em;
+  background: var(--card);
+  /* A 60-character Redis key pattern must break rather than push the card
+     wider than its column. */
+  overflow-wrap: anywhere;
+}
+
+/* A run-in sub-heading inside a section. The DISPLAY face, not mono. It was
+   mono for one iteration, on the argument that it reads as a caption, and
+   that was wrong: an `<h3>` is a heading in the document outline, the
+   Trinity Rule gives headings to the display face, and these nine would
+   have been the only mono headings on the site. Case, weight and colour all
+   come from the global h3 rule; this sets only the step, one below the
+   section title so the two levels cannot be confused. */
+.legal-prose h3 {
+  font-size: var(--t-title-sm);
+  letter-spacing: var(--track-display-sm);
+}
+
+/* -------------------- the operator's details -------------------- */
+
+/* A label/value list, not a table: these are facts about ONE entity, and a
+   table would promise columns that compare. One column until there is room
+   for the label to sit beside its value. */
+.legal-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-sm);
+  margin: 0;
+  font-size: var(--t-body-sm);
+}
+
+@media (min-width: 640px) {
+  .legal-facts {
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: var(--s-sm) var(--s-xl);
+  }
+}
+
+.legal-facts dt {
+  /* Lines the label's cap height up with the first line of its value, which
+     sits on a taller body-face line. */
+  padding-top: 0.3em;
+}
+
+.legal-facts dd {
+  margin: 0;
+  font-family: var(--font-body);
+  line-height: 1.6;
+  color: var(--body-strong);
+}
+
+/* The entity's name. The one place on these pages that takes a bigger
+   display step, because it is the answer to the question an Impressum
+   exists to answer. Case, family and weight all come from the global
+   heading rule. */
+.legal-entity__name {
+  font-size: clamp(1.375rem, 2.4vw, 1.75rem);
+  line-height: 1.15;
+  letter-spacing: var(--track-display-sm);
+  text-wrap: balance;
+}
+
+.legal-entity__kind {
+  margin: var(--s-xs) 0 var(--s-lg);
+  max-width: 68ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+/* -------------------- third-party components -------------------- */
+
+.legal-parties {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-sm);
+}
+
+@media (min-width: 900px) {
+  .legal-parties {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* A FRAME, not a card: `--card-soft` fill at `--r-card-sm` with no shadow.
+   The missing shadow is the whole distinction (DESIGN.md:516, 687) — these
+   sit inside a white card already, and giving them a shadow would nest a
+   card in a card. */
+.legal-party {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xxs);
+  padding: var(--s-md);
+  background: var(--card-soft);
+  border-radius: var(--r-card-sm);
+  /* `--card-border`, the token every other soft-grey frame uses
+     (`.field--framed`, `.tile__depiction`) — not a hand-rolled hairline.
+     The absent SHADOW is what makes this a frame and not a second card;
+     the keyline should still speak the same vocabulary. */
+  border: var(--card-border);
+}
+
+.legal-party__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-xs);
+}
+
+/* Weight 400, never bold: the Selective-Bold Rule's three permitted uses do
+   not include a card title, so the name is set apart by step and colour
+   rather than by weight.
+
+   AN ANCHOR HERE LOOKS LIKE A LINK. It did not for one iteration — it was
+   undecorated `--ink`, pixel-identical to the plain `<span>` the OpenSTOUT
+   entry renders because its repository is private, so a reader could not
+   tell which of the twelve names would do anything. The system's inline
+   link is `--link` with a 1px underline; that is what these take, with
+   `--accent-deep` as the hover depth DESIGN.md names. */
+/* Shared half. The link half is INHERITED: `--link`, the 1px underline and
+   the 0.2em offset all come from the global `a` rule in index.css, so an
+   anchor here needs no declarations of its own beyond the hover depth
+   DESIGN.md names. */
+.legal-party__name {
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+}
+
+a.legal-party__name:hover {
+  color: var(--accent-deep);
+}
+
+/* The non-link case: an entry whose source is not public. Ink and no
+   underline — visibly not a link, which is the whole point of the split. */
+span.legal-party__name {
+  color: var(--ink);
+}
+
+/* The SPDX identifier is machine data — an exact string with a defined
+   meaning — so it is mono and it is left in its own case rather than
+   uppercased. `MIT` and `LGPL-2.1-or-later` are identifiers, not labels.
+
+   It shipped for one iteration as a filled, bordered, rounded pill, which
+   is exactly the badge DESIGN.md's Chips rule forbids — "no fill, no border
+   box, no pill. The label *is* the tag" — and this file quotes that rule
+   two sections above, against a crimson eyebrow. The chip treatment is the
+   one the rule specifies: `--muted` mono caption over a single
+   `--hairline-strong` underline, 0px radius, no plate. */
+.legal-party__spdx {
+  padding-bottom: 0.15em;
+  border-bottom: 1px solid var(--hairline-strong);
+  white-space: nowrap;
+}
+
+/* `--t-body-sm` (14px), not `--t-caption` (11px). Caption is the MONO step
+   — DESIGN.md defines it as "uppercase mono, 2px tracking — field labels,
+   tier codes, spec labels, metadata" — and these are two or three sentences
+   of running body prose. Body SM is the documented step for secondary
+   prose, and it is what `.legal-section__note` on the same page already
+   uses. */
+.legal-party__note {
+  max-width: 60ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* -------------------- a verbatim licence -------------------- */
+
+/* Reproduced exactly. `white-space: pre-wrap` keeps the original line breaks
+   and lets a long line wrap rather than forcing a horizontal scrollbar
+   inside the card; `overflow-x: auto` covers the one case pre-wrap cannot,
+   an unbreakable token wider than the column. A licence that has been
+   re-flowed is still the licence that was granted — what must not change is
+   its TEXT, and none of this changes the text.
+
+   NO `font-family` HERE, deliberately. This block is ~1,100 characters of
+   running English, and the Trinity Rule's one unbreakable clause is that the
+   monospace face never sets a paragraph — so this file must not be the thing
+   that chooses mono for it. It does not have to: `pre` is already in the
+   global mono selector list in index.css, because a `<pre>` is
+   machine-preserved text by definition. The face therefore comes from the
+   system's own long-standing decision about `pre`, and if that decision ever
+   changes this block follows it instead of overriding it. */
+.legal-license {
+  margin: 0;
+  padding: var(--s-md);
+  background: var(--card-soft);
+  border: var(--card-border);
+  border-radius: var(--r-card-sm);
+  font-size: var(--t-body-sm);
+  line-height: 1.6;
+  color: var(--ink);
+  white-space: pre-wrap;
+  /* This is what lets a long line wrap, so no horizontal scrollbar can ever
+     appear inside the card and `overflow-x` has nothing to do. */
+  overflow-wrap: break-word;
+}
+
+/* -------------------- the version line -------------------- */
+
+/* Lives INSIDE the last card, not on the ground beneath it. It was on the
+   ground first: `--muted` measures 2.9–4.1:1 against the gradient ground
+   and `--muted-soft` is canvas-only by its own rule in index.css, so both
+   miss AA there (DESIGN.md:295, 312). On the white card `--muted` is
+   5.74:1 and the line needs no exception at all. */
+.legal-updated {
+  margin: var(--s-lg) 0 0;
+  padding-top: var(--s-sm);
+  border-top: 1px solid var(--hairline);
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+}

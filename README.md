@@ -1,6 +1,14 @@
 # STITCH
 
-**S**MILES **T**O **I**UPAC name **T**ranslator for **CH**emistry — a public prototype putting [OpenSTOUT](https://github.com/Kohulan/OpenSTOUT)'s deterministic, rule-based naming engine in front of visitors. See `PRODUCT.md` for product context and `DESIGN.md` for the visual system (a soft-grey card bento where confidence is a rule beneath the name, never a colour).
+**S**MILES **T**O **I**UPAC name **T**ranslator for **CH**emistry — a web app putting OpenSTOUT's
+deterministic, rule-based naming engine in front of visitors. Every name it shows carries the
+confidence STITCH could actually claim for it: a verified PIN, a verified fallback, a best effort, or
+an honest abstention.
+
+> **This repository does not contain the naming engine.** `backend/vendor/` is populated from a
+> checkout of OpenSTOUT, which is not public. A fresh clone builds and runs the frontend and the API
+> shell, but cannot name a molecule until the engine is vendored in — see
+> [The OpenSTOUT dependency](#the-openstout-dependency).
 
 ## Architecture in one paragraph
 
@@ -46,6 +54,58 @@ One wrinkle worth knowing: with `DEPLOYMENT_PROFILE` unset, `core/config.py` app
 all rather than falling back to `medium`. That is harmless only because the code defaults happen to
 equal `medium.yml`'s values — compose always sets it explicitly.
 
+## Deploying it publicly
+
+`docker compose up -d` is the whole deployment, but three things about it are only correct
+because of decisions recorded elsewhere, and all three break quietly rather than loudly.
+
+### Put a TLS terminator in front — and let it forward the client address
+
+`frontend` is the only service published beyond loopback, and it speaks **plain HTTP on 8080**.
+A public host needs something holding the certificate for the real hostname in front of it.
+Anything works; the requirement is the header:
+
+```nginx
+# on the TLS terminator
+location / {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_set_header Host              $host;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;   # <- not optional
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+(Caddy sets `X-Forwarded-For` itself, so a bare `reverse_proxy 127.0.0.1:8080` is enough.)
+
+Without that header every visitor collapses into a single per-IP rate-limit bucket and one
+script 429s the whole site. `frontend/nginx.conf`'s `set_real_ip_from` block recovers the true
+address and carries the full reasoning; narrow its four ranges if the terminator has a fixed
+address.
+
+HSTS belongs on the terminator, not in `frontend/nginx.conf` — a `Strict-Transport-Security`
+header sent over plain HTTP is ignored, and that container never speaks TLS.
+
+### The memory dials
+
+Every service has a `mem_limit`, overridable from `.env` as `WORKER_MEM_LIMIT` (`3g`),
+`REDIS_MEM_LIMIT` (`3g`), `BACKEND_MEM_LIMIT` (`1500m`) and `FRONTEND_MEM_LIMIT` (`256m`). Each
+sits beside a comment in `docker-compose.yml` saying what it is sized from and when to raise it;
+the two that bite are the worker limit (arithmetic off `OPENSTOUT_JVM_XMX` × concurrency) and the
+redis limit (must stay **above** `REDIS_MAXMEMORY`, never equal).
+
+### What "healthy" means here
+
+```bash
+docker compose ps        # every service should read (healthy)
+```
+
+A backend reporting healthy while `/api/health` says `DEGRADED` is correct, not a bug: it is
+refusing names because no worker has a live JVM. Each check's scope, and what it deliberately
+does **not** prove, is commented at the check itself in `docker-compose.yml`.
+
+Logs are capped at 10 MB × 3 files per service; the Docker default is unbounded, and the workers
+log a line per molecule.
+
 ## Run locally without Docker
 
 You need **four** processes, not two. Redis first:
@@ -57,7 +117,7 @@ docker compose up -d redis    # service stitch-redis, publishes localhost:6379
 ```bash
 # backend — from backend/. uv, not `python3.12 -m venv`: there is no
 # `python3.12` on PATH on a typical dev Mac here, and uv fetches its own.
-uv venv --python 3.12 .venv-mac && source .venv-mac/bin/activate
+uv venv --python 3.12 .venv && source .venv/bin/activate
 uv pip install -r requirements.txt        # `pip` itself is not in this venv
 python scripts/place_opsin_resources.py   # see "OpenSTOUT dependency" below — required.
                                           # Not automatic: the vendored openstout is a plain
@@ -134,7 +194,24 @@ caps are **2** concurrent jobs, **20** jobs/hour, **60** naming requests/min, **
 
 ## The OpenSTOUT dependency
 
-OpenSTOUT isn't published on PyPI in the form STITCH needs (`name_tiered()`, `general_fallback`), so `backend/requirements.txt` installs it from `backend/vendor/openstout` — a snapshot vendored from the local sibling project, not a live path dependency. This keeps Docker builds self-contained (a container can't reach outside its build context) and makes the backend reproducible without assuming an OpenSTOUT checkout exists on the host it's built on.
+OpenSTOUT isn't published on PyPI in the form STITCH needs (`name_tiered()`, `general_fallback`), so
+`backend/requirements.txt` installs it from `backend/vendor/openstout` — a snapshot, not a live path
+dependency, so a container build never has to reach outside its own context.
+
+**That snapshot is not in this repository, and neither are three of the four vendored artifacts.**
+`scripts/vendor-openstout.sh` copies all of them out of an OpenSTOUT checkout: the engine source, the
+OPSIN grammar resources, and the `opsin-cli` and `centres-cli` jars. Publishing them would publish
+the engine, so all four are gitignored. Run the script before your first build:
+
+```bash
+OPENSTOUT_SRC=/path/to/OpenSTOUT/Project ./scripts/vendor-openstout.sh
+```
+
+The exception is **CDK**, the only vendored artifact with a public release URL: `backend/Dockerfile`
+downloads it during the build and checks it against the SHA-256 recorded in
+`backend/vendor/cdk/NOTICE`, which is tracked. `backend/.dockerignore` keeps any local copy out of
+the build context, so a build here exercises the same download path a fresh clone does. `centres-cli`
+cannot be fetched at all — its notice records it as a local Maven build from an unreleased commit.
 
 **Refresh the snapshot** after pulling OpenSTOUT changes you want STITCH to pick up:
 

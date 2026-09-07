@@ -1,4 +1,13 @@
 .venv
+.venv-mac
 __pycache__
 *.pyc
 .pytest_cache
+tests
+.DS_Store
+
+# The CDK jar is downloaded and SHA-verified by the Dockerfile, so the local
+# copy must NOT enter the build context -- otherwise a build on the
+# maintainer's machine silently uses the on-disk jar and never exercises the
+# download path a fresh clone depends on.
+vendor/cdk/*.jar
