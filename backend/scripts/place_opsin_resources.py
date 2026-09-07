@@ -6,7 +6,7 @@ to be sitting there as siblings of "src/" in a full OpenSTOUT dev checkout:
 
   openstout/validation/opsin_grammar.py    -> opsin/opsin-core/src/main/resources/...
   openstout/validation/opsin_roundtrip.py  -> opsin-cli-2.9.0-jar-with-dependencies.jar
-  openstout/perception/centres_bridge.py   -> centres-cli-1.5.jar
+  openstout/perception/centres_bridge.py   -> centres-cli-1.2.1.jar
 
 None of these ship with the pip package (pyproject.toml's packages =
 ["src/openstout"] never includes them), and NONE are optional in the way

@@ -59,7 +59,10 @@ fi
 # should be suppressed and replaced with an honest fallback can ship as if verified.
 # This is NOT a hypothetical -- confirmed by direct A/B testing during STITCH's own
 # Docker work (see DESIGN.md / commit notes), so these are load-bearing, not optional.
-for jar in opsin-cli-2.9.0-jar-with-dependencies.jar centres-cli-1.5.jar; do
+# centres is NOT in this list any more: since 2026-09-07 the engine pins the
+# tagged 1.2.1 release, which backend/Dockerfile downloads and SHA-checks. Add
+# it back here only if it ever returns to an unreleased build.
+for jar in opsin-cli-2.9.0-jar-with-dependencies.jar; do
   if [ -f "$SRC/$jar" ]; then
     cp "$SRC/$jar" "$OPSIN_VENDOR_BASE/$jar"
     echo "vendored $jar ($(du -sh "$OPSIN_VENDOR_BASE/$jar" | cut -f1))"

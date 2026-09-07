@@ -11,3 +11,4 @@ tests
 # maintainer's machine silently uses the on-disk jar and never exercises the
 # download path a fresh clone depends on.
 vendor/cdk/*.jar
+vendor/opsin-resources/centres-cli-*.jar
