@@ -1,6 +1,9 @@
 <div align="center">
 
-<img src="frontend/public/logos/orthonym.svg" alt="Orthonym" height="76">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/logo-dark.png">
+  <img src="docs/screenshots/logo.png" alt="Orthonym" width="560">
+</picture>
 
 ### Verified IUPAC names for Chemical Structures
 
