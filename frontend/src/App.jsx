@@ -5,6 +5,9 @@ import Home from './pages/Home'
 import IupacToSmiles from './pages/IupacToSmiles'
 import Explain from './pages/Explain'
 import About from './pages/About'
+import Imprint from './pages/Imprint'
+import Privacy from './pages/Privacy'
+import Terms from './pages/Terms'
 import './App.css'
 
 // The page's ground: FOUR corner fields, a centre glow and a fine dot grid,
@@ -91,6 +94,36 @@ function App() {
               bounce off the redirect. */}
           <Route path="/health" element={<Navigate to="/about" replace />} />
           <Route path="/about" element={<About />} />
+          {/* The three legal routes, last because they are the only ones a
+              visitor reaches from the footer rather than from the nav.
+              /imprint keeps the English route and the German label: Impressum
+              is the legally recognised term and the word a German visitor
+              looks for, but the URL stays in the language every other route
+              uses. nginx already serves index.html for any unmatched path
+              (`try_files $uri $uri/ /index.html`), so a deep link to one of
+              these needs no server change. */}
+          <Route path="/imprint" element={<Imprint />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
+          {/* THE CATCH-ALL, and it is not cosmetic. `Layout` is a PATHLESS
+              route, so it renders only when a child matches -- on any other
+              path `<Routes>` rendered null, and nginx answers every unmatched
+              path with index.html (`try_files $uri $uri/ /index.html`). The
+              two together meant a typo was HTTP 200 with a completely blank
+              white page: no nav, no footer, not even the ground, and no way
+              back but the browser's own button. Measured, not theorised.
+
+              It lands on Home rather than on a 404 page, and `replace` keeps
+              the bad URL out of the history. That is the same call the four
+              redirects above make -- a visitor who mistyped wanted the site,
+              not a lecture -- and it costs one line where a 404 page costs a
+              component, a route and a piece of copy nobody reads.
+
+              This also covers the German spellings DECIMER.ai serves:
+              /impressum and /privacy_policy each had their own redirect for
+              one iteration, which was two lines for a case this one line
+              already handles. */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
     </BrowserRouter>

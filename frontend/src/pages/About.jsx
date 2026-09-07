@@ -219,7 +219,7 @@ const ROWS = [
   },
   {
     n: 'II',
-    title: 'IUPAC → Structure',
+    title: 'Name → Structure',
     body: 'The reverse. This one runs on OPSIN rather than the engine backwards, because reading a name is a different craft from writing one.',
   },
   {
@@ -411,17 +411,14 @@ function About() {
             </div>
             <div className="gauge__row">
               <dt>Source</dt>
+              {/* No link: the upstream repository is private and answers 404
+                  to an anonymous visitor, and "Read the pattern itself"
+                  promises a target a reader cannot open. Terms.jsx and
+                  Navigation.jsx carry the same fact; the three move
+                  together. */}
               <dd>
-                MIT licence.{' '}
-                <a
-                  className="about-link"
-                  href="https://github.com/Kohulan/Orthonym"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Read the pattern itself
-                </a>
-                .
+                MIT licence. Vendored as a source snapshot; the upstream repository is not yet
+                public.
               </dd>
             </div>
             <div className="gauge__row">

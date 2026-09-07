@@ -45,7 +45,10 @@ import { NavLink, useLocation } from 'react-router-dom'
 
 const NAV_LINKS = [
   { to: '/', label: 'Translate', end: true },
-  { to: '/from-name', label: 'IUPAC → Structure' },
+  // "Name", not "IUPAC name": every route on this site is about IUPAC names,
+  // so the word carried no information here and made this the longest label in
+  // the notch by half. The arrow already says which direction it runs.
+  { to: '/from-name', label: 'Name → Structure' },
   // One entry where there were three. /structure and /teach were the same
   // capability reached two different ways -- both now redirect here, and the
   // page's own Input tabs (name / SMILES / draw) are what used to be separate
@@ -59,8 +62,17 @@ const NAV_LINKS = [
   { to: '/about', label: 'About' },
 ]
 
-// The naming engine's public source — the same repo the About page links to.
-const GITHUB_URL = 'https://github.com/Kohulan/Orthonym'
+// The naming engine's source, WHEN there is a public one to link to. There
+// is not today: github.com/Kohulan/Orthonym is private and answers 404 to
+// an anonymous visitor, so this shipped a dead link in the header of every
+// route. The comment here used to say "the naming engine's public source",
+// which was simply false.
+//
+// Gated rather than deleted, because the header chrome and the mobile menu
+// entry are worth keeping for the day the repository is published: set
+// VITE_GITHUB_URL and both come back. Terms.jsx and About.jsx state the same
+// fact in prose and move together with this.
+const GITHUB_URL = import.meta.env.VITE_GITHUB_URL || null
 
 // A minimal molecule mark: two nodes joined by a bond, one stroke
 // weight, inheriting the crimson accent via currentColor.
@@ -258,17 +270,24 @@ function Navigation() {
             ))}
           </nav>
 
-          <span className="notch__rule" aria-hidden="true" />
+          {/* The rule is the link's separator, so it goes when the link
+              does -- otherwise the notch keeps a divider with nothing
+              after it. */}
+          {GITHUB_URL && (
+            <>
+              <span className="notch__rule" aria-hidden="true" />
 
-          <a
-            className="site-head__ext"
-            href={GITHUB_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <GitHubMark />
-            GitHub
-          </a>
+              <a
+                className="site-head__ext"
+                href={GITHUB_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <GitHubMark />
+                GitHub
+              </a>
+            </>
+          )}
         </div>
 
         {open && (
@@ -285,16 +304,20 @@ function Navigation() {
                 {link.label}
               </NavLink>
             ))}
-            <span className="site-nav__mobile-sep" aria-hidden="true" />
-            <a
-              className="site-nav__mlink"
-              href={GITHUB_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <GitHubMark />
-              GitHub
-            </a>
+            {GITHUB_URL && (
+              <>
+                <span className="site-nav__mobile-sep" aria-hidden="true" />
+                <a
+                  className="site-nav__mlink"
+                  href={GITHUB_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <GitHubMark />
+                  GitHub
+                </a>
+              </>
+            )}
           </nav>
         )}
       </div>

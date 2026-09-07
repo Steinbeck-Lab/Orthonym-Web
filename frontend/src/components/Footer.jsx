@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import CreditCross from './CreditCross'
 
 // Site-wide footer — appears once, beneath every page, via the router shell.
@@ -8,14 +9,22 @@ import CreditCross from './CreditCross'
 // which (/structure, /teach) had just become redirects, so the footer was
 // carrying stale copies of a list it did not own.
 //
+// The three legal links added on 2026-09-06 are not a fourth part and not a
+// return of those columns: they ride ON the copyright line, and they are the
+// only routes the header nav does NOT carry, so they are not duplicates of
+// anything.
+//
 // There is no footer BAND: the whole strip is transparent and only the credit
 // pill and the round back-to-top button lift off the grey ground, matching
 // ChemAudit's footer (user instruction: "I don't need a whole white bar at the
 // bottom, use pill style similar to chemaudit"). Restoring a background here
 // re-creates the bar that was removed on purpose.
 //
-// The crimson is the coffee cup and nothing else, which keeps the one-accent
-// rule DESIGN.md sets: accent lives in chrome, never on a confidence tier.
+// The crimson here is the coffee cup and the three legal links — both on
+// DESIGN.md's allowlist (chrome and inline links), neither anywhere near a
+// confidence tier, which is the one place the accent may never go. The links
+// take `--accent-deep` rather than `--link` because this strip sits on the
+// bare ground; App.css carries the measurement.
 
 // A coffee cup, inline rather than an asset: one glyph, no network request,
 // no file to lose, and it inherits currentColor so the accent rule holds
@@ -67,8 +76,26 @@ function Footer() {
   return (
     <footer className="site-footer">
       <div className="site-footer__inner page-shell">
+        {/* The three legal routes ride ON the copyright line rather than
+            becoming a fourth object in the grid above. Two reasons, both
+            recorded rather than aesthetic:
+              - the grid is `1fr auto auto` by owner instruction 2026-09-03,
+                and a fourth track would move the credit pill off the right
+                edge that instruction put it on.
+              - the footer's deleted link columns (see the block comment at
+                the top of this file) were deleted because every link in them
+                already sat in the header nav. These three do NOT sit in the
+                header nav -- the notch carries the five route labels only --
+                so they are not the duplicates that deletion was about.
+            They are `<Link>`, not `<a>`: an `<a href>` inside the router
+            shell reloads the whole app for an in-app route. */}
         <p className="site-footer__copyright">
           &copy; {year} Orthonym. All rights reserved.
+          <span className="site-footer__legal">
+            <Link to="/imprint">Impressum</Link>
+            <Link to="/privacy">Privacy</Link>
+            <Link to="/terms">Terms</Link>
+          </span>
         </p>
 
         <p className="credit">

@@ -1716,6 +1716,57 @@ input.field__control {
   color: var(--body);
 }
 
+/* Impressum · Privacy · Terms, riding on the copyright line rather than
+   taking a fourth track in the footer grid. Wraps to its own line on a
+   narrow viewport, which is why it is a flex row with its own gap and not
+   three inline anchors separated by a literal bullet character. */
+.site-footer__legal {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0 var(--s-sm);
+  margin-left: var(--s-sm);
+}
+
+/* `--accent-deep`, NOT `--link`. Same contrast fix, and for the same
+   measured reason, as the copyright text beside it: this is the only place
+   on the site where a LINK sits on the bare ground with no card under it,
+   and `--link` (#c41e3a) measures 3.4-5.0:1 across the four gradient fields
+   -- under AA. DESIGN.md names this exact substitution as the fix for a
+   link on ground; it is not a new exception.
+
+   MEASURED HERE, not carried over: 8.06:1 is `--accent-deep` on --canvas
+   and says nothing about this ground. Sampled off a 1440x900 screenshot of
+   the footer strip, the ground behind these links is a uniform
+   rgb(213,216,220) -- the gradient fields do not reach this far down -- and
+   `--accent-deep` on it is 5.63:1, `--body` 8.84:1. Both clear AA.
+
+   THE UNDERLINE IS AT REST AND IS NOT OPTIONAL. It shipped as hover-only
+   for one iteration and that was a WCAG 1.4.1 failure, measured: these
+   three links sit INSIDE the copyright paragraph, so they render at the
+   same 11.2px JetBrains Mono, uppercase, on the same line as the sentence
+   beside them, and the ONLY thing separating link from prose was hue --
+   crimson against `--body` is 1.57:1, which is no separation at all for
+   anyone who does not see the hue. Colour may not be the only carrier.
+
+   The underline is INHERITED, not restated. Only the colour is overridden
+   here, so `underline` / `1px` / `0.2em` and the hover thickening all come
+   from the global `a` rules — a second copy of those values in this block
+   is a copy that can drift, and re-declaring the `text-decoration`
+   shorthand on hover would additionally reset the thickness the global
+   `a:hover` sets.
+
+   Separated from one another by the flex gap and nothing else. A `::before`
+   middle dot was the first attempt and was dropped: generated content
+   inside an anchor is folded into that anchor's accessible name by most
+   engines, so the second link announced as "· Privacy". */
+.site-footer__legal a {
+  color: var(--accent-deep);
+}
+
+.site-footer__legal a:hover {
+  color: var(--ink);
+}
+
 /* The credit, as a floating pill — the one place the footer lifts, matching
    the header/footer glass treatment DESIGN.md already establishes. */
 .credit {
@@ -3362,10 +3413,32 @@ input.field__control {
   transform: translateX(-22px);
   pointer-events: none;
   visibility: hidden;
+  /* THE CLOSED DRAWER MUST NOT RESERVE SCROLL HEIGHT, and `visibility` alone
+     does not stop it. In side mode this box is `position: absolute`, so the
+     `grid-template-rows: 0fr` collapse that hides it in stacked mode never
+     applies -- it sits at its full natural height (683px, measured) anchored
+     at the card's top, and an absolute box counts toward its containing
+     block's scroll overflow whether or not anything paints. Home therefore
+     loaded with a scrollbar and ~158px of empty ground under the footer,
+     scrolling nothing but an invisible panel.
+     `height: 0` does NOT fix it: the children are `overflow: visible` and go
+     on contributing (measured -- still 1020px). `content-visibility: hidden`
+     skips the subtree for layout as well as painting, which does.
+     `allow-discrete` plus the SAME delay `visibility` already uses is what
+     keeps the 520ms fade-out: sampled 200ms into a close, the content is
+     still rendered at opacity 0.15, and it only drops out once the animation
+     has finished. */
+  content-visibility: hidden;
   transition:
     opacity var(--info-ms) cubic-bezier(0.22, 1, 0.36, 1),
     transform var(--info-ms) cubic-bezier(0.22, 1, 0.36, 1),
-    visibility 0s linear var(--info-ms);
+    visibility 0s linear var(--info-ms),
+    content-visibility 0s linear var(--info-ms);
+  transition-behavior: allow-discrete;
+}
+
+.info--side.info--open .info__drawer {
+  content-visibility: visible;
 }
 
 .info--side.info--open .info__drawer {

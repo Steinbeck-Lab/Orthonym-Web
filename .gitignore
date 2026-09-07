@@ -19,10 +19,39 @@ dist/
 # OS
 .DS_Store
 
-# NOTE: backend/vendor/ is deliberately TRACKED. The pinned OPSIN 2.9.0 jar
-# is load-bearing (see docs/superpowers/specs/) and cannot be re-fetched by
-# any script in this repo -- vendor-orthonym.sh copies it from a local
-# Orthonym checkout that a fresh clone will not have.
+# ---------------------------------------------------------------------------
+# LOCAL-ONLY: everything below stays on the maintainer's machine and is kept
+# out of the published repository (github.com/Kohulan/Orthonym-Web), which was
+# rewritten on 2026-09-07 so none of it appears in any commit.
+# ---------------------------------------------------------------------------
+
+# The engine, and everything derived from it. `backend/vendor/` used to be
+# tracked in full; it is not, because scripts/vendor-orthonym.sh copies ALL
+# of it -- engine source, OPSIN grammar resources, the opsin-cli and
+# centres-cli jars -- out of a checkout of Orthonym, which is a private
+# repository. Publishing the vendored snapshot would publish the engine.
+# A fresh clone populates this directory with that script; see README.
+backend/vendor/orthonym/
+backend/vendor/opsin-resources/
+# The CDK jar is the one vendored artifact with a public source, so the
+# backend Dockerfile downloads it (pinned version, checked against the
+# SHA-256 in backend/vendor/cdk/NOTICE, which IS tracked).
+backend/vendor/cdk/*.jar
+
+# Agent and tooling state.
+.claude/
+.impeccable/
+.planning/
+.tools/
+
+# Working documents: session handoffs, planning notes, the design system's
+# own working record, and the env reference. Useful here, noise in public.
+NEXT-SESSION.md
+env_txt.txt
+DESIGN.md
+PRODUCT.md
+docs/superpowers/
+docs/architecture-notes.md
 
 # graphify knowledge-graph output: 29 MB of generated data, rebuildable
 # with /graphify. The cache/ subdir makes an incremental rebuild cheap.
