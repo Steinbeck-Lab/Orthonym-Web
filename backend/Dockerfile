@@ -67,13 +67,33 @@ WORKDIR /code
 # --no-install-recommends on curl for the same reason as the block above:
 # nothing else in the image needs it, and it is removed in the same layer so
 # it never reaches the runtime image.
+#
+# centres is fetched the same way, as of 2026-09-07. It used to be vendored
+# because the pinned build was `develop @ d4b3cf0` (pom 1.5-SNAPSHOT), an
+# unreleased snapshot nobody could reproduce. The engine moved to the tagged
+# 1.2.1 release, which scores 281/290 on the Hanson CIP validation suite where
+# that snapshot scored 279 -- the snapshot inverted M/P on two cumulenes.
+#
+# TWO things about this download are load-bearing:
+#   * The release ASSET is called `centres.jar`, but it is renamed to
+#     `centres-cli-1.2.1.jar` here, because orthonym's `_find_centres_jar()`
+#     globs `centres-cli-*.jar`. A differently-named file is invisible to it
+#     and CIP labelling silently falls back to RDKit.
+#   * That glob returns the HIGHEST version present, so a stale
+#     `centres-cli-1.5.jar` left anywhere on this path would WIN and quietly
+#     undo the upgrade. Never let two centres jars coexist.
 ARG CDK_VERSION=2.12
 ARG CDK_SHA256=443d86e549edd659807a444770819a05f9ea626511f433ed99342c7568272e5a
+ARG CENTRES_VERSION=1.2.1
+ARG CENTRES_SHA256=6c5d5cafa9393ed7b667a2340222348cd15a9bbdd0d1b92518229f26cc5e87fb
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
-    && mkdir -p vendor/cdk \
+    && mkdir -p vendor/cdk vendor/opsin-resources \
     && curl -fsSL -o "vendor/cdk/cdk-${CDK_VERSION}.jar" \
        "https://github.com/cdk/cdk/releases/download/cdk-${CDK_VERSION}/cdk-${CDK_VERSION}.jar" \
     && echo "${CDK_SHA256}  vendor/cdk/cdk-${CDK_VERSION}.jar" | sha256sum -c - \
+    && curl -fsSL -o "vendor/opsin-resources/centres-cli-${CENTRES_VERSION}.jar" \
+       "https://github.com/SiMolecule/centres/releases/download/${CENTRES_VERSION}/centres.jar" \
+    && echo "${CENTRES_SHA256}  vendor/opsin-resources/centres-cli-${CENTRES_VERSION}.jar" | sha256sum -c - \
     && apt-get purge -y --auto-remove curl \
     && rm -rf /var/lib/apt/lists/*
 

@@ -21,7 +21,7 @@ classes with ``JClass(name, loader=...)``.
 
 WHY THE PARENT IS THE BOOTSTRAP LOADER, NOT THE SYSTEM LOADER
 --------------------------------------------------------------
-``centres-cli-1.5.jar`` is a fat jar that already carries **859 CDK classes** -- a partial
+``centres-cli-1.2.1.jar`` is a fat jar that already carries **820 CDK classes** -- a partial
 CDK with no ``org.openscience.cdk.depict`` package at all. Those classes are therefore
 already on the system classpath. A URLClassLoader with the default (system) parent delegates
 upward first, so half of CDK resolves to the old partial copy and half to ours. Measured, not

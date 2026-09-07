@@ -75,10 +75,10 @@ const THIRD_PARTY = [
     note: 'Parses a name back into a structure. It is what makes the round-trip verdict under every name possible, and it is also the whole of /from-name. Shipped as an unmodified executable jar and invoked as a separate program. © Daniel Lowe and contributors.',
   },
   {
-    name: 'centres 1.5',
+    name: 'centres 1.2.1',
     href: 'https://github.com/SiMolecule/centres',
-    spdx: 'LGPL-3.0',
-    note: 'Assigns Cahn-Ingold-Prelog stereo descriptors. Shipped as an unmodified fat jar that itself redistributes CDK and javax.vecmath; see the notice below. Upstream states BSD-2-Clause in its LICENSE file and LGPL-3.0 in its pom, so the jar is treated here as carrying the more restrictive of the two.',
+    spdx: 'BSD-2-Clause',
+    note: 'Assigns Cahn-Ingold-Prelog stereo descriptors. Shipped as an unmodified fat jar that itself redistributes CDK and javax.vecmath, so the notice below still governs the archive as a whole — this identifier is centres\u2019 own licence, not the bundled components\u2019. Pinned to the tagged 1.2.1 release: it scores 281/290 on the Hanson CIP validation suite where an earlier unreleased build scored 279, and its licence is unambiguous.',
   },
   {
     name: 'Chemistry Development Kit 2.12',

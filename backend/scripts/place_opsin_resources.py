@@ -6,7 +6,7 @@ to be sitting there as siblings of "src/" in a full Orthonym dev checkout:
 
   orthonym/validation/opsin_grammar.py    -> opsin/opsin-core/src/main/resources/...
   orthonym/validation/opsin_roundtrip.py  -> opsin-cli-2.9.0-jar-with-dependencies.jar
-  orthonym/perception/centres_bridge.py   -> centres-cli-1.5.jar
+  orthonym/perception/centres_bridge.py   -> centres-cli-1.2.1.jar
 
 None of these ship with the pip package (pyproject.toml's packages =
 ["src/orthonym"] never includes them), and NONE are optional in the way

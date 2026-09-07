@@ -231,7 +231,7 @@ Orthonym ships three modules that each compute an identical `PROJECT_ROOT` (4 pa
 |---|---|
 | `validation/opsin_grammar.py` | `opsin/opsin-core/src/main/resources/...` |
 | `validation/opsin_roundtrip.py` | `opsin-cli-2.9.0-jar-with-dependencies.jar` |
-| `perception/centres_bridge.py` | `centres-cli-1.5.jar` |
+| `perception/centres_bridge.py` | `centres-cli-1.2.1.jar` (downloaded by the Dockerfile) |
 
 None of these ship with the pip package. `scripts/vendor-orthonym.sh` vendors all three into `backend/vendor/opsin-resources/`, and `backend/scripts/place_opsin_resources.py` (run once after every `pip install`, and baked into `backend/Dockerfile`) copies them to wherever orthonym actually got installed — it locates the target via `sysconfig`, not by guessing a venv layout, so it works the same locally and in a container.
 
