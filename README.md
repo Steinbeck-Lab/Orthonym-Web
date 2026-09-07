@@ -1,6 +1,9 @@
 <div align="center">
 
-<img src="frontend/public/logos/stitch.svg" alt="STITCH" height="76">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/logo-dark.png">
+  <img src="docs/screenshots/logo.png" alt="STITCH — the I of the wordmark is a pint of stout, pierced by a needle" width="560">
+</picture>
 
 ### **S**MILES **T**o **I**UPAC name **T**ranslator for **CH**emistry
 
