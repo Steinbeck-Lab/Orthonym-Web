@@ -72,6 +72,7 @@ backend/vendor/cdk/*.jar
 # own working record, and the env reference. Useful here, noise in public.
 NEXT-SESSION.md
 env_txt.txt
+ENGINE-PROMPT-*.md
 DESIGN.md
 PRODUCT.md
 docs/superpowers/
