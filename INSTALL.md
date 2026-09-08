@@ -56,12 +56,22 @@ The engine is private and is not in this repository, so the VM needs credentials
 
 ```bash
 sudo apt-get update && sudo apt-get install -y git gh        # gh only if you use the PAT route
+
+# /opt is root-owned, so take ownership BEFORE cloning rather than cloning with
+# sudo -- a root-owned tree makes every later `git pull` and `docker compose`
+# need sudo too, and mixes root-written files into a directory you then edit.
+sudo mkdir -p /opt/stitch && sudo chown "$USER:$USER" /opt/stitch
 git clone https://github.com/Kohulan/STITCH-Web.git /opt/stitch
 cd /opt/stitch
+
+# "Docker is installed" does not mean your user may talk to it. If this prints
+# the hint, run it and start a new login shell (`newgrp docker` for this one).
+docker ps >/dev/null 2>&1 || echo "run: sudo usermod -aG docker $USER  -- then log out and back in"
 
 # authenticate however you prefer -- a fine-grained PAT with read access to
 # Kohulan/OpenSTOUT, or a deploy key in ~/.ssh. Then:
 gh auth login                                                 # or: eval "$(ssh-agent)"; ssh-add ~/.ssh/openstout_deploy
+sudo mkdir -p /opt/openstout && sudo chown "$USER:$USER" /opt/openstout
 gh repo clone Kohulan/OpenSTOUT /opt/openstout -- --depth 1
 
 # populate backend/vendor/ from that checkout
