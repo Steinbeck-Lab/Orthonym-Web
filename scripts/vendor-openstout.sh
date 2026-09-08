@@ -43,33 +43,69 @@ echo "vendored $(find "$DEST/src/openstout" -name '*.py' | wc -l) .py files + da
 # scripts/place-opsin-resources.py can put it where the loader expects.
 OPSIN_RESOURCES_SRC="$SRC/opsin/opsin-core/src/main/resources"
 OPSIN_VENDOR_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/backend/vendor/opsin-resources"
-if [ -d "$OPSIN_RESOURCES_SRC" ]; then
-  rm -rf "$OPSIN_VENDOR_BASE"
-  mkdir -p "$OPSIN_VENDOR_BASE/opsin/opsin-core/src/main"
-  cp -r "$OPSIN_RESOURCES_SRC" "$OPSIN_VENDOR_BASE/opsin/opsin-core/src/main/resources"
-  echo "vendored OPSIN grammar resources ($(du -sh "$OPSIN_VENDOR_BASE" | cut -f1)) for opsin_grammar.py"
-else
-  echo "warning: $OPSIN_RESOURCES_SRC not found -- openstout will fail to import without it" >&2
+OPSIN_JAR_VERSION="2.9.0"
+OPSIN_JAR="opsin-cli-${OPSIN_JAR_VERSION}-jar-with-dependencies.jar"
+OPSIN_JAR_URL="https://github.com/dan2097/opsin/releases/download/${OPSIN_JAR_VERSION}/${OPSIN_JAR}"
+
+# ALWAYS create the destination first. It used to be created only inside the
+# `if [ -d ]` below, so on a checkout without the resources tree the directory
+# never appeared and the jar copy further down died with a bare
+# "cp: cannot create regular file ...: No such file or directory" -- an error
+# about the destination that reads like one about the source. Hit on a real
+# Ubuntu deploy, 2026-09-08.
+mkdir -p "$OPSIN_VENDOR_BASE"
+
+# The jar comes from the OpenSTOUT checkout when it is there, and from OPSIN's
+# own public release when it is not. A clone of OpenSTOUT does NOT necessarily
+# carry it -- verified on a fresh --depth 1 clone -- and without it SELF-01
+# silently "fails open": a name that should be suppressed and replaced with an
+# honest fallback ships as if verified. Downloading beats warning.
+if [ -f "$SRC/$OPSIN_JAR" ]; then
+  cp "$SRC/$OPSIN_JAR" "$OPSIN_VENDOR_BASE/$OPSIN_JAR"
+  echo "vendored $OPSIN_JAR from the checkout ($(du -sh "$OPSIN_VENDOR_BASE/$OPSIN_JAR" | cut -f1))"
+elif [ ! -f "$OPSIN_VENDOR_BASE/$OPSIN_JAR" ]; then
+  echo "$OPSIN_JAR not in the checkout -- downloading the $OPSIN_JAR_VERSION release"
+  curl -fsSL -o "$OPSIN_VENDOR_BASE/$OPSIN_JAR" "$OPSIN_JAR_URL"
+  echo "downloaded $OPSIN_JAR ($(du -sh "$OPSIN_VENDOR_BASE/$OPSIN_JAR" | cut -f1))"
 fi
 
-# openstout/validation/opsin_roundtrip.py and openstout/perception/centres_bridge.py
-# compute the SAME PROJECT_ROOT (4 parents up) and glob for these two jars there --
-# they're what actually runs the real OPSIN/CIP-centres round-trip check (SELF-01).
-# Without them (and without jpype/Java), SELF-01 silently "fails open": a name that
-# should be suppressed and replaced with an honest fallback can ship as if verified.
-# This is NOT a hypothetical -- confirmed by direct A/B testing during STITCH's own
-# Docker work (see DESIGN.md / commit notes), so these are load-bearing, not optional.
-# centres is NOT in this list any more: since 2026-09-07 the engine pins the
-# tagged 1.2.1 release, which backend/Dockerfile downloads and SHA-checks. Add
-# it back here only if it ever returns to an unreleased build.
-for jar in opsin-cli-2.9.0-jar-with-dependencies.jar; do
-  if [ -f "$SRC/$jar" ]; then
-    cp "$SRC/$jar" "$OPSIN_VENDOR_BASE/$jar"
-    echo "vendored $jar ($(du -sh "$OPSIN_VENDOR_BASE/$jar" | cut -f1))"
-  else
-    echo "warning: $SRC/$jar not found -- SELF-01 round-trip verification will silently fail open without it" >&2
+# The grammar resources: from the checkout if present, otherwise UNPACKED FROM
+# THE JAR. openstout's validation/opsin_grammar.py wants them as real files at
+# PROJECT_ROOT + "opsin/opsin-core/src/main/resources/...", and that tree is a
+# sibling of src/ in a full OpenSTOUT dev checkout -- a plain clone may not have
+# it, and then the package fails at import.
+#
+# The jar is a complete substitute, not an approximation: its
+# uk/ac/cam/ch/wwmm/opsin/{resources/*,opsinbuild.props} entries were diffed
+# against a known-good vendored tree and matched exactly, 140 files, nothing
+# extra on either side.
+OPSIN_RESOURCES_DEST="$OPSIN_VENDOR_BASE/opsin/opsin-core/src/main/resources"
+if [ -d "$OPSIN_RESOURCES_SRC" ]; then
+  rm -rf "$OPSIN_VENDOR_BASE/opsin"
+  mkdir -p "$OPSIN_VENDOR_BASE/opsin/opsin-core/src/main"
+  cp -r "$OPSIN_RESOURCES_SRC" "$OPSIN_RESOURCES_DEST"
+  echo "vendored OPSIN grammar resources from the checkout ($(du -sh "$OPSIN_VENDOR_BASE/opsin" | cut -f1))"
+elif [ -f "$OPSIN_VENDOR_BASE/$OPSIN_JAR" ]; then
+  rm -rf "$OPSIN_VENDOR_BASE/opsin"
+  mkdir -p "$OPSIN_RESOURCES_DEST"
+  ( cd "$OPSIN_RESOURCES_DEST" \
+    && unzip -qo "$OPSIN_VENDOR_BASE/$OPSIN_JAR" \
+         "uk/ac/cam/ch/wwmm/opsin/resources/*" "uk/ac/cam/ch/wwmm/opsin/opsinbuild.props" )
+  n=$(find "$OPSIN_RESOURCES_DEST" -type f | wc -l | tr -d ' ')
+  if [ "$n" -lt 100 ]; then
+    echo "error: extracted only $n resource files from $OPSIN_JAR -- expected ~140" >&2
+    exit 1
   fi
-done
+  echo "extracted OPSIN grammar resources from $OPSIN_JAR ($n files, $(du -sh "$OPSIN_VENDOR_BASE/opsin" | cut -f1))"
+else
+  echo "error: no OPSIN resources and no jar to take them from -- openstout will fail to import" >&2
+  exit 1
+fi
+
+# NOTE: the OPSIN jar and the grammar resources are both handled above, and
+# centres is not vendored at all any more -- since 2026-09-07 the engine pins
+# the tagged 1.2.1 release, which backend/Dockerfile downloads and SHA-checks,
+# as it does CDK.
 
 # --- cache invalidation -----------------------------------------------------
 # app/name_cache.py folds a digest of the INSTALLED OpenSTOUT source into every
