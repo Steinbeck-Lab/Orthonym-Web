@@ -201,12 +201,21 @@ services:
         VITE_GITHUB_URL: ${VITE_GITHUB_URL:-}
     container_name: stitch-frontend
     ports:
-      # The ONLY service published beyond loopback, and still plain HTTP: a
-      # TLS terminator holding the real certificate belongs in front of this
-      # on a public host. frontend/nginx.conf's set_real_ip_from block is the
-      # other half of that arrangement -- without it every visitor collapses
-      # into one rate-limit bucket the moment a terminator is added.
-      - "8080:80"
+      # LOOPBACK BY DEFAULT, and still plain HTTP: this speaks no TLS, so a
+      # terminator holding the real certificate belongs in front of it on any
+      # public host. Published on 0.0.0.0 it would serve the whole site over
+      # unencrypted HTTP on :8080 alongside whatever the terminator serves on
+      # 443 -- the same mistake the backend's own binding avoids two services
+      # up, for the same reason.
+      #
+      # frontend/nginx.conf's set_real_ip_from block is the other half of the
+      # arrangement: without it every visitor collapses into ONE rate-limit
+      # bucket the moment a terminator is added. It trusts RFC1918 and
+      # loopback peers, which is what a co-located Caddy/nginx reaches it as.
+      #
+      # Override FRONTEND_BIND=0.0.0.0 only when nothing sits in front and
+      # you accept plain HTTP -- an internal network behind a VPN, say.
+      - "${FRONTEND_BIND:-127.0.0.1}:8080:80"
     depends_on:
       backend:
         # service_healthy, not a bare list entry: a bare `- backend` waits

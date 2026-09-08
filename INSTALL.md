@@ -7,6 +7,9 @@ engine dependency actually requires. The [README](README.md) is the short versio
 > is populated from a checkout of OpenSTOUT, which is not public — see
 > [The OpenSTOUT dependency](#the-openstout-dependency). A fresh clone builds and runs the
 > frontend and the API shell, but cannot name a molecule until the engine is vendored in.
+>
+> Deploying to a server? [Deploying it publicly](#deploying-it-publicly) is a step-by-step
+> runbook for an Ubuntu VM behind Caddy, and it starts from that same clone.
 
 ## Contents
 
@@ -41,16 +44,176 @@ curl -s http://127.0.0.1:8000/api/health
 
 ## Deploying it publicly
 
-`docker compose up -d` is the whole deployment, but three things about it are only correct
-because of decisions recorded elsewhere, and all three break quietly rather than loudly.
+A concrete runbook for a **4-core / 16 GB Ubuntu VM with Docker already installed**, behind
+**Caddy** for HTTPS. Substitute your own hostname for `stitch.example.org` throughout.
 
-### Put a TLS terminator in front — and let it forward the client address
+Everything below assumes the DNS `A`/`AAAA` record for that hostname already points at the VM —
+Caddy will not be able to get a certificate until it does.
 
-`frontend` is the only service published beyond loopback, and it speaks **plain HTTP on 8080**.
-A public host needs something holding the certificate for the real hostname in front of it.
-Anything works; the requirement is the header:
+### 1. Get the code and the engine
 
-```nginx
+The engine is private and is not in this repository, so the VM needs credentials for it once.
+
+```bash
+sudo apt-get update && sudo apt-get install -y git gh        # gh only if you use the PAT route
+git clone https://github.com/Kohulan/STITCH-Web.git /opt/stitch
+cd /opt/stitch
+
+# authenticate however you prefer -- a fine-grained PAT with read access to
+# Kohulan/OpenSTOUT, or a deploy key in ~/.ssh. Then:
+gh auth login                                                 # or: eval "$(ssh-agent)"; ssh-add ~/.ssh/openstout_deploy
+gh repo clone Kohulan/OpenSTOUT /opt/openstout -- --depth 1
+
+# populate backend/vendor/ from that checkout
+OPENSTOUT_SRC=/opt/openstout ./scripts/vendor-openstout.sh
+```
+
+Check it landed before going further — a missing engine fails at image build, not at runtime,
+but the error is long and this is quicker:
+
+```bash
+ls backend/vendor/openstout/src/openstout/__init__.py \
+   backend/vendor/opsin-resources/opsin-cli-2.9.0-jar-with-dependencies.jar
+```
+
+CDK and centres are **not** needed here: the backend image downloads and SHA-checks both.
+
+### 2. Configure
+
+```bash
+cp .env.example .env
+```
+
+For a 4-core / 16 GB box the shipped defaults are already the `medium` profile, so the only line
+that must change is the proxy trust — and it is already correct at `true` for this topology.
+Read `.env` once and confirm:
+
+| key | value for this VM | why |
+|---|---|---|
+| `DEPLOYMENT_PROFILE` | `medium` | 2 + 2 workers, 10,000-molecule batches, 50 MB uploads |
+| `TRUST_PROXY_HEADERS` | `true` | correct **only** because the backend is loopback-published |
+| `WORKER_MEM_LIMIT` | `3g` | 512 MB JVM × 2 children + parent ≈ 2.3 GB, with headroom |
+| `REDIS_MEM_LIMIT` | `3g` | must stay **above** `REDIS_MAXMEMORY` (2 GB), never equal |
+
+Total steady-state footprint is roughly 8 GB, which leaves the box half free.
+
+### 3. Build and start
+
+The first build downloads a JRE, RDKit and two jars, so allow ten minutes or so.
+
+```bash
+docker compose up -d --build
+docker compose ps                     # every service should reach (healthy)
+```
+
+The workers each boot a JVM before they report ready. Until one has, naming is refused
+deliberately rather than answered without verification:
+
+```bash
+curl -s http://127.0.0.1:8000/api/health
+# {"status":"OK","opsin":"available"}   <- ready
+# {"status":"DEGRADED",...}             <- still starting, or check `docker compose logs worker-fast`
+```
+
+Confirm the site itself answers on loopback — it is **not** reachable from outside yet, by
+design:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/     # 200
+```
+
+### 4. Put Caddy in front
+
+Caddy is **not** in Ubuntu's default repositories — `apt-get install caddy` on a stock box
+either fails or installs something years old. Add the official repo first (these four lines are
+from Caddy's own install docs):
+
+```bash
+sudo apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+  | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+  | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt-get update && sudo apt-get install -y caddy
+```
+
+Then replace `/etc/caddy/Caddyfile` with:
+
+```caddyfile
+stitch.example.org {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+That is the whole file. Caddy provisions and renews the certificate itself, and sets
+`X-Forwarded-For` by default — which matters more than it looks: `app/ratelimit.py` counts per IP
+using the address nginx derives from that header, so without it every visitor on the internet
+would share **one** bucket of 2 concurrent jobs and 60 requests a minute.
+
+```bash
+sudo systemctl reload caddy
+sudo systemctl enable --now caddy
+```
+
+### 5. Firewall
+
+Only 80 and 443 need to be open. Nothing else should be reachable: the frontend is bound to
+`127.0.0.1:8080`, the backend to `127.0.0.1:8000`, and Redis to `127.0.0.1:6379`.
+
+```bash
+sudo ufw allow OpenSSH
+sudo ufw allow 80,443/tcp
+sudo ufw enable
+```
+
+### 6. Verify from outside
+
+Run these from your laptop, not the VM — the point is to test the path a visitor takes.
+
+```bash
+curl -sI https://stitch.example.org | head -3                    # 200, and a valid cert
+curl -s  https://stitch.example.org/api/health                   # {"status":"OK",...}
+
+# the round-trip gate, end to end: ethanol must be `pin`, the fused polycyclic `fallback`
+curl -s -X POST https://stitch.example.org/api/translate \
+  -H 'Content-Type: application/json' \
+  -d '{"smiles":["CCO","C1CC2CCC1(CC2)C3CCC4(CCC5(CCCC5C4C3)C)C"]}' | head -c 400
+```
+
+**Confirm the rate limiter sees real client addresses.** If this shows one shared bucket instead
+of per-visitor ones, `X-Forwarded-For` is not reaching the app and every cap is effectively void:
+
+```bash
+# on the VM, after making a request from your laptop
+docker exec stitch-redis redis-cli --scan --pattern 'stitch:ip:*' | head
+# expect your laptop's public IP in the key name -- NOT 127.0.0.1 or a 172.x address
+```
+
+### 7. Updating
+
+```bash
+cd /opt/stitch && git pull
+OPENSTOUT_SRC=/opt/openstout ./scripts/vendor-openstout.sh     # only if the engine moved
+docker compose up -d --build
+```
+
+If the engine did move, bump `_KEY_VERSION` in `backend/app/name_cache.py` first — upstream
+develops on a static version, so the version-keyed cache cannot invalidate itself and names
+computed by the old engine would survive the update.
+
+### What runs, and what it costs
+
+| service | role | memory cap |
+|---|---|---|
+| `frontend` | nginx serving the SPA, proxying `/api` | 256 MB |
+| `backend` | FastAPI web process (2 uvicorn workers) | 1.5 GB |
+| `worker-fast` | interactive naming, holds a JVM per child | 3 GB |
+| `worker-batch` | batch jobs, holds a JVM per child | 3 GB |
+| `redis` | broker, job store, name cache, rate limits | 3 GB |
+
+All five restart automatically (`restart: unless-stopped`) and each is capped at 10 MB × 3 log
+files, so an unattended box cannot fill its disk with worker logs.
 
 ## Run locally without Docker
 
