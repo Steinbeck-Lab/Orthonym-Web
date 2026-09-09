@@ -62,17 +62,31 @@ const NAV_LINKS = [
   { to: '/about', label: 'About' },
 ]
 
-// The naming engine's source, WHEN there is a public one to link to. There
-// is not today: github.com/Kohulan/OpenSTOUT is private and answers 404 to
-// an anonymous visitor, so this shipped a dead link in the header of every
-// route. The comment here used to say "the naming engine's public source",
-// which was simply false.
+// THIS SITE's source, and only this site's.
 //
-// Gated rather than deleted, because the header chrome and the mobile menu
-// entry are worth keeping for the day the repository is published: set
-// VITE_GITHUB_URL and both come back. Terms.jsx and About.jsx state the same
-// fact in prose and move together with this.
-const GITHUB_URL = import.meta.env.VITE_GITHUB_URL || null
+// The distinction matters, because this link used to mean something else and
+// was correctly switched off for it. It pointed at the naming ENGINE,
+// github.com/Kohulan/OpenSTOUT, which is private and answers 404 to an
+// anonymous visitor -- a dead link in the header of every route. It now
+// points at STITCH-Web, the published split of this web app, which is public.
+//
+// So the label is honest as "GitHub" in the header but must not be read as
+// "the engine is open": Terms.jsx and About.jsx both still state, in prose,
+// that OpenSTOUT's repository is not public, and those statements remain
+// TRUE and must not be "corrected" to match this link. The accessible name
+// below says which source it is, so nobody has to guess from context.
+//
+// Still overridable: a fork or a private deployment sets VITE_GITHUB_URL and
+// gets its own source. The literal `none` ships no link and no separator.
+//
+// `||`, not `??`, and the default is repeated in frontend/Dockerfile on
+// purpose. An unset build arg reaches vite as an EMPTY STRING, not as
+// undefined, so `??` would keep the empty string and silently ship no link --
+// which is exactly the bug this line replaced. `||` treats empty as absent,
+// and `none` is then the explicit way to say "off".
+const GITHUB_URL_DEFAULT = 'https://github.com/Kohulan/STITCH-Web'
+const GITHUB_URL_RAW = import.meta.env.VITE_GITHUB_URL || GITHUB_URL_DEFAULT
+const GITHUB_URL = GITHUB_URL_RAW === 'none' ? null : GITHUB_URL_RAW
 
 // A minimal molecule/stitch mark: two nodes joined by a bond, one stroke
 // weight, inheriting the crimson accent via currentColor.
@@ -277,11 +291,29 @@ function Navigation() {
             <>
               <span className="notch__rule" aria-hidden="true" />
 
+              {/* The word and the mark, nothing else -- but wearing the
+                  chrome adapted from a rainbow-bordered button reference:
+                  a gradient border, a sheen that crosses it on hover, and a
+                  bloom underneath. All in crimson, because a five-hue
+                  gradient is exactly the "colour a reader could mistake for
+                  a confidence tier" DESIGN.md refuses; legal here because
+                  the header is CHROME, the one place the accent lives.
+
+                  The reference's star and its hardcoded "1.2k" count are
+                  both gone by instruction. The count could not have shipped
+                  anyway: a made-up number on a real repository is a
+                  fabricated claim, and fetching api.github.com per page load
+                  would send every visitor's IP to a third party and make
+                  Privacy.jsx false. */}
               <a
                 className="site-head__ext"
                 href={GITHUB_URL}
                 target="_blank"
                 rel="noopener noreferrer"
+                /* "this site's source", not just "GitHub": a bare "GitHub"
+                   beside a naming engine invites the reading that the ENGINE
+                   is open, which it is not. */
+                aria-label="This site's source on GitHub (opens in a new tab)"
               >
                 <GitHubMark />
                 GitHub
@@ -312,6 +344,7 @@ function Navigation() {
                   href={GITHUB_URL}
                   target="_blank"
                   rel="noopener noreferrer"
+                  aria-label="This site's source on GitHub (opens in a new tab)"
                 >
                   <GitHubMark />
                   GitHub

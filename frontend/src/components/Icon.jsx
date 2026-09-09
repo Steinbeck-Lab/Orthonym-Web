@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowRightLeft,
+  ArrowUp,
   Check,
   Copy,
   Download,
@@ -44,6 +45,10 @@ const ICONS = {
   plus: Plus,
   back: ArrowLeft,
   forward: ArrowRight,
+  // Sort direction. ONE glyph, rotated by CSS for descending, so the two
+  // states are the same drawn arrow rather than two icons a reader has to
+  // tell apart at 12px.
+  sort: ArrowUp,
 }
 
 /**

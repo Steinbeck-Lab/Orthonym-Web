@@ -252,7 +252,29 @@ def begin_chunk(job_id: str) -> bool:
     return bool(result)
 
 
-def bump_job_done(job_id: str, index: int, done: int, failed: int) -> None:
+# Meta-hash field prefix for the per-tier tally. Namespaced away from
+# `bumped:{index}` and from the scalar counters, and read back by
+# job_tier_counts.
+_TIER_FIELD_PREFIX = "tier:"
+
+
+def job_tier_counts(meta: dict[str, str]) -> dict[str, int]:
+    """The per-tier tally out of an already-read meta hash.
+
+    A tier with no molecules has no field, so it is absent rather than zero.
+    The caller decides whether to print a zero -- and the API does not, since
+    "0 bad input" and "we never counted bad input" must not look alike.
+    """
+    return {
+        field[len(_TIER_FIELD_PREFIX) :]: int(value)
+        for field, value in meta.items()
+        if field.startswith(_TIER_FIELD_PREFIX)
+    }
+
+
+def bump_job_done(
+    job_id: str, index: int, done: int, failed: int, counts: dict[str, int] | None = None
+) -> None:
     """Count molecules, not chunks, so progress moves smoothly.
 
     Idempotent per chunk: HSETNX on a `bumped:{index}` marker field in the
@@ -272,6 +294,11 @@ def bump_job_done(job_id: str, index: int, done: int, failed: int) -> None:
         pipe.hincrby(key, "done", done)
     if failed:
         pipe.hincrby(key, "failed", failed)
+    # The per-tier tally rides the SAME hsetnx marker as done/failed, so a
+    # chunk redelivered by task_acks_late cannot double-count a tier either.
+    for status, n in (counts or {}).items():
+        if n:
+            pipe.hincrby(key, f"{_TIER_FIELD_PREFIX}{status}", n)
     _retag_if_untagged(pipe, key)
     pipe.execute()
 

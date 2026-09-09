@@ -1,5 +1,7 @@
 import { useEffect } from 'react'
+import { STATE_SHORT } from '../lib/statuses'
 import { useDisclosure } from '../lib/useDisclosure'
+import TierLamp from './TierLamp'
 
 // The confidence key, as a DRAWER behind an INFO notch on the input card.
 //
@@ -37,6 +39,12 @@ const TIERS = [
   // the label here too: a key should teach the vocabulary you will meet, not
   // a second longer one. The full tier names live on the result tiles.
   //
+  // The five words come from statuses.js rather than being typed here,
+  // because the batch tally counts in this same vocabulary. Two copies of
+  // "what this tier is called" is how a key ends up teaching a word the
+  // results no longer use. `key` stays in CSS-class form (best-effort, not
+  // best_effort) because .rung--* selectors are keyed on it.
+  //
   // TWO lines each: what the tier IS, then how it got that way. The one-line
   // version fitted, and it left every reader who did not already know the
   // engine to guess at the mechanism -- "Verified" by what? The detail line
@@ -45,15 +53,17 @@ const TIERS = [
   // empty panel on the right.
   {
     key: 'pin',
+    status: 'pin',
     ordinal: '01',
-    label: 'PIN',
+    label: STATE_SHORT.pin,
     body: 'Verified, and the preferred name.',
     detail: 'OPSIN read the name back and got your structure.',
   },
   {
     key: 'fallback',
+    status: 'fallback',
     ordinal: '02',
-    label: 'FALLBACK',
+    label: STATE_SHORT.fallback,
     body: 'Verified, but not the preferred name.',
     detail: 'Correct by the general rules, not the strict ones.',
   },
@@ -69,8 +79,9 @@ const TIERS = [
     // The mode link belongs on a result, where Tile.jsx states it, not
     // compressed into a tier definition where it changes its meaning.
     key: 'best-effort',
+    status: 'best_effort',
     ordinal: '03',
-    label: 'UNVERIFIED',
+    label: STATE_SHORT.best_effort,
     body: 'A real name OPSIN could not confirm.',
     // "The check ran" is the load-bearing half of this line, for the reason
     // in the comment above.
@@ -78,8 +89,9 @@ const TIERS = [
   },
   {
     key: 'abstain',
+    status: 'abstain',
     ordinal: '04',
-    label: 'NO NAME',
+    label: STATE_SHORT.abstain,
     body: 'The engine declined rather than guess.',
     // Only an abstain carries a formula (openstout_service.py sets it
     // nowhere else), which is exactly why it is worth saying here.
@@ -91,8 +103,9 @@ const TIERS = [
     // ("Naming failed: ...", tasks.py). The old line said "The SMILES could
     // not be read", which was false for the second case.
     key: 'error',
+    status: 'error',
     ordinal: '05',
-    label: 'BAD INPUT',
+    label: STATE_SHORT.error,
     body: 'The input could not be named.',
     detail: 'RDKit refused it, or naming failed part-way.',
   },
@@ -226,7 +239,15 @@ export default function ConfidenceLegend({ openToSide = false, onOpenChange }) {
                 style={{ '--i': index }}
               >
                 <span className="rung__ordinal">{tier.ordinal}</span>
-                <h3 className="rung__name">{tier.label}</h3>
+                <h3 className="rung__name">
+                  {/* The key has to teach the lamp as well as the rule, or a
+                      reader meets a lit ring on a result with nothing to
+                      look it up against. `status`, not `key`: TierLamp takes
+                      the API status and this list is keyed in CSS-class
+                      form. */}
+                  <TierLamp status={tier.status} />
+                  {tier.label}
+                </h3>
                 <Specimen tier={tier.key} />
                 <div className="rung__body">
                   <p className="rung__line">{tier.body}</p>

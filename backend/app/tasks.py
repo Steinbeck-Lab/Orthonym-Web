@@ -172,6 +172,28 @@ def _timed_out_rows(timeout: _ChunkTimedOut) -> tuple[list[dict], int]:
     return rows, failed
 
 
+def _tier_counts(rows: list[dict]) -> dict[str, int]:
+    """Tally rows by confidence tier.
+
+    Counted here, per chunk, rather than by scanning the assembled rows
+    later: the tally is then available while the job is still running, which
+    is the point -- a 5,000-molecule job should not have to finish before its
+    submitter can see that a third of it is abstaining.
+
+    Deliberately NOT the same number as `failed`. `failed` is a row the
+    engine could not produce at all (status "error", a parse failure, a
+    chunk timeout); an "abstain" is the engine correctly declining to guess
+    and is a successful row. Merging them is the conflation PRODUCT.md
+    forbids, and it is also what hid the abstains from the batch panel.
+    """
+    counts: dict[str, int] = {}
+    for row in rows:
+        status = row.get("status")
+        if status:
+            counts[status] = counts.get(status, 0) + 1
+    return counts
+
+
 def _close_job(job_id: str, n_chunks: int) -> int:
     """Assemble the chunks and decide done-versus-failed. The ONE place that does.
 
@@ -284,7 +306,9 @@ def translate_job_inline(
     except _ChunkTimedOut as timeout:
         rows, failed = _timed_out_rows(timeout)
     redis_store.write_chunk(job_id, 0, rows)
-    redis_store.bump_job_done(job_id, index=0, done=len(rows), failed=failed)
+    redis_store.bump_job_done(
+        job_id, index=0, done=len(rows), failed=failed, counts=_tier_counts(rows)
+    )
     _close_job(job_id, n_chunks=1)
     return rows
 
@@ -318,7 +342,9 @@ def run_chunk(
         rows, failed = _timed_out_rows(timeout)
 
     redis_store.write_chunk(job_id, index, rows)
-    redis_store.bump_job_done(job_id, index=index, done=len(rows), failed=failed)
+    redis_store.bump_job_done(
+        job_id, index=index, done=len(rows), failed=failed, counts=_tier_counts(rows)
+    )
     return len(rows)
 
 

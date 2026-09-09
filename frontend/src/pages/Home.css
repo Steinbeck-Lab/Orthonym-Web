@@ -1708,6 +1708,71 @@
   }
 }
 
+/* -------------------- the outcome, counted by tier -------------------- */
+/* Added because the panel reported `done of total` and `N failed`, and
+   `failed` only counts a row the engine could not produce. A molecule it
+   honestly declined is an abstain -- a successful row with no name -- so a
+   run that abstained on a third of its input said "0 failed" and read as a
+   clean sweep. The numbers were in the downloadable CSV and nowhere on the
+   page.
+
+   Every count wears the SAME rule its rows wear, so the summary speaks the
+   grammar the table below it uses, and no new signal has to be learned.
+   Monochrome, like the progress bar above it: this is a measurement, and
+   measurements in this system do not borrow the accent. */
+.batch__tally {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xs);
+}
+
+/* The reading in words. Body face, not the mono caption the chips use: this
+   is a sentence to be read, and the mono/uppercase treatment above is for
+   labels and measurements. */
+.batch__tally-say {
+  margin: 0;
+  max-width: 68ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
+  color: var(--body-strong);
+}
+
+.batch__tally-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-xs) var(--s-md);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.batch__tally-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6ch;
+  /* Room for the rule to sit clear of the baseline, the same way a name's
+     rule clears its descenders. */
+  padding-bottom: 3px;
+}
+
+.batch__tally-count {
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  font-weight: 700;
+  /* Public Sans ships tnum, so a column of counts does not jitter. */
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.batch__tally-label {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .batch__error,
 .batch__gone {
   margin: 0;
@@ -1747,6 +1812,88 @@
    The card's head, progress bar, CSV link and pager stay put while a long
    job's rows scroll under them, which is why the scroll belongs here rather
    than on the card as a whole. */
+/* -------------------- the sort controls -------------------- */
+/* A control group, not clickable column headings: confidence has no column
+   and may never get one (CLAUDE.md -- a tier is never reduced to a word in a
+   column), and it is the sort a reader most wants. Same mono-caption idiom as
+   every other label in this panel. */
+.batch__sortbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-xs);
+}
+
+.batch__sortbar-label {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.batch__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4ch;
+  padding: 5px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-pill);
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.batch__sort:hover {
+  color: var(--ink);
+  border-color: var(--hairline-strong);
+}
+
+.batch__sort:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The active sort settles on ink, not the accent: this is a reading of the
+   table, and the accent is chrome. */
+.batch__sort--active {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.batch__sort-mark {
+  display: inline-flex;
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ONE arrow, rotated. Two icons would be two shapes to tell apart at 12px. */
+.batch__sort-mark--desc {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .batch__sort,
+  .batch__sort-mark {
+    transition: none;
+  }
+}
+
+/* The copy button sits on the name's baseline, inside the ruled block, so the
+   rule still reads as belonging to the name and not to the button. */
+.batch__name .copy-btn {
+  width: 22px;
+  height: 22px;
+  margin-left: 0.2ch;
+}
+
 .batch__table-wrap {
   overflow-x: auto;
   /* See .sampler: the card around this is a scroll container too, and a
@@ -1814,23 +1961,28 @@
   color: var(--muted);
 }
 
-.batch__name--pin {
+.batch__name--pin,
+.batch__tally-item--pin {
   border-bottom: 3px double var(--ink);
 }
 
-.batch__name--fallback {
+.batch__name--fallback,
+.batch__tally-item--fallback {
   border-bottom: 1px dashed var(--ink);
 }
 
-.batch__name--best-effort {
+.batch__name--best-effort,
+.batch__tally-item--best-effort {
   border-bottom: 1px dotted var(--muted);
 }
 
-.batch__name--abstain {
+.batch__name--abstain,
+.batch__tally-item--abstain {
   border-bottom: 1px solid var(--hairline-strong);
 }
 
-.batch__name--error {
+.batch__name--error,
+.batch__tally-item--error {
   border-top: 1px solid var(--muted);
   border-bottom: 1px solid var(--muted);
 }

@@ -41,15 +41,23 @@ than guessing.
 
 ## Every name carries its receipt
 
-Four marks, and they appear wherever a name appears — never a footnote, never a colour, never a
-word buried in a column.
+Five marks, and they appear wherever a name appears — never a footnote, never a word buried in a
+column.
 
-| Mark | Tier | What it means |
-|:--|:--|:--|
-| ▬▬ | **Preferred IUPAC name** | Worked to the strict rule, and read back clean. |
-| ┄┄ | **Fallback** | Reads back clean, but is not the preferred name. |
-| ▭ | **Best effort** | The engine worked it. OPSIN could not confirm it. |
-| ⌀ | **Left unworked** | No name — it declined rather than guess. |
+| Mark | Lamp | Tier | What it means |
+|:--|:--|:--|:--|
+| ▬▬ | ◉ green | **Preferred IUPAC name** | Worked to the strict rule, and read back clean. |
+| ┄┄ | ◍ lime | **Fallback** | Reads back clean, but is not the preferred name. |
+| ⋯⋯ | ◌ amber | **Best effort** | The engine worked it. OPSIN could not confirm it. |
+| ── | ○ unlit | **Left unworked** | No name — it declined rather than guess. |
+| ⊘ | ⊘ red | **Unreadable input** | Nothing to name: the structure could not be read. |
+
+**The shape carries the ladder; the colour only agrees with it.** The lamp beside each mark is
+neon, but its *form* is that tier's own rule — double, dashed, dotted, plain, struck — so the five
+stay five in greyscale and to a reader with any of the three common colour deficiencies. That is
+not a preference: measured across the palette, adjacent steps of a pure green-to-red ramp separate
+by as little as **1.03:1** under deuteranopia, which is no signal at all. Colour is reinforcement.
+Nothing here is ever colour alone.
 
 That distinction is the product. A tool that cannot tell you which of these you are holding has
 not finished the job.
@@ -69,7 +77,7 @@ Anything it cannot place, it says so — the same rule as everywhere else.
 
 | | |
 |:--|:--|
-| **Translate** | Paste, upload or draw a structure. Batches stream as a job with progress. |
+| **Translate** | Paste, upload or draw a structure. Batches stream as a job with progress, and report their outcome by tier — how many were named, and which kind of miss the rest were. |
 | **Name → Structure** | The reverse, on OPSIN — because reading a name is a different craft from writing one. |
 | **Explain** | The breakdown above. |
 | **About** | How it works, and a live health board for the service itself. |

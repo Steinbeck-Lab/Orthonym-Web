@@ -194,9 +194,16 @@ services:
       # build time, so a runtime variable is ignored silently. The ARG in
       # frontend/Dockerfile carries the full reasoning.
       #
-      # Unset ships no GitHub link, which is correct while the engine's
-      # repository is private. Set it to a repository URL and the header
-      # link and the mobile-menu entry return on the next `--build`.
+      # Unset now ships THIS SITE's own repository -- Navigation.jsx defaults
+      # to github.com/Kohulan/STITCH-Web, which is public. It does NOT link
+      # the naming engine: OpenSTOUT's repository is still private, and the
+      # prose in Terms.jsx and About.jsx that says so is still true.
+      #
+      # Set VITE_GITHUB_URL to point a fork at its own source, or to the
+      # literal `none` to ship no link at all. An empty value is NOT "off":
+      # an unset build arg reaches vite as an empty string, so empty has to
+      # mean "use the default" or an unset variable would silently remove the
+      # link. frontend/Dockerfile carries the default.
       args:
         VITE_GITHUB_URL: ${VITE_GITHUB_URL:-}
     container_name: stitch-frontend

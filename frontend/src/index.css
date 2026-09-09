@@ -169,6 +169,25 @@
      almost never appear. Both are darkened for AA on white. */
   --warning: #7a5a07; /* 6.38:1 */
   --success: #2f6b28; /* 6.45:1 */
+  /* The confidence lamp's red, and NOT --accent. The crimson accent belongs
+     to the site chrome and may never read as a result (DESIGN.md), so a tier
+     that has to say "broken" needs its own darker red. 7.47:1 on white,
+     6.48:1 on --card-soft, 5.22:1 on --ground -- clear of AA non-text (3:1)
+     on every surface a lamp appears on. */
+  --tier-stop: #a3231a; /* 7.47:1 */
+
+  /* THE LAMP NEON. The only saturated colours in the system, and they are
+     legal for one reason: they are only ever GLOW, never a mark. A bloom
+     carries no information, so it may be as bright as it likes; the mark
+     inside it stays one of the deep tokens above and keeps its measured
+     contrast. On white these neons run 1.2-1.6:1 and could never be a line.
+     Hue meaning matches the deep token each one blooms around -- green
+     verified, lime fallback, amber unverified, red broken. */
+  --lamp-pin: #3dff8f; /* neon green */
+  --lamp-fallback: #b6f24a; /* neon lime -- same family as pin, ring separates them */
+  --lamp-unverified: #ffb02e; /* neon amber */
+  --lamp-off: #767b85; /* NOT neon: an unlit lamp is the signal for an abstain */
+  --lamp-stop: #ff4560; /* neon red */
 
   /* -- type: the unbreakable trinity ----------------------------
      --font-display  Saira Condensed 400. Every headline, the wordmark,

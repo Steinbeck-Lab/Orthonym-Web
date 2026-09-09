@@ -17,12 +17,17 @@ COPY . .
 # public bundle by accident. Verified by building with a probe value and
 # grepping the output, not assumed.
 #
-# Empty is the honest default: github.com/Kohulan/OpenSTOUT is private and
-# answers 404, so shipping no link is correct until some repository is
-# published. Navigation.jsx renders the link and its notch separator only
-# when this is set; About.jsx and Terms.jsx state the same fact in prose and
-# must be edited by hand when it changes.
-ARG VITE_GITHUB_URL=""
+# THIS SITE's repository is the default, because it is public:
+# github.com/Kohulan/STITCH-Web. It is NOT the naming engine -- OpenSTOUT's
+# repository is private and answers 404, which is why this arg was empty for
+# a while, and the prose in About.jsx and Terms.jsx saying the engine is not
+# public is still true and must not be edited to match this link.
+#
+# Override to point a fork at its own source. The literal value `none` ships
+# no link and no notch separator (Navigation.jsx), which is the only way to
+# turn it off -- an empty string here would just fall through to the
+# component's own default.
+ARG VITE_GITHUB_URL="https://github.com/Kohulan/STITCH-Web"
 RUN npm run build
 
 FROM nginx:stable-alpine

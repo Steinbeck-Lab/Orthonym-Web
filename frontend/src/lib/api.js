@@ -310,8 +310,18 @@ export async function fetchJobStatus(jobId) {
  * 1000.
  * @returns {Promise<{job_id:string, offset:number, limit:number, total:number, retrievable:number, rows:Array<object>}>}
  */
-export async function fetchJobResults(jobId, { offset = 0, limit = 50 } = {}) {
-  const query = new URLSearchParams({ offset: String(offset), limit: String(limit) })
+export async function fetchJobResults(
+  jobId,
+  { offset = 0, limit = 50, sort = 'index', order = 'asc' } = {}
+) {
+  // `sort` and `order` are sent always, not only when non-default, so the
+  // server's own default can never silently disagree with this one.
+  const query = new URLSearchParams({
+    offset: String(offset),
+    limit: String(limit),
+    sort,
+    order,
+  })
   const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/results?${query}`)
   if (!res.ok) throw await jobFailure(res, jobId)
   return res.json()

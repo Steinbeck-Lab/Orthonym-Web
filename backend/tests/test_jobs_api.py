@@ -85,6 +85,94 @@ def test_results_are_paginated(redis_client):
     assert page["total"] == 4
 
 
+def _rows_with_tiers(job_id, rows):
+    """Overwrite a submitted job's assembled rows with hand-built ones.
+
+    The engine will not produce a chosen spread of tiers on demand, and the
+    sort has to be exercised against a spread. Everything else about the job
+    -- meta, counts, TTL -- is real.
+    """
+    redis_client_rows = redis_store.job_rows_key(job_id)
+    redis_store.get_redis().delete(redis_client_rows)
+    redis_store.write_chunk(job_id, 0, rows)
+    redis_store.assemble_rows(job_id, n_chunks=1)
+
+
+def test_results_sort_orders_the_whole_job_not_just_one_page(redis_client):
+    # The point of the feature: a sorted page must be a page of the SORTED
+    # JOB. Sorting a 50-row slice would only reorder rows the client already
+    # had, and the ask was to bring every abstain onto one screen.
+    job_id = _submit("\n".join(["CCO"] * 6))["job_id"]
+    _rows_with_tiers(
+        job_id,
+        [
+            {"index": 0, "input": "a", "status": "pin", "name": "a"},
+            {"index": 1, "input": "b", "status": "abstain"},
+            {"index": 2, "input": "c", "status": "pin", "name": "c"},
+            {"index": 3, "input": "d", "status": "error"},
+            {"index": 4, "input": "e", "status": "fallback", "name": "e"},
+            {"index": 5, "input": "f", "status": "abstain"},
+        ],
+    )
+
+    # Page 2 of a tier sort must carry rows that page 1 pushed off the end --
+    # rows 3 and 5 here, which an unsorted page 2 would never contain.
+    first = client.get(
+        f"/api/jobs/{job_id}/results",
+        params={"offset": 0, "limit": 3, "sort": "tier"},
+    ).json()
+    second = client.get(
+        f"/api/jobs/{job_id}/results",
+        params={"offset": 3, "limit": 3, "sort": "tier"},
+    ).json()
+
+    assert [r["index"] for r in first["rows"]] == [0, 2, 4]
+    assert [r["index"] for r in second["rows"]] == [1, 5, 3]
+    # Every row exactly once across the two pages.
+    assert sorted(r["index"] for r in first["rows"] + second["rows"]) == [0, 1, 2, 3, 4, 5]
+
+
+def test_results_sort_descending_reverses_only_the_sort_key(redis_client):
+    job_id = _submit("\n".join(["CCO"] * 4))["job_id"]
+    _rows_with_tiers(
+        job_id,
+        [
+            {"index": 0, "input": "a", "status": "pin", "name": "a"},
+            {"index": 1, "input": "b", "status": "pin", "name": "b"},
+            {"index": 2, "input": "c", "status": "abstain"},
+            {"index": 3, "input": "d", "status": "abstain"},
+        ],
+    )
+    rows = client.get(
+        f"/api/jobs/{job_id}/results",
+        params={"limit": 10, "sort": "tier", "order": "desc"},
+    ).json()["rows"]
+    # Abstains first, but 2 before 3: within a tier the submission order is
+    # preserved in BOTH directions.
+    assert [r["index"] for r in rows] == [2, 3, 0, 1]
+
+
+def test_the_default_results_order_is_untouched(redis_client):
+    # The fast path. `sort=index&order=asc` must stay a single slice of the
+    # stored list -- no full decode -- so the common case cannot regress.
+    job_id = _submit("\n".join(["CCO", "CCC", "CCCC", "c1ccccc1"]))["job_id"]
+    plain = client.get(f"/api/jobs/{job_id}/results", params={"limit": 10}).json()
+    explicit = client.get(
+        f"/api/jobs/{job_id}/results",
+        params={"limit": 10, "sort": "index", "order": "asc"},
+    ).json()
+    assert [r["index"] for r in plain["rows"]] == [0, 1, 2, 3]
+    assert plain["rows"] == explicit["rows"]
+
+
+def test_an_unknown_sort_field_is_a_422_not_a_silent_no_op(redis_client):
+    job_id = _submit("\n".join(["CCO", "CCC"]))["job_id"]
+    response = client.get(
+        f"/api/jobs/{job_id}/results", params={"sort": "smiles"}
+    )
+    assert response.status_code == 422, response.text
+
+
 def test_chunk_order_is_preserved_across_multiple_chunks(redis_client, monkeypatch):
     from app.core.config import get_settings
 

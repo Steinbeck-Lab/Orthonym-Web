@@ -17,9 +17,12 @@ import {
   progressPercent,
   stateLabel,
 } from '../lib/batchJob'
+import { outcomeMessage, tierTally } from '../lib/batchTally'
 import { forgetJob, rememberJob } from '../lib/jobStore'
 import { STATE_CLASS, STATE_LABEL, VERIFIED_STATUSES } from '../lib/statuses'
+import CopyButton from './CopyButton'
 import Icon from './Icon'
+import TierLamp from './TierLamp'
 import ChemName, { ChemFormula } from './Typeset'
 
 // One submitted batch: its progress while it runs, then its rows.
@@ -68,6 +71,78 @@ function rowKey(row) {
   return `${row.index}-${row.input}`
 }
 
+// The sortable columns, and the direction each one STARTS in.
+//
+// A first click should give the reader the order they meant, not an arbitrary
+// ascending pass they then have to reverse. So the ladder starts strongest
+// first, the round-trip starts with the confirmed rows, and the name starts
+// A-Z -- and `index` is here because a reader who has sorted needs a way back
+// to the order they submitted.
+//
+// `sr` is what a screen-reader user hears on the button, since the visible
+// header is a two-word abbreviation of a longer idea ("Round-trip" for "did
+// OPSIN read this name back and get your structure").
+const SORT_COLUMNS = [
+  { key: 'index', label: 'Input order', sr: 'input order', first: 'asc' },
+  { key: 'name', label: 'Name', sr: 'name, A to Z', first: 'asc' },
+  { key: 'tier', label: 'Confidence', sr: 'confidence tier, strongest first', first: 'asc' },
+  { key: 'roundtrip', label: 'Round-trip', sr: 'round-trip result, confirmed first', first: 'asc' },
+]
+
+/** The sort controls, as a group ABOVE the table rather than clickable
+ * column headings.
+ *
+ * The obvious build is a sortable `th` per column, and it is wrong here for
+ * one reason: confidence has no column. It is the rule under the name, and
+ * CLAUDE.md's product rule is that a tier is "never reduced to a word in a
+ * column" -- so adding a Confidence column to hang a sort off is the one
+ * thing this table may not do, and a `th` with no matching `td` is not a
+ * table. Sorting by tier is also the sort the reader most wants, since it is
+ * what brings every abstain onto one screen, so dropping it was not an
+ * option either.
+ *
+ * One group of four buttons keeps all four sorts in the same idiom, leaves
+ * the table structure untouched, and reads as what it is: a control, not a
+ * column. The active button carries aria-pressed and states its direction in
+ * its accessible name, because the arrow beside it is aria-hidden.
+ */
+function SortBar({ sort, order, onSort }) {
+  return (
+    <div className="batch__sortbar" role="group" aria-label="Sort results">
+      <span className="batch__sortbar-label" aria-hidden="true">
+        Sort
+      </span>
+      {SORT_COLUMNS.map((column) => {
+        const active = sort === column.key
+        return (
+          <button
+            key={column.key}
+            type="button"
+            className={`batch__sort${active ? ' batch__sort--active' : ''}`}
+            aria-pressed={active}
+            onClick={() => onSort(column)}
+            aria-label={
+              active
+                ? `Sorted by ${column.sr}. Activate to reverse.`
+                : `Sort by ${column.sr}.`
+            }
+          >
+            <span>{column.label}</span>
+            {active && (
+              <span
+                className={`batch__sort-mark${order === 'desc' ? ' batch__sort-mark--desc' : ''}`}
+                aria-hidden="true"
+              >
+                <Icon name="sort" size={12} />
+              </span>
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 /** The confidence mark, in the same grammar the tiles use. */
 function NameCell({ row }) {
   const stateClass = STATE_CLASS[row.status] ?? 'error'
@@ -75,10 +150,20 @@ function NameCell({ row }) {
   if (row.name) {
     return (
       <div className={`batch__name batch__name--${stateClass}`}>
+        {/* A named batch row shows NO visible tier label -- the rule under
+            the name was the whole visible signal, and 50 rows of rule is a
+            lot to read. The lamp is where this table gains most. No `fresh`:
+            fifty lamps breathing at once is a light show, not a signal. */}
+        <TierLamp status={row.status} />
         <span className="batch__name-text">
           <ChemName name={row.name} />
         </span>
         <span className="sr-only">{label ? ` — ${label}` : ''}</span>
+        {/* `row.name`, the data object -- NEVER the typeset DOM above it.
+            Typeset renders `0^4,9` as a superscript, and copying what the
+            reader SEES would put a name on the clipboard that no parser can
+            read back. Every copy path in this app reads the string. */}
+        <CopyButton text={row.name} />
       </div>
     )
   }
@@ -92,6 +177,7 @@ function NameCell({ row }) {
   // dashes in 13 rows the first time this shipped.
   return (
     <div className={`batch__name batch__name--${stateClass}`}>
+      <TierLamp status={row.status} />
       <span className="batch__name-text batch__name-text--muted">
         {row.status === 'error' ? (row.error ?? 'Could not read this input') : label}
         {row.formula ? (
@@ -101,6 +187,55 @@ function NameCell({ row }) {
           </>
         ) : null}
       </span>
+    </div>
+  )
+}
+
+/** The outcome, counted by tier.
+ *
+ * The panel used to report `done of total` and `N failed`, and `failed` only
+ * ever counts a row the engine could not produce. A molecule it honestly
+ * DECLINED is an abstain -- a successful row with no name -- so a run that
+ * abstained on a third of its input reported "0 failed" and read as a clean
+ * sweep. Those numbers reached the CSV and nothing else.
+ *
+ * So: the whole ladder, in the ladder's order, each count wearing the same
+ * rule its rows wear. Two rules hold it honest --
+ *
+ *   1. `named` and `not named` are separate figures and the per-tier list
+ *      sits right under them, because "the engine declined" and "the input
+ *      was unreadable" must not merge into one number (PRODUCT.md: a
+ *      best-effort name must never be conflated with a verified one, and an
+ *      abstain is the engine working correctly, not a fault).
+ *   2. While the job runs these counts are PARTIAL, so the heading says "so
+ *      far" and counts against what has been counted -- never against the
+ *      job's declared total, which would report work-in-progress as a
+ *      shortfall.
+ */
+function BatchTally({ counts, finished }) {
+  const rows = tierTally(counts)
+  if (rows.length === 0) return null
+  return (
+    <div className="batch__tally">
+      {/* The reading in words, so nobody has to add the chips up. It is
+          role="status" because the panel's job is to report an outcome and a
+          screen-reader user gets the numbers here rather than by walking a
+          list of five counts. It states only what the tier counts support --
+          see outcomeMessage on why it makes no round-trip claim. */}
+      <p className="batch__tally-say" role="status">
+        {outcomeMessage(counts, { finished })}
+      </p>
+      <ul className="batch__tally-list">
+        {rows.map((row) => (
+          <li
+            key={row.status}
+            className={`batch__tally-item batch__tally-item--${row.className}`}
+          >
+            <span className="batch__tally-count">{row.count}</span>
+            <span className="batch__tally-label">{row.label}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
@@ -136,6 +271,11 @@ function BatchResults({ job, onForget }) {
   const [cancelRequested, setCancelRequested] = useState(false)
   const [busy, setBusy] = useState(null)
   const [drawn, setDrawn] = useState({ key: null, svg: null, error: null, loading: false })
+  // The sort is SERVER-SIDE: it orders the whole job, then the server slices
+  // the page. Sorting the 50 rows already in `rows` would only reorder the
+  // page on screen, which is not what "sort through the pages" means.
+  const [sort, setSort] = useState('index')
+  const [order, setOrder] = useState('asc')
 
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
 
@@ -230,6 +370,8 @@ function BatchResults({ job, onForget }) {
         const data = await fetchJobResults(jobId, {
           offset: which * PAGE_SIZE,
           limit: PAGE_SIZE,
+          sort,
+          order,
         })
         setRows(data.rows ?? [])
         if (Number.isFinite(data.retrievable)) setRetrievable(data.retrievable)
@@ -245,7 +387,7 @@ function BatchResults({ job, onForget }) {
         return null
       }
     },
-    [jobId]
+    [jobId, sort, order]
   )
 
   // Rows are fetched when the job reaches a terminal state, and when the page
@@ -271,6 +413,19 @@ function BatchResults({ job, onForget }) {
     }, SETTLE_MS)
     return () => window.clearTimeout(timer)
   }, [settling, settleTries, loadPage])
+
+  // Re-sorting takes the reader back to page 1. Staying on page 4 of a new
+  // ordering would show them rows 151-200 of a list they have not seen the
+  // start of, which reads as the sort having done nothing.
+  const applySort = (column) => {
+    if (sort === column.key) {
+      setOrder((current) => (current === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSort(column.key)
+      setOrder(column.first)
+    }
+    setPage(0)
+  }
 
   // --- controls -------------------------------------------------------
   const stop = async () => {
@@ -344,7 +499,9 @@ function BatchResults({ job, onForget }) {
           </span>
           <span className="batch__counts">
             {status ? `${status.done} of ${total} molecules` : `${total} molecules`}
-            {status?.failed ? ` · ${status.failed} failed` : ''}
+            {status?.failed && !tierTally(status?.counts).length
+              ? ` · ${status.failed} failed`
+              : ''}
           </span>
         </div>
 
@@ -382,6 +539,8 @@ function BatchResults({ job, onForget }) {
       >
         <span className="batch__progress-fill" style={{ width: `${percent}%` }} />
       </div>
+
+      <BatchTally counts={status?.counts} finished={finished} />
 
       {error && (
         <p className="batch__error" role="status">
@@ -439,10 +598,13 @@ function BatchResults({ job, onForget }) {
 
       {finished && rows.length > 0 && (
         <>
+          <SortBar sort={sort} order={order} onSort={applySort} />
           <div className="batch__table-wrap">
             <table className="batch__table">
               <caption className="sr-only">
-                Batch results, page {page + 1} of {pages}. Every name carries its
+                Batch results, page {page + 1} of {pages}, sorted by{' '}
+                {SORT_COLUMNS.find((c) => c.key === sort)?.sr}
+                {order === 'desc' ? ', reversed' : ''}. Every name carries its
                 confidence mark.
               </caption>
               <thead>
