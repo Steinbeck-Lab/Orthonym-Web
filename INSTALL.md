@@ -230,12 +230,21 @@ sudo systemctl disable --now caddy && sudo apt-get purge -y caddy
 
 ### 5. Firewall
 
-Only 80 and 443 need to be open. Nothing else should be reachable: the frontend is bound to
-`127.0.0.1:8080`, the backend to `127.0.0.1:8000`, and Redis to `127.0.0.1:6379`.
+**Route 4a (Caddy here):** only 80 and 443 need to be open. Nothing else should be reachable —
+the frontend is on `127.0.0.1:8080`, the backend on `127.0.0.1:8000`, Redis on `127.0.0.1:6379`.
+
+**Route 4b (proxy elsewhere):** 80 and 443 should stay **closed**. The only thing that needs to
+reach this VM is the proxy, on 8080, from its address alone.
 
 ```bash
 sudo ufw allow OpenSSH
+
+# route 4a -- this VM terminates TLS itself:
 sudo ufw allow 80,443/tcp
+
+# route 4b instead -- let ONLY the proxy in, and only to the app port:
+#   sudo ufw allow from <proxy-ip> to any port 8080 proto tcp
+
 sudo ufw enable
 ```
 
