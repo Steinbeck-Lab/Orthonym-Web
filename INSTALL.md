@@ -132,7 +132,24 @@ design:
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/     # 200
 ```
 
-### 4. Put Caddy in front
+### 4. Choose a front door
+
+**First work out whether this VM is reachable from the internet at all.** On an institutional
+network it very often is not, and everything below depends on the answer:
+
+```bash
+ip -4 addr show scope global | grep inet          # a 10./172.16-31./192.168. address means NAT
+curl -4 -s ifconfig.me; echo                      # egress address -- NOT proof of ingress
+dig +short <a-sibling-service-you-run>            # where do your OTHER services resolve to?
+```
+
+If the VM has only private IPv4 and your other services resolve to some shared address, there
+is already a reverse proxy in front of everything and **that is your front door** — skip to 4b.
+Egress working proves nothing about ingress: a NAT gateway lets you out without letting anyone in.
+
+#### 4a. Caddy on this VM — only if it holds a public address
+
+Caddy is **not** in Ubuntu's default repositories — `apt-get install caddy` on a stock box
 
 Caddy is **not** in Ubuntu's default repositories — `apt-get install caddy` on a stock box
 either fails or installs something years old. Add the official repo first (these four lines are
@@ -164,6 +181,51 @@ would share **one** bucket of 2 concurrent jobs and 60 requests a minute.
 ```bash
 sudo systemctl reload caddy
 sudo systemctl enable --now caddy
+```
+
+#### 4b. An institutional reverse proxy on another host
+
+This is the common case on a university network, and it is the better answer when it applies:
+certificate issue and renewal, TLS policy and security headers are handled centrally by the
+people who already do that for every other service.
+
+Ask that team for a vhost. They need three things from you:
+
+| | |
+|---|---|
+| hostname | `orthonym.example.org` |
+| upstream | `http://<this VM's internal IP>:8080` |
+| must forward | `Host`, `X-Forwarded-For`, `X-Forwarded-Proto` |
+
+Then **bind the frontend to the internal interface**, or their proxy gets a connection refused
+and serves a 502 — the container listens on loopback by default:
+
+```bash
+echo 'FRONTEND_BIND=10.0.0.5' >> .env        # this VM's internal address
+docker compose up -d
+docker ps --format '{{.Names}}\t{{.Ports}}' | grep frontend   # expect 10.0.0.5:8080->80/tcp
+curl -s -o /dev/null -w '%{http_code}\n' http://10.0.0.5:8080/
+```
+
+Use the **address, not `0.0.0.0`**. A VM with private IPv4 may still hold a globally routable
+IPv6, and `0.0.0.0` binds that too — publishing the site unencrypted to the internet, past the
+proxy holding your certificate. Worth testing rather than assuming:
+`curl -6 -sI http://[<your-v6>]/`.
+
+Two things to check in the vhost they write:
+
+- **`client_max_body_size`** must be at least as large as `MAX_FILE_SIZE_MB` (50 on `medium`).
+  A smaller value rejects uploads the app would have accepted, with a bare nginx 413 instead of
+  the app's own JSON error.
+- **Whose address reaches you.** `frontend/nginx.conf` trusts `X-Forwarded-For` only from
+  RFC1918 and loopback peers. If their proxy connects from a *public* address, the header is
+  discarded and every visitor collapses into one rate-limit bucket. Verify with the Redis check
+  in step 6, and add their address to `set_real_ip_from` if needed.
+
+If you took this route, remove Caddy — it will contend for ports 80/443 on the next reboot:
+
+```bash
+sudo systemctl disable --now caddy && sudo apt-get purge -y caddy
 ```
 
 ### 5. Firewall
