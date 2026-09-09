@@ -78,3 +78,8 @@ original-*.webp
 
 # Stray screenshots from browser-driving agents
 /*.png
+
+# Deployment-local operational files: htpasswd, nginx snippets, compose
+# overrides. Never in git -- these carry credentials and per-host addresses.
+ops/
+docker-compose.override.yml

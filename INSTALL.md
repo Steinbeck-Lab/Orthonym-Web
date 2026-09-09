@@ -271,6 +271,70 @@ docker exec orthonym-redis redis-cli --scan --pattern 'orthonym:ip:*' | head
 # expect your laptop's public IP in the key name -- NOT 127.0.0.1 or a 172.x address
 ```
 
+### Putting the site behind a password
+
+For a preview, or while a deployment is being checked, the whole site can sit behind HTTP Basic
+Auth. Do it here rather than asking whoever runs the upstream proxy — nothing needs to change
+outside this VM, and it lifts in one command.
+
+```bash
+cd /opt/orthonym-web
+mkdir -p ops/snippets
+
+# the credential. openssl is already present; apache2-utils is not needed.
+printf 'orthonym:%s\n' "$(openssl passwd -apr1 'CHOOSE-A-PASSWORD')" > ops/htpasswd
+chmod 600 ops/htpasswd
+
+cat > ops/snippets/auth.conf <<'EOF'
+satisfy any;
+allow 127.0.0.1;
+allow ::1;
+deny all;
+auth_basic "Orthonym — preview";
+auth_basic_user_file /etc/nginx/htpasswd;
+EOF
+
+cat > docker-compose.override.yml <<'EOF'
+services:
+  frontend:
+    volumes:
+      - ./ops/snippets:/etc/nginx/snippets:ro
+      - ./ops/htpasswd:/etc/nginx/htpasswd:ro
+EOF
+
+docker compose up -d frontend
+```
+
+Compose picks `docker-compose.override.yml` up automatically, and `ops/` is gitignored, so no
+credential reaches the repository.
+
+`satisfy any` with `allow 127.0.0.1` is the part that is easy to get wrong. The container's own
+healthcheck requests `http://127.0.0.1/`; a bare `auth_basic` answers it with a 401, the
+container is marked **unhealthy**, and compose then treats a perfectly working site as broken.
+The allow rule exempts that one caller and nobody else — `set_real_ip_from` has already
+rewritten `$remote_addr` to the visitor's real address by the time this is evaluated, so a
+visitor can never match it.
+
+Verify all four, not just the first:
+
+```bash
+curl -s -o /dev/null -w 'no creds:   %{http_code}\n' http://10.232.0.68:8080/          # 401
+curl -s -u orthonym:PASS -o /dev/null -w 'with creds: %{http_code}\n' http://10.232.0.68:8080/   # 200
+curl -s -o /dev/null -w 'api gated:  %{http_code}\n' http://10.232.0.68:8080/api/health # 401
+sleep 12; docker inspect --format 'health: {{.State.Health.Status}}' orthonym-frontend    # healthy
+```
+
+**To remove it**, which is the point of doing it this way:
+
+```bash
+rm -f docker-compose.override.yml && docker compose up -d frontend
+```
+
+Two limits worth knowing. Basic Auth sends the password on every request — fine over the HTTPS
+the upstream proxy terminates, useless over plain HTTP. And it is a gate, not access control:
+one shared credential, no accounts, no audit. It suits "not ready for the public yet"; it does
+not suit protecting anything sensitive.
+
 ### 7. Updating
 
 ```bash
