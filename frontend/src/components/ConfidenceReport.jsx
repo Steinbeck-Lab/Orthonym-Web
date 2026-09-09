@@ -1,4 +1,5 @@
 import { NAMED_STATUSES, STATE_LABEL } from '../lib/statuses'
+import TierLamp from './TierLamp'
 import { roundtripLine } from '../lib/explainVerdict'
 
 /**
@@ -37,7 +38,12 @@ export default function ConfidenceReport({ row }) {
 
   return (
     <div className="confidence-report">
-      <span className="tile__state-label">{STATE_LABEL[row.status]}</span>
+      {/* Inside the label, for the reason Tile.jsx records: nested, the lamp
+          flows with the words whatever the parent's display is. */}
+      <span className="tile__state-label">
+        <TierLamp status={row.status} />
+        {STATE_LABEL[row.status]}
+      </span>
       {line && (
         <p className="tile__roundtrip">
           {line.lead}{' '}

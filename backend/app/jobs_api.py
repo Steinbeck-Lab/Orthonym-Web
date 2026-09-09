@@ -31,7 +31,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from rdkit import Chem
 
-from app import cdk_bridge, redis_store
+from app import batch_sort, cdk_bridge, redis_store
 from app.core.config import get_settings
 from app.depiction import structure_svg_data_uri
 from app.inputs import (
@@ -523,6 +523,7 @@ def _status_response(
         total=int(meta["total"]),
         done=int(meta["done"]),
         failed=int(meta["failed"]),
+        counts=redis_store.job_tier_counts(meta),
         created_at=int(meta["created"]),
         expires_at=int(meta["expires"]),
     )
@@ -643,10 +644,21 @@ def job_results(
     job_id: str,
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=1000),
+    sort: batch_sort.SortField = Query(default="index"),
+    order: batch_sort.SortOrder = Query(default="asc"),
 ) -> JobResultsResponse:
     check_poll_allowed(client_ip(request))
     meta = _require_complete_meta(job_id)
-    rows = redis_store.read_rows(job_id, offset, limit)
+    if sort == "index" and order == "asc":
+        # The stored order, so this stays a single 50-row LRANGE. Every other
+        # ordering has to be computed over the WHOLE list, because a sort of
+        # one page would only reorder the page -- see app/batch_sort.py.
+        rows = redis_store.read_rows(job_id, offset, limit)
+    else:
+        ordered = batch_sort.sort_rows(
+            list(redis_store.iter_all_rows(job_id)), sort, order
+        )
+        rows = ordered[offset : offset + limit]
     return JobResultsResponse(
         job_id=job_id,
         offset=offset,

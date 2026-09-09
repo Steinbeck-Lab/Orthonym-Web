@@ -228,6 +228,12 @@ class JobStatusResponse(BaseModel):
     total: int
     done: int
     failed: int
+    # Rows so far, by confidence tier -- keys are Status values. Reported
+    # SEPARATELY from `failed` and never summed into it: `failed` is a row
+    # the engine could not produce, while an "abstain" is the engine
+    # correctly declining to guess. A tier with no rows is absent rather
+    # than 0, so "none yet" and "counted, none found" stay distinguishable.
+    counts: dict[str, int] = {}
     created_at: int
     expires_at: int
 

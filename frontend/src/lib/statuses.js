@@ -31,6 +31,23 @@ export const STATE_CLASS = {
   error: 'error',
 }
 
+// The ladder, strongest first. ONE list, because two places now walk it:
+// ConfidenceLegend teaches the vocabulary and the batch tally counts in it,
+// and a second copy is how the two end up disagreeing about the order.
+export const TIER_ORDER = ['pin', 'fallback', 'best_effort', 'abstain', 'error']
+
+// The SHORT word the interface puts next to a name -- the one a reader meets
+// in the confidence key and in a batch tally. STATE_LABEL above is the long
+// form a single result tile prints; this is the same tier said in one or two
+// words, and the two must never drift apart.
+export const STATE_SHORT = {
+  pin: 'PIN',
+  fallback: 'FALLBACK',
+  best_effort: 'UNVERIFIED',
+  abstain: 'NO NAME',
+  error: 'BAD INPUT',
+}
+
 // Statuses that ship a real (if not always verified) name.
 export const NAMED_STATUSES = new Set(['pin', 'fallback', 'best_effort'])
 

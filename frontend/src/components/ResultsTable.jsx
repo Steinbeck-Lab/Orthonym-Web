@@ -2,6 +2,7 @@ import { NAMED_STATUSES, STATE_CLASS, STATE_LABEL } from '../lib/statuses'
 import useDepiction from '../lib/useDepiction'
 import CopyButton from './CopyButton'
 import ChemName from './Typeset'
+import TierLamp from './TierLamp'
 
 /**
  * The 3-or-more-molecules view: a table with the input and retranslated
@@ -86,6 +87,7 @@ function ResultRow({ row, index }) {
         <td className="results-conf-row__spacer" aria-hidden="true" />
         <td className="results-conf-cell" colSpan={2}>
           <span className="results-conf">
+            <TierLamp status={status} />
             <span className="results-conf__tier">{STATE_LABEL[status] || 'Error'}</span>
             {named && roundtrip_smiles && (
               <span className="results-conf__rt">

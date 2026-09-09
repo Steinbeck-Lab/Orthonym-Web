@@ -142,8 +142,18 @@ Things the repo does not tell you, or tells you only after they cost time.
 
 **Product truth**
 - Confidence tiers (verified PIN, verified fallback, best-effort, abstain, error) are the product.
-  Each is a monochrome rule under the name, is never coloured with the crimson chrome accent, never
-  conflated, and never reduced to a word in a column. In a payload, `tier` moves with `status`.
+  Each is a rule under the name plus a plain-text label, never conflated, and never reduced to a
+  word in a column.
+- **A tier lamp (`components/TierLamp.jsx`) adds colour, and the ladder inside it is FORM, not
+  hue.** Each lamp wears its own tier's rule pattern: double ring, dashed, dotted, plain unlit,
+  struck. The reason is measured, not stylistic -- a pure hue ramp separates adjacent tiers by only
+  1.03-1.11:1 under deuteranopia, so hue may reinforce a signal and can never be one. The rule and
+  the label both stay, so no reading depends on colour, and the lamp is `aria-hidden`. Palette:
+  `--success` / `--olive` (the verified pair share one green family on purpose; the ring pattern
+  separates them), `--accent-amber`, `--muted`, and `--tier-stop` for an error. **The crimson
+  `--accent` still never touches a tier** -- that is what `--tier-stop` exists for, and fixing
+  `.results-group--error`, which had been colouring the error tier crimson, was part of the same
+  change. In a payload, `tier` moves with `status`.
 - The rendered chemical name is never uppercased or bolded; IUPAC case and weight are semantic.
 - The rendered name IS typeset the way IUPAC prints it: italic stereodescriptors, element-symbol
   locants, `tert-`, indicated hydrogen and fusion letters; superscript bridge locants; subscript

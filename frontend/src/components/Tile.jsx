@@ -2,6 +2,7 @@ import { NAMED_STATUSES, STATE_CLASS, STATE_LABEL, VERIFIED_STATUSES } from '../
 import useDepiction from '../lib/useDepiction'
 import CopyButton from './CopyButton'
 import ThreadedName from './ThreadedName'
+import TierLamp from './TierLamp'
 import { ChemFormula } from './Typeset'
 
 /**
@@ -51,7 +52,18 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
 
       {!isPending && NAMED_STATUSES.has(status) && (
         <div className="tile__verify">
-          <span className="tile__verify-label">{label}</span>
+          {/* The lamp lives INSIDE the label, not beside it. `.tile__verify`
+              is a flex COLUMN, so a sibling lamp became its own row above
+              the words; nested, it flows inline with them and needs no
+              layout rule of its own here.
+              `fresh` on the tile that is resolving into place is the one
+              moment a PIN's lamp breathes -- the same signal ThreadedName
+              already animates on, so the two read as one arrival rather
+              than two effects. */}
+          <span className="tile__verify-label">
+            <TierLamp status={status} fresh={isActive} />
+            {label}
+          </span>
           {roundtrip_smiles ? (
             <span className="tile__verify-rt">
               round-trip check: <code>{roundtrip_smiles}</code>{' '}
@@ -135,7 +147,13 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
             named result; the foot carries it only for the states that have no
             name to sit under -- pending, abstain, error. */}
         {(isPending || !NAMED_STATUSES.has(status)) && (
-          <span className="tile__state-label">{label}</span>
+          <span className="tile__state-label">
+            {/* Pending has no tier yet, so TierLamp returns null for it and
+                the label stands alone -- an unlit lamp would claim the engine
+                had already decided something. */}
+            <TierLamp status={isPending ? undefined : status} />
+            {label}
+          </span>
         )}
         {/* The link back to the control that produced this tier. Without it
             the tier reads as a property of the MOLECULE rather than a

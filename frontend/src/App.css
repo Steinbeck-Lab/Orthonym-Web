@@ -592,10 +592,109 @@
     background-color 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.site-head__ext:hover {
-  color: var(--ink);
-  background: var(--surface-soft);
+/* THE GITHUB PILL, wearing chrome adapted from a rainbow-bordered button
+   reference. Two of its ideas translate; the rainbow does not, and neither
+   did its star or its hardcoded "1.2k" count -- both removed by instruction,
+   and the count could not have shipped regardless (a made-up number on a
+   real repository is a fabricated claim, and fetching api.github.com per
+   page load would put every visitor's IP at a third party and make
+   Privacy.jsx false).
+
+   The gradient BORDER is the reference's signature and it is pure CSS: two
+   backgrounds, one clipped to the padding box (the pill's own fill) and one
+   to the border box (the gradient), with a transparent border between them.
+   At 200% width the gradient can then be slid on hover, which is the sheen.
+   ONE hue: --accent through --accent-deep and back, so the sweep reads as
+   light moving across crimson rather than as a second colour arriving.
+
+   No `filter: blur()` for the bloom, per DESIGN.md -- a radial gradient is
+   already seamless and costs nothing. */
+.site-head__ext {
+  position: relative;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--card), var(--card)) padding-box,
+    linear-gradient(
+        90deg,
+        var(--accent-line),
+        var(--accent),
+        var(--accent-deep),
+        var(--accent),
+        var(--accent-line)
+      )
+      border-box;
+  background-size:
+    auto,
+    200% 100%;
+  background-position:
+    0 0,
+    0 0;
+  transition:
+    color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    background-position 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* The bloom, under the pill, the way the reference blurs a bar beneath it.
+   Its own element would need extra markup in the notch; ::after costs
+   nothing and the link has no other pseudo-element. */
+.site-head__ext::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  bottom: -45%;
+  width: 74%;
+  height: 90%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse,
+    color-mix(in srgb, var(--accent) 55%, transparent) 0%,
+    transparent 70%
+  );
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.site-head__ext:hover,
+.site-head__ext:focus-visible {
+  color: var(--accent-deep);
   text-decoration: none;
+  /* Slides the 200% gradient one full width: the crimson sheen crosses the
+     border once per hover. */
+  background-position:
+    0 0,
+    100% 0;
+  transform: translateY(-1px);
+}
+
+.site-head__ext:hover::after,
+.site-head__ext:focus-visible::after {
+  opacity: 1;
+}
+
+.site-head__ext:active {
+  transform: translateY(0) scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-head__ext,
+  .site-head__ext::after {
+    transition: none;
+  }
+
+  /* The sheen was movement, so it goes. The colour change, the bloom and the
+     filled star all stay -- reduced motion means fewer animations, not a
+     control that stops responding. */
+  .site-head__ext:hover,
+  .site-head__ext:focus-visible {
+    background-position:
+      0 0,
+      0 0;
+    transform: none;
+  }
 }
 
 .site-head__ext svg {
@@ -2433,8 +2532,13 @@ input.field__control {
   --tier-accent: var(--accent-amber);
 }
 
+/* --tier-stop, NOT --accent. This used to be the crimson chrome accent, which
+   made the 3+ table the one place in the app where the accent coloured a
+   confidence tier -- the exact thing DESIGN.md, CLAUDE.md and About.css:1254
+   all say never happens. The lamp palette gave the error tier its own red, so
+   the contradiction is closed rather than documented. */
 .results-group--error {
-  --tier-accent: var(--accent);
+  --tier-accent: var(--tier-stop);
 }
 
 .results-group:hover {
@@ -3739,6 +3843,193 @@ input.field__control {
   .info--unseen .info__bulb-glow {
     animation: none;
     opacity: 0.8;
+    transform: scale(1);
+  }
+}
+
+/* ==================== the confidence lamp ==================== */
+/* A lit indicator beside the tier label, wherever a name and its tier appear.
+   Full reasoning in components/TierLamp.jsx. Three facts this file holds:
+
+   1. The LADDER is FORM, not hue. Each lamp wears its own tier's rule pattern
+      (double / dashed / dotted / plain / struck), so the five stay five in
+      greyscale and under all three common colour deficiencies -- measured,
+      adjacent steps of a pure hue ramp separate by only 1.03-1.11:1 under
+      deuteranopia. Neon makes the colour louder; it does not make it the
+      signal.
+
+   2. THE NEON IS ONLY EVER GLOW. Neon on a white card is 1.2-1.6:1 and could
+      never be a line, so the MARK stays a deep AA-measured token and the
+      neon is spent entirely on the bloom around it: bright light, dark
+      filament, which is how a lit lamp reads on paper. A bloom carries no
+      information, so it is free to be as saturated as it likes -- but it
+      still sits BEHIND the mark, so it is the mark's contrast against the
+      bloom that has to pass.
+
+      MEASURED, by painting these exact gradients to a canvas, reading the
+      pixels at the mark's centre and at its ring, and compositing over all
+      three surfaces a lamp appears on -- getComputedStyle cannot see a
+      composited gradient. Worst case per tier:
+
+        PIN 4.40:1   FALLBACK 4.16:1   UNVERIFIED 3.87:1
+        NO NAME 4.02:1   BAD INPUT 3.41:1
+
+      against AA's 3:1 for non-text. Re-measure after touching any glow
+      opacity or either palette; the error lamp already failed this check
+      once at 2.66:1 and its opacity is set by the fix, not by taste.
+
+   3. NO filter: blur(). DESIGN.md bans it and is right: a radial gradient is
+      already seamless, and layered gradients give the bloom for free. The
+      only thing a blur would add here is GPU cost on every result row. */
+.tier-lamp {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  /* TWO colour channels, and the split is the whole design. `color` is the
+     MARK, and it is always one of the deep, AA-measured tokens, because the
+     mark is the signal and it sits on a light card. `--lamp-neon` is the
+     GLOW, and that is where the neon goes -- a bloom carries no information,
+     so it is free to be as saturated as it likes. Bright light, dark
+     filament, which is how a lit lamp reads on paper. */
+  color: var(--muted);
+  --lamp-neon: var(--muted);
+  vertical-align: -0.2em;
+  /* The gap lives on the LAMP, not on each of the parents that hold one.
+     One declaration, and a new call site cannot forget it. */
+  margin-inline-end: 0.55ch;
+}
+
+/* ...except where the parent already spaces its children. The 3+ table's
+   confidence pill is an inline-flex with its own gap, so the lamp's margin
+   would stack on top of it and read as a loose lamp in a tight pill. */
+.results-conf .tier-lamp {
+  margin-inline-end: 0;
+}
+
+/* THE BLOOM, in two layers, sitting between the socket and the mark. One
+   gradient cannot be both a hot centre and a wide halo. The outer inset lets
+   the halo spill past the socket rim, which is the whole reason a neon lamp
+   reads as emitting rather than as a coloured shape. */
+.tier-lamp__glow {
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      circle,
+      color-mix(in srgb, var(--lamp-neon) 88%, transparent) 0%,
+      color-mix(in srgb, var(--lamp-neon) 40%, transparent) 30%,
+      transparent 64%
+    ),
+    radial-gradient(
+      circle,
+      color-mix(in srgb, var(--lamp-neon) 30%, transparent) 0%,
+      transparent 88%
+    );
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tier-lamp__mark {
+  position: relative;
+  display: block;
+}
+
+/* Lit, by three different amounts. A verified PIN is the brightest thing in
+   the ladder; an unverified name barely glows. An abstain and an error stay
+   DARK -- an unlit lamp in a dark socket is the signal there, and the contrast
+   between lit and unlit is what makes "lit" mean anything at all. */
+.tier-lamp--pin {
+  color: var(--success);
+  --lamp-neon: var(--lamp-pin);
+}
+
+.tier-lamp--pin .tier-lamp__glow {
+  opacity: 1;
+}
+
+.tier-lamp--fallback {
+  color: var(--olive);
+  --lamp-neon: var(--lamp-fallback);
+}
+
+.tier-lamp--fallback .tier-lamp__glow {
+  opacity: 0.8;
+}
+
+.tier-lamp--best-effort {
+  color: var(--accent-amber);
+  --lamp-neon: var(--lamp-unverified);
+}
+
+.tier-lamp--best-effort .tier-lamp__glow {
+  opacity: 0.62;
+}
+
+/* An abstain is the ONLY dark lamp. The engine declining is not a fault, and
+   it is not an event either -- nothing lights up. */
+.tier-lamp--abstain {
+  color: var(--muted);
+  --lamp-neon: var(--muted);
+}
+
+/* A broken input DOES light up, in neon red. It is a real failure and the one
+   place in this system that gets to shout. */
+.tier-lamp--error {
+  color: var(--tier-stop);
+  --lamp-neon: var(--lamp-stop);
+}
+
+/* 0.4, and it is the one number in this block that was set by a measurement
+   failing rather than by taste. At 0.7 the dark red mark against its own hot
+   red bloom measured 2.66:1 on the grey ground -- red-on-red is the one pair
+   in this palette where mark and neon sit close in luminance, so the bloom
+   swallows its own filament. 0.4 brings it to 3.4:1. It also happens to be
+   right: an error should not out-shine a verified PIN. */
+.tier-lamp--error .tier-lamp__glow {
+  opacity: 0.4;
+}
+
+/* THE BREATH. One tier, one moment: a PIN's lamp breathes three times as the
+   result arrives, then holds its steady glow. It is the reward signal the
+   original "strobing light" asked for, at a rate that cannot be a hazard.
+
+   3 cycles x 660ms = ~2.0s, so 1.5 per second against WCAG 2.3.1's limit of
+   three -- and it SWELLS rather than blinks: the floor is the resting
+   brightness, so the lamp never goes dark mid-breath. A lamp that dips to
+   nothing reads as a fault, which is the opposite of what a verified PIN is
+   saying.
+
+   opacity and transform only, on the GLOW element. Never box-shadow on the
+   mark: the INFO bulb above records the measured reason -- it repaints
+   instead of compositing, and a filter blurs the mark's own edge, which would
+   destroy the dash and dot patterns the ladder is built from. */
+@keyframes tier-lamp-breath {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.3);
+  }
+}
+
+.tier-lamp--pin.tier-lamp--fresh .tier-lamp__glow {
+  animation: tier-lamp-breath 660ms cubic-bezier(0.37, 0, 0.63, 1) 3 both;
+}
+
+/* Reduced motion keeps the SIGNAL and drops the movement: still lit, still
+   neon green, still a double ring. Only the breath goes. */
+@media (prefers-reduced-motion: reduce) {
+  .tier-lamp--pin.tier-lamp--fresh .tier-lamp__glow {
+    animation: none;
+    opacity: 1;
     transform: scale(1);
   }
 }

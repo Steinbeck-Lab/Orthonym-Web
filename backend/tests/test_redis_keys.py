@@ -35,6 +35,52 @@ def test_bump_job_done_accumulates(redis_client, job_id):
     assert meta["failed"] == "1"
 
 
+def test_bump_job_done_tallies_tiers_separately_from_failed(redis_client, job_id):
+    # The bug this covers: the batch panel reported `failed` only, so a job
+    # whose molecules the engine honestly DECLINED reported "0 failed" and
+    # looked like a clean run. An abstain is a successful row, so it must be
+    # counted, and counted somewhere other than `failed`.
+    redis_store.create_job(job_id, total=6, fmt="smiles_list", client_ip="::1")
+    redis_store.bump_job_done(
+        job_id, index=0, done=3, failed=0, counts={"pin": 2, "abstain": 1}
+    )
+    redis_store.bump_job_done(
+        job_id, index=1, done=3, failed=1, counts={"abstain": 2, "error": 1}
+    )
+
+    meta = redis_store.read_job_meta(job_id)
+    counts = redis_store.job_tier_counts(meta)
+
+    assert counts == {"pin": 2, "abstain": 3, "error": 1}
+    # The whole point: three abstains did NOT become three failures.
+    assert meta["failed"] == "1"
+    # A tier with no rows is absent, not 0 -- "none yet" must not read as
+    # "counted, none found".
+    assert "fallback" not in counts
+
+
+def test_a_redelivered_chunk_does_not_double_count_its_tiers(redis_client, job_id):
+    # Same guard as done/failed: one hsetnx marker gates the whole pipeline,
+    # so task_acks_late redelivery cannot inflate the tally either.
+    redis_store.create_job(job_id, total=2, fmt="smiles_list", client_ip="::1")
+    redis_store.bump_job_done(job_id, index=0, done=2, failed=0, counts={"pin": 2})
+    redis_store.bump_job_done(job_id, index=0, done=2, failed=0, counts={"pin": 2})
+
+    counts = redis_store.job_tier_counts(redis_store.read_job_meta(job_id))
+    assert counts == {"pin": 2}
+
+
+def test_job_tier_counts_ignores_the_other_meta_fields(redis_client, job_id):
+    # The tally shares the meta hash with `done`, `failed`, `owner`,
+    # `bumped:{index}` and friends. A prefix that leaked any of those into
+    # the API response would publish the owner token.
+    redis_store.create_job(job_id, total=1, fmt="smiles_list", client_ip="::1")
+    redis_store.bump_job_done(job_id, index=0, done=1, failed=0, counts={"pin": 1})
+
+    meta = redis_store.read_job_meta(job_id)
+    assert redis_store.job_tier_counts(meta) == {"pin": 1}
+
+
 def test_assemble_rows_orders_chunks_and_cleans_them_up(redis_client, job_id):
     redis_store.create_job(job_id, total=4, fmt="smiles_list", client_ip="::1")
     # Written out of order on purpose: chunks finish out of order.
