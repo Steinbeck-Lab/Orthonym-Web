@@ -63,3 +63,45 @@ def test_owning_parts_partition_all_heavy_atoms():
         assert not (indices & covered), f"{part.text} overlaps an earlier part"
         covered |= indices
     assert covered == set(range(14))
+
+
+def test_a_thirteen_carbon_stem_decomposes():
+    """OPSIN lexes "tridec" two ways: the multiplier 3 times a 10-carbon
+    stem, and a single 13-carbon stem. ComponentGenerator.resolveAmbiguities
+    THROWS to reject the first reading so the caller moves to the next
+    candidate parse (ComponentGenerator.java:149-171). Taking parses.get(0)
+    made that rejection fatal.
+    """
+    result = decompose("tridecanoic acid")
+    assert result is not None
+    assert result.smiles
+
+
+def test_every_chain_length_either_side_of_the_boundary_decomposes():
+    """C11 and C12 always worked; C13 upward did not. Assert the whole run so
+    a future change cannot fix one and re-break its neighbour.
+    """
+    for name in (
+        "undecanoic acid", "dodecanoic acid", "tridecanoic acid",
+        "tetradecanoic acid", "octadecanoic acid", "nonadecane",
+        "icosanoic acid", "tricosanoic acid",
+    ):
+        assert decompose(name) is not None, name
+
+
+def test_a_name_opsin_itself_cannot_parse_still_returns_none():
+    """The fail-closed half. Trying every candidate must not turn a genuine
+    OPSIN failure into a partial answer.
+    """
+    assert decompose("dinitrogen tetroxide") is None
+
+
+def test_the_error_string_does_not_blame_opsin():
+    """23 of the 25 names that reported "OPSIN could not parse this name"
+    parse fine through the OPSIN 2.9.0 CLI. The message claimed a fact about
+    OPSIN that Orthonym had not established.
+    """
+    from app.explain import explain_name
+
+    payload = explain_name("dinitrogen tetroxide")
+    assert payload["error"] == "Orthonym could not decompose this name."
