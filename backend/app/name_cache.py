@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 # glycine was cached as a MISMATCH on a correct PIN. The engine fingerprint
 # below cannot see a change in THIS app's code, which is exactly what this
 # manual counter is for.
-_KEY_VERSION = "v3"
+_KEY_VERSION = "v4"
 _ENGINE_VERSION = orthonym.__version__
 
 
