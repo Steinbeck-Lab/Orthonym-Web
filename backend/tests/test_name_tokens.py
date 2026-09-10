@@ -135,3 +135,60 @@ def test_no_parts_withholds():
     list here would read as success to every caller.
     """
     assert assign_runs(toks(("ethan", "alkaneStem")), []) is None
+
+
+def test_purin_does_not_reach_back_over_the_modifier_region():
+    """Regression for fix round 1: caffeine's REAL token stream (measured
+    from opsin_tokenizer.tokenize on
+    "1,3,7-trimethyl-3,7-dihydro-1H-purine-2,6-dione"), which the first draft
+    of this module got wrong even though all 9 fabricated-stream tests above
+    passed against it.
+
+    Part texts here are the bare stems `token_for` builds ('meth', 'purin',
+    'one'), not the merged 'methyl'/'purine'/'dione'. Between 'meth' and
+    'purin' sits an entire second locanted modifier run
+    (3,7-di|hydro|-|1H-) that belongs to NEITHER part. The first draft's
+    unbounded interior skip let 'purin' reach across all of it and swallow
+    the whole region as filler -- 'purin' does occur, standalone, nowhere
+    else in the stream, so the only way to satisfy it at all was to skip
+    everything in between. The fix requires the CONTIGUOUS run for 'purin'
+    to start exactly at its own token (index 10, offset 31) and grow right
+    only over `_TRAILING` categories (picking up the elided 'e' to read
+    "purine"), never left across `bigCapitalH`, which is not in `_LEADING`.
+    """
+    tokens = toks(
+        ("1,3,7-", "locant"), ("tri", "diOrTri"),
+        ("meth", "alkaneStemTrivial"), ("yl", "inlineSuffix"),
+        ("-", "interSubstituentHyphen"), ("3,7-", "locant"),
+        ("di", "diOrTri"), ("hydro", "hydro"),
+        ("-", "hyphen"), ("1H-", "bigCapitalH"),
+        ("purin", "trivialRing"), ("e", "e"),
+        ("-", "hyphen"), ("2,6-", "locant"),
+        ("di", "diOrTri"), ("one", "nonAcidStemSuffix"),
+    )
+    name = "".join(t.text for t in tokens)
+    assert name == "1,3,7-trimethyl-3,7-dihydro-1H-purine-2,6-dione"
+
+    runs = assign_runs(tokens, ["meth", "purin", "one"])
+
+    assert runs is not None
+    assert len(runs) == 3
+    meth_run, purin_run, one_run = runs
+
+    # The bug: 'purin' must not extend left of its own token (offset 31),
+    # swallowing the modifier region between 'meth' and 'purin'.
+    assert purin_run.start == 31
+    assert name[purin_run.start:purin_run.end] == "purine"
+
+    # The modifier region itself belongs to neither run -- it is a separate
+    # referential part this module does not produce, and is left uncovered.
+    assert name[meth_run.end:purin_run.start] == "3,7-dihydro-1H-"
+
+    assert name[meth_run.start:meth_run.end] == "1,3,7-trimethyl-"
+    assert name[one_run.start:one_run.end] == "-2,6-dione"
+
+    # The suffix run's OWN left-growth recovers the plain hyphen that
+    # 'purin's right-growth deliberately left behind, so "-2,6-dione" is
+    # whole -- not stolen by the previous run, not dropped by this one.
+    for earlier, later in zip(runs, runs[1:]):
+        assert earlier.end <= later.start
