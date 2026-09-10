@@ -40,8 +40,10 @@ from rdkit.Chem.Draw import rdMolDraw2D
 from orthonym import Orthonym
 
 from .glossary import describe_locant, describe_part
-from .name_spans import MODIFIER_KEY, compute_spans
+from .name_spans import _MULTIPLIER_CATEGORIES, _MULTIPLIER_VALUES, _locant_subspans
+from .name_tokens import _MODIFIER, Tok, assign_runs, find_modifier_run
 from .opsin_decompose import decompose, heavy_atom_indices
+from .opsin_tokenizer import tokenize
 from .root_split import split_root
 
 logger = logging.getLogger(__name__)
@@ -140,13 +142,114 @@ def _locant_sort_key(segment: dict):
     return (int(digits) if digits else 0, locant)
 
 
+def _compute_claims(tokens: list, runs: list, modifier_run) -> dict:
+    """Position (in `group_tokens`/`spanned`) -> how many instances of its
+    group each run's own text CLAIMS -- e.g. "1,3,7-" + "tri" both say 3.
+
+    Ported from `name_spans.py`'s per-part claims count (its step 4b), but
+    windowed over RUN boundaries (a run's own span plus everything back to
+    the previous run's end) instead of `compute_spans`' anchor-derived
+    PARTS. A narrower version keyed only to a run's own `fillers` was tried
+    first and measurably wrong: `tetrOrHigher` (the "tetr" half of a
+    two-token "tetra"/"hexa"/"hepta") is not in `_LEADING`, so it is never
+    absorbed into ANY run's fillers, and a `fillers`-only count silently
+    dropped to 1 for "tetramethylammonium chloride" -- previously CLEAN,
+    wrongly withheld end-to-end. Windowing back to the previous run's end
+    recovers it, exactly as it does in `compute_spans`.
+    """
+    boundaries = sorted(
+        list(runs) + ([modifier_run] if modifier_run is not None else []),
+        key=lambda r: r.start,
+    )
+
+    # An unlocanted hydro/indicated-hydrogen run's own multiplier prefix
+    # ("tetr" in tetrahydrofuran) is not absorbed by ANY run either, so with
+    # no modifier run to bound it, it would leak into whichever real run's
+    # window reaches it next. Ported fence from name_spans.py:244-270 --
+    # skipped whenever this name HAS a modifier run, because then that
+    # run's own start already bounds the window (see that module for the
+    # measured case: an unlocanted repeated "tetrahydrofuran-2-yl" without
+    # this fence inflated a segment's claims from 1 to 4).
+    excluded_multipliers = set()
+    if modifier_run is None:
+        for i, token in enumerate(tokens):
+            if token.category not in _MODIFIER:
+                continue
+            j = i - 1
+            while j >= 0 and tokens[j].category == "a":
+                j -= 1
+            if j >= 0 and tokens[j].category in _MULTIPLIER_CATEGORIES:
+                excluded_multipliers.add(j)
+
+    claims: dict = {}
+    previous_end = 0
+    for run in boundaries:
+        pieces, multiplier = 0, 0
+        for i, token in enumerate(tokens):
+            if token.start < previous_end or token.end > run.end:
+                continue
+            if token.category == "locant":
+                pieces += len(
+                    [p for p in token.text.replace("-", "").split(",") if p]
+                )
+            elif (
+                token.category in _MULTIPLIER_CATEGORIES
+                and i not in excluded_multipliers
+            ):
+                multiplier = max(
+                    multiplier, _MULTIPLIER_VALUES.get(token.text.lower(), 0)
+                )
+        for position in run.part_indices:
+            claims[position] = max(pieces, multiplier, 1)
+        previous_end = run.end
+    return claims
+
+
+def _locants_within(tokens: list, start: int, end: int) -> dict:
+    """Locant string -> (start, end) for every locant token whose OWN
+    offsets sit inside `[start, end)`.
+
+    Ported from `name_spans.py`'s per-part locant pass (its step 4), now
+    keyed off a run's (or the modifier's) character span directly instead
+    of `compute_spans`' anchor-derived one.
+    """
+    found = {}
+    for token in tokens:
+        if token.category != "locant":
+            continue
+        if token.start < start or token.end > end:
+            continue
+        for locant, span in _locant_subspans(token).items():
+            found.setdefault(locant, span)
+    return found
+
+
 def _apply_name_spans(name: str, segments: list, result) -> None:
     """Fill in each segment's and child's `name_range`, or leave every one
-    of them None. Never partial: a response with some spans and some not
-    would leave regions of the name dead that look identical to live ones.
+    of them None. Never partial at the TOP level: a response with some
+    top-level spans and some not would leave regions of the name dead that
+    look identical to live ones.
+
+    Spans are DERIVED from token offsets (`name_tokens.assign_runs`), not
+    searched for by text. The anchor scan this replaced (`compute_spans`,
+    still in `name_spans.py` -- its own tests still exercise it directly,
+    but this function no longer calls it) tested equality against a SINGLE
+    raw token, which withheld every fusion-bracket and ring-assembly name
+    in the census -- 80 names -- because their labels are several tokens
+    wide (`benzo[a]pyrene` merges to one value spanning three raw tokens;
+    `assign_runs` anchors on a CONTIGUOUS run instead of one token).
     """
+    raw = tokenize(name)
+    if raw is None:
+        logger.info(
+            "explain: %r could not be tokenized -- the page will fall back "
+            "to the part list", name,
+        )
+        return
+    tokens = [Tok(t.text, t.category, t.start, t.end) for t in raw]
+
     # Anchor keys in DOCUMENT order: substituent stems, then the ring, then the
-    # suffix token. `compute_spans` matches monotonically, so the order matters.
+    # suffix token. `assign_runs` matches monotonically, so the order matters.
     root = next((p for p in result.parts if p.kind == "root"), None)
     suffix_key = root.suffix_texts[0] if (root and root.suffix_texts) else None
 
@@ -160,7 +263,7 @@ def _apply_name_spans(name: str, segments: list, result) -> None:
         return None
 
     # One entry per span-bearing segment, WITH duplicates, in document order.
-    # `compute_spans` keys its result by POSITION in this list, not by text:
+    # `assign_runs` keys its result by POSITION in this list, not by text:
     # two different segments can share the same stem text -- ibuprofen's
     # "propyl" substituent and its "propanoic acid" parent both strip to
     # "prop" -- and a text key would collapse both onto one span, handing the
@@ -176,8 +279,9 @@ def _apply_name_spans(name: str, segments: list, result) -> None:
                 spanned.append(segment)
 
     want_modifier = any(s["kind"] == "modifier" for s in segments)
-    spans = compute_spans(name, group_tokens, want_modifier)
-    if spans is None:
+
+    runs = assign_runs(tokens, group_tokens)
+    if runs is None:
         # Not an error: a name whose spans cannot be PROVEN falls back to the
         # part list by design. Logged at INFO because the fallback is now an
         # expected outcome, and without a line here there is no way to tell
@@ -188,29 +292,70 @@ def _apply_name_spans(name: str, segments: list, result) -> None:
         )
         return
 
-    # A grouped substituent segment can own atoms that ITS SPAN DOES NOT NAME.
+    # `assign_runs`' clone-group pass exists for a caller that hands it ONE
+    # entry per RAW part (its own tests do exactly that: caffeine's three raw
+    # "methyl" parts, still un-merged). `group_tokens` here is not that -- it
+    # is one entry per already-merged SEGMENT (`_build_segments` merges every
+    # same-substituent duplicate itself), so two ADJACENT positions sharing
+    # text can never legitimately mean "one substituent, multiplied" here;
+    # that case has no way to reach this list at all. It can only mean two
+    # DIFFERENT segments happen to share a bare stem after suffix-stripping
+    # -- measured live on "6,7-dimethoxy-1-methylisoquinoline": the
+    # "methoxy" segment's stem and the unrelated "methyl" segment's stem are
+    # both "meth", adjacent in document order, and the "6,7-" locant ahead of
+    # them satisfies `_group_locant_matches`'s count check by coincidence.
+    # `assign_runs` then folds both into ONE run and this function would hand
+    # the "methyl" segment the "6,7-dimethoxy-" span -- a wrong letters-to-
+    # atoms claim, not just a missing one. Withhold rather than guess.
+    for run in runs:
+        if len(run.part_indices) > 1:
+            logger.debug(
+                "explain: %r withheld -- assign_runs merged %d unrelated "
+                "segments (positions %r) into one run %r; a legitimate "
+                "multiplied substituent is already one segment by the time "
+                "it reaches here, so this can only be a coincidental shared "
+                "stem",
+                name, len(run.part_indices), run.part_indices,
+                name[run.start:run.end],
+            )
+            return
+
+    modifier_run = None
+    if want_modifier:
+        modifier_run = find_modifier_run(tokens, runs)
+        if modifier_run is None:
+            logger.info(
+                "explain: no proven name spans for %r -- the page will fall "
+                "back to the part list", name,
+            )
+            return
+
+    by_position: dict = {}
+    for run in runs:
+        for position in run.part_indices:
+            by_position[position] = run
+
+    # A grouped substituent segment can own atoms that ITS RUN DOES NOT NAME.
     # `_build_segments` groups substituent parts by TEXT, so every `chloro` in
-    # a name lands in one segment, while `compute_spans` anchors that segment
+    # a name lands in one segment, while `assign_runs` anchors that segment
     # on the FIRST occurrence only. Measured live on
     # "1,1,1-trichloro-2,2-bis(4-chlorophenyl)ethane": the chloro segment's
-    # span is `1,1,1-trichloro-` (name[0:16]) yet it owns five chlorines, two
-    # of which are named by the `4-chloro` at name[24:32] -- text no span
+    # run is `1,1,1-trichloro-` (name[0:16]) yet it owns five chlorines, two
+    # of which are named by the `4-chloro` at name[24:32] -- text no run
     # covers and which therefore renders inert. Hovering three characters
-    # would glow atoms belonging to a different numbering scope. Every one of
-    # `compute_spans`' four proofs passes on that answer (the span does
-    # contain "chloro", its locant text is "1", it sits inside its own part,
-    # nothing overlaps), which is precisely the defect class this branch has
-    # already fixed three times: a structurally valid region making a false
-    # letters-to-atoms claim.
+    # would glow atoms belonging to a different numbering scope. This is
+    # precisely the defect class this branch has already fixed three times:
+    # a structurally valid region making a false letters-to-atoms claim.
     #
     # The grouping is pre-existing and spec §2 forbids changing the
     # decomposition, so the honest move is to WITHHOLD -- for the whole name,
     # per §4's all-or-nothing rule -- whenever a segment contributes more
-    # parts than its span's own text claims. `spans.claims` reads that claim
-    # off the span's locant list and multiplier word, so a substituent
-    # multiplied by ONE token keeps working: caffeine's `1,3,7-trimethyl`
-    # (3 locants, "tri") and TNT's `1,3,5-trinitro` both claim 3 for 3 parts,
-    # and an unlocanted `diethyl` claims 2 for 2 -- all verified.
+    # parts than its run's own text claims. `_compute_claims` reads that
+    # claim off each run's own decorating tokens (its locant list and
+    # multiplier word), so a substituent multiplied by ONE token keeps
+    # working: caffeine's `1,3,7-trimethyl` (3 locants, "tri") and TNT's
+    # `1,3,5-trinitro` both claim 3 for 3 parts, and an unlocanted `diethyl`
+    # claims 2 for 2 -- all verified.
     #
     # The count MUST be keyed the same way `_build_segments` groups
     # (`part.text.strip("-")`, which is also the segment's label); a different
@@ -219,60 +364,53 @@ def _apply_name_spans(name: str, segments: list, result) -> None:
     # Substituents only, because they are the only grouped-by-text segments:
     # `parent` and `suffix` are emitted one per root, and a multiplied suffix
     # ("dione") is written ONCE in the name, so neither can leave a second
-    # occurrence uncovered. Known over-conservative case, though no longer
-    # DDT's reason for falling back: `bis(4-chlorophenyl)` writes `phenyl`
-    # once per occurrence, and the `bis` sits outside the bracket and so
-    # outside phenyl's own span -- but the claims window (4b in name_spans.py)
-    # has since widened to each part's decorating neighbourhood, so
-    # `phenyl)`'s claim now reaches the `2,2` and `4` locants just before it
-    # and lands at 3, comfortably covering the 2 parts it owns. Measured
-    # live: DDT's full `explain_name` run still withholds end-to-end, though
-    # now via the unrelated `chloro` segment instead -- `1,1,1-trichloro-`
-    # owns five chlorines while claiming only three, so 5 > 3 fires this
-    # same clause there.
+    # occurrence uncovered.
     contributors: dict[str, int] = {}
     for part in result.parts:
         if part.kind == "substituent":
             key = part.text.strip("-")
             contributors[key] = contributors.get(key, 0) + 1
+    claims = _compute_claims(tokens, runs, modifier_run)
     for position, segment in enumerate(spanned):
         if segment["kind"] != "substituent":
             continue
+        run = by_position.get(position)
+        if run is None:
+            continue
         owned_by = contributors.get(segment["label"], 1)
-        if owned_by > spans.claims.get(position, 1):
+        if owned_by > claims.get(position, 1):
             logger.debug(
-                "name_spans: %r withheld -- the %r segment collects %d parts "
-                "but its span %r claims only %d, so some of its atoms are "
+                "explain: %r withheld -- the %r segment collects %d parts "
+                "but its run %r claims only %d, so some of its atoms are "
                 "named by text no span covers",
                 name, segment["label"], owned_by,
-                name[slice(*spans.parts[position])], spans.claims.get(position, 1),
+                name[run.start:run.end], claims.get(position, 1),
             )
             return
 
     for position, segment in enumerate(spanned):
-        span = spans.parts.get(position)
-        if span is not None:
-            segment["name_range"] = list(span)
+        run = by_position.get(position)
+        if run is None:
+            continue
+        segment["name_range"] = [run.start, run.end]
         # Locants are nested PER PART, not flat: a locant string is not unique
         # within a name. Caffeine's "3" appears in both "1,3,7-" (the methyls)
         # and "3,7-" (the hydro prefix); a flat lookup would give the modifier
         # the methyls' letters.
-        found = spans.locants.get(position, {})
+        found = _locants_within(tokens, run.start, run.end)
         for child in segment["children"]:
             child_span = found.get(child["locant"])
             if child_span is not None:
                 child["name_range"] = list(child_span)
 
     if want_modifier:
-        modifier_span = spans.parts.get(MODIFIER_KEY)
-        modifier_locants = spans.locants.get(MODIFIER_KEY, {})
+        found = _locants_within(tokens, modifier_run.start, modifier_run.end)
         for segment in segments:
             if segment["kind"] != "modifier":
                 continue
-            if modifier_span is not None:
-                segment["name_range"] = list(modifier_span)
+            segment["name_range"] = [modifier_run.start, modifier_run.end]
             for child in segment["children"]:
-                child_span = modifier_locants.get(child["locant"])
+                child_span = found.get(child["locant"])
                 if child_span is not None:
                     child["name_range"] = list(child_span)
 
