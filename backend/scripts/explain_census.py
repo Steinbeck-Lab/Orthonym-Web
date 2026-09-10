@@ -30,13 +30,15 @@ def walk(segments):
         yield from walk(segment.get("children") or [])
 
 
-def classify(payload: dict) -> list[str]:
-    """Outcome labels for one explain_name result. ENGINE_ERROR is exclusive:
-    a name that never decomposed has no spans to judge, and reporting both
-    would double-count it against two different causes.
+def _classify(payload: dict):
+    """Shared implementation for classify() and run(): walks the segment
+    tree exactly once and returns (outcome, segments, span_bearing), so a
+    caller that also needs the segments (run(), for its n_span_bearing /
+    n_with_range columns) does not have to walk the same tree a second
+    time to get an outcome.
     """
     if payload.get("error"):
-        return ["ENGINE_ERROR"]
+        return ["ENGINE_ERROR"], [], []
 
     segments = list(walk(payload.get("segments") or []))
     span_bearing = [s for s in segments if s.get("kind") in SPAN_BEARING]
@@ -57,7 +59,16 @@ def classify(payload: dict) -> list[str]:
         outcome.append("UNMAPPED")
     if atom_gap:
         outcome.append("ATOM_GAP")
-    return outcome or ["CLEAN"]
+    return outcome or ["CLEAN"], segments, span_bearing
+
+
+def classify(payload: dict) -> list[str]:
+    """Outcome labels for one explain_name result. ENGINE_ERROR is exclusive:
+    a name that never decomposed has no spans to judge, and reporting both
+    would double-count it against two different causes.
+    """
+    outcome, _segments, _span_bearing = _classify(payload)
+    return outcome
 
 
 def run(corpus) -> list[dict]:
@@ -66,12 +77,11 @@ def run(corpus) -> list[dict]:
     rows = []
     for index, (axis, name) in enumerate(corpus, 1):
         payload = explain_name(name)
-        segments = list(walk(payload.get("segments") or []))
-        span_bearing = [s for s in segments if s.get("kind") in SPAN_BEARING]
+        outcome, _segments, span_bearing = _classify(payload)
         rows.append({
             "axis": axis,
             "name": name,
-            "outcome": classify(payload),
+            "outcome": outcome,
             "n_span_bearing": len(span_bearing),
             "n_with_range": len([
                 s for s in span_bearing if s.get("name_range") is not None
@@ -93,7 +103,7 @@ def table(rows) -> str:
 
     lines = [
         f"{'axis':24s} {'n':>4s} {'clean':>6s} {'spansNONE':>10s} "
-        f"{'partial':>8s} {'engErr':>7s} {'unmap':>6s}"
+        f"{'partial':>8s} {'engErr':>7s} {'unmap':>6s} {'atomGap':>7s}"
     ]
     for axis in sorted(by_axis):
         subset = by_axis[axis]
@@ -102,12 +112,14 @@ def table(rows) -> str:
             f"{count(subset, 'SPANS_NONE'):10d} "
             f"{count(subset, 'SPANS_PARTIAL'):8d} "
             f"{count(subset, 'ENGINE_ERROR'):7d} "
-            f"{count(subset, 'UNMAPPED'):6d}"
+            f"{count(subset, 'UNMAPPED'):6d} "
+            f"{count(subset, 'ATOM_GAP'):7d}"
         )
     lines.append(
         f"{'TOTAL':24s} {len(rows):4d} {count(rows, 'CLEAN'):6d} "
         f"{count(rows, 'SPANS_NONE'):10d} {count(rows, 'SPANS_PARTIAL'):8d} "
-        f"{count(rows, 'ENGINE_ERROR'):7d} {count(rows, 'UNMAPPED'):6d}"
+        f"{count(rows, 'ENGINE_ERROR'):7d} {count(rows, 'UNMAPPED'):6d} "
+        f"{count(rows, 'ATOM_GAP'):7d}"
     )
     return "\n".join(lines)
 
