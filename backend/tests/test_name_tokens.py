@@ -192,3 +192,71 @@ def test_purin_does_not_reach_back_over_the_modifier_region():
     # whole -- not stolen by the previous run, not dropped by this one.
     for earlier, later in zip(runs, runs[1:]):
         assert earlier.end <= later.start
+
+
+# ---------------------------------------------------------------------------
+# find_modifier_run: assign_runs itself never covers the hydro / indicated-
+# hydrogen region -- it has no group text of its own to anchor on. These
+# tests use the same real caffeine token stream as
+# test_purin_does_not_reach_back_over_the_modifier_region above.
+# ---------------------------------------------------------------------------
+
+
+def _caffeine_tokens():
+    return toks(
+        ("1,3,7-", "locant"), ("tri", "diOrTri"),
+        ("meth", "alkaneStemTrivial"), ("yl", "inlineSuffix"),
+        ("-", "interSubstituentHyphen"), ("3,7-", "locant"),
+        ("di", "diOrTri"), ("hydro", "hydro"),
+        ("-", "hyphen"), ("1H-", "bigCapitalH"),
+        ("purin", "trivialRing"), ("e", "e"),
+        ("-", "hyphen"), ("2,6-", "locant"),
+        ("di", "diOrTri"), ("one", "nonAcidStemSuffix"),
+    )
+
+
+def test_caffeines_modifier_run_covers_exactly_the_gap_between_its_neighbours():
+    """The pin: caffeine's modifier run must be [16, 31) -- the region
+    `assign_runs` itself leaves uncovered between the methyl run's [0, 16)
+    and the purine run's [31, 37).
+    """
+    from app.name_tokens import find_modifier_run
+
+    tokens = _caffeine_tokens()
+    name = "".join(t.text for t in tokens)
+    runs = assign_runs(tokens, ["meth", "purin", "one"])
+    assert runs is not None
+
+    modifier = find_modifier_run(tokens, runs)
+    assert modifier is not None
+    assert (modifier.start, modifier.end) == (16, 31)
+    assert name[modifier.start:modifier.end] == "3,7-dihydro-1H-"
+
+
+def test_the_modifier_run_does_not_walk_back_over_a_neighbours_hyphen():
+    """Regression for the exact bug name_spans.py's own MODIFIER_KEY branch
+    was fixed for: without the "already claimed" bound, growing left from
+    the first mark walks back over the methyl run's own trailing hyphen
+    (index 4) and produces [15, 31) against the methyl's [0, 16) -- an
+    overlap.
+    """
+    from app.name_tokens import find_modifier_run
+
+    tokens = _caffeine_tokens()
+    runs = assign_runs(tokens, ["meth", "purin", "one"])
+    assert runs is not None
+
+    modifier = find_modifier_run(tokens, runs)
+    assert modifier is not None
+    methyl_run = runs[0]
+    assert modifier.start >= methyl_run.end
+    assert modifier.start == 16
+
+
+def test_no_modifier_marks_returns_none():
+    from app.name_tokens import find_modifier_run
+
+    tokens = toks(("meth", "alkaneStemTrivial"), ("yl", "inlineSuffix"))
+    runs = assign_runs(tokens, ["meth"])
+    assert runs is not None
+    assert find_modifier_run(tokens, runs) is None

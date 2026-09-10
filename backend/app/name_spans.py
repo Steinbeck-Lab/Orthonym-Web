@@ -24,19 +24,18 @@ from __future__ import annotations
 import logging
 from typing import NamedTuple, Optional
 
-from .name_tokens import _LEADING, _TRAILING
+from .name_tokens import _LEADING, _MODIFIER, _TRAILING
 from .opsin_tokenizer import tokenize
 
 logger = logging.getLogger(__name__)
 
-# _LEADING and _TRAILING (which categories decorate a content token, and from
-# which side) now live in `name_tokens.py`, imported above, since
-# `assign_runs` there needs the exact same growth rule and a second, drifted
-# copy of the same rationale is a defect waiting to happen. See that module
-# for the full comments -- moved, not duplicated.
-
-# The hydro / indicated-hydrogen run, which is its own referential part.
-_MODIFIER = frozenset({"hydro", "bigCapitalH"})
+# _LEADING, _TRAILING (which categories decorate a content token, and from
+# which side) and _MODIFIER (which categories mark the hydro / indicated-
+# hydrogen run, its own referential part) now live in `name_tokens.py`,
+# imported above, since `assign_runs`/`find_modifier_run` there need the
+# exact same definitions and a second, drifted copy of the same rationale
+# is a defect waiting to happen. See that module for the full comments --
+# moved, not duplicated.
 
 # Multiplier tokens, and what each one's text says about HOW MANY instances of
 # the following group its own span names. Used only by `claims` below, whose

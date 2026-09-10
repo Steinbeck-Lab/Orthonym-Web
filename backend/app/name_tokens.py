@@ -127,6 +127,14 @@ _TRAILING = frozenset({
     "interSubstituentHyphen",
 })
 
+# The hydro / indicated-hydrogen run, which is its own REFERENTIAL run:
+# `assign_runs` above never anchors on it, because it has no group text of
+# its own -- see `find_modifier_run` below. Shared with `name_spans.py`,
+# which imports it from here rather than keeping its own copy, for the same
+# reason _LEADING/_TRAILING are shared: a second, drifted definition is a
+# defect waiting to happen.
+_MODIFIER = frozenset({"hydro", "bigCapitalH"})
+
 
 def _find_contiguous_anchor(tokens: list, cursor: int, want: str):
     """Find the first position at or after `cursor` where a CONTIGUOUS run of
@@ -268,3 +276,62 @@ def assign_runs(tokens: list, part_texts: list) -> Optional[list]:
             logger.debug("name_tokens: runs overlap -- withholding")
             return None
     return runs
+
+
+def find_modifier_run(tokens: list, runs: list) -> Optional[Run]:
+    """The hydro / indicated-hydrogen run, if this name has one.
+
+    `assign_runs` above only ever anchors a PART's own group text, and the
+    modifier has none -- it is a referential run (spec: `modifier`/`stereo`
+    kinds own no atoms), so it needs its own pass. `_MODIFIER`-category
+    tokens mark it: from the first such token to the last, grown LEFT over
+    `_LEADING` exactly like a real run's own left-growth, but never
+    crossing into a token any of `runs` already claims (consumed or
+    filler).
+
+    Ported from `name_spans.py`'s MODIFIER_KEY branch (see that module,
+    step 3): the "already claimed" bound is not optional. Verified on
+    caffeine -- without it, growing left from the first mark walks back
+    over the methyl run's own trailing hyphen (token 4) and produces
+    [15, 31) against the methyl's [0, 16), an overlap that makes the
+    caller discard every span in the name.
+
+    Growth is LEFT only, matching the ported branch: nothing grows the
+    right edge past the last mark, because the token immediately after it
+    always belongs to the next real run.
+
+    Returns None if the name carries no `_MODIFIER`-category token at all,
+    or -- construction should already prevent this, kept as the same cheap
+    insurance `assign_runs` gives its own runs -- if the derived span turns
+    out to overlap one of `runs` anyway.
+    """
+    marks = [i for i, t in enumerate(tokens) if t.category in _MODIFIER]
+    if not marks:
+        return None
+    first, last = marks[0], marks[-1]
+
+    claimed: set = set()
+    for run in runs:
+        claimed.update(run.consumed)
+        claimed.update(run.fillers)
+
+    grown_start = first
+    while (
+        grown_start - 1 >= 0
+        and tokens[grown_start - 1].category in _LEADING
+        and (grown_start - 1) not in claimed
+    ):
+        grown_start -= 1
+
+    start, end = tokens[grown_start].start, tokens[last].end
+    for run in runs:
+        if start < run.end and run.start < end:
+            logger.debug(
+                "name_tokens: modifier run overlaps an existing run -- "
+                "withholding"
+            )
+            return None
+
+    consumed = tuple(range(first, last + 1))
+    fillers = tuple(range(grown_start, first))
+    return Run((), consumed, fillers, start, end)
