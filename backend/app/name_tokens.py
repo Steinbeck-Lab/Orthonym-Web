@@ -24,6 +24,24 @@ Two measured facts shape the algorithm:
 So the bridge between offsets (which live pre-ComponentGenerator) and atoms
 (which live post-buildFragment) is TEXT: a part's merged value is the
 concatenation of the run of raw tokens it absorbed.
+
+A first draft of this module resolved that subsequence gap by letting the
+matcher SKIP any non-continuing token, unboundedly, while hunting for where a
+part's text picks up again. That is wrong: a part's own text can recur later
+in the stream (`purin` also matches inside `...1H-purine...`), so an unbounded
+skip lets a part reach forward and claim every token in between as filler --
+measured on caffeine itself, where `purin` swallowed the entire
+`yl-3,7-dihydro-1H-` modifier region between "meth" and "purin" instead of
+just "purine". `app/name_spans.py` already carried the fix for exactly this,
+from before this module existed: a part's core text must be a CONTIGUOUS run
+(no interior skipping at all), and everything around that core -- locants,
+multiplier words, hyphens, elision vowels, the suffix that closes a stem --
+is recovered separately, by growing the contiguous anchor outward over a
+curated set of decorating categories, bounded by where the NEIGHBOURING run
+already starts or ends. `_LEADING`/`_TRAILING` below, and the two-pass anchor-
+then-grow shape of `assign_runs`, are that mechanism moved here so both this
+module and `name_spans.py` share one definition instead of two that could
+drift apart.
 """
 
 from __future__ import annotations
@@ -61,74 +79,101 @@ class Run(NamedTuple):
     end: int
 
 
-# Two shapes of trailing connective token are safe to sweep into the run that
-# just finished, rather than left for the next part to claim as a leading
-# filler (the default, via the non-matching-prefix skip in `_match_one`
-# below): an elision vowel and a hyphen. Both are safe because neither
-# carries an identity of its own that could be misattributed -- unlike a
-# locant (whose digits belong to whichever part they introduce) or a bracket
-# or multiplier word (which conventionally open what comes AFTER them, not
-# close what came before). OPSIN's tokenizer names an elision-vowel category
-# after the letter itself, so the category string equals one of these three
-# single characters -- confirmed against `regexes.xml` (`%a%`, `%e%`,
-# `%o%`), and matching the measured drops in `benzo[a]pyrene` (trailing `e`)
-# and `octadecanoic acid` (`a`, `o`).
-_ELISION_VOWEL_CATEGORIES = frozenset({"a", "e", "o"})
+# The single source of truth for which categories decorate a content run and
+# which side they decorate it from -- shared with `name_spans.py`, which
+# imports both sets from here rather than keeping its own copy. Moved here,
+# not copied, so the two callers cannot drift apart.
+#
+# Tokens that decorate the CONTENT run AFTER them and belong to ITS run:
+# "1,3,7-" and "tri" belong to "meth", not to whatever precedes them.
+#
+# "openBracket" and "stereochemistryBracket" are deliberately NOT here. A
+# bracket is structural -- it groups a DIFFERENT run's substituent, not a
+# decoration of the run that happens to sit just inside it. With brackets
+# in _LEADING, a run's left-growth walked straight through the bracket and
+# swallowed the locant token belonging to whatever the bracket encloses:
+# in "2-[4-(2-methylpropyl)phenyl]propanoic acid" the methyl's left-growth
+# walked all the way back to index 0 and adopted the PARENT propanoic acid's
+# "2" as if it were the methyl's own, producing the methyl's span ==
+# (0, 14) == "2-[4-(2-methyl" and its locant "2" == (0, 1) instead of the
+# methyl's real locant "2" at index 6. Every proof still passed (the text
+# is "2" and it sits inside the run's own span) -- this is a confidently
+# wrong highlight, not a missing one.
+_LEADING = frozenset({
+    "locant", "diOrTri", "multiplier", "groupMultiplier",
+    "alkaneStemModifier", "cyclo",
+    "hyphen", "interSubstituentHyphen",
+})
+
+# Tokens that close the content run BEFORE them and belong to ITS run:
+# "yl" and the substituent's trailing hyphen belong to "meth".
+#
+# A plain "hyphen" is deliberately NOT here, only "interSubstituentHyphen".
+# In caffeine the hyphen after "purine" is a plain hyphen; absorbing it would
+# make the parent span read "purine-" instead of "purine", and would steal the
+# character that lets the suffix run claim "-2,6-dione".
+#
+# "closeBracket" IS deliberately here, and it is the mirror image of the
+# _LEADING note above rather than a contradiction of it. Growing LEFT through
+# an openBracket is unsafe because the tokens beyond it (a locant) make a real
+# claim about atoms that belong to a different run. A closing bracket claims
+# no atom at all, so absorbing it can only ever be cosmetic -- ibuprofen's
+# spans read "propyl)" and "phenyl]" -- never a wrong letters-to-atoms claim.
+# Dropping it would merely move those two characters into the uncovered class
+# while perturbing spans that are pinned by measurement.
+_TRAILING = frozenset({
+    "inlineSuffix", "nonAcidStemSuffix", "suffixesThatCanBeModifiedByAPrefix",
+    "e", "ane", "an", "o", "closeBracket",
+    "interSubstituentHyphen",
+})
 
 
-def _is_trailing_filler_category(category: str) -> bool:
-    """Would this token's own category mark it as unsemantic connective
-    material that CLOSES the word just matched, rather than opening the
-    next one?
+def _find_contiguous_anchor(tokens: list, cursor: int, want: str):
+    """Find the first position at or after `cursor` where a CONTIGUOUS run of
+    tokens concatenates exactly to `want`, with no interior gaps.
 
-    Only elision vowels and hyphens qualify -- see the module-level comment
-    above for why locants, brackets and multiplier words are deliberately
-    excluded even though the docstring on `Run.fillers` lists them as filler
-    kinds in general: those still end up recorded as fillers, just as
-    LEADING fillers of the next run, which is where their identity actually
-    belongs.
+    Returns `(start_index, end_index_inclusive)`, or None if no such run
+    exists anywhere from `cursor` onward. Trying `want` starting at token `i`
+    is abandoned the moment the next token cannot continue it -- there is no
+    fallback to skipping ahead within that same attempt, only a fresh
+    attempt at `i + 1`. That is what makes this a CONTIGUOUS match rather
+    than a subsequence one: a part's own text recurring later in the stream
+    (`purin` also occurring inside `...1H-purine...` is not this case, but a
+    stem reappearing under a different locant is) must never let this run
+    reach across unrelated tokens to find it.
     """
-    if category in _ELISION_VOWEL_CATEGORIES:
-        return True
-    return "hyphen" in category.lower()
+    for start in range(cursor, len(tokens)):
+        accumulated = ""
+        index = start
+        while index < len(tokens) and want.startswith(accumulated + tokens[index].text):
+            accumulated += tokens[index].text
+            if accumulated == want:
+                return start, index
+            index += 1
+    return None
 
 
-def _match_one(tokens: list, cursor: int, want: str):
-    """Consume tokens from `cursor` until their concatenation equals `want`,
-    then greedily sweep any immediately following unsemantic tokens into the
-    same run.
+def _group_locant_matches(tokens: list, start_idx: int, lower_bound: int, wanted: int) -> bool:
+    """Does a locant token immediately decorating this anchor list exactly
+    `wanted` locants?
 
-    Returns (consumed, fillers, next_cursor) or None. A token whose text does
-    not continue `want` is a filler and is skipped -- that is what makes this
-    a subsequence match rather than a contiguous one, and it is required
-    because the parse tree drops tokens the stream keeps.
-
-    Once `want` is exactly built, a hyphen or elision vowel sitting right
-    after it (e.g. caffeine's trailing `-` after `methyl`, or `benzo[a]pyrene`'s
-    trailing `e`) is swept in too: it closes this word rather than opening the
-    next one, and if this is the LAST part there is no next run to claim it as
-    a leading filler at all -- it would otherwise dangle, unclaimed by
-    anything, which is what left the trailing `e`/`-` out of the run entirely
-    in an earlier draft of this function.
+    Walks backward from `start_idx` through consecutive `_LEADING`-category
+    tokens -- the same walk left-growth performs -- stopping at the first
+    token that is not `_LEADING`, or at `lower_bound` (the previous run's raw
+    anchor end, so this scan can never reach back over a run already
+    assigned). This is what separates caffeine's three cloned methyls under
+    `1,3,7-` (wanted=3, found) from two separate `chloro` occurrences that
+    merely share a text (never even attempted, since DDT's two `chloro`
+    parts are not consecutive in `part_texts`).
     """
-    accumulated = ""
-    consumed: list[int] = []
-    fillers: list[int] = []
-    index = cursor
-    while index < len(tokens) and accumulated != want:
-        text = tokens[index].text
-        if want.startswith(accumulated + text):
-            accumulated += text
-            consumed.append(index)
-        else:
-            fillers.append(index)
-        index += 1
-    if accumulated != want:
-        return None
-    while index < len(tokens) and _is_trailing_filler_category(tokens[index].category):
-        fillers.append(index)
-        index += 1
-    return consumed, fillers, index
+    index = start_idx - 1
+    while index > lower_bound and tokens[index].category in _LEADING:
+        if tokens[index].category == "locant":
+            pieces = [p for p in tokens[index].text.replace("-", "").split(",") if p]
+            if len(pieces) == wanted:
+                return True
+        index -= 1
+    return False
 
 
 def assign_runs(tokens: list, part_texts: list) -> Optional[list]:
@@ -137,14 +182,27 @@ def assign_runs(tokens: list, part_texts: list) -> Optional[list]:
     None is not an error. It is the honesty rule: a name whose runs cannot be
     accounted for withholds every span rather than shipping some regions live
     and some dead, which would look identical to the reader.
+
+    Two passes. Pass 1 anchors each part (or candidate group of consecutive
+    parts sharing one merged value) to a CONTIGUOUS run of raw tokens,
+    monotonically left to right. Pass 2 grows each anchor outward over
+    `_LEADING`/`_TRAILING` decoration: left growth is bounded by the PREVIOUS
+    run's already-grown end (not its anchor -- using the anchor would let a
+    run reach back over tokens its neighbour already took, which matters
+    because `interSubstituentHyphen` sits in both sets), and right growth is
+    bounded by the NEXT run's raw (ungrown) anchor start, so a token both
+    neighbours could claim goes to whichever one reaches it via its own
+    bound, never both.
     """
     if not tokens or not part_texts:
         # Nothing to anchor on, so nothing can be proven. An empty list would
         # read as success to every caller.
         return None
 
-    runs: list[Run] = []
+    # Pass 1: anchor.
+    raw_anchors: list = []  # (part_indices, start_idx, end_idx_inclusive)
     cursor = 0
+    prev_raw_end = -1
     position = 0
     while position < len(part_texts):
         want = part_texts[position]
@@ -153,54 +211,60 @@ def assign_runs(tokens: list, part_texts: list) -> Optional[list]:
         # multiplied substituent. Try them as one group first: the name spells
         # a multiplied substituent once, so a group is the only reading that
         # can succeed for caffeine. If the name really does spell the text
-        # again later (DDT), the group attempt still consumes exactly one
-        # occurrence and the next part matches the next occurrence -- so
-        # falling through to a per-part run happens naturally.
+        # again later (DDT), the two occurrences are never adjacent in
+        # `part_texts` in the first place, so no group is even attempted.
         group_end = position
         while group_end + 1 < len(part_texts) and part_texts[group_end + 1] == want:
             group_end += 1
 
-        matched = _match_one(tokens, cursor, want)
-        if matched is None:
+        anchor = _find_contiguous_anchor(tokens, cursor, want)
+        if anchor is None:
             logger.debug(
-                "name_tokens: no run for part %d (%r) from token %d",
+                "name_tokens: no contiguous run for part %d (%r) from token %d",
                 position, want, cursor,
             )
             return None
-        consumed, fillers, next_cursor = matched
+        start_idx, end_idx = anchor
 
-        group = tuple(range(position, group_end + 1))
-        if len(group) > 1 and not _locant_count_matches(tokens, consumed, fillers, len(group)):
+        group_size = group_end - position + 1
+        if group_size > 1 and not _group_locant_matches(tokens, start_idx, prev_raw_end, group_size):
             # The repeats are separate occurrences, not clones under one
             # locant. Take this run for THIS part only and let the next part
             # find its own occurrence.
-            group = (position,)
+            group_end = position
+            group_size = 1
 
-        start = tokens[min(consumed + fillers)].start
-        end = tokens[max(consumed + fillers)].end
-        runs.append(Run(group, tuple(consumed), tuple(fillers), start, end))
-        cursor = next_cursor
-        position = group[-1] + 1
+        raw_anchors.append((tuple(range(position, group_end + 1)), start_idx, end_idx))
+        prev_raw_end = end_idx
+        cursor = end_idx + 1
+        position = group_end + 1
 
-    # Prove it: non-overlapping and strictly increasing.
+    # Pass 2: grow.
+    runs: list[Run] = []
+    last_end_index = -1
+    for position, (group, start_idx, end_idx) in enumerate(raw_anchors):
+        grown_start = start_idx
+        while (
+            grown_start - 1 > last_end_index
+            and tokens[grown_start - 1].category in _LEADING
+        ):
+            grown_start -= 1
+        limit = raw_anchors[position + 1][1] if position + 1 < len(raw_anchors) else len(tokens)
+        grown_end = end_idx
+        while grown_end + 1 < limit and tokens[grown_end + 1].category in _TRAILING:
+            grown_end += 1
+
+        consumed = tuple(range(start_idx, end_idx + 1))
+        fillers = tuple(range(grown_start, start_idx)) + tuple(range(end_idx + 1, grown_end + 1))
+        runs.append(Run(group, consumed, fillers, tokens[grown_start].start, tokens[grown_end].end))
+        last_end_index = grown_end
+
+    # Prove it: non-overlapping and strictly increasing. Construction already
+    # guarantees this (each run's grown_start is bounded by the previous run's
+    # grown_end), but the check is cheap insurance against a future change to
+    # either pass breaking that invariant silently.
     for earlier, later in zip(runs, runs[1:]):
         if earlier.end > later.start:
             logger.debug("name_tokens: runs overlap -- withholding")
             return None
     return runs
-
-
-def _locant_count_matches(tokens: list, consumed, fillers, wanted: int) -> bool:
-    """Does a locant token inside this run list exactly `wanted` locants?
-
-    This is what separates caffeine's three cloned methyls under `1,3,7-`
-    from two separate `chloro` occurrences that merely share a text.
-    """
-    for index in consumed + fillers:
-        token = tokens[index]
-        if token.category != "locant":
-            continue
-        pieces = [p for p in token.text.replace("-", "").split(",") if p]
-        if len(pieces) == wanted:
-            return True
-    return False

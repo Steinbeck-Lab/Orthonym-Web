@@ -24,52 +24,16 @@ from __future__ import annotations
 import logging
 from typing import NamedTuple, Optional
 
+from .name_tokens import _LEADING, _TRAILING
 from .opsin_tokenizer import tokenize
 
 logger = logging.getLogger(__name__)
 
-# Tokens that decorate the CONTENT token after them and belong to its part:
-# "1,3,7-" and "tri" belong to "meth", not to whatever precedes them.
-#
-# "openBracket" and "stereochemistryBracket" are deliberately NOT here. A
-# bracket is structural -- it groups a DIFFERENT part's substituent, not a
-# decoration of the part that happens to sit just inside it. With brackets
-# in _LEADING, a part's left-growth walked straight through the bracket and
-# swallowed the locant token belonging to whatever the bracket encloses:
-# in "2-[4-(2-methylpropyl)phenyl]propanoic acid" the methyl's left-growth
-# walked all the way back to index 0 and adopted the PARENT propanoic acid's
-# "2" as if it were the methyl's own, producing the methyl's part span ==
-# (0, 14) == "2-[4-(2-methyl" and its locant "2" == (0, 1) instead of the
-# methyl's real locant "2" at index 6. Every proof still passed (the text
-# is "2" and it sits inside the part's own span) -- this is a confidently
-# wrong highlight, not a missing one.
-_LEADING = frozenset({
-    "locant", "diOrTri", "multiplier", "groupMultiplier",
-    "alkaneStemModifier", "cyclo",
-    "hyphen", "interSubstituentHyphen",
-})
-
-# Tokens that close the content token BEFORE them and belong to its part:
-# "yl" and the substituent's trailing hyphen belong to "meth".
-#
-# A plain "hyphen" is deliberately NOT here, only "interSubstituentHyphen".
-# In caffeine the hyphen after "purine" is a plain hyphen; absorbing it would
-# make the parent span read "purine-" instead of "purine", and would steal the
-# character that lets the suffix run claim "-2,6-dione".
-#
-# "closeBracket" IS deliberately here, and it is the mirror image of the
-# _LEADING note above rather than a contradiction of it. Growing LEFT through
-# an openBracket is unsafe because the tokens beyond it (a locant) make a real
-# claim about atoms that belong to a different part. A closing bracket claims
-# no atom at all, so absorbing it can only ever be cosmetic -- ibuprofen's
-# spans read "propyl)" and "phenyl]" -- never a wrong letters-to-atoms claim.
-# Dropping it would merely move those two characters into the uncovered class
-# while perturbing spans that are pinned by measurement.
-_TRAILING = frozenset({
-    "inlineSuffix", "nonAcidStemSuffix", "suffixesThatCanBeModifiedByAPrefix",
-    "e", "ane", "an", "o", "closeBracket",
-    "interSubstituentHyphen",
-})
+# _LEADING and _TRAILING (which categories decorate a content token, and from
+# which side) now live in `name_tokens.py`, imported above, since
+# `assign_runs` there needs the exact same growth rule and a second, drifted
+# copy of the same rationale is a defect waiting to happen. See that module
+# for the full comments -- moved, not duplicated.
 
 # The hydro / indicated-hydrogen run, which is its own referential part.
 _MODIFIER = frozenset({"hydro", "bigCapitalH"})
