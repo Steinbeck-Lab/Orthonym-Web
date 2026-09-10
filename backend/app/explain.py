@@ -461,7 +461,11 @@ def explain_name(name: str) -> dict:
         return {
             "smiles": "", "name": name, "svg": None, "atom_points": [], "total_atoms": 0,
             "segments": [],
-            "error": "OPSIN could not parse this name.",
+            # NOT "OPSIN could not parse this name" -- measured, 23 of 25
+            # names that reported that parse fine through the OPSIN 2.9.0
+            # CLI, and it fired on names STITCH generated itself
+            # (octadecanoic acid). The honest claim is about STITCH.
+            "error": "STITCH could not decompose this name.",
         }
 
     mol = Chem.MolFromSmiles(result.smiles)
