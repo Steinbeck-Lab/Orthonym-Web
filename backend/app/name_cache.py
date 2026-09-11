@@ -40,7 +40,11 @@ logger = logging.getLogger(__name__)
 # glycine was cached as a MISMATCH on a correct PIN. The engine fingerprint
 # below cannot see a change in THIS app's code, which is exactly what this
 # manual counter is for.
-_KEY_VERSION = "v4"
+# v5 (2026-09-11): vendor refresh to the latest OpenSTOUT. 261 modules against
+#     the previous 254 -- seven new handlers (chalcogen_oxide,
+#     imidoyl_thioyl_halide among them) and edits across every package, all
+#     still stamped "1.0.0" upstream, so _ENGINE_VERSION cannot see it.
+_KEY_VERSION = "v5"
 _ENGINE_VERSION = openstout.__version__
 
 
