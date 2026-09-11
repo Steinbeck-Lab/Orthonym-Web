@@ -228,6 +228,16 @@ def compute_spans(
 
     # 4b. What each span's own text CLAIMS -- see SpanSet.claims.
     #
+    # `explain.py`'s `_compute_claims` is a near-verbatim copy of this loop,
+    # windowed over `name_tokens.assign_runs`' RUN boundaries instead of the
+    # PARTS this function derives. That is the LIVE copy -- `_apply_name_spans`
+    # no longer calls `compute_spans` at all, so this one is unreachable from
+    # there (it is still exercised directly by this module's own tests).
+    # Task 7 deletes this loop along with `SpanSet.claims` and
+    # `_MULTIPLIER_VALUES`; not relocated now to avoid dragging
+    # `_MULTIPLIER_CATEGORIES`, `_MULTIPLIER_VALUES` and `_locant_subspans`
+    # along with code that is about to be deleted anyway.
+    #
     # Counted over the part's DECORATING NEIGHBOURHOOD, not just the span:
     # from the previous part's span end up to this part's own end. A span
     # cannot always reach the tokens that decorate it. `openBracket` is
