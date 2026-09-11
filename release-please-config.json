@@ -1,0 +1,55 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "package-name": "orthonym",
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": false,
+      "include-v-in-tag": true,
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": false,
+      "draft": false,
+      "prerelease": false,
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "frontend/package.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "changelog-sections": [
+        { "type": "feat", "section": "Features" },
+        { "type": "fix", "section": "Bug Fixes" },
+        { "type": "perf", "section": "Performance" },
+        { "type": "refactor", "section": "Refactoring" },
+        { "type": "docs", "section": "Documentation" },
+        { "type": "test", "section": "Tests", "hidden": true },
+        { "type": "build", "section": "Build", "hidden": true },
+        { "type": "ci", "section": "CI", "hidden": true },
+        { "type": "chore", "section": "Chores", "hidden": true }
+      ]
+    }
+  },
+  "$comment": [
+    "ONE version for the whole app, not one per package. The frontend and the",
+    "backend ship together -- `docker compose up -d --build` brings up both --",
+    "so two independently-moving versions would describe a split that does not",
+    "exist in the deployment.",
+    "",
+    "release-type is `simple`: it owns .release-please-manifest.json as the",
+    "source of truth and writes the version back into frontend/package.json",
+    "through extra-files. The backend has no version file of its own and does",
+    "not need one; app/name_cache.py already embeds orthonym.__version__ for",
+    "the only versioning that is load-bearing at runtime (cache invalidation).",
+    "",
+    "Starting at 0.1.0 on purpose. Under semver, 0.x says breaking changes are",
+    "expected -- which is the honest reading of a product whose own census",
+    "records 109 of 544 names still fully inert and one named regression.",
+    "bump-minor-pre-major keeps a `feat:` at 0.x -> 0.(x+1).0 rather than",
+    "jumping to 1.0.0 before the coverage story is finished.",
+    "",
+    "test/build/ci/chore are hidden from the changelog, not ignored: they still",
+    "bump the version, they just do not clutter release notes a user reads."
+  ]
+}
