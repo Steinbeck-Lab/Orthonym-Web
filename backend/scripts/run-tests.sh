@@ -16,7 +16,8 @@
 #   backend/scripts/run-tests.sh                        # whole suite
 #   backend/scripts/run-tests.sh tests/test_inputs.py -v
 #
-# Exit: 0 all passed, 1 tests failed, 2 no summary appeared (real hang).
+# Exit: 0 all passed, 1 tests failed, 2 no summary appeared (real hang),
+# 3 no interpreter found (see the venv resolution below).
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
@@ -24,11 +25,29 @@ cd "$(dirname "$0")/.."
 LOG=${ORTHONYM_TEST_LOG:-/tmp/orthonym-pytest.log}
 : > "$LOG"
 
-# .venv-mac, not .venv: the committed .venv is a Linux venv built at
-# /home/kohulan/Orthonym-Web and cannot run on macOS.
+# .venv-mac and .venv are not interchangeable: a venv is tied to the OS
+# and interpreter it was built with, and orthonym pulls in compiled
+# native deps (rdkit, JPype's JVM bridge), so a Linux .venv cannot run on
+# macOS and vice versa. Prefer .venv-mac when it exists so the
+# maintainer's macOS workflow stays byte-identical to before this
+# detection was added; otherwise fall back to .venv, the Linux venv
+# CLAUDE.md/INSTALL.md have every other command run through. Fail loudly
+# and by name rather than silently running the wrong interpreter (or
+# failing deep inside pytest with an obscure import error) when neither
+# is present.
+if [ -x .venv-mac/bin/python ]; then
+    PYTHON=.venv-mac/bin/python
+elif [ -x .venv/bin/python ]; then
+    PYTHON=.venv/bin/python
+else
+    echo "error: no interpreter at .venv-mac/bin/python or .venv/bin/python." >&2
+    echo "Build one (from backend/): python3 -m venv .venv && .venv/bin/pip install -r requirements.txt -r requirements-dev.txt" >&2
+    exit 3
+fi
+
 REDIS_URL=${REDIS_URL:-redis://localhost:6379/0} \
 PYTHONPATH="$(pwd)" \
-  .venv-mac/bin/python -m pytest "$@" > "$LOG" 2>&1 &
+  "$PYTHON" -m pytest "$@" > "$LOG" 2>&1 &
 PYTEST_PID=$!
 
 # Matches BOTH pytest's banner form ("==== 4 passed in 0.1s ====") and the

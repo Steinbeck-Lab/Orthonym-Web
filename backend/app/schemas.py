@@ -130,7 +130,7 @@ class IupacToSmilesResponse(BaseModel):
 
 
 SegmentKind = Literal[
-    "substituent", "parent", "suffix", "modifier", "stereo", "unmapped"
+    "substituent", "parent", "suffix", "modifier", "stereo", "unmapped", "token"
 ]
 
 

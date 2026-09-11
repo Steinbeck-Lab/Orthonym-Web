@@ -49,7 +49,13 @@ def test_caffeine_exposes_a_modifier_segment_owning_no_atoms():
     assert len(modifiers) == 1
     assert modifiers[0]["owns_atoms"] is False
     assert modifiers[0]["atom_indices"] == []
-    assert sorted(c["locant"] for c in modifiers[0]["children"]) == ["1", "3", "7"]
+    # Filtered to kind == "modifier": the modifier segment's children now
+    # also include TOKEN siblings ("di", "hydro", the "1H-" token itself),
+    # which carry locant=None and would otherwise blow up the sort below.
+    locants = sorted(
+        c["locant"] for c in modifiers[0]["children"] if c["kind"] == "modifier"
+    )
+    assert locants == ["1", "3", "7"]
 
 
 def test_modifier_highlights_ring_atoms_owned_by_the_parent():
@@ -87,7 +93,9 @@ def test_caffeine_modifier_children_pin_the_exact_ring_nitrogen_each_names():
 def test_modifier_children_are_locant_sorted():
     result = explain_name(CAFFEINE)
     modifier = next(s for s in result["segments"] if s["kind"] == "modifier")
-    assert [c["locant"] for c in modifier["children"]] == ["1", "3", "7"]
+    # Filtered to kind == "modifier" for the same reason as above.
+    locants = [c["locant"] for c in modifier["children"] if c["kind"] == "modifier"]
+    assert locants == ["1", "3", "7"]
 
 
 def test_a_substituents_indicated_hydrogen_is_never_put_on_a_parent_atom():
@@ -107,6 +115,11 @@ def test_a_substituents_indicated_hydrogen_is_never_put_on_a_parent_atom():
         "indole's 1H must not highlight any parent atom"
     )
     for child in modifier["children"]:
+        # Token siblings (the "1H-" token itself, now hoverable on its own
+        # account) are not this test's concern -- it is about the
+        # UNMAPPED locant child indole's substituent-scoped "1H" produces.
+        if child["kind"] == "token":
+            continue
         assert child["kind"] == "unmapped", child
         assert child["highlight_atoms"] == [], child
         assert child["atom_indices"] == [], child
@@ -122,8 +135,13 @@ def test_an_unresolvable_modifier_is_reported_not_dropped():
     result = explain_name(INDANONE)
     assert result["error"] is None
     modifier = next(s for s in result["segments"] if s["kind"] == "modifier")
-    assert sorted(c["locant"] for c in modifier["children"]) == ["1", "2", "3"]
-    assert {c["kind"] for c in modifier["children"]} == {"unmapped"}
+    # Filtered to non-token children: the modifier segment's own token
+    # siblings ("di", "hydro", the "1H-" token) carry locant=None and are a
+    # separate concern from the per-locant unmapped children this test is
+    # about.
+    non_token = [c for c in modifier["children"] if c["kind"] != "token"]
+    assert sorted(c["locant"] for c in non_token) == ["1", "2", "3"]
+    assert {c["kind"] for c in non_token} == {"unmapped"}
     assert modifier["highlight_atoms"] == []
 
 
@@ -135,7 +153,12 @@ def test_children_have_distinct_locants():
         if result["error"]:
             continue
         for segment in result["segments"]:
-            locants = [c["locant"] for c in segment["children"]]
+            # Token children legitimately share locant=None (they are not
+            # addressed by locant at all); only the real locant children
+            # are this test's concern.
+            locants = [
+                c["locant"] for c in segment["children"] if c["locant"] is not None
+            ]
             assert len(locants) == len(set(locants)), (
                 f"{name}: {segment['label']} repeats a locant: {locants}"
             )
