@@ -155,37 +155,6 @@ _TRAILING = frozenset({
 # `compute_spans`, proved to have no production caller.
 _MODIFIER = frozenset({"hydro", "bigCapitalH"})
 
-# Moved from `name_spans.py` (Task 7), which was deleted once its only
-# consumer -- `compute_spans` -- turned out to have no production caller.
-# These three are still live: `explain.py` imports them from here for
-# `_compute_claims` and `_locants_within`.
-#
-# Multiplier tokens, and what each one's text says about HOW MANY instances of
-# the following group its own span names. Used by `explain.py`'s
-# `_compute_claims`, whose job is to let a caller ask "can this one span
-# honestly account for every atom my segment owns?".
-#
-# `tetrOrHigher` is here because OPSIN emits the higher multipliers as TWO
-# tokens: "tetra" arrives as ('tetr','tetrOrHigher') + ('a','a'), and "hexa"
-# as ('hex','tetrOrHigher') + ('a','a'). Without this category the multiplier
-# is invisible, and an unlocanted name like `hexamethylbenzene` -- which has
-# no locant list to count instead -- withholds its spans entirely.
-_MULTIPLIER_CATEGORIES = frozenset({
-    "multiplier", "diOrTri", "groupMultiplier", "tetrOrHigher",
-})
-
-# The bare stems below (tetr, pent, hex, ...) are the two-token form's first
-# half. Listing "hex" is safe ONLY because the category gate above runs
-# first: cyclohexane's "hex" is category alkaneStemTrivial, never
-# tetrOrHigher, so it is never looked up here. Do not drop that gate.
-_MULTIPLIER_VALUES = {
-    "mono": 1, "di": 2, "bis": 2, "tri": 3, "tris": 3,
-    "tetra": 4, "tetrakis": 4, "penta": 5, "pentakis": 5,
-    "hexa": 6, "hexakis": 6, "hepta": 7, "octa": 8, "nona": 9, "deca": 10,
-    "tetr": 4, "pent": 5, "hex": 6, "hept": 7, "oct": 8, "non": 9, "dec": 10,
-}
-
-
 def _locant_subspans(token) -> dict:
     """Split a locant token into one span per individual locant.
 
@@ -406,3 +375,117 @@ def find_modifier_run(tokens: list, runs: list) -> Optional[Run]:
     consumed = tuple(range(first, last + 1))
     fillers = tuple(range(grown_start, first))
     return Run((), consumed, fillers, start, end)
+
+
+def collapse_cloned_blocks(keys: list) -> list[list[int]]:
+    """Fold a block of PART KEYS that repeats immediately, one or more
+    times, into one slot per position in the block -- each slot covering
+    every original index the repeats occupy.
+
+    A key is whatever the caller uses to decide "these two parts are the
+    same occurrence": `_apply_name_spans` below uses `(stripped_text,
+    locant)`, so caffeine's three differently-locanted methyls are never
+    even candidates here (their keys differ) -- `assign_runs` itself
+    already merges those, via its own consecutive-same-TEXT pass (proven by
+    `test_three_multiplied_clones_share_one_run`). This function exists for
+    the shape `assign_runs`' own pass cannot reach: a `bis`/`tris`/
+    `tetrakis` prefix clones a whole BLOCK of parts, not a single part, and
+    the written name spells that block ONCE. DDT's own parts read
+    chloro(1), chloro(1), chloro(1), chloro(4), phenyl, chloro(4), phenyl --
+    the block [chloro(4), phenyl], cloned by `bis`, is not adjacent to a
+    third copy of itself the way a same-key run is; without collapsing it
+    first, `chloro(4)`'s second occurrence has no second span of text left
+    to anchor to (the name never spells "chlorophenyl" twice), and
+    `assign_runs` fails closed for the whole name.
+
+    Returns a list of slots, each a list of original indices into `keys`
+    (and whatever parallel list of texts the caller keeps), covering every
+    index in `keys` exactly once, in order. A name with nothing to collapse
+    gets back one singleton slot per key, unchanged.
+
+    ALGORITHM, and the two questions this function's docstring is asked to
+    settle:
+
+    * Shortest block wins, at the leftmost position it occurs. Scanning
+      length 1 upward (then position left to right) at each pass, rather
+      than longest-first, is what makes DDT's own three same-locant
+      `chloro(1)` parts fold on the FIRST pass (a length-1 block, trivially
+      "repeated" 3 times) before the length-2 `[chloro(4), phenyl]` block
+      is even considered -- a longest-first scan would look at the whole
+      7-key list, find no length-3+ repeat, and never come back for the
+      length-1 one once a length-2 candidate had already (wrongly, since it
+      is not what actually repeats before folding the triple first) been
+      tried. Shortest-first also matches the plain reading of "repeated
+      block": the smallest unit that tiles the sequence, not some multiple
+      of it.
+    * Nested and multiple independent blocks: handled by ITERATING to a
+      fixed point, not by one pass. Each pass finds and folds exactly one
+      block (the shortest, leftmost one), then the key sequence is
+      re-derived from the now-fewer slots and scanned again. This is load-
+      bearing for DDT specifically: folding the `chloro(1)` triple on pass 1
+      changes the sequence from 7 keys to 5 slots, and only THEN does the
+      `[chloro(4), phenyl]` pair become visible as a length-2 repeat in the
+      reduced sequence (positions 1-2 vs 3-4 of the 5) -- it was not a
+      length-2 match in the ORIGINAL 7-key sequence at all, because the
+      three `chloro(1)` entries sat in between the first `chloro(4)` and
+      nothing (there is no third `[chloro(4), phenyl]` copy to make THAT a
+      repeat on its own). A single-pass, first-match-and-stop version (the
+      shape of the original spike script) folds the triple and then
+      returns, missing the pair entirely and leaving DDT withheld -- this
+      was measured directly: the spike's own `collapse_blocks` returns
+      `None` from `assign_runs` for DDT, while the iterated version here
+      recovers it. Termination is guaranteed because every fold strictly
+      reduces the slot count (by `(reps - 1) * length >= 1`).
+
+    Not addressed here, and this is a REAL gap, not a hypothetical one:
+    this function has no notion of WHY two keys are equal, so it folds a
+    block that repeats for reasons OTHER than a multiplier prefix exactly
+    the same way. Measured live: two SEPARATELY WRITTEN
+    `tetrahydrofuran-2-yl` occurrences get IDENTICAL keys (`("furan",
+    None)` both times -- a lone substituent's PARENT-attachment locant is
+    not `part.locant` at all, so two unrelated single occurrences can share
+    the key by coincidence), and folding them here would anchor the merged
+    slot to the FIRST occurrence's text only, handing it atoms that belong
+    to the physically separate SECOND occurrence too -- a wrong span, not
+    a missing one. This function does not protect against that; its
+    caller does. `_compute_span_plan` (`app/explain.py`) calls
+    `assign_runs` on the UNCOLLAPSED keys first and only reaches for this
+    function when that fails -- which is precisely when the name does NOT
+    have enough separate written occurrences to go around, i.e. a genuine
+    multiplier clone. A coincidentally-repeating block that is NOT a clone
+    always has enough separate occurrences (each was written out in full),
+    so the uncollapsed attempt already succeeds for it and this function is
+    never even invoked. See `_compute_span_plan`'s own docstring for that
+    ordering argument in full.
+    """
+    slots: list[list[int]] = [[index] for index in range(len(keys))]
+    while True:
+        current_keys = [keys[slot[0]] for slot in slots]
+        total = len(current_keys)
+        found = None
+        for length in range(1, total // 2 + 1):
+            for start in range(0, total - 2 * length + 1):
+                block = current_keys[start:start + length]
+                cursor = start + length
+                repeats = 1
+                while (
+                    cursor + length <= total
+                    and current_keys[cursor:cursor + length] == block
+                ):
+                    repeats += 1
+                    cursor += length
+                if repeats >= 2:
+                    found = (start, length, repeats, cursor)
+                    break
+            if found is not None:
+                break
+        if found is None:
+            return slots
+        start, length, repeats, end = found
+        folded = []
+        for offset in range(length):
+            merged: list[int] = []
+            for repeat in range(repeats):
+                merged.extend(slots[start + offset + repeat * length])
+            folded.append(merged)
+        slots = slots[:start] + folded + slots[end:]
