@@ -124,31 +124,42 @@ def test_caffeine_suffix_segment_and_its_locants_are_hoverable():
     assert got == {"2": "2", "6": "6"}
 
 
-def test_ddt_withholds_every_span_because_one_chloro_span_cannot_name_five():
-    # The grouped-substituent defect, pinned by concrete offsets. Substituent
-    # parts are grouped by TEXT, so all five of DDT's chlorines land in one
-    # `chloro` segment, while the span is anchored on the FIRST occurrence
-    # only: `1,1,1-trichloro-` == name[0:16], whose three locants name three
-    # chlorines. The other two are named by the `4-chloro` at name[24:32] --
-    # text that would be covered by NO span and so render inert, while the
-    # three characters `1,1,1` glowed atoms belonging to a different
-    # numbering scope. All four of compute_spans' proofs pass on that answer,
-    # so the whole name must fall back instead (spec §4 all-or-nothing).
+def test_ddt_gets_two_chloro_segments_one_per_written_occurrence():
+    # CHANGED ASSERTED VALUE (per-occurrence regrouping): `_build_segments`
+    # used to group substituent parts by TEXT, so all five of DDT's
+    # chlorines landed in ONE `chloro` segment, anchored on the FIRST
+    # written occurrence only (`1,1,1-trichloro-` == name[0:16]) while
+    # actually owning atoms named by a SECOND, separate occurrence
+    # (`4-chloro` at name[24:32]) that no span covered -- the whole name
+    # withheld rather than ship that false claim (spec sec 4). Grouping by
+    # RUN instead of by text (see `app/explain.py::_compute_span_plan` and
+    # `_build_segments`) makes each written occurrence its own segment, so
+    # DDT now gets TWO `chloro` segments -- one per occurrence, each
+    # spanning only the text that actually names its own chlorines -- and
+    # nothing is withheld. This is the recovery this feature exists for,
+    # not a loosening of the all-or-nothing rule: every span below is
+    # checked against real offsets, and the corpus-wide invariant that no
+    # span may claim atoms its own text does not cover still holds -- it
+    # simply no longer forces DDT's whole name dark to satisfy it.
     name = "1,1,1-trichloro-2,2-bis(4-chlorophenyl)ethane"
     result = explain_name(name)
     assert result["error"] is None
     assert name[0:16] == "1,1,1-trichloro-"
     assert name[24:32] == "4-chloro"
-    chloro = next(s for s in result["segments"] if s["label"] == "chloro")
-    assert len(chloro["atom_indices"]) == 5, chloro["atom_indices"]
-    # Not one segment, and not one child, may hold a span.
+    chloro_segments = [s for s in result["segments"] if s["label"] == "chloro"]
+    assert len(chloro_segments) == 2, result["segments"]
+    by_span = {name[slice(*s["name_range"])]: s for s in chloro_segments}
+    assert set(by_span) == {"1,1,1-trichloro-", "4-chloro"}
+    # The first occurrence's three chlorines (locant "1" x3) stay together;
+    # the second occurrence's two (both locant "4", one per `bis` clone of
+    # `4-chlorophenyl`) stay together and separately -- 3 + 2 == 5, DDT's
+    # real chlorine count, now split honestly instead of merged falsely.
+    assert len(by_span["1,1,1-trichloro-"]["atom_indices"]) == 3
+    assert len(by_span["4-chloro"]["atom_indices"]) == 2
+    # Every segment is spanned -- the honesty rule (never partial at the
+    # top level) is satisfied by recovery, not by withholding.
     assert result["segments"], "expected a real decomposition, not an empty one"
-    assert [s["name_range"] for s in result["segments"]] == [
-        None for _ in result["segments"]
-    ]
-    for segment in result["segments"]:
-        for child in segment["children"]:
-            assert child["name_range"] is None, (segment["label"], child["locant"])
+    assert all(s["name_range"] is not None for s in result["segments"])
 
 
 def test_caffeine_still_has_all_four_spans_after_the_ddt_withholding_rule():
@@ -185,46 +196,69 @@ def test_one_token_naming_several_substituents_keeps_its_span():
         assert name[slice(*segment["name_range"])] == expected
 
 
-def test_a_second_written_occurrence_of_a_substituent_forces_the_fallback():
-    # Every one of these writes the same substituent text twice, so the one
-    # span it gets would own atoms the other occurrence names. Measured live
-    # before the fix: p-cymene's `methyl` span was name[0:9] == '1-methyl-'
-    # while owning atoms [0, 9], and atom 9 is the isopropyl's methyl carbon,
-    # named by the `1-methyl` at name[12:20].
-    for name in (
-        "1-methyl-4-(1-methylethyl)benzene",
-        "methyl 2-methylpropanoate",
-        "2-chloro-4-(4-chlorophenyl)phenol",
+def test_a_second_written_occurrence_of_a_substituent_now_gets_its_own_segment():
+    # CHANGED ASSERTED VALUE (per-occurrence regrouping). These names each
+    # write the same substituent text twice; grouping substituent parts by
+    # TEXT (the old behaviour, before this branch) merged both occurrences
+    # into one segment holding only the FIRST occurrence's span -- p-cymene's
+    # `methyl` span was name[0:9] == '1-methyl-' while owning atoms [0, 9],
+    # and atom 9 is the isopropyl's methyl carbon, named by the SECOND
+    # `1-methyl` at name[12:20]. That was a false letters-to-atoms claim, so
+    # the whole name was withheld (spec sec 4).
+    #
+    # Grouping by RUN instead means each written occurrence is its own
+    # segment: two `methyl` segments here, exactly as DDT now gets two
+    # `chloro` segments (see
+    # `test_ddt_gets_two_chloro_segments_one_per_written_occurrence`). The
+    # false claim this test used to guard against cannot arise any more --
+    # each segment's atoms come only from ITS OWN occurrence -- so recovery
+    # is the correct outcome, not a loosening of the guard.
+    for name, label, spans in (
+        ("1-methyl-4-(1-methylethyl)benzene", "methyl",
+         {"1-methyl-", "1-methyl"}),
+        ("methyl 2-methylpropanoate", "methyl", {"methyl", "2-methyl"}),
+        ("2-chloro-4-(4-chlorophenyl)phenol", "chloro",
+         {"2-chloro-", "4-chloro"}),
     ):
         result = explain_name(name)
         assert result["error"] is None, name
         assert result["segments"], name
-        assert all(s["name_range"] is None for s in result["segments"]), name
+        assert all(s["name_range"] is not None for s in result["segments"]), name
+        matching = [s for s in result["segments"] if s["label"] == label]
+        assert len(matching) == 2, (name, result["segments"])
+        got_spans = {name[slice(*s["name_range"])] for s in matching}
+        assert got_spans == spans, (name, got_spans)
     assert "1-methyl-4-(1-methylethyl)benzene"[12:20] == "1-methyl"
 
 
-def test_a_repeated_unlocanted_hydro_substituent_still_forces_the_fallback():
-    # Same family as test_a_second_written_occurrence_of_a_substituent_
-    # forces_the_fallback above, but the repeated substituent is itself an
-    # unlocanted hydro ring ("tetrahydrofuran-2-yl"). Measured live before
-    # the claims-window fence: the "furanyl" segment's own claims window
-    # swept in the leaked "tetr" from its OWN preceding, unlocanted
-    # "tetrahydro" run (no locant on that hydro token, so no MODIFIER_KEY
-    # part bounds it), inflating claims from 1 to 4 -- enough to satisfy
-    # owned_by(2) <= claims(4) and let a span through for the FIRST
-    # "tetrahydrofuran" occurrence's text while the segment's atom_indices
-    # covered BOTH ring occurrences. The fence must restore the correct
-    # all-or-nothing fallback here exactly as it does for phenyl above.
+def test_a_repeated_unlocanted_hydro_substituent_now_gets_two_segments():
+    # CHANGED ASSERTED VALUE (per-occurrence regrouping), same family as
+    # `test_a_second_written_occurrence_of_a_substituent_now_gets_its_own_
+    # segment` above, but the repeated substituent is itself an unlocanted
+    # hydro ring ("tetrahydrofuran-2-yl"), written out twice. Before this
+    # branch, both occurrences merged into one `furanyl` segment (10 atoms,
+    # both rings) anchored on the first occurrence's text alone -- withheld
+    # for the same false-claim reason as p-cymene above. `_compute_span_plan`
+    # feeds `assign_runs` the two occurrences SEPARATELY; `hydro` is not a
+    # `_LEADING` category, so `assign_runs`' own group-locant check never
+    # even considers merging them (there is no locant token to satisfy), and
+    # each occurrence anchors to its own "furan" text, correctly.
     name = "1-(tetrahydrofuran-2-yl)-2-(tetrahydrofuran-2-yl)ethane"
     assert name[13:18] == "furan"
+    assert name[38:43] == "furan"
     result = explain_name(name)
     assert result["error"] is None
-    furanyl = next(s for s in result["segments"] if s["label"] == "furanyl")
-    assert len(furanyl["atom_indices"]) == 10, furanyl["atom_indices"]
-    assert result["segments"], "expected a real decomposition, not an empty one"
-    assert [s["name_range"] for s in result["segments"]] == [
-        None for _ in result["segments"]
-    ]
+    furanyl_segments = [s for s in result["segments"] if s["label"] == "furanyl"]
+    assert len(furanyl_segments) == 2, result["segments"]
+    assert all(s["name_range"] is not None for s in result["segments"])
+    got_spans = {name[slice(*s["name_range"])]: s for s in furanyl_segments}
+    assert set(got_spans) == {"furan"}
+    # Both occurrences' spans read "furan" (the growth stops at the "-2-yl"
+    # boundary either way), so distinguish them by offset instead: one
+    # 5-atom ring per occurrence, not one merged 10-atom segment.
+    assert {s["name_range"][0] for s in furanyl_segments} == {13, 38}
+    for s in furanyl_segments:
+        assert len(s["atom_indices"]) == 5, s
 
 
 def test_the_repeated_locant_3_points_at_different_letters_per_part():
@@ -586,44 +620,32 @@ def test_a_genuinely_partial_single_word_parse_still_withholds():
 
 
 def test_a_ring_stem_that_looks_like_a_multiplier_is_not_counted_as_one():
-    """`_compute_claims` gates its multiplier lookup on the token's CATEGORY,
-    never on its text, and that gate is load-bearing rather than defensive.
+    """CHANGED MECHANISM, same protected outcome. This used to pin
+    `_compute_claims`'s category gate directly: `1,2,3,4,5,6-
+    hexachlorocyclohexane` spells `hex` TWICE, once as a genuine multiplier
+    (category `tetrOrHigher`, "six chloros") and once as the ring's own stem
+    (category `alkaneStemTrivial`, the six-carbon ring), and only the
+    category distinguished them for that function's multiplier lookup.
 
-    `1,2,3,4,5,6-hexachlorocyclohexane` spells `hex` TWICE: once as a genuine
-    multiplier (category `tetrOrHigher`, "six chloros") and once as the ring's
-    own stem (category `alkaneStemTrivial`, the six-carbon ring). Only the
-    category distinguishes them. Drop the gate and the ring stem is read as
-    the number 6 too, inflating the parent's claim and letting a span through
-    that its segment's atoms do not justify -- the wrong-atom class the claims
-    guard exists to catch.
-
-    This pins what `tests/test_name_spans.py::
-    test_a_ring_stem_that_looks_like_a_multiplier_is_not_counted_as_one`
-    used to pin before that module was deleted (see commit 9908574^); the
-    protection was lost with it, and a mutation test confirmed 101 tests
-    still passed with the gate removed.
+    `_compute_claims` is gone -- the claims guard it served is superseded by
+    per-occurrence grouping (a segment's atom count and its run's own text
+    are the same thing by construction now, so there is nothing left to
+    compare) -- but the underlying ambiguity this test exists to catch is
+    unchanged: does the PARENT segment's span ever get confused with the
+    substituent's own multiplier count? Pinned end-to-end instead: the
+    chloro segment must claim exactly the six locants that decorate it, and
+    the parent's own span must be its ring text alone, never inflated by
+    the substituent's `hex`.
     """
-    from app.explain import _compute_claims
-    from app.name_tokens import Tok, assign_runs
-    from app.opsin_tokenizer import tokenize
-
     name = "1,2,3,4,5,6-hexachlorocyclohexane"
-    tokens = [Tok(t.text, t.category, t.start, t.end) for t in tokenize(name)]
-
-    stems = [t for t in tokens if t.text == "hex"]
-    assert [t.category for t in stems] == ["tetrOrHigher", "alkaneStemTrivial"], (
-        "this test's premise is that one name carries `hex` as BOTH a "
-        f"multiplier and a ring stem; OPSIN now tokenizes it as {stems}"
+    result = explain_name(name)
+    assert result["error"] is None
+    assert all(s["name_range"] is not None for s in result["segments"]), (
+        result["segments"]
     )
-
-    runs = assign_runs(tokens, ["chloro", "cyclohex"])
-    assert runs is not None, "premise: this name's runs are derivable"
-    claims = _compute_claims(tokens, runs, None)
-
-    # The chloro run legitimately claims 6 -- six locants and a real `hex`
-    # multiplier both say so. The ring run must claim 1: its `hex` is a stem.
-    assert claims[0] == 6, claims
-    assert claims[1] == 1, (
-        "the ring's `hex` stem was counted as the multiplier 6 -- the "
-        "category gate in _compute_claims is not doing its job"
-    )
+    chloro = next(s for s in result["segments"] if s["label"] == "chloro")
+    parent = next(s for s in result["segments"] if s["kind"] == "parent")
+    assert name[slice(*chloro["name_range"])] == "1,2,3,4,5,6-hexachloro"
+    assert len(chloro["atom_indices"]) == 6, chloro["atom_indices"]
+    assert name[slice(*parent["name_range"])] == "cyclohexane"
+    assert len(parent["atom_indices"]) == 6, parent["atom_indices"]

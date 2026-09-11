@@ -10,29 +10,48 @@ row for row.
 
 **The plan's definition of done was not reached, and this file does not
 pretend otherwise.** The spec asked for zero fully-inert (`SPANS_NONE`) names.
-Measured against the full 544-name corpus, right now:
+Measured against the full 544-name corpus, right now (after the per-occurrence
+regrouping follow-on -- see below):
 
-    CLEAN 277   SPANS_NONE 157   SPANS_PARTIAL 106   ENGINE_ERROR 2
+    CLEAN 311   SPANS_NONE 111   SPANS_PARTIAL 117   ENGINE_ERROR 2
     UNMAPPED 12   ATOM_GAP 0
 
-`SPANS_NONE` is 157, not 0. The two largest contributors are both *named*
-residue, not unexplained gaps:
+`SPANS_NONE` is 111, not 0. The largest remaining contributor is *named*
+residue, not an unexplained gap: lossy OPSIN labels, where a token OPSIN
+itself duplicates (e.g. the `az` token in `[1,2,4]triazolo[4,3-a]pyridine`)
+mean the merged part text is no longer any ordered concatenation of the raw
+token stream, so there is no substring of the name left to point the span at.
+Withholding is correct here -- guessing would show a wrong highlight -- and
+this is the class the design spec calls out as expected residue.
 
-* Lossy OPSIN labels, where a token OPSIN itself duplicates (e.g. the `az`
-  token in `[1,2,4]triazolo[4,3-a]pyridine`) mean the merged part text is no
-  longer any ordered concatenation of the raw token stream, so there is no
-  substring of the name left to point the span at. Withholding is correct
-  here -- guessing would show a wrong highlight -- and this is the class the
-  design spec calls out as expected residue.
-* The "claims guard" in `app/explain.py`, which withholds a multiplicative
-  substituent's span whenever grouping it by TEXT (rather than by each raw
-  occurrence) would make it claim atoms its span does not cover -- measured
-  directly (Ruling 25 in `.superpowers/sdd/2026-09-09-explain-token-parts/
-  progress.md` -- a gitignored path, so it is not in a clone) at **+55
-  names** if regrouped per-occurrence. That regrouping
-  changes what a segment means (payload-contract work) and was scoped out of
-  this plan as a follow-on project; it is not a defect this gate should treat
-  as a regression.
+The other named contributor, as of the previous measurement in this
+docstring, was the "claims guard" in `app/explain.py`: it withheld a
+multiplicative substituent's span whenever grouping it by TEXT (rather than
+by each raw occurrence) would make it claim atoms its span did not cover --
+measured then (Ruling 25 in `.superpowers/sdd/2026-09-09-explain-token-parts/
+progress.md` -- a gitignored path, so it is not in a clone) at **+55 names**
+recoverable by regrouping per-occurrence. That follow-on
+(`.superpowers/sdd/followon-regroup/`) is what produced the numbers above:
+`_build_segments` now groups substituent parts by the RUN they belong to (one
+written occurrence) rather than by shared text, so a segment's atoms and its
+own span are the same thing by construction and the old claims guard has no
+condition left to catch -- it was measured, removed, and its dead-code test
+converted to an end-to-end check
+(`test_a_ring_stem_that_looks_like_a_multiplier_is_not_counted_as_one` in
+`test_name_range.py`). Of the +55, 51 names actually recovered (some CLEAN,
+some SPANS_PARTIAL at the CHILD level -- e.g. a locant child whose text sits
+outside its own run after a `bis`/`tris` block-collapse), 1 was a wash (still
+withheld, for an unrelated pre-existing reason), 2 were superseded by a
+narrower multi-root fix bundled with the same change (`calcium carbonate`,
+`potassium permanganate`, previously CLEAN and now still CLEAN via a
+corrected suffix-anchor check), and 1 pre-existing CLEAN name regressed to
+SPANS_NONE (`3a,7a-dimethyl-hexahydro-4,7-epoxyisobenzofuran-1,3-dione`) --
+a PRE-EXISTING gap in `name_tokens.py`'s `_LEADING`/`_group_locant_matches`
+(the `alphaBetaStereochemLocant` category, e.g. "3a,7a-", was never
+recognised as a locant there) that this follow-on's per-part feeding exposes
+but does not itself cause; it fails closed (never a wrong span) and is
+reported, not fixed, as out of this follow-on's scope. See
+`.superpowers/sdd/followon-regroup/report.md` for the full measurement.
 
 Given that, this file gates two kinds of things differently, on purpose:
 
@@ -105,21 +124,33 @@ def test_no_atom_gap_anywhere(rows):
 
 # --- The shortfall: gated at the measured floor/ceiling, not the unmet goal. ---
 
-# Minimum CLEAN count per axis, measured against CURATED on 2026-09-11
-# (tip 81c0db7). Three axes are floored at 0 -- `multiplicative-nested`,
-# `esters-salts-amides` and `long-chains-polyenes` -- because they measure 0
-# clean names today; that is the truth, not an oversight, and is exactly the
-# shortfall this module's docstring names. Floors are watermarks: lower one
-# only if CURATED itself changes what it asks of that axis, never to paper
-# over a regression.
+# Minimum CLEAN count per axis, re-measured against CURATED on 2026-09-11
+# after the per-occurrence regrouping follow-on (see this module's own
+# docstring). Two floors moved UP from the previous measurement (tip
+# 81c0db7), both progress, never edited down to paper over a regression:
+#
+# * `golden` 2 -> 3: `1,1,1-trichloro-2,2-bis(4-chlorophenyl)ethane` (DDT)
+#   is CURATED's own worked example of the class-A shape (a `bis` prefix
+#   cloning a block of parts) this follow-on recovers -- see
+#   `test_ddt_gets_two_chloro_segments_one_per_written_occurrence` in
+#   `test_name_range.py`.
+# * `multiplicative-nested` 0 -> 2: two of this axis's `bis`/`tris`-prefixed
+#   names now derive runs via `collapse_cloned_blocks`, closing part of the
+#   exact shortfall this file's docstring named.
+#
+# The other two axes named as zero-clean shortfall before this follow-on --
+# `esters-salts-amides` and `long-chains-polyenes` -- measure zero clean
+# still; nothing in per-occurrence regrouping touches their residue (mostly
+# multi-root suffix-anchor and lossy-label cases), so their floors are
+# unchanged. Every other floor also measures unchanged and stays as is.
 CLEAN_FLOOR_BY_AXIS = {
-    "golden": 2,
+    "golden": 3,
     "baseline-chains": 1,
     "monocycles": 3,
     "retained-fused": 3,
     "fusion-bracket": 4,
     "ring-assembly-primed": 3,
-    "multiplicative-nested": 0,
+    "multiplicative-nested": 2,
     "von-baeyer-spiro": 3,
     "bridge-prefix": 1,
     "element-italic-locants": 2,
@@ -156,19 +187,23 @@ def test_clean_count_per_axis_does_not_regress(by_axis):
     assert shortfall == {}, shortfall
 
 
-# The exact CURATED names measured SPANS_NONE on 2026-09-11 (tip 81c0db7) --
-# 10 of 49. This is the residue named in the module docstring: lossy OPSIN
-# labels (duplicated tokens, e.g. the fusion-bracket and multiplicative-nested
-# entries below) and the claims-guard class the +55 follow-on owns. It is a
-# CEILING, not a target: a name leaving this set (getting fixed) needs no
-# edit here and never fails the test below; a name NOT in this set showing up
-# as SPANS_NONE is a genuine new regression.
+# The exact CURATED names measured SPANS_NONE on 2026-09-11, RE-MEASURED
+# after the per-occurrence regrouping follow-on -- 8 of 49, down from 10.
+# Two names LEFT this set as part of that follow-on and needed no edit here
+# (the removal itself is the record): `1,1,1-trichloro-2,2-bis(4-
+# chlorophenyl)ethane` (DDT) and `tris(2-chloroethyl) phosphate` are now
+# CLEAN, each recovered by `collapse_cloned_blocks` folding a `bis`/`tris`-
+# cloned block back to the one written occurrence that names it (see
+# `.superpowers/sdd/followon-regroup/report.md`). What remains is lossy
+# OPSIN labels (duplicated tokens, e.g. `[1,2,4]triazolo[4,3-a]pyridine`) and
+# the multi-root suffix-anchor limitation (`sodium acetate`) -- neither is
+# per-occurrence-regrouping's residue; both are recorded, separate follow-on
+# work. It is a CEILING, not a target: a name leaving this set (getting
+# fixed) needs no edit here and never fails the test below; a name NOT in
+# this set showing up as SPANS_NONE is a genuine new regression.
 KNOWN_SPANS_NONE_CURATED = frozenset({
-    "1,1,1-trichloro-2,2-bis(4-chlorophenyl)ethane",
     "[1,2,4]triazolo[4,3-a]pyridine",
     "1,1'-bi(cyclohexane)",
-    "2,2-bis(4-hydroxyphenyl)propane",
-    "tris(2-chloroethyl) phosphate",
     "4,4'-methylenedianiline",
     "octadecanoic acid",
     "tetradecanoic acid",
