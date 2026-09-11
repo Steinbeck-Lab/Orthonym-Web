@@ -37,8 +37,16 @@ jobs:
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-          # The default GITHUB_TOKEN is deliberate. A PAT would let the release
-          # PR trigger other workflows, which is occasionally wanted -- but it
-          # also means a release PR could run CI as a privileged actor. Keep
-          # the narrower token until there is a reason not to.
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # A PAT is REQUIRED here, not a preference. The built-in token
+          # cannot open a pull request: this repo reports
+          # `can_approve_pull_request_reviews=false`, and the first run failed
+          # with "GitHub Actions is not permitted to create or approve pull
+          # requests". release-please got as far as creating the branch and
+          # the commit, then could not open the PR.
+          #
+          # The secret cannot be called anything starting with `GITHUB_` --
+          # GitHub reserves that prefix and refuses to create such a secret.
+          # Hence RELEASE_PLEASE_TOKEN. It needs `contents: write` and
+          # `pull-requests: write` on this repo and nothing else; a
+          # fine-grained PAT scoped to this repository alone is enough.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
