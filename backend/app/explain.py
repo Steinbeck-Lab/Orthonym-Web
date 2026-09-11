@@ -39,7 +39,7 @@ from rdkit.Chem.Draw import rdMolDraw2D
 
 from openstout import OpenSTOUT
 
-from .glossary import describe_locant, describe_part
+from .glossary import describe_locant, describe_part, describe_token
 from .name_spans import _MULTIPLIER_CATEGORIES, _MULTIPLIER_VALUES, _locant_subspans
 from .name_tokens import _MODIFIER, Tok, assign_runs, find_modifier_run
 from .opsin_decompose import decompose, heavy_atom_indices
@@ -267,6 +267,47 @@ def _locants_within(tokens: list, start: int, end: int) -> dict:
     return found
 
 
+def _token_children(segment: dict, tokens: list, run) -> None:
+    """Append one child per token in `run` that teaches something on its
+    own, to `segment["children"]`.
+
+    Callers append these AFTER the existing locant-child pass has already
+    consumed `segment["children"]` by `child["locant"]` (see
+    `_apply_name_spans` below). That ordering is load-bearing, not
+    incidental: a token child carries `locant=None`, so running the locant
+    pass over it would look up `found.get(None)` and just leave its
+    `name_range` unset -- harmless by luck (no real locant string is ever
+    `None`), but appending here instead keeps that pass walking only the
+    locant children it was written for, and each token child gets its span
+    from ITS OWN token's offsets, set in this same iteration, never a
+    stale value left over from the last token visited.
+
+    Referential, like every other span this feature carries for a token:
+    OPSIN gives a fused ring (or a spiro system, or a von Baeyer cage) ONE
+    atom set for the whole group, so `benzo` and `pyren` have no separable
+    atoms and `[a]` has none at all -- deriving a split would be exactly
+    the SMARTS-style guessing `opsin_decompose.py` records as the original
+    caffeine defect. `highlight` therefore inherits the OWNING segment's
+    own `highlight_atoms`, not its `atom_indices`: for a `modifier` segment
+    (`owns_atoms=False`) those two differ -- `atom_indices` is always `[]`
+    there, while `highlight_atoms` is the real, resolved parent-atom set
+    that segment lights up -- and a token child using `atom_indices` would
+    silently highlight nothing.
+    """
+    for index in sorted(run.consumed + run.fillers):
+        token = tokens[index]
+        line = describe_token(token.category, token.text)
+        if line is None:
+            continue
+        child = _segment(
+            token.text, "token", line, (),
+            owns=False, locant=None,
+            highlight=tuple(segment["highlight_atoms"]),
+        )
+        child["name_range"] = [token.start, token.end]
+        segment["children"].append(child)
+
+
 def _apply_name_spans(name: str, segments: list, result) -> None:
     """Fill in each segment's and child's `name_range`, or leave every one
     of them None. Never partial at the TOP level: a response with some
@@ -445,6 +486,10 @@ def _apply_name_spans(name: str, segments: list, result) -> None:
             child_span = found.get(child["locant"])
             if child_span is not None:
                 child["name_range"] = list(child_span)
+        # Token children go in AFTER the locant pass above, not interleaved
+        # with it -- see `_token_children`'s docstring for why the order
+        # matters.
+        _token_children(segment, tokens, run)
 
     if want_modifier:
         found = _locants_within(tokens, modifier_run.start, modifier_run.end)
@@ -456,6 +501,10 @@ def _apply_name_spans(name: str, segments: list, result) -> None:
                 child_span = found.get(child["locant"])
                 if child_span is not None:
                     child["name_range"] = list(child_span)
+            # Same ordering rule as the loop above: token children go in
+            # only after the modifier's own locant children have their
+            # spans set.
+            _token_children(segment, tokens, modifier_run)
 
 
 def _build_segments(result) -> list[dict]:
