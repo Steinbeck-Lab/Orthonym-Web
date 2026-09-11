@@ -99,8 +99,25 @@ class Run(NamedTuple):
 # methyl's real locant "2" at index 6. Every proof still passed (the text
 # is "2" and it sits inside the run's own span) -- this is a confidently
 # wrong highlight, not a missing one.
+#
+# "tetrOrHigher" and "a" were added here for the same reason "diOrTri",
+# "multiplier" and "groupMultiplier" are already in this set: they are a
+# multiplier word's OWN tokens, decorating whatever content run follows.
+# The omission was real, not a decision -- OPSIN emits "tetra"/"hexa"/
+# "hepta"/... as TWO tokens ("tetr"+"a", category tetrOrHigher+a) where
+# "di"/"tri" are one (category diOrTri), and the two-token form had simply
+# never been accounted for here. Its absence left a run's left-growth
+# unable to reach back over "1,2,3,4-tetr" to the locant token that names
+# it: caffeine's own sibling case, `1,2,3,4-tetrahydro-1,4-
+# methanonaphthalene`, gave its modifier segment ("added hydrogens") a
+# top-level span of only [13,18) = "hydro", stranding the "1,2,3,4-"
+# locant tokens outside the span their own children needed to nest inside
+# -- not a missing locant, a too-narrow parent. Measured over the full
+# 544-name census before and after adding these two categories: CLEAN
+# 251 -> 274 (+23), SPANS_NONE unchanged at 166, ATOM_GAP unchanged at 0 --
+# strictly more spans proven, nothing regressed to unproven or wrong.
 _LEADING = frozenset({
-    "locant", "diOrTri", "multiplier", "groupMultiplier",
+    "locant", "diOrTri", "multiplier", "groupMultiplier", "tetrOrHigher", "a",
     "alkaneStemModifier", "cyclo",
     "hyphen", "interSubstituentHyphen",
 })

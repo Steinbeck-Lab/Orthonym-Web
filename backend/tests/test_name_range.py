@@ -1,3 +1,5 @@
+import re
+
 from app.explain import explain_name
 from tests.conftest import CAFFEINE, GOLDEN_NAMES
 
@@ -169,13 +171,28 @@ def test_the_repeated_locant_3_points_at_different_letters_per_part():
 
 def test_a_two_token_multiplier_still_keeps_its_span():
     # "tetra" tokenizes as tetrOrHigher ("tetr") + "a" -- TWO tokens -- and
-    # tetrOrHigher is not in _LEADING, so it is never absorbed into a run's
-    # own fillers. A first, narrower claims computation (counting only a
-    # run's own `fillers`) silently dropped this substituent's claim from 4
-    # to 1, wrongly withholding this name end-to-end even though it was
-    # CLEAN in production before this task. `explain.py`'s `_compute_claims`
-    # must window the count back to the previous run's end (matching
-    # `compute_spans` step 4b) to recover it.
+    # tetrOrHigher was not in _LEADING, so it was never absorbed into a
+    # run's own fillers. A first, narrower claims computation (counting
+    # only a run's own `fillers`) silently dropped this substituent's claim
+    # from 4 to 1, wrongly withholding this name end-to-end even though it
+    # was CLEAN in production before this task. `explain.py`'s
+    # `_compute_claims` must window the count back to the previous run's
+    # end (matching `compute_spans` step 4b) to recover it.
+    #
+    # The asserted span below changed FROM "methyl" TO "tetramethyl" in a
+    # later task on this same branch (Task 5), which added `tetrOrHigher`
+    # and `a` to `_LEADING` itself -- not just to the claims window. Before
+    # that, this substituent's span stopped short of its own multiplier,
+    # inconsistent with every ONE-token multiplier ("tri" in caffeine's
+    # "1,3,7-trimethyl", TNT's "1,3,5-trinitro"), which `_LEADING` already
+    # absorbed. `name_tokens.py`'s own documented rule for `_LEADING` is
+    # that a multiplier word decorates the run it multiplies and belongs to
+    # ITS span -- so "tetramethyl", not "methyl", is what that rule already
+    # said for every other multiplier and had simply never been extended to
+    # the two-token spelling. Confirmed by reverting the `_LEADING` change
+    # alone: this test passes against "methyl" on the old set and against
+    # "tetramethyl" on the new one, so the assertion below is pinned to
+    # real, current behaviour, not merely restated to match it.
     name = "tetramethylammonium chloride"
     result = explain_name(name)
     assert result["error"] is None
@@ -184,7 +201,7 @@ def test_a_two_token_multiplier_still_keeps_its_span():
         result["segments"]
     )
     methyl = next(s for s in result["segments"] if s["label"] == "methyl")
-    assert name[slice(*methyl["name_range"])] == "methyl"
+    assert name[slice(*methyl["name_range"])] == "tetramethyl"
 
 
 def test_a_coincidental_stem_collision_withholds_everything():
@@ -219,3 +236,71 @@ def test_the_other_stem_collision_shape_also_withholds_everything():
     assert all(s["name_range"] is None for s in result["segments"]), (
         result["segments"]
     )
+
+
+def test_caffeines_indicated_hydrogen_locant_is_hoverable():
+    """The hole in the reference example. `3` and `7` of the hydro run were
+    live and the `1` of `1H-` was dead, so one locant of the best-working
+    name in the product could not be hovered. Caffeine scored 11 of 12.
+    """
+    from app.explain import explain_name
+    from tests.fixtures.explain_corpus import CAFFEINE
+
+    payload = explain_name(CAFFEINE)
+    modifier = next(
+        s for s in payload["segments"] if s["kind"] == "modifier"
+    )
+    by_locant = {c["locant"]: c["name_range"] for c in modifier["children"]}
+    assert by_locant["3"] is not None
+    assert by_locant["7"] is not None
+    assert by_locant["1"] is not None, "the 1 of 1H- is still dead"
+
+
+def test_every_locant_child_of_a_spanned_segment_has_a_span():
+    """Stated as an invariant over the curated corpus, so a future change
+    cannot re-open the hole this task closed somewhere else.
+
+    Not a blanket `holes == []`: some locants are honestly unwritable.
+    IUPAC omits a suffix locant entirely when the parent's own numbering
+    leaves only one possible position for it -- `ethanol`'s suffix
+    genuinely carries locant "1" (there is only one carbon it could be),
+    but the string "ethanol" contains no "1" anywhere for a span to point
+    at. The child keeps its explanation line ("attached at position 1"
+    is still useful to read even with nothing to hover); only its
+    `name_range` stays `None`, which is the honest answer, not a defect --
+    the same as this suite's own `test_ddt_withholds_...` and the spec's
+    "never guess" rule.
+
+    So a missing span is only counted as a HOLE -- worth failing the test
+    over -- when the locant's own text is actually sitting inside its
+    segment's OWN already-proven span and got missed anyway. That check
+    is deliberately independent of `explain.py`'s own token walk (a plain
+    regex over the sliced-out span text, not a second call into the
+    collector under test), so this stays a real invariant rather than the
+    implementation grading its own homework.
+    """
+    from app.explain import explain_name
+    from tests.fixtures.explain_corpus import CURATED
+
+    holes = []
+    for _axis, name in CURATED:
+        payload = explain_name(name)
+        if payload["error"] is not None:
+            continue
+        for segment in payload["segments"]:
+            if segment["name_range"] is None:
+                continue
+            start, end = segment["name_range"]
+            window = name[start:end]
+            for child in segment["children"]:
+                locant = child["locant"]
+                if not locant or child["name_range"] is not None:
+                    continue
+                # Bounded on both sides so a locant never matches as a
+                # substring of a longer one ("1" inside "13") and a
+                # letter-suffixed or primed locant ("3a", "1'") is matched
+                # whole, not fragmented.
+                pattern = rf"(?<![0-9A-Za-z']){re.escape(locant)}(?![0-9A-Za-z'])"
+                if re.search(pattern, window):
+                    holes.append((name, segment["label"], locant))
+    assert holes == [], holes
