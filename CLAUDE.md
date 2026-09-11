@@ -22,7 +22,7 @@ docker compose up -d redis           # container stitch-redis, localhost:6379
 
 # tests — from the repo root; this script is the only correct way to run them
 backend/scripts/run-tests.sh                              # full suite
-backend/scripts/run-tests.sh tests/test_name_spans.py -v  # one file
+backend/scripts/run-tests.sh tests/test_name_range.py -v  # one file
 
 # backend — from backend/, three processes in three terminals
 REDIS_URL=redis://localhost:6379/0 .venv/bin/python -m uvicorn app.main:app --port 8001
@@ -31,6 +31,13 @@ REDIS_URL=redis://localhost:6379/0 .venv/bin/python -m celery -A app.celery_app 
 
 # ad hoc scripts importing app.*
 cd backend && PYTHONPATH="$(pwd)" REDIS_URL=redis://localhost:6379/0 .venv/bin/python <script.py>
+
+# explain coverage census -- 544 names, prints the per-axis table. Runs the
+# interpreter directly (not via run-tests.sh, which is for pytest only); the
+# interpreter is backend/.venv/bin/python -- run-tests.sh itself now
+# auto-detects .venv-mac (macOS) or .venv (Linux) and picks whichever exists.
+cd backend && PYTHONPATH="$(pwd)" REDIS_URL=redis://localhost:6379/0 \
+  .venv/bin/python scripts/explain_census.py
 
 # frontend — from frontend/
 npm run dev        # proxies /api -> http://localhost:8000
@@ -44,9 +51,12 @@ docker compose up -d --build
 
 ## The engine is not in this repo
 
-`scripts/vendor-openstout.sh` copies **all** of `backend/vendor/` out of an OpenSTOUT checkout:
-the engine source, the OPSIN grammar resources, and the `opsin-cli` and `centres-cli` jars. All
-four are gitignored, because publishing them would publish the engine.
+`backend/vendor/` holds **three** pieces, not four: `openstout/` (the engine source) and
+`opsin-resources/` (the OPSIN grammar resources plus the `opsin-cli` jar) are populated by
+`scripts/vendor-openstout.sh` out of an OpenSTOUT checkout and are gitignored wholesale, because
+publishing them would publish the engine; `cdk/` holds only a tracked `NOTICE` — no jar is vendored
+there at all. `centres-cli` is not vendored anywhere any more (`scripts/vendor-openstout.sh:105-106`);
+see below.
 
 ```bash
 OPENSTOUT_SRC=/path/to/OpenSTOUT/Project ./scripts/vendor-openstout.sh
@@ -56,11 +66,14 @@ Then bump `_KEY_VERSION` in `backend/app/name_cache.py` by hand. Upstream develo
 version `1.0.0`, so version-keyed cache invalidation cannot fire on its own and a name computed by
 the old engine would survive the refresh.
 
-The one exception is **CDK**, whose release jar has a public URL: `backend/Dockerfile` downloads it
-and checks it against the SHA-256 recorded in `backend/vendor/cdk/NOTICE` (which *is* tracked).
+**CDK**, and since commit `e148f25` **centres** as well, are FETCHED, not vendored: both release
+jars have public URLs, so `backend/Dockerfile` downloads each at build time and checks it against a
+pinned SHA-256 (CDK's is recorded in the tracked `backend/vendor/cdk/NOTICE`; centres' is a
+`CENTRES_SHA256` build arg in the Dockerfile itself, there being no tracked NOTICE for it).
 `backend/.dockerignore` keeps any local copy out of the build context, so a build here exercises the
-same download path a fresh clone does. `centres-cli` cannot be fetched at all — its NOTICE records
-it as a local Maven build from an unreleased commit.
+same download path a fresh clone does. Centres used to be committed as a jar because the pinned
+build was an unreleased snapshot (`develop @ d4b3cf0`) nobody could reproduce; the engine moved to
+the tagged `1.2.1` release, which is fetchable the same way CDK's always was.
 
 Without a live JVM and those jars, OpenSTOUT's SELF-01 self-consistency gate **fails open**: a
 molecule that should report as a lower-confidence `fallback` ships as an unverified `pin`. That is
@@ -162,6 +175,21 @@ Things the repo does not tell you, or tells you only after they cost time.
   every copy/CSV/SDF path reads the data object, so the caret of `0^4,9` still leaves the page.
 - `/from-name` computes no tier and no verdict: OPSIN either parses a name or does not, and borrowing
   Home's grammar there would claim a check that never ran.
+- `/explain` explains **how the name is written**: every name token that teaches something is its
+  own hoverable child with its own plain-language line. Token children are referential -- OPSIN
+  gives a fused ring ONE atom set, so `[a]` cannot own atoms and inherits its parent's highlight.
+  Spans are DERIVED from token offsets (`app/name_tokens.py`), never searched for by text. If the
+  token run cannot be accounted for, the name withholds EVERY span rather than guess. Coverage is
+  measured, not assumed: `backend/scripts/explain_census.py` classifies all 544 names and prints
+  the residue rather than hiding it, and `backend/tests/test_explain_coverage.py` gates a curated
+  subset of that corpus so a class already fixed cannot silently regress. This is **not**
+  near-total coverage. Measured 2026-09-11 over the 544-name corpus: **282 clean, 159 fully
+  inert** (`SPANS_NONE`, 154 of them plus 5 that also carry an unmapped part), **99 partially
+  spanned** (94 plus 5 with an unmapped part), **2 fully spanned but carrying an unmapped
+  part**, and **2 that OPSIN itself cannot parse**. The residue is real and named,
+  not accidental (lossy OPSIN labels where a duplicated token means the part text is no longer a
+  substring of the name, plus a text-grouped-substituent class worth a measured +55 names that a
+  follow-on project owns, not this one).
 - The three legal pages describe **this deployment**, and every factual claim in `Privacy.jsx` was
   read out of the backend or measured against a running stack. Do not adapt wording from another
   site's policy: a policy that claims processing which does not happen is as wrong as one that hides

@@ -67,3 +67,34 @@ def test_carbonyl_suffix_does_not_claim_it_is_a_ketone():
     text = describe_part("suffix", "dione", None, 2)
     assert "C=O" in text
     assert "ketone" not in text.lower()
+
+
+def test_a_fusion_bracket_explains_what_it_does():
+    from app.glossary import describe_token
+
+    line = describe_token("fusionBracket", "[a]")
+    assert line is not None
+    assert "fuse" in line.lower()
+
+
+def test_a_ring_assembly_multiplier_says_how_many():
+    from app.glossary import describe_token
+
+    line = describe_token("ringAssemblyMultiplier", "bi")
+    assert line is not None
+    assert "two" in line.lower()
+
+
+def test_an_elision_vowel_teaches_nothing_and_gets_no_line():
+    """A token child for the `e` of `pyrene` would be noise. None means the
+    token gets a span for continuity but no explanation of its own.
+    """
+    from app.glossary import describe_token
+
+    assert describe_token("e", "e") is None
+
+
+def test_an_unknown_category_gets_no_line_rather_than_a_wrong_one():
+    from app.glossary import describe_token
+
+    assert describe_token("someCategoryOpsinAddedLater", "zzz") is None

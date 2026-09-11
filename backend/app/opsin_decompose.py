@@ -79,6 +79,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from functools import cmp_to_key
 from typing import NamedTuple, Optional
 
 logger = logging.getLogger(__name__)
@@ -139,6 +140,12 @@ class _Handles:
         self.Atom = J("uk.ac.cam.ch.wwmm.opsin.Atom")
         JString = J("java.lang.String")
         JInt = J("java.lang.Integer").TYPE
+
+        self.PreProcessor = J("uk.ac.cam.ch.wwmm.opsin.PreProcessor")
+        self.SortParses = J("uk.ac.cam.ch.wwmm.opsin.SortParses")
+        # Static: invoke with None as the receiver.
+        self.preprocess = _unlock_method(self.PreProcessor, "preProcess", JString)
+        self.sort_parses = _unlock_ctor(self.SortParses).newInstance()
 
         nts = self.NameToStructure.getInstance()
         version = str(self.NameToStructure.getVersion())
@@ -408,11 +415,76 @@ def _collect_modifiers(h: _Handles, parse_el) -> list[Modifier]:
     return found
 
 
+def _decompose_one(h: _Handles, state, parse_el, name: str) -> Decomposition:
+    """One candidate parse, all the way through. Raises on any OPSIN
+    rejection; the caller treats that as "try the next candidate".
+    Caller holds _lock.
+    """
+    h.cg_process.invoke(h.cg_ctor.newInstance(state), parse_el)
+    suffix_applier = h.sa_ctor.newInstance(state, h.suffix_rules)
+    h.cp_process.invoke(h.cp_ctor.newInstance(state, suffix_applier), parse_el)
+
+    # BEFORE buildFragment -- it consumes these elements.
+    modifiers = _collect_modifiers(h, parse_el)
+
+    sb = h.sb_ctor.newInstance(state)
+    final_frag = h.build_fragment.invoke(sb, parse_el)
+    h.convert_spare_valencies.invoke(h.frag_manager_field.get(state))
+
+    # AFTER buildFragment -- this ordering IS the fix.
+    parts = _collect_parts(h, parse_el)
+    if not parts:
+        # No substituent/root parts recovered from this candidate -- treat
+        # it exactly like any other OPSIN rejection so the caller advances
+        # to the next candidate. Preserves decompose()'s original
+        # fail-closed contract: never a Decomposition with nothing in it.
+        raise ValueError(f"no name parts recovered from candidate for {name!r}")
+
+    sw = h.sw_ctor.newInstance(final_frag, h.default_smiles_opts)
+    smiles = str(h.write_smiles.invoke(sw))
+    order = h.output_order_field.get(sw)
+
+    atoms = []
+    for i in range(order.size()):
+        atom = order.get(i)
+        locants = h.get_locants.invoke(atom)
+        atoms.append(
+            DecomposedAtom(
+                rdkit_index=i,
+                opsin_id=int(h.get_id.invoke(atom)),
+                element=str(h.get_atom_element.invoke(atom)),
+                locants=tuple(str(locants.get(j)) for j in range(locants.size())),
+            )
+        )
+
+    return Decomposition(
+        smiles=smiles,
+        atoms=tuple(atoms),
+        parts=tuple(parts),
+        modifiers=tuple(modifiers),
+    )
+
+
 def decompose(name: str) -> Optional[Decomposition]:
     """Runs OPSIN's internal pipeline for `name` and reports every name part
-    with its own atoms, plus every heavy atom with its locants. Returns None
-    on any failure -- reflection unavailable, name unparseable, or the
-    pipeline raising. None means "cannot decompose", never a partial result.
+    with its own atoms, plus every heavy atom with its locants.
+
+    Mirrors ``NameToStructure.parseChemicalName``
+    (NameToStructure.java:128-195): preprocesses the name the way OPSIN's
+    own public entry point does, sorts OPSIN's candidate parses the way
+    OPSIN itself prefers them ("fewer tokens preferred"), and tries each in
+    turn with a fresh ``BuildState``. OPSIN returns more than one candidate
+    ON PURPOSE -- ``ComponentGenerator.resolveAmbiguities`` THROWS to REJECT
+    a wrong candidate so the caller advances to the next one
+    (ComponentGenerator.java:149-171; its own comment: "Resolves common
+    ambiguities e.g. tetradeca being 4x10carbon chain rather than
+    14carbon chain"). Taking only ``parses.get(0)`` from an unsorted list
+    made every such rejection fatal instead of recoverable -- measured on
+    every C13-C19 and C23-C29 stem ("tridecanoic acid" and friends).
+
+    Returns None on any failure -- reflection unavailable, name unparseable,
+    every candidate rejected, or the pipeline raising. None means "cannot
+    decompose", never a partial result.
     """
     h = _get_handles()
     if h is None:
@@ -423,54 +495,42 @@ def decompose(name: str) -> Optional[Decomposition]:
         # documented reentrancy guarantee, and FastAPI runs sync endpoints on
         # a threadpool. Serialize the whole pipeline.
         with _lock:
-            state = h.state_ctor.newInstance(h.config)
-            parses = h.parse_method.invoke(h.parser, h.config, name)
+            # PreProcessor normalises the name string before parsing --
+            # OPSIN's own first step (NameToStructure.java:137). Skipping it
+            # meant STITCH parsed a string OPSIN never would.
+            processed = str(h.preprocess.invoke(None, name))
+            parses = h.parse_method.invoke(h.parser, h.config, processed)
             if parses.size() == 0:
                 return None
-            parse_el = parses.get(0)
 
-            h.cg_process.invoke(h.cg_ctor.newInstance(state), parse_el)
-            suffix_applier = h.sa_ctor.newInstance(state, h.suffix_rules)
-            h.cp_process.invoke(h.cp_ctor.newInstance(state, suffix_applier), parse_el)
+            # OPSIN returns CANDIDATES, sorted "fewer tokens preferred", and
+            # tries each: ComponentGenerator.resolveAmbiguities THROWS to
+            # REJECT a wrong candidate (ComponentGenerator.java:149-171), so
+            # a throw is a signal to advance, not a failure. Taking
+            # parses.get(0) unsorted made every such rejection fatal --
+            # measured on every C13-C19 and C23-C29 stem.
+            candidates = [parses.get(i) for i in range(parses.size())]
+            candidates.sort(key=cmp_to_key(
+                lambda a, b: int(h.sort_parses.compare(a, b))
+            ))
 
-            # BEFORE buildFragment -- it consumes these elements.
-            modifiers = _collect_modifiers(h, parse_el)
-
-            sb = h.sb_ctor.newInstance(state)
-            final_frag = h.build_fragment.invoke(sb, parse_el)
-            h.convert_spare_valencies.invoke(h.frag_manager_field.get(state))
-
-            # AFTER buildFragment -- this ordering IS the fix.
-            parts = _collect_parts(h, parse_el)
-
-            sw = h.sw_ctor.newInstance(final_frag, h.default_smiles_opts)
-            smiles = str(h.write_smiles.invoke(sw))
-            order = h.output_order_field.get(sw)
-
-            atoms = []
-            for i in range(order.size()):
-                atom = order.get(i)
-                locants = h.get_locants.invoke(atom)
-                atoms.append(
-                    DecomposedAtom(
-                        rdkit_index=i,
-                        opsin_id=int(h.get_id.invoke(atom)),
-                        element=str(h.get_atom_element.invoke(atom)),
-                        locants=tuple(str(locants.get(j)) for j in range(locants.size())),
+            for parse_el in candidates:
+                try:
+                    # A fresh BuildState per candidate, as OPSIN does
+                    # (NameToStructure.java:157). A failed candidate leaves
+                    # the state dirty, so reusing it would poison the next.
+                    state = h.state_ctor.newInstance(h.config)
+                    return _decompose_one(h, state, parse_el, name)
+                except Exception:
+                    logger.debug(
+                        "opsin_decompose: candidate rejected for %r, trying "
+                        "the next", name, exc_info=True,
                     )
-                )
+                    continue
+            return None
     except Exception:
         logger.exception("opsin_decompose: failed decomposing %r", name)
         return None
-
-    if not parts:
-        return None
-    return Decomposition(
-        smiles=smiles,
-        atoms=tuple(atoms),
-        parts=tuple(parts),
-        modifiers=tuple(modifiers),
-    )
 
 
 def heavy_atom_indices(result: Decomposition, opsin_ids) -> tuple[int, ...]:

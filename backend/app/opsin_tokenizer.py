@@ -1,6 +1,6 @@
 """Real name tokenization via OPSIN's own parser -- not a guess.
 
-NOW LOAD-BEARING. `name_spans.py` imports `tokenize` from this module and
+NOW LOAD-BEARING. `explain.py` imports `tokenize` from this module and
 builds every `name_range` in the Explain response on its character offsets,
 which is the work this module was kept for -- "Spans come instead from
 `ParseRules.getParses()`, which `opsin_tokenizer.py` already turns into exact
@@ -175,19 +175,34 @@ def tokenize(name: str) -> Optional[list]:
     symbol_table = _load_symbol_table()
 
     def to_tokens(pairs, base_offset):
+        """Builds Token objects whose `.text` is sliced from the ORIGINAL
+        `name` at the offsets OPSIN's own token lengths walk out -- never
+        OPSIN's returned text verbatim. OPSIN's ParseRules matches some
+        tokens case-insensitively and hands the token back lowercased
+        (`D-` comes back as `d-`); trusting that text directly would make
+        a span's highlighted characters differ from what the page
+        renders. Also returns OPSIN's own raw joined text (unsliced) so
+        the caller can verify the parse against `name`/`word`
+        case-insensitively -- comparing the sliced tokens back against
+        the very string they were sliced from would always trivially
+        match and could no longer catch a partial parse.
+        """
         tokens = []
+        raw_pieces = []
         pos = base_offset
         for text, symbol in pairs:
             if not text:
                 continue
             category = symbol_table.get(symbol, symbol)
-            tokens.append(Token(text=text, category=category, start=pos, end=pos + len(text)))
-            pos += len(text)
-        return tokens, pos
+            end = pos + len(text)
+            tokens.append(Token(text=name[pos:end], category=category, start=pos, end=end))
+            raw_pieces.append(text)
+            pos = end
+        return tokens, pos, "".join(raw_pieces)
 
     whole = _tokenize_raw(name)
     if whole is not None:
-        tokens, _ = to_tokens(whole, 0)
+        tokens, _, raw_joined = to_tokens(whole, 0)
         # Full reconstruction confirmed character-for-character -- a PARTIAL
         # parse ("methyl acetate" consumes only "methyl") has to fall through to
         # the multi-word path below.
@@ -199,7 +214,15 @@ def tokenize(name: str) -> Optional[list]:
         # token lengths: if the joined text equals `name` then `end_pos ==
         # len(name)` follows, and the empty-token case reduces to `"" == name`
         # on both sides.
-        if "".join(t.text for t in tokens) == name:
+        #
+        # OPSIN's ParseRules matches some tokens case-insensitively
+        # (ParseRules.java:97-107, 146-158) and returns the token LOWERCASED --
+        # `D-` comes back as `d-`. Comparing exactly rejected OPSIN's own
+        # correct answer and killed every D-/L- sugar and amino acid. Compare
+        # case-folded instead, against `raw_joined` -- OPSIN's own text, before
+        # slicing -- so a genuinely partial parse (still shorter than `name`
+        # under casefold too) is still rejected exactly as before.
+        if raw_joined.casefold() == name.casefold():
             return tokens
 
     # Multi-word fallback (e.g. ester names like "methyl acetate"): tokenize
@@ -215,8 +238,14 @@ def tokenize(name: str) -> Optional[list]:
             pairs = _tokenize_raw(word)
             if pairs is None:
                 return None
-            word_tokens, new_pos = to_tokens(pairs, pos)
-            if new_pos - pos != len(word) or "".join(t.text for t in word_tokens) != word:
+            word_tokens, new_pos, raw_joined = to_tokens(pairs, pos)
+            # Same case-fold relaxation as the whole-name guard above, and for
+            # the same reason: OPSIN can lowercase a `D-`/`L-` token inside a
+            # single word of a multi-word name too (e.g. the second word of
+            # "methyl beta-D-galactopyranoside"). The length check stays
+            # case-sensitive-strict -- it is what actually catches a word this
+            # loop only partially consumed.
+            if new_pos - pos != len(word) or raw_joined.casefold() != word.casefold():
                 return None
             all_tokens.extend(word_tokens)
             pos = new_pos

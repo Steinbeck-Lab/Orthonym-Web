@@ -18,14 +18,21 @@ def test_caffeine_is_no_longer_one_undecomposed_blob():
 def test_caffeine_has_three_methyls_at_1_3_and_7():
     result = explain_name(CAFFEINE)
     subs = [s for s in result["segments"] if s["kind"] == "substituent"]
-    locants = sorted(c["locant"] for s in subs for c in s["children"])
+    # Filtered to kind == "substituent": a methyl segment's children now also
+    # include TOKEN siblings ("tri", the "1,3,7-" locant token itself), which
+    # carry locant=None and would otherwise blow up the sort below.
+    locants = sorted(
+        c["locant"] for s in subs for c in s["children"] if c["kind"] == "substituent"
+    )
     assert locants == ["1", "3", "7"]
 
 
 def test_caffeine_suffix_children_are_c2_and_c6():
     result = explain_name(CAFFEINE)
     suffix = next(s for s in result["segments"] if s["kind"] == "suffix")
-    assert sorted(c["locant"] for c in suffix["children"]) == ["2", "6"]
+    # Filtered to kind == "suffix" for the same reason as above.
+    locants = sorted(c["locant"] for c in suffix["children"] if c["kind"] == "suffix")
+    assert locants == ["2", "6"]
 
 
 def test_caffeine_suffix_is_labelled_dione_and_described_as_carbonyl():
@@ -97,12 +104,21 @@ def test_caffeine_locant_to_atom_association_is_pinned():
     substituent = next(s for s in result["segments"] if s["kind"] == "substituent")
     suffix = next(s for s in result["segments"] if s["kind"] == "suffix")
 
-    methyls = {c["locant"]: c["atom_indices"] for c in substituent["children"]}
+    # Filtered to their own locant-bearing kind: token siblings ("tri", the
+    # "1,3,7-"/"2,6-" locant tokens themselves) carry locant=None and would
+    # otherwise collide into a spurious {None: []} entry.
+    methyls = {
+        c["locant"]: c["atom_indices"]
+        for c in substituent["children"] if c["kind"] == "substituent"
+    }
     assert methyls == {"1": [0], "3": [12], "7": [11]}
     for indices in methyls.values():
         assert mol.GetAtomWithIdx(indices[0]).GetSymbol() == "C"
 
-    diones = {c["locant"]: c["atom_indices"] for c in suffix["children"]}
+    diones = {
+        c["locant"]: c["atom_indices"]
+        for c in suffix["children"] if c["kind"] == "suffix"
+    }
     assert diones == {"2": [13], "6": [10]}
     for indices in diones.values():
         assert mol.GetAtomWithIdx(indices[0]).GetSymbol() == "O"
@@ -329,3 +345,30 @@ def test_every_golden_name_still_decomposes():
         if explain_name(name)["error"]
     }
     assert not broken, f"{len(broken)} of {len(GOLDEN_NAMES)} golden names no longer decompose: {broken}"
+
+
+def test_a_fusion_name_exposes_its_tokens_as_hoverable_children():
+    from app.explain import explain_name
+
+    payload = explain_name("benzo[a]pyrene")
+    parent = next(s for s in payload["segments"] if s["kind"] == "parent")
+    texts = [c["label"] for c in parent["children"]]
+    assert "[a]" in texts
+    bracket = next(c for c in parent["children"] if c["label"] == "[a]")
+    assert bracket["owns_atoms"] is False
+    assert bracket["atom_indices"] == []
+    assert bracket["name_range"] is not None
+
+
+def test_token_children_never_nest_deeper_than_one_level():
+    """frontend/src/lib/nameTargets.js walks segment then child only. A
+    grandchild would be silently unhoverable.
+    """
+    from app.explain import explain_name
+    from tests.fixtures.explain_corpus import CURATED
+
+    for _axis, name in CURATED:
+        payload = explain_name(name)
+        for segment in payload["segments"]:
+            for child in segment["children"]:
+                assert child["children"] == [], (name, child["label"])

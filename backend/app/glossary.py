@@ -172,3 +172,123 @@ def describe_locant(kind: str, locant: str, element: str | None = None) -> str:
             f"here. The other parts are unaffected."
         )
     return f"Position {locant}."
+
+
+# One line per raw OPSIN token category (`Tok.category` from
+# `app.opsin_tokenizer.tokenize`, decoded through the vendored grammar's own
+# symbol table -- NOT `Modifier.kind` from `opsin_decompose.py`, a
+# differently-scoped namespace that happens to share some spellings
+# ("hydro") but not others). A category absent from this table gets NO
+# line, never a generic one: a token child with a wrong explanation is
+# worse than a token child with none, and OPSIN may add categories in a
+# future release.
+#
+# Two keys here were corrected against the REAL tokenizer output (run
+# live against the vendored jar, not assumed from the grammar file alone):
+#   - the indicated-hydrogen token ("1H-", "3aH-") tokenizes as category
+#     "bigCapitalH". "indicatedHydrogen" is never emitted by this
+#     tokenizer -- that spelling belongs to the OTHER namespace
+#     (`opsin_decompose.Modifier.kind`, the parsed-tree element name) --
+#     so a table keyed on it would silently explain no indicated hydrogen
+#     at all.
+#   - the spiro descriptor ("spiro[4.5]") tokenizes as category
+#     "spiroDescriptor", never "spiro" (a real category in the same
+#     grammar file, just for a different, unreachable-here production).
+#
+# "locant" is DELIBERATELY ABSENT, not merely unlisted: `_build_segments`
+# already emits a precise per-locant CHILD for each individual position a
+# `locant`-category token spells ("1", "3", "7", each with its own exact
+# span). A `locant` token child would be a SIBLING at the same depth,
+# spanning the WHOLE decorator ("1,3,7-", covering all three) -- and
+# `frontend/src/lib/nameTargets.js`'s ownership resolution (depth desc,
+# then range[0] asc, first-claim-wins) does not prefer the narrower span:
+# ties and earlier starts win regardless of width. Verified live: this
+# coarse child's range [0,6) starts before "3"'s own [2,3) and "7"'s own
+# [4,5), so hovering the digit "3" or "7" showed "numbers the positions
+# the next part attaches to" and highlighted all three methyl carbons,
+# instead of Task 5's own precise "Position 3" line highlighting one atom
+# -- silently undoing the very precision Task 5 built. The fine children
+# already ARE the locant explanation; a coarse sibling adds nothing they
+# do not already cover, so it must not exist.
+_TOKEN_LINES = {
+    "fusionBracket": (
+        'The letters in "{text}" say WHERE the two ring systems are fused '
+        "together."
+    ),
+    "diOrTri": (
+        '"{text}" is a counting word — it says how many of the next group '
+        "there are."
+    ),
+    "multiplier": (
+        '"{text}" is a counting word — it says how many of the next group '
+        "there are."
+    ),
+    "hydro": (
+        '"{text}" records that hydrogens were added here, which fixes '
+        "where the double bonds go."
+    ),
+    "bigCapitalH": (
+        '"{text}" pins which ring atom carries a hydrogen. Without it the '
+        "ring could be drawn more than one way."
+    ),
+    "stereochemistryBracket": (
+        '"{text}" fixes the three-dimensional arrangement at the '
+        "positions it names."
+    ),
+    "vonBaeyer": '"{text}" counts the atoms in each bridge of the ring cage.',
+    "spiroDescriptor": '"{text}" marks one atom shared between two rings.',
+}
+
+# Ring-assembly multiplier words, OPSIN's own token table
+# (`multipliers.xml`, tagname="ringAssemblyMultiplier") -- "bi" for two
+# joined rings, up through "pentadeci" for fifteen. A hardcoded "two copies"
+# for every one of these words would overclaim for anything past "bi":
+# terphenyl's "ter" means three copies, not two. Verified live against the
+# vendored jar that both "bi" (biphenyl) and "ter" (terphenyl) really tokenize
+# to this one category.
+_RING_ASSEMBLY_MULTIPLIER_COUNTS = {
+    "bi": 2, "ter": 3, "quater": 4, "quinque": 5, "sexi": 6, "septi": 7,
+    "octi": 8, "novi": 9, "deci": 10, "undeci": 11, "dodeci": 12,
+    "trideci": 13, "tetradeci": 14, "pentadeci": 15,
+}
+_NUMBER_WORDS = {
+    2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven",
+    8: "eight", 9: "nine", 10: "ten", 11: "eleven", 12: "twelve",
+    13: "thirteen", 14: "fourteen", 15: "fifteen",
+}
+
+
+def _ring_assembly_multiplier_line(text: str) -> str:
+    count = _RING_ASSEMBLY_MULTIPLIER_COUNTS.get(text.strip("-").lower())
+    word = _NUMBER_WORDS.get(count)
+    if word:
+        return (
+            f'"{text}" means {word} copies of the ring that follows are '
+            "joined together."
+        )
+    # Not reached against the current grammar -- every ring-assembly
+    # multiplier word OPSIN defines is in the table above. Kept as a
+    # truthful fallback (states WHAT the word does, not a guessed count)
+    # rather than a wrong number if OPSIN ever adds one.
+    return (
+        f'"{text}" says how many copies of the ring that follows are '
+        "joined together."
+    )
+
+
+def describe_token(category: str, text: str) -> str | None:
+    """One line for a single raw name token, or None if the token teaches
+    nothing. Elision vowels, hyphens and brackets fall in the second group.
+
+    `None` means NO CHILD AT ALL, not a silent child: `explain.py`'s
+    `_token_children` skips any token whose line is None, so no span is
+    created for it either and its characters fall through to the owning
+    segment. (An earlier draft of this docstring claimed such tokens "carry
+    a span so the name stays continuous"; they do not.)
+    """
+    if category == "ringAssemblyMultiplier":
+        return _ring_assembly_multiplier_line(text)
+    template = _TOKEN_LINES.get(category)
+    if template is None:
+        return None
+    return template.format(text=text)
