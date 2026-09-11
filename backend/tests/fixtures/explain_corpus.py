@@ -8,11 +8,14 @@ FULL holds all 544 (axis, name) pairs of the real corpus, generated once and
 frozen from `.superpowers/sdd/2026-09-09-explain-token-parts/corpus_full.json`
 (14 axes; not tracked in this repo -- that JSON is workspace scratch, this
 frozen list is the committed artifact). Order is preserved exactly as
-measured. CURATED is a hand-picked subset of ~50 names, chosen so each
-documented cause appears at least once; most of its entries are drawn
-verbatim from FULL, but a few (noted in the task-1 report) are worked
-examples from the design spec that predate this corpus and are not
-themselves present in FULL by name.
+measured. CURATED is 49 hand-picked names, chosen so each documented cause
+appears at least once. It is **not** a subset of FULL and must not be
+"tidied" into one: measured, 14 of its 49 names appear nowhere in FULL, and
+6 more sit under a different axis there (caffeine is `golden` in CURATED,
+`retained-fused` in FULL). Those extras are the repo's own GOLDEN_NAMES and
+the app's "Try one" examples -- the names most worth gating, which the
+544-name corpus never contained. Deleting them as duplicates would remove
+the gate's most load-bearing rows.
 """
 
 CAFFEINE = "1,3,7-trimethyl-3,7-dihydro-1H-purine-2,6-dione"
@@ -79,8 +82,9 @@ OPSIN_CANNOT_PARSE: frozenset[str] = frozenset({
 })
 
 # The 544-name corpus (14 axes), frozen verbatim from corpus_full.json in
-# its original order. This is the whole corpus -- CURATED above is drawn
-# from it (see the module docstring), not concatenated with it.
+# its original order. Hold it at exactly 544 so every census stays comparable
+# to the recorded baseline. CURATED is a SEPARATE list, not a slice of this
+# one and not concatenated with it -- see the module docstring.
 FULL: list[tuple[str, str]] = [
     ('baseline-chains', '2-methylbutane'),
     ('baseline-chains', '2,2,4-trimethylpentane'),

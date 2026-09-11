@@ -25,7 +25,8 @@ residue, not unexplained gaps:
   substituent's span whenever grouping it by TEXT (rather than by each raw
   occurrence) would make it claim atoms its span does not cover -- measured
   directly (Ruling 25, `.superpowers/sdd/2026-09-09-explain-token-parts/
-  progress.md`) at **+55 names** if regrouped per-occurrence. That regrouping
+  progress.md`, Ruling 25 -- that path is gitignored, so it is not in a
+  clone) at **+55 names** if regrouped per-occurrence. That regrouping
   changes what a segment means (payload-contract work) and was scoped out of
   this plan as a follow-on project; it is not a defect this gate should treat
   as a regression.
@@ -45,8 +46,10 @@ Given that, this file gates two kinds of things differently, on purpose:
    SPANS_NONE/PARTIAL to CLEAN) never fails these tests and never requires
    editing them; only a regression does.
 
-Measured 2026-09-11 against `CURATED` (49 names) on this branch, tip
-`81c0db7`, matching the FULL-corpus run above exactly.
+Measured 2026-09-11 against `CURATED` (49 names), at the same tip as the
+FULL-corpus run quoted above. The two tables cannot be compared row for row
+-- CURATED is a separate 49-name list, not a slice of the 544 (see
+`tests/fixtures/explain_corpus.py`) -- so "same tip", not "same numbers".
 """
 
 import collections
@@ -168,6 +171,18 @@ KNOWN_SPANS_NONE_CURATED = frozenset({
     "tetradecanoic acid",
     "nonadecane",
     "(9Z,12Z)-octadeca-9,12-dienoic acid",
+    # Added by the final-review fix wave, and it is a TRADE, not a loss. This
+    # name used to ship PARTIALLY spanned -- parent `sodium` and parent `acet`
+    # both had spans while suffix `ate` had none -- which `_apply_name_spans`
+    # calls impossible. Its suffix belongs to the SECOND root while
+    # `suffix_key` reads only the first, so the suffix has no anchor. The
+    # backend now withholds the whole name instead, which is the honest
+    # answer; the frontend was already falling back, so no reader loses
+    # anything they could previously see. Recovering it properly means keying
+    # the suffix anchor to the root that produced the segment -- recorded
+    # follow-on, not done here. `potassium benzoate` has the same shape but is
+    # not in CURATED.
+    "sodium acetate",
 })
 
 
