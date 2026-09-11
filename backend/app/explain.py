@@ -205,22 +205,65 @@ def _compute_claims(tokens: list, runs: list, modifier_run) -> dict:
     return claims
 
 
+def _bigcapitalh_subspans(token) -> dict:
+    """Split a `bigCapitalH`-category token into one span per individual
+    locant, less its own trailing "H" marker.
+
+    Unlike a `locant`-category token, a locant here is glued directly to
+    the element letter that names it, not set off by a hyphen: "1H-" is
+    one locant ("1") stuck to "H"; a fused-ring letter locant keeps its
+    own letter ("3aH-" -> "3a", "9bH-" -> "9b" -- confirmed against
+    OPSIN's own tokenizer, not assumed). A ring can also carry more than
+    one indicated hydrogen in a single token, each spelling its own "H":
+    "1H,3H-" -> "1" and "3" (also confirmed live). Offsets are walked
+    forward from the token's own start, exactly like `_locant_subspans`,
+    so a repeated locant cannot collide with an earlier occurrence.
+    """
+    found = {}
+    cursor = token.start
+    for piece in token.text.replace("-", "").split(","):
+        if not piece:
+            cursor += 1
+            continue
+        index = token.text.find(piece, cursor - token.start)
+        if index < 0:
+            continue
+        start = token.start + index
+        locant = piece[:-1] if piece.endswith("H") else piece
+        found.setdefault(locant, (start, start + len(locant)))
+        cursor = start + len(piece) + 1
+    return found
+
+
 def _locants_within(tokens: list, start: int, end: int) -> dict:
-    """Locant string -> (start, end) for every locant token whose OWN
-    offsets sit inside `[start, end)`.
+    """Locant string -> (start, end) for every locant inside `[start, end)`,
+    from EITHER of the two token shapes a locant can arrive in.
+
+    A `locant`-category token can carry several locants set off by commas
+    ("1,3,7-" is three); a `bigCapitalH`-category token carries its locant
+    glued to the element that marks it ("1H-" is one, "1H,3H-" is two).
+    Both are walked here, restricted to tokens whose OWN offsets sit
+    inside the caller's window, so a repeated locant elsewhere in the name
+    cannot collide with this part's own.
 
     Ported from `name_spans.py`'s per-part locant pass (its step 4), now
     keyed off a run's (or the modifier's) character span directly instead
-    of `compute_spans`' anchor-derived one.
+    of `compute_spans`' anchor-derived one. The `bigCapitalH` branch is new
+    here: the ported version only ever walked `locant`-category tokens, so
+    an indicated-hydrogen locant living inside a `bigCapitalH` token (like
+    caffeine's `1H-`) was invisible to it -- the token simply never matched
+    the category filter, not merely mis-split by it.
     """
     found = {}
     for token in tokens:
-        if token.category != "locant":
-            continue
         if token.start < start or token.end > end:
             continue
-        for locant, span in _locant_subspans(token).items():
-            found.setdefault(locant, span)
+        if token.category == "locant":
+            for locant, span in _locant_subspans(token).items():
+                found.setdefault(locant, span)
+        elif token.category == "bigCapitalH":
+            for locant, span in _bigcapitalh_subspans(token).items():
+                found.setdefault(locant, span)
     return found
 
 
