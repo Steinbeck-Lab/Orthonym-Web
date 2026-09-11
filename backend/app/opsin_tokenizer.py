@@ -1,6 +1,6 @@
 """Real name tokenization via OPSIN's own parser -- not a guess.
 
-NOW LOAD-BEARING. `name_spans.py` imports `tokenize` from this module and
+NOW LOAD-BEARING. `explain.py` imports `tokenize` from this module and
 builds every `name_range` in the Explain response on its character offsets,
 which is the work this module was kept for -- "Spans come instead from
 `ParseRules.getParses()`, which `opsin_tokenizer.py` already turns into exact
