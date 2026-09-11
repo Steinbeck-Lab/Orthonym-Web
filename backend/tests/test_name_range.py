@@ -58,7 +58,13 @@ def test_caffeine_locant_children_carry_their_own_spans():
     result = explain_name(CAFFEINE)
     name = result["name"]
     methyl = next(s for s in result["segments"] if s["kind"] == "substituent")
-    got = {c["locant"]: name[slice(*c["name_range"])] for c in methyl["children"]}
+    # Filtered to kind == "substituent": the methyl segment's children now
+    # also include TOKEN siblings ("tri", the "1,3,7-" locant token itself),
+    # which are a separate concern from the per-locant children pinned here.
+    got = {
+        c["locant"]: name[slice(*c["name_range"])]
+        for c in methyl["children"] if c["kind"] == "substituent"
+    }
     assert got == {"1": "1", "3": "3", "7": "7"}
 
 
@@ -94,7 +100,13 @@ def test_caffeine_suffix_segment_and_its_locants_are_hoverable():
     name = result["name"]
     suffix = next(s for s in result["segments"] if s["kind"] == "suffix")
     assert name[slice(*suffix["name_range"])] == "-2,6-dione"
-    got = {c["locant"]: name[slice(*c["name_range"])] for c in suffix["children"]}
+    # Filtered to kind == "suffix" for the same reason as the methyl case
+    # above: the suffix segment's children now also include a TOKEN sibling
+    # ("di", the multiplier word).
+    got = {
+        c["locant"]: name[slice(*c["name_range"])]
+        for c in suffix["children"] if c["kind"] == "suffix"
+    }
     assert got == {"2": "2", "6": "6"}
 
 
