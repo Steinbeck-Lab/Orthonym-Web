@@ -30,6 +30,9 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
+      # Still on node20 upstream as of 2026-09-11, so this one action keeps
+      # raising GitHub's node20 deprecation notice. That is upstream's to fix
+      # -- v4 is the current major -- and it is a warning, not a failure.
       - uses: googleapis/release-please-action@v4
         with:
           config-file: release-please-config.json
