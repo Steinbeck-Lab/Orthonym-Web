@@ -1,7 +1,49 @@
-import re
-
 from app.explain import explain_name
+from app.opsin_tokenizer import tokenize
 from tests.conftest import CAFFEINE, GOLDEN_NAMES
+
+
+def _locant_text_present(name: str, start: int, end: int, locant: str) -> bool:
+    """Is `locant`'s own text really sitting somewhere inside `name[start:end]`?
+
+    An independent check for the invariant test below -- it re-tokenizes
+    `name` from scratch via the real OPSIN tokenizer (`opsin_tokenizer.
+    tokenize`, not `explain.py`'s own collector) and asks, per RAW TOKEN
+    whose offsets sit fully inside the window, whether `locant` is one of
+    that token's own comma-separated pieces, less a trailing "-" (a locant
+    token's own closing hyphen) and less a trailing "H" (an indicated-
+    hydrogen token's own element marker, glued directly onto its locant:
+    "1H-" is the locant "1" plus that marker, not two characters of one
+    locant; "9bH-" is the locant "9b" the same way).
+
+    A first version of this oracle used a hand-rolled word-boundary regex
+    over the raw window text instead of real tokens, and got exactly this
+    case wrong: it treated a glued "H" as an ordinary word character, so
+    its negative lookahead refused to recognise "1" as present inside
+    "1H-" at all -- the one shape this task's whole fix exists for. That
+    silently left the invariant with no protection for anything but
+    caffeine (pinned separately by
+    `test_caffeines_indicated_hydrogen_locant_is_hoverable`): forcing
+    `1H-indole`'s or `4H-pyran`'s indicated-hydrogen child back to `None`
+    passed the old regex clean, because it could not see the "1" or "4"
+    was ever there to miss. Walking real tokens and comparing whole
+    pieces sidesteps boundary-guessing entirely: a piece either equals
+    the locant (a plain `locant`-category token) or equals it plus one
+    trailing "H" (a `bigCapitalH`-category token), and nothing else can
+    match by accident.
+    """
+    tokens = tokenize(name)
+    if not tokens:
+        return False
+    for token in tokens:
+        if token.start < start or token.end > end:
+            continue
+        for piece in token.text.rstrip("-").split(","):
+            if not piece:
+                continue
+            if piece == locant or (piece.endswith("H") and piece[:-1] == locant):
+                return True
+    return False
 
 
 def test_caffeine_segments_carry_spans_that_slice_to_the_right_text():
@@ -274,10 +316,11 @@ def test_every_locant_child_of_a_spanned_segment_has_a_span():
     So a missing span is only counted as a HOLE -- worth failing the test
     over -- when the locant's own text is actually sitting inside its
     segment's OWN already-proven span and got missed anyway. That check
-    is deliberately independent of `explain.py`'s own token walk (a plain
-    regex over the sliced-out span text, not a second call into the
-    collector under test), so this stays a real invariant rather than the
-    implementation grading its own homework.
+    (`_locant_text_present` above) is deliberately independent of
+    `explain.py`'s own collector (`_locant_subspans`/`_bigcapitalh_
+    subspans`) -- it re-tokenizes from scratch and compares whole raw
+    token pieces, not offsets -- so this stays a real invariant rather
+    than the implementation grading its own homework.
     """
     from app.explain import explain_name
     from tests.fixtures.explain_corpus import CURATED
@@ -291,16 +334,10 @@ def test_every_locant_child_of_a_spanned_segment_has_a_span():
             if segment["name_range"] is None:
                 continue
             start, end = segment["name_range"]
-            window = name[start:end]
             for child in segment["children"]:
                 locant = child["locant"]
                 if not locant or child["name_range"] is not None:
                     continue
-                # Bounded on both sides so a locant never matches as a
-                # substring of a longer one ("1" inside "13") and a
-                # letter-suffixed or primed locant ("3a", "1'") is matched
-                # whole, not fragmented.
-                pattern = rf"(?<![0-9A-Za-z']){re.escape(locant)}(?![0-9A-Za-z'])"
-                if re.search(pattern, window):
+                if _locant_text_present(name, start, end, locant):
                     holes.append((name, segment["label"], locant))
     assert holes == [], holes
