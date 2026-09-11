@@ -353,3 +353,90 @@ def test_every_locant_child_of_a_spanned_segment_has_a_span():
                 if _locant_text_present(name, start, end, locant):
                     holes.append((name, segment["label"], locant))
     assert holes == [], holes
+
+
+def _hover_owner_by_offset(payload: dict) -> dict:
+    """Python port of the frontend's OWN hover-resolution algorithm --
+    `frontend/src/lib/nameTargets.js`'s `nameTargets()` (build one target
+    per segment/child with a `name_range`, at depth 0/1) composed with
+    `sliceName()`'s ownership pass (first-claim-wins over the targets in
+    `nameTargets()`'s own sort order: depth DESCENDING, then `range[0]`
+    ASCENDING, ties broken by list order because both JS's `Array.sort`
+    and Python's `list.sort` are stable).
+
+    This exists because the JSON payload alone cannot show a shadowing
+    regression: a same-depth sibling with a WIDER range that happens to
+    start no later can still win a character away from a narrower,
+    more precise sibling, even though both children are present and
+    individually correct in isolation. Verified live before the fix this
+    test guards: a `locant`-category token child ("1,3,7-", [0,6)) started
+    at the SAME offset as caffeine's own precise "1" locant child ([0,1))
+    but, being wider, also swallowed "3" ([2,3)) and "7" ([4,5)) -- neither
+    of which starts as early as the token, so the token's own EARLIER (or
+    tied) `range[0]` let it win the sort position and claim their
+    characters first, regardless of the token being built and appended
+    to the children list after them.
+
+    Returns `{char_offset: (segment, child_or_None)}` for every character
+    some target's range covers.
+    """
+    targets = []
+    for s_index, segment in enumerate(payload["segments"]):
+        if segment["name_range"] is not None:
+            targets.append((0, segment["name_range"][0], s_index, segment, None))
+        for c_index, child in enumerate(segment["children"]):
+            if child["name_range"] is not None:
+                targets.append((1, child["name_range"][0], (s_index, c_index), segment, child))
+
+    # Stable sort: depth DESCENDING (children win over their own parent),
+    # then range[0] ASCENDING -- exactly nameTargets.js's own comparator.
+    # Ties (equal depth AND equal range[0]) keep their ORIGINAL list order,
+    # which is why insertion order (locant children built before token
+    # children are appended) can still matter for a tie specifically.
+    targets.sort(key=lambda t: (-t[0], t[1]))
+
+    owner = {}
+    for _depth, _start, _path, segment, child in targets:
+        name_range = child["name_range"] if child is not None else segment["name_range"]
+        for offset in range(name_range[0], name_range[1]):
+            if offset not in owner:
+                owner[offset] = (segment, child)
+    return owner
+
+
+def test_precise_locant_children_are_not_shadowed_by_a_coarser_token_sibling():
+    """Fix-round-1 regression guard. A `"locant"`-category token child used
+    to exist alongside the precise per-position locant children Task 5
+    built, and -- proven by replaying the REAL frontend ownership algorithm
+    above, not by inspecting the JSON -- silently won the hover for "3" and
+    "7" away from their own precise children, because the coarse token's
+    range started no later than theirs. The JSON alone looked fine (both
+    children were present, both individually correct); only replaying
+    `nameTargets`/`sliceName`'s own resolution rule exposes the shadowing.
+    `describe_token` no longer has a `"locant"` entry, so this class of
+    token child cannot be produced at all any more -- this test is the
+    proof, not just the removal.
+    """
+    result = explain_name(CAFFEINE)
+    name = result["name"]
+    owner = _hover_owner_by_offset(result)
+
+    methyl = next(s for s in result["segments"] if s["kind"] == "substituent")
+    by_locant = {
+        c["locant"]: c for c in methyl["children"] if c["kind"] == "substituent"
+    }
+    assert set(by_locant) == {"1", "3", "7"}
+
+    for locant in ("1", "3", "7"):
+        child = by_locant[locant]
+        start, end = child["name_range"]
+        assert name[start:end] == locant, (locant, name[start:end])
+        for offset in range(start, end):
+            owning_segment, owning_child = owner[offset]
+            assert owning_child is child, (
+                f"caffeine offset {offset} ({name[offset]!r}, locant "
+                f"{locant!r}) is owned by "
+                f"{(owning_child or owning_segment)['label']!r} "
+                f"({(owning_child or owning_segment)['kind']}) instead of "
+                f"its own precise locant child"
+            )

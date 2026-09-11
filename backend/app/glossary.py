@@ -194,12 +194,32 @@ def describe_locant(kind: str, locant: str, element: str | None = None) -> str:
 #   - the spiro descriptor ("spiro[4.5]") tokenizes as category
 #     "spiroDescriptor", never "spiro" (a real category in the same
 #     grammar file, just for a different, unreachable-here production).
+#
+# "locant" is DELIBERATELY ABSENT, not merely unlisted: `_build_segments`
+# already emits a precise per-locant CHILD for each individual position a
+# `locant`-category token spells ("1", "3", "7", each with its own exact
+# span). A `locant` token child would be a SIBLING at the same depth,
+# spanning the WHOLE decorator ("1,3,7-", covering all three) -- and
+# `frontend/src/lib/nameTargets.js`'s ownership resolution (depth desc,
+# then range[0] asc, first-claim-wins) does not prefer the narrower span:
+# ties and earlier starts win regardless of width. Verified live: this
+# coarse child's range [0,6) starts before "3"'s own [2,3) and "7"'s own
+# [4,5), so hovering the digit "3" or "7" showed "numbers the positions
+# the next part attaches to" and highlighted all three methyl carbons,
+# instead of Task 5's own precise "Position 3" line highlighting one atom
+# -- silently undoing the very precision Task 5 built. The fine children
+# already ARE the locant explanation; a coarse sibling adds nothing they
+# do not already cover, so it must not exist.
 _TOKEN_LINES = {
     "fusionBracket": (
         'The letters in "{text}" say WHERE the two ring systems are fused '
         "together."
     ),
     "diOrTri": (
+        '"{text}" is a counting word — it says how many of the next group '
+        "there are."
+    ),
+    "multiplier": (
         '"{text}" is a counting word — it says how many of the next group '
         "there are."
     ),
@@ -215,7 +235,6 @@ _TOKEN_LINES = {
         '"{text}" fixes the three-dimensional arrangement at the '
         "positions it names."
     ),
-    "locant": '"{text}" numbers the positions the next part attaches to.',
     "vonBaeyer": '"{text}" counts the atoms in each bridge of the ring cage.',
     "spiroDescriptor": '"{text}" marks one atom shared between two rings.',
 }
