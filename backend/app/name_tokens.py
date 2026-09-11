@@ -39,9 +39,11 @@ multiplier words, hyphens, elision vowels, the suffix that closes a stem --
 is recovered separately, by growing the contiguous anchor outward over a
 curated set of decorating categories, bounded by where the NEIGHBOURING run
 already starts or ends. `_LEADING`/`_TRAILING` below, and the two-pass anchor-
-then-grow shape of `assign_runs`, are that mechanism moved here so both this
-module and `name_spans.py` share one definition instead of two that could
-drift apart.
+then-grow shape of `assign_runs`, are that mechanism moved here so this
+module owns the one definition instead of a second copy in
+`name_spans.py` that could drift apart -- `name_spans.py` itself was
+deleted in Task 7, once its only consumer, `compute_spans`, proved to have
+no production caller.
 """
 
 from __future__ import annotations
@@ -80,9 +82,10 @@ class Run(NamedTuple):
 
 
 # The single source of truth for which categories decorate a content run and
-# which side they decorate it from -- shared with `name_spans.py`, which
-# imports both sets from here rather than keeping its own copy. Moved here,
-# not copied, so the two callers cannot drift apart.
+# which side they decorate it from. This used to be shared with
+# `name_spans.py`, which imported both sets from here rather than keeping
+# its own copy; that module was deleted in Task 7 once its only consumer,
+# `compute_spans`, proved to have no production caller.
 #
 # Tokens that decorate the CONTENT run AFTER them and belong to ITS run:
 # "1,3,7-" and "tri" belong to "meth", not to whatever precedes them.
@@ -146,11 +149,62 @@ _TRAILING = frozenset({
 
 # The hydro / indicated-hydrogen run, which is its own REFERENTIAL run:
 # `assign_runs` above never anchors on it, because it has no group text of
-# its own -- see `find_modifier_run` below. Shared with `name_spans.py`,
-# which imports it from here rather than keeping its own copy, for the same
-# reason _LEADING/_TRAILING are shared: a second, drifted definition is a
-# defect waiting to happen.
+# its own -- see `find_modifier_run` below. This used to be shared with
+# `name_spans.py`, which imported it from here rather than keeping its own
+# copy; that module was deleted in Task 7 once its only consumer,
+# `compute_spans`, proved to have no production caller.
 _MODIFIER = frozenset({"hydro", "bigCapitalH"})
+
+# Moved from `name_spans.py` (Task 7), which was deleted once its only
+# consumer -- `compute_spans` -- turned out to have no production caller.
+# These three are still live: `explain.py` imports them from here for
+# `_compute_claims` and `_locants_within`.
+#
+# Multiplier tokens, and what each one's text says about HOW MANY instances of
+# the following group its own span names. Used by `explain.py`'s
+# `_compute_claims`, whose job is to let a caller ask "can this one span
+# honestly account for every atom my segment owns?".
+#
+# `tetrOrHigher` is here because OPSIN emits the higher multipliers as TWO
+# tokens: "tetra" arrives as ('tetr','tetrOrHigher') + ('a','a'), and "hexa"
+# as ('hex','tetrOrHigher') + ('a','a'). Without this category the multiplier
+# is invisible, and an unlocanted name like `hexamethylbenzene` -- which has
+# no locant list to count instead -- withholds its spans entirely.
+_MULTIPLIER_CATEGORIES = frozenset({
+    "multiplier", "diOrTri", "groupMultiplier", "tetrOrHigher",
+})
+
+# The bare stems below (tetr, pent, hex, ...) are the two-token form's first
+# half. Listing "hex" is safe ONLY because the category gate above runs
+# first: cyclohexane's "hex" is category alkaneStemTrivial, never
+# tetrOrHigher, so it is never looked up here. Do not drop that gate.
+_MULTIPLIER_VALUES = {
+    "mono": 1, "di": 2, "bis": 2, "tri": 3, "tris": 3,
+    "tetra": 4, "tetrakis": 4, "penta": 5, "pentakis": 5,
+    "hexa": 6, "hexakis": 6, "hepta": 7, "octa": 8, "nona": 9, "deca": 10,
+    "tetr": 4, "pent": 5, "hex": 6, "hept": 7, "oct": 8, "non": 9, "dec": 10,
+}
+
+
+def _locant_subspans(token) -> dict:
+    """Split a locant token into one span per individual locant.
+
+    "1,3,7-" at [0:6] gives 1->(0,1), 3->(2,3), 7->(4,5). Offsets are walked
+    rather than searched, so a repeated locant cannot collide.
+    """
+    found = {}
+    cursor = token.start
+    for piece in token.text.replace("-", "").split(","):
+        if not piece:
+            cursor += 1
+            continue
+        index = token.text.find(piece, cursor - token.start)
+        if index < 0:
+            continue
+        start = token.start + index
+        found.setdefault(piece, (start, start + len(piece)))
+        cursor = start + len(piece) + 1
+    return found
 
 
 def _find_contiguous_anchor(tokens: list, cursor: int, want: str):

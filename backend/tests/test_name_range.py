@@ -440,3 +440,64 @@ def test_precise_locant_children_are_not_shadowed_by_a_coarser_token_sibling():
                 f"({(owning_child or owning_segment)['kind']}) instead of "
                 f"its own precise locant child"
             )
+
+
+# ---------------------------------------------------------------------------
+# Moved from test_name_spans.py (Task 7). These test explain_name's own
+# production behaviour -- name_tokens.assign_runs and _apply_name_spans --
+# not the deleted compute_spans/SpanSet/MODIFIER_KEY, so they belong here
+# rather than dying with that module.
+#
+# `_apply_name_spans` sources its top-level spans from
+# `name_tokens.assign_runs`, not from the old anchor scan (`compute_spans`,
+# which tested equality against a SINGLE raw token and withheld every
+# fusion-bracket and ring-assembly name in the census -- 80 names --
+# because their labels are several tokens wide).
+# ---------------------------------------------------------------------------
+
+
+def test_a_fusion_parent_gets_a_span():
+    """All 40 fusion-bracket names in the census withheld every span. The
+    label is three raw tokens wide and the anchor scan tested equality
+    against one.
+    """
+    payload = explain_name("benzo[a]pyrene")
+    assert payload["error"] is None
+    parents = [s for s in payload["segments"] if s["kind"] == "parent"]
+    assert parents, payload["segments"]
+    assert parents[0]["name_range"] is not None
+
+
+def test_a_primed_ring_assembly_gets_a_span():
+    """All 40 ring-assembly names withheld. 'biphenyl' is bi|phenyl in the
+    stream.
+    """
+    payload = explain_name("1,1'-biphenyl")
+    assert payload["error"] is None
+    assert any(s["name_range"] is not None for s in payload["segments"])
+
+
+def test_caffeine_still_spans_every_top_level_part():
+    """The reference example. Its four top-level parts covered [0,47] before
+    this change and must still cover it after.
+
+    `CAFFEINE` here is the module's own import from `tests.conftest`; the
+    original (test_name_spans.py) instead imported it from
+    `tests.fixtures.explain_corpus`, but the two are the same literal
+    string, so this is the same molecule under the name this module
+    already uses everywhere else.
+    """
+    payload = explain_name(CAFFEINE)
+    ranges = [s["name_range"] for s in payload["segments"]]
+    assert all(r is not None for r in ranges), ranges
+    assert min(r[0] for r in ranges) == 0
+    assert max(r[1] for r in ranges) == len(CAFFEINE)
+
+
+def test_a_duplicated_heteroatom_label_still_withholds_everything():
+    """The named residue. OPSIN duplicates the az token, so the label is not
+    any ordered concatenation of the stream. Withhold -- never guess.
+    """
+    payload = explain_name("[1,2,4]triazolo[4,3-a]pyridine")
+    assert payload["error"] is None
+    assert all(s["name_range"] is None for s in payload["segments"])

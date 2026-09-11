@@ -260,3 +260,24 @@ def test_no_modifier_marks_returns_none():
     runs = assign_runs(tokens, ["meth"])
     assert runs is not None
     assert find_modifier_run(tokens, runs) is None
+
+
+def test_locant_subspans_walked_cursor_does_not_confuse_a_prefix_locant():
+    """Moved from test_name_spans.py (Task 7): `_locant_subspans` now lives
+    in this module, alongside `_MULTIPLIER_CATEGORIES`/`_MULTIPLIER_VALUES`,
+    since `explain.py`'s `_compute_claims`/`_locants_within` are its only
+    live callers -- `name_spans.py`'s own use was deleted with that module.
+
+    No golden name has a locant token where one locant is a prefix of the
+    next (e.g. "11" then "1"), so this branch -- the walked cursor
+    documented as preventing exactly this collision -- is otherwise never
+    exercised. A naive `text.find(piece)` search (no cursor) would find "1"
+    INSIDE "11" at index 0 instead of the real standalone "1" at index 3.
+    """
+    from app.name_tokens import _locant_subspans
+    from app.opsin_tokenizer import Token
+
+    token = Token(text="11,1-", category="locant", start=100, end=105)
+    found = _locant_subspans(token)
+    assert found["11"] == (100, 102)
+    assert found["1"] == (103, 104)

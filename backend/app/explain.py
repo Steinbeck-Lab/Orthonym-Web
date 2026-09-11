@@ -40,8 +40,15 @@ from rdkit.Chem.Draw import rdMolDraw2D
 from openstout import OpenSTOUT
 
 from .glossary import describe_locant, describe_part, describe_token
-from .name_spans import _MULTIPLIER_CATEGORIES, _MULTIPLIER_VALUES, _locant_subspans
-from .name_tokens import _MODIFIER, Tok, assign_runs, find_modifier_run
+from .name_tokens import (
+    _MODIFIER,
+    _MULTIPLIER_CATEGORIES,
+    _MULTIPLIER_VALUES,
+    Tok,
+    _locant_subspans,
+    assign_runs,
+    find_modifier_run,
+)
 from .opsin_decompose import decompose, heavy_atom_indices
 from .opsin_tokenizer import tokenize
 from .root_split import split_root
@@ -120,8 +127,8 @@ def _parent_label(root) -> str:
 def _strip_suffixes(label: str, result) -> str:
     """The group token behind a substituent label: "methyl" -> "meth".
 
-    OPSIN's raw group token is what name_spans anchors on, and a substituent
-    label is that token plus its inline suffix ("meth" + "yl").
+    OPSIN's raw group token is what `name_tokens.assign_runs` anchors on, and
+    a substituent label is that token plus its inline suffix ("meth" + "yl").
     """
     for part in result.parts:
         if part.kind != "substituent":
@@ -316,12 +323,12 @@ def _apply_name_spans(name: str, segments: list, result) -> None:
 
     Spans are DERIVED from token offsets (`name_tokens.assign_runs`), not
     searched for by text. The anchor scan this replaced (`compute_spans`,
-    still in `name_spans.py` -- its own tests still exercise it directly,
-    but this function no longer calls it) tested equality against a SINGLE
-    raw token, which withheld every fusion-bracket and ring-assembly name
-    in the census -- 80 names -- because their labels are several tokens
-    wide (`benzo[a]pyrene` merges to one value spanning three raw tokens;
-    `assign_runs` anchors on a CONTIGUOUS run instead of one token).
+    formerly in `name_spans.py`, deleted in Task 7 once its only consumer
+    -- its own tests -- was the last one left) tested equality against a
+    SINGLE raw token, which withheld every fusion-bracket and ring-assembly
+    name in the census -- 80 names -- because their labels are several
+    tokens wide (`benzo[a]pyrene` merges to one value spanning three raw
+    tokens; `assign_runs` anchors on a CONTIGUOUS run instead of one token).
     """
     raw = tokenize(name)
     if raw is None:
