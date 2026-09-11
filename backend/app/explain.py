@@ -156,7 +156,7 @@ def _compute_claims(tokens: list, runs: list, modifier_run) -> dict:
     """Position (in `group_tokens`/`spanned`) -> how many instances of its
     group each run's own text CLAIMS -- e.g. "1,3,7-" + "tri" both say 3.
 
-    Ported from `name_spans.py`'s per-part claims count (its step 4b), but
+    Ported from `name_spans.py` (deleted in this branch; read it at `9908574^`)'s per-part claims count (its step 4b), but
     windowed over RUN boundaries (a run's own span plus everything back to
     the previous run's end) instead of `compute_spans`' anchor-derived
     PARTS. A narrower version keyed only to a run's own `fillers` was tried
@@ -342,9 +342,23 @@ def _apply_name_spans(name: str, segments: list, result) -> None:
         return
     tokens = [Tok(t.text, t.category, t.start, t.end) for t in raw]
 
-    # Anchor keys in DOCUMENT order: substituent stems, then the ring, then the
-    # suffix token. `assign_runs` matches monotonically, so the order matters.
+    # Anchor keys in `_build_segments` order: every substituent stem, then the
+    # ring, then the suffix token. `assign_runs` matches monotonically, so the
+    # order matters -- but that is NOT a guarantee of document order, and this
+    # comment used to claim it was. `_build_segments` emits ALL substituents
+    # before ANY root, so a name whose root is written first produces keys out
+    # of order: `sodium 2-hydroxybenzoate` yields [hydroxy, sodium, benz, ...]
+    # while the name reads `sodium` first. The monotonic scan then cannot
+    # anchor them and the whole name withholds -- fail-closed, so nothing
+    # incorrect ships, but the cause is invisible from here. Measured: of 34
+    # multi-root names in the esters-salts-amides and charged-inorganic axes,
+    # 18 are SPANS_NONE, and `trisodium phosphate` has four roots. Sorting the
+    # keys by their roots' document position would recover a real slice of
+    # that; it is recorded follow-on work, not done here.
     root = next((p for p in result.parts if p.kind == "root"), None)
+    # First root only. A second root's own suffix therefore has no anchor --
+    # `sodium acetate`'s `ate` belongs to root 2 -- and the falsy-text branch
+    # below withholds the name rather than shipping it partially spanned.
     suffix_key = root.suffix_texts[0] if (root and root.suffix_texts) else None
 
     def token_for(segment):
@@ -368,9 +382,24 @@ def _apply_name_spans(name: str, segments: list, result) -> None:
     for segment in segments:
         if segment["kind"] in ("substituent", "parent", "suffix"):
             text = token_for(segment)
-            if text:
-                group_tokens.append(text)
-                spanned.append(segment)
+            if not text:
+                # A span-bearing segment with no anchorable text cannot be
+                # proven, and SKIPPING it is not a neutral act: it leaves that
+                # segment's `name_range` at None while its siblings keep
+                # theirs, which is exactly the partial top-level span set this
+                # function's docstring forbids. Measured: `sodium acetate` and
+                # `potassium benzoate` shipped that way, because `suffix_key`
+                # is read from the FIRST root and their suffix belongs to the
+                # second. The page's own fallback hid it. Withhold instead --
+                # the honest answer is the part list, not half a live name.
+                logger.info(
+                    "explain: %r has a span-bearing %s segment with no "
+                    "anchorable text -- the page will fall back to the part "
+                    "list", name, segment["kind"],
+                )
+                return
+            group_tokens.append(text)
+            spanned.append(segment)
 
     want_modifier = any(s["kind"] == "modifier" for s in segments)
 
@@ -585,7 +614,16 @@ def _build_segments(result) -> list[dict]:
         # which names nothing. There is no honest label to invent, so the
         # atoms stay with the parent that actually names them: degrade, never
         # guess (spec §6). Ownership still partitions the molecule exactly.
-        names_its_suffix = bool(root.suffix_texts)
+        # `any`, not `bool`: OPSIN hands back `('',)` for several retained
+        # amino-acid roots -- a suffix token that exists but spells nothing.
+        # That tuple is TRUTHY, so `bool` emitted a segment labelled "", whose
+        # explanation rendered as '"" covers 2 atoms of this structure.' and
+        # whose empty label then fell through the falsy test in
+        # `_apply_name_spans`, silently dropping a span-bearing segment and
+        # leaving the name PARTIALLY spanned -- the one thing this module
+        # forbids. An all-empty tuple is the same "names nothing" case the
+        # comment above describes, just wearing a truthy disguise.
+        names_its_suffix = any(root.suffix_texts)
         parent_atoms = split.parent_atoms
         if split.suffix_atoms and not names_its_suffix:
             parent_atoms = tuple(sorted(parent_atoms + split.suffix_atoms))

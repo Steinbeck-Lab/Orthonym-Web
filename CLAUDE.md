@@ -22,7 +22,7 @@ docker compose up -d redis           # container stitch-redis, localhost:6379
 
 # tests — from the repo root; this script is the only correct way to run them
 backend/scripts/run-tests.sh                              # full suite
-backend/scripts/run-tests.sh tests/test_name_spans.py -v  # one file
+backend/scripts/run-tests.sh tests/test_name_range.py -v  # one file
 
 # backend — from backend/, three processes in three terminals
 REDIS_URL=redis://localhost:6379/0 .venv/bin/python -m uvicorn app.main:app --port 8001
@@ -183,8 +183,10 @@ Things the repo does not tell you, or tells you only after they cost time.
   measured, not assumed: `backend/scripts/explain_census.py` classifies all 544 names and prints
   the residue rather than hiding it, and `backend/tests/test_explain_coverage.py` gates a curated
   subset of that corpus so a class already fixed cannot silently regress. This is **not**
-  near-total coverage -- measured 2026-09-11, 277 of 544 names decompose cleanly, 157 are still
-  fully inert (`SPANS_NONE`), and the rest are partially spanned; the residue is real and named,
+  near-total coverage. Measured 2026-09-11 over the 544-name corpus: **282 clean, 159 fully
+  inert** (`SPANS_NONE`, 154 of them plus 5 that also carry an unmapped part), **99 partially
+  spanned** (94 plus 5 with an unmapped part), **2 fully spanned but carrying an unmapped
+  part**, and **2 that OPSIN itself cannot parse**. The residue is real and named,
   not accidental (lossy OPSIN labels where a duplicated token means the part text is no longer a
   substring of the name, plus a text-grouped-substituent class worth a measured +55 names that a
   follow-on project owns, not this one).

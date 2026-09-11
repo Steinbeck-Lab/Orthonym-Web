@@ -266,7 +266,7 @@ def test_locant_subspans_walked_cursor_does_not_confuse_a_prefix_locant():
     """Moved from test_name_spans.py (Task 7): `_locant_subspans` now lives
     in this module, alongside `_MULTIPLIER_CATEGORIES`/`_MULTIPLIER_VALUES`,
     since `explain.py`'s `_compute_claims`/`_locants_within` are its only
-    live callers -- `name_spans.py`'s own use was deleted with that module.
+    live callers -- `name_spans.py` (deleted in this branch; read it at `9908574^`)'s own use was deleted with that module.
 
     No golden name has a locant token where one locant is a prefix of the
     next (e.g. "11" then "1"), so this branch -- the walked cursor

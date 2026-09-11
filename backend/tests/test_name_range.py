@@ -1,6 +1,7 @@
 from app.explain import explain_name
 from app.opsin_tokenizer import tokenize
 from tests.conftest import CAFFEINE, GOLDEN_NAMES
+from tests.fixtures.explain_corpus import CURATED
 
 
 def _locant_text_present(name: str, start: int, end: int, locant: str) -> bool:
@@ -69,9 +70,22 @@ def test_caffeine_locant_children_carry_their_own_spans():
 
 
 def test_spans_are_all_or_nothing_never_partial():
-    # A response with some spans and some None would leave dead regions in
-    # the name that look identical to unhovered ones.
-    for name in GOLDEN_NAMES:
+    """A response with some spans and some None leaves dead regions in the
+    name that look identical to unhovered ones. `_apply_name_spans` calls this
+    absolute.
+
+    Asserted over CURATED (49 names), not GOLDEN_NAMES (10). It used to run
+    over the 10, and that is exactly why nothing caught the branch's one real
+    contract break: none of the 10 has the shape that broke it. Two did --
+    `sodium acetate` and `potassium benzoate`, whose suffix belongs to a
+    SECOND root while `suffix_key` is read from the first, and five retained
+    amino acids whose root carried a suffix token spelling `''`. Both shipped
+    a partially-spanned name, and only the frontend's own
+    `segments.every(s => s.name_range)` fallback kept a reader from seeing it.
+
+    Do not narrow this back to a smaller corpus. The breadth IS the test.
+    """
+    for _axis, name in CURATED:
         result = explain_name(name)
         if result["error"]:
             continue
@@ -569,3 +583,47 @@ def test_a_genuinely_partial_single_word_parse_still_withholds():
     """
     tokens = tokenize("phenylacetatex")
     assert tokens is None
+
+
+def test_a_ring_stem_that_looks_like_a_multiplier_is_not_counted_as_one():
+    """`_compute_claims` gates its multiplier lookup on the token's CATEGORY,
+    never on its text, and that gate is load-bearing rather than defensive.
+
+    `1,2,3,4,5,6-hexachlorocyclohexane` spells `hex` TWICE: once as a genuine
+    multiplier (category `tetrOrHigher`, "six chloros") and once as the ring's
+    own stem (category `alkaneStemTrivial`, the six-carbon ring). Only the
+    category distinguishes them. Drop the gate and the ring stem is read as
+    the number 6 too, inflating the parent's claim and letting a span through
+    that its segment's atoms do not justify -- the wrong-atom class the claims
+    guard exists to catch.
+
+    This pins what `tests/test_name_spans.py::
+    test_a_ring_stem_that_looks_like_a_multiplier_is_not_counted_as_one`
+    used to pin before that module was deleted (see commit 9908574^); the
+    protection was lost with it, and a mutation test confirmed 101 tests
+    still passed with the gate removed.
+    """
+    from app.explain import _compute_claims
+    from app.name_tokens import Tok, assign_runs
+    from app.opsin_tokenizer import tokenize
+
+    name = "1,2,3,4,5,6-hexachlorocyclohexane"
+    tokens = [Tok(t.text, t.category, t.start, t.end) for t in tokenize(name)]
+
+    stems = [t for t in tokens if t.text == "hex"]
+    assert [t.category for t in stems] == ["tetrOrHigher", "alkaneStemTrivial"], (
+        "this test's premise is that one name carries `hex` as BOTH a "
+        f"multiplier and a ring stem; OPSIN now tokenizes it as {stems}"
+    )
+
+    runs = assign_runs(tokens, ["chloro", "cyclohex"])
+    assert runs is not None, "premise: this name's runs are derivable"
+    claims = _compute_claims(tokens, runs, None)
+
+    # The chloro run legitimately claims 6 -- six locants and a real `hex`
+    # multiplier both say so. The ring run must claim 1: its `hex` is a stem.
+    assert claims[0] == 6, claims
+    assert claims[1] == 1, (
+        "the ring's `hex` stem was counted as the multiplier 6 -- the "
+        "category gate in _compute_claims is not doing its job"
+    )

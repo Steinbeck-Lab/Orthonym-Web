@@ -278,9 +278,13 @@ def _ring_assembly_multiplier_line(text: str) -> str:
 
 def describe_token(category: str, text: str) -> str | None:
     """One line for a single raw name token, or None if the token teaches
-    nothing. Elision vowels, hyphens and brackets fall in the second group:
-    they carry a span so the name stays continuous, but no explanation of
-    their own.
+    nothing. Elision vowels, hyphens and brackets fall in the second group.
+
+    `None` means NO CHILD AT ALL, not a silent child: `explain.py`'s
+    `_token_children` skips any token whose line is None, so no span is
+    created for it either and its characters fall through to the owning
+    segment. (An earlier draft of this docstring claimed such tokens "carry
+    a span so the name stays continuous"; they do not.)
     """
     if category == "ringAssemblyMultiplier":
         return _ring_assembly_multiplier_line(text)

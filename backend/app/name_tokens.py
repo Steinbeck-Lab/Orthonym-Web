@@ -41,7 +41,7 @@ curated set of decorating categories, bounded by where the NEIGHBOURING run
 already starts or ends. `_LEADING`/`_TRAILING` below, and the two-pass anchor-
 then-grow shape of `assign_runs`, are that mechanism moved here so this
 module owns the one definition instead of a second copy in
-`name_spans.py` that could drift apart -- `name_spans.py` itself was
+`name_spans.py` (deleted in this branch; read it at `9908574^`) that could drift apart -- `name_spans.py` itself was
 deleted in Task 7, once its only consumer, `compute_spans`, proved to have
 no production caller.
 """
