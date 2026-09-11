@@ -2,8 +2,11 @@
 
 The census script (`backend/scripts/explain_census.py`) measures all 544 names
 in `tests/fixtures/explain_corpus.FULL` on demand; this file asserts the
-curated ~50-name subset (`CURATED`) inside the suite, so every documented
-nomenclature class has a named test that cannot silently re-open.
+49-name `CURATED` list inside the suite, so every documented nomenclature
+class has a named test that cannot silently re-open. `CURATED` is a SEPARATE
+list, not a subset of `FULL` -- 14 of its 49 names appear nowhere in `FULL`
+(see that fixture's own docstring), so the two tables are never comparable
+row for row.
 
 **The plan's definition of done was not reached, and this file does not
 pretend otherwise.** The spec asked for zero fully-inert (`SPANS_NONE`) names.
@@ -24,9 +27,9 @@ residue, not unexplained gaps:
 * The "claims guard" in `app/explain.py`, which withholds a multiplicative
   substituent's span whenever grouping it by TEXT (rather than by each raw
   occurrence) would make it claim atoms its span does not cover -- measured
-  directly (Ruling 25, `.superpowers/sdd/2026-09-09-explain-token-parts/
-  progress.md`, Ruling 25 -- that path is gitignored, so it is not in a
-  clone) at **+55 names** if regrouped per-occurrence. That regrouping
+  directly (Ruling 25 in `.superpowers/sdd/2026-09-09-explain-token-parts/
+  progress.md` -- a gitignored path, so it is not in a clone) at **+55
+  names** if regrouped per-occurrence. That regrouping
   changes what a segment means (payload-contract work) and was scoped out of
   this plan as a follow-on project; it is not a defect this gate should treat
   as a regression.

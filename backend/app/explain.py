@@ -175,7 +175,7 @@ def _compute_claims(tokens: list, runs: list, modifier_run) -> dict:
     # An unlocanted hydro/indicated-hydrogen run's own multiplier prefix
     # ("tetr" in tetrahydrofuran) is not absorbed by ANY run either, so with
     # no modifier run to bound it, it would leak into whichever real run's
-    # window reaches it next. Ported fence from name_spans.py:244-270 --
+    # window reaches it next. Ported fence from name_spans.py` (deleted; see `9908574^`):244-270 --
     # skipped whenever this name HAS a modifier run, because then that
     # run's own start already bounds the window (see that module for the
     # measured case: an unlocanted repeated "tetrahydrofuran-2-yl" without
@@ -256,7 +256,8 @@ def _locants_within(tokens: list, start: int, end: int) -> dict:
     inside the caller's window, so a repeated locant elsewhere in the name
     cannot collide with this part's own.
 
-    Ported from `name_spans.py`'s per-part locant pass (its step 4), now
+    Ported from `name_spans.py`'s per-part locant pass (its step 4; that
+    module was deleted in this branch -- read it at `9908574^`), now
     keyed off a run's (or the modifier's) character span directly instead
     of `compute_spans`' anchor-derived one. The `bigCapitalH` branch is new
     here: the ported version only ever walked `locant`-category tokens, so
@@ -352,9 +353,13 @@ def _apply_name_spans(name: str, segments: list, result) -> None:
     # anchor them and the whole name withholds -- fail-closed, so nothing
     # incorrect ships, but the cause is invisible from here. Measured: of 34
     # multi-root names in the esters-salts-amides and charged-inorganic axes,
-    # 18 are SPANS_NONE, and `trisodium phosphate` has four roots. Sorting the
-    # keys by their roots' document position would recover a real slice of
-    # that; it is recorded follow-on work, not done here.
+    # 20 are SPANS_NONE, and `trisodium phosphate` has four roots. (That was
+    # 18 before the commit which wrote this comment: the same commit moved
+    # `sodium acetate` and `potassium benzoate` from partially-spanned to
+    # withheld. Re-measure rather than trust it if the withholding rules
+    # change again.) Sorting the keys by their roots' document position would
+    # recover a real slice of that; it is recorded follow-on work, not done
+    # here.
     root = next((p for p in result.parts if p.kind == "root"), None)
     # First root only. A second root's own suffix therefore has no anchor --
     # `sodium acetate`'s `ate` belongs to root 2 -- and the falsy-text branch

@@ -360,7 +360,7 @@ def find_modifier_run(tokens: list, runs: list) -> Optional[Run]:
     crossing into a token any of `runs` already claims (consumed or
     filler).
 
-    Ported from `name_spans.py`'s MODIFIER_KEY branch (see that module,
+    Ported from `name_spans.py` (deleted; see `9908574^`)`'s MODIFIER_KEY branch (see that module,
     step 3): the "already claimed" bound is not optional. Verified on
     caffeine -- without it, growing left from the first mark walks back
     over the methyl run's own trailing hyphen (token 4) and produces
