@@ -165,3 +165,57 @@ def test_the_repeated_locant_3_points_at_different_letters_per_part():
     methyl_3 = next(c for c in by_kind["substituent"]["children"] if c["locant"] == "3")
     modifier_3 = next(c for c in by_kind["modifier"]["children"] if c["locant"] == "3")
     assert methyl_3["name_range"] != modifier_3["name_range"]
+
+
+def test_a_two_token_multiplier_still_keeps_its_span():
+    # "tetra" tokenizes as tetrOrHigher ("tetr") + "a" -- TWO tokens -- and
+    # tetrOrHigher is not in _LEADING, so it is never absorbed into a run's
+    # own fillers. A first, narrower claims computation (counting only a
+    # run's own `fillers`) silently dropped this substituent's claim from 4
+    # to 1, wrongly withholding this name end-to-end even though it was
+    # CLEAN in production before this task. `explain.py`'s `_compute_claims`
+    # must window the count back to the previous run's end (matching
+    # `compute_spans` step 4b) to recover it.
+    name = "tetramethylammonium chloride"
+    result = explain_name(name)
+    assert result["error"] is None
+    assert result["segments"], "expected a real decomposition, not an empty one"
+    assert all(s["name_range"] is not None for s in result["segments"]), (
+        result["segments"]
+    )
+    methyl = next(s for s in result["segments"] if s["label"] == "methyl")
+    assert name[slice(*methyl["name_range"])] == "methyl"
+
+
+def test_a_coincidental_stem_collision_withholds_everything():
+    # "methoxy" and "methyl" both strip to the bare stem "meth" -- and are
+    # adjacent in document order, with a "6,7-" locant ahead of them that
+    # satisfies `assign_runs`' clone-group check by coincidence (it exists
+    # for a caller that hands it one entry per RAW OPSIN part; fed the
+    # per-SEGMENT entries `_build_segments` already merges, an adjacent
+    # shared-stem pair here can only ever be a coincidence, never a
+    # legitimate multiplication). Without the caller-side guard,
+    # `assign_runs` folds both into ONE run and the "methyl" segment gets
+    # handed the "methoxy" segment's span -- a wrong letters-to-atoms claim,
+    # not merely a missing one. Every top-level span must be withheld.
+    name = "6,7-dimethoxy-1-methylisoquinoline"
+    result = explain_name(name)
+    assert result["error"] is None
+    assert result["segments"], "expected a real decomposition, not an empty one"
+    assert all(s["name_range"] is None for s in result["segments"]), (
+        result["segments"]
+    )
+
+
+def test_the_other_stem_collision_shape_also_withholds_everything():
+    # The other measured shape of the same defect: a SUBSTITUENT and the
+    # PARENT (not two substituents) share a stem -- "ethyl" and "ethamine"
+    # (root text, after its "amine" suffix is stripped) both reduce to
+    # "eth". Same guard, different segment kinds colliding.
+    name = "N,N-diethylethanamine"
+    result = explain_name(name)
+    assert result["error"] is None
+    assert result["segments"], "expected a real decomposition, not an empty one"
+    assert all(s["name_range"] is None for s in result["segments"]), (
+        result["segments"]
+    )
