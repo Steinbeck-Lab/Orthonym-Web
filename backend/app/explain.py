@@ -2,8 +2,11 @@
 tree of parts and map each part to the real atoms it names.
 
 The design, the evidence behind it and the failure policy live in the spec:
-``docs/superpowers/specs/2026-08-14-explain-iupac-decomposition-design.md``.
-The short version, because it governs everything below:
+``docs/superpowers/specs/2026-09-09-explain-token-parts-design.md``. That path
+(and ``docs/superpowers/`` generally) is gitignored, so it is not in this repo
+-- it lives only on a checkout that has done the planning work under
+``.superpowers/sdd/``; do not go hunting for it in git history or on a clone
+that lacks it. The short version, because it governs everything below:
 
 * Every atom mapping is traceable to OPSIN's OWN output -- its internal parse
   tree plus its per-atom locants (``opsin_decompose``, ``root_split``). There
