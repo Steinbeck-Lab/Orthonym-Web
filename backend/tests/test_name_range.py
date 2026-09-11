@@ -501,3 +501,71 @@ def test_a_duplicated_heteroatom_label_still_withholds_everything():
     payload = explain_name("[1,2,4]triazolo[4,3-a]pyridine")
     assert payload["error"] is None
     assert all(s["name_range"] is None for s in payload["segments"])
+
+
+def test_a_capital_d_sugar_tokenizes():
+    """OPSIN's ParseRules matches dlStereochemistry case-insensitively and
+    hands back a lowercased `d` where the name wrote `D`. The exact
+    reconstruction guard then rejected OPSIN's own answer and returned None,
+    so compute_spans (and everything downstream of `tokenize`) died on its
+    second line for every D-/L- sugar and amino acid.
+    """
+    tokens = tokenize("alpha-D-glucopyranose")
+    assert tokens is not None
+
+
+def test_the_reconstructed_token_keeps_the_names_own_casing():
+    """The span text is what the page renders, so a lowercased `d` would
+    make the highlighted letters differ from the letters on screen. Each
+    token's `.text` must come from the ORIGINAL name, not OPSIN's
+    case-folded copy of it -- so this join must match `name` EXACTLY,
+    case included, not just case-insensitively.
+    """
+    name = "alpha-D-glucopyranose"
+    tokens = tokenize(name)
+    assert tokens is not None
+    assert "".join(t.text for t in tokens) == name
+
+
+def test_a_lowercased_multiword_token_also_keeps_its_own_casing():
+    """The multi-word fallback path (methyl-acetate-style ester names) has
+    its own, separate reconstruction guard from the single-word path --
+    `methyl beta-D-galactopyranoside` only reaches OPSIN's lowercased `d`
+    by going through it, since the whole string never parses as one call.
+    Both guards had to be fixed, not just the one the single-word sugar
+    test above already exercises.
+
+    Unlike the single-word case, `"".join(t.text for t in tokens) == name`
+    does NOT hold here -- no token owns the space between "methyl" and
+    "beta-D-galactopyranoside" (the multi-word path advances `pos` over it
+    without emitting a Token for it), so the join skips that character even
+    on already-correct, pre-existing multi-word names like "methyl
+    acetate". The invariant the renderer actually depends on, and the one
+    that must hold on both paths, is that every individual token's `.text`
+    is exactly the original name's own slice at that token's own offsets --
+    checked here directly against `name`, not against OPSIN's returned
+    value.
+    """
+    name = "methyl beta-D-galactopyranoside"
+    tokens = tokenize(name)
+    assert tokens is not None
+    assert all(t.text == name[t.start:t.end] for t in tokens)
+    # And the case survived: OPSIN's own answer for this token is the
+    # lowercased "d", but the slice taken from `name` is the "D" it wrote.
+    d_tokens = [t for t in tokens if t.category == "dlStereochemistry"]
+    assert len(d_tokens) == 1
+    assert d_tokens[0].text == "D"
+
+
+def test_a_genuinely_partial_single_word_parse_still_withholds():
+    """The case-fold relaxation must not loosen the guard into accepting a
+    PARTIAL parse -- only tolerate case. "phenylacetatex" has no space, so
+    it can only ever go through the single-word path, and OPSIN parses only
+    "phenylacetate" out of it (confirmed directly against `_tokenize_raw`:
+    it returns the tokens for "phenylacetate" and stops, leaving the
+    trailing "x" unconsumed). That mismatch is a real length/content
+    difference, not a casing difference, so it must still return None both
+    before and after the case-fold fix.
+    """
+    tokens = tokenize("phenylacetatex")
+    assert tokens is None
