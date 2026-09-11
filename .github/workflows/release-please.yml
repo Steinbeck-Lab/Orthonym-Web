@@ -1,0 +1,41 @@
+# Release automation.
+#
+# release-please watches `main` for Conventional Commits and keeps ONE pull
+# request open that accumulates the next release: it writes CHANGELOG.md, bumps
+# the version in .release-please-manifest.json and frontend/package.json, and
+# when you merge that PR it tags the commit and cuts a GitHub Release.
+#
+# Nothing here publishes a package or deploys anything. It only writes a
+# changelog, a version and a tag -- deployment stays a human action, which
+# matters for this repo because CLAUDE.md records that JVM, font and native
+# library checks can pass locally and fail silently inside the slim Debian
+# image. A green tag is not a proven deploy.
+#
+# The commit style is already in place: this repository's history is
+# Conventional Commits throughout (feat/fix/test/refactor/docs), so the first
+# run has real material to work from rather than starting empty.
+
+name: release-please
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write        # create the release branch, the tag and the Release
+  pull-requests: write   # open and update the release PR
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          # The default GITHUB_TOKEN is deliberate. A PAT would let the release
+          # PR trigger other workflows, which is occasionally wanted -- but it
+          # also means a release PR could run CI as a privileged actor. Keep
+          # the narrower token until there is a reason not to.
+          token: ${{ secrets.GITHUB_TOKEN }}

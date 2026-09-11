@@ -1,0 +1,201 @@
+#  CI for STITCH.
+#
+# WHY THE BACKEND SUITE DOES NOT RUN HERE
+# ---------------------------------------
+# It cannot, on a public runner. `backend/tests/conftest.py` imports
+# `app.celery_app`, and importing anything under `app.` pulls in the naming
+# engine -- measured, `import app.main` loads 136 `openstout.*` modules. That
+# engine lives in `backend/vendor/openstout/`, which `.gitignore` excludes on
+# purpose: publishing it would publish OpenSTOUT, which is not public. A fresh
+# clone therefore has no engine and every backend test errors at collection.
+#
+# So this file runs what a public runner can genuinely run, and the `backend`
+# job below stays SKIPPED until you opt in (see its own comment for the two
+# secrets and the one variable it needs). A skipped job is honest; a job that
+# passes without having run the tests is not.
+#
+# WHY `npm ci`, NOT `npm install`
+# -------------------------------
+# A stale `node_modules` is a documented trap in this repo (CLAUDE.md: "a fresh
+# worktree needs its own npm install"). Measured while writing this file: a
+# stale tree reported `119 tests, 1 fail` -- a missing `react` package -- while a
+# clean `npm ci` reports `124 tests, 0 fail`. The stale tree was hiding five
+# tests AND failing one. `npm ci` deletes `node_modules` and installs from the
+# lockfile, which is the only reproducible starting point.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # One run per ref. A new push cancels the previous run for the same branch,
+  # but never cancels a run on `main`.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: frontend (test, lint, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install from the lockfile
+        run: npm ci
+
+      - name: Test
+        # `node --test "src/**/*.test.js"` -- the quotes matter. Unquoted,
+        # the shell globs it and `node --test src/lib/` picks up non-test
+        # files (CLAUDE.md records this). package.json already quotes it.
+        run: npm test
+
+      - name: Lint
+        # `npm run lint` lints vendored public/standalone/ too, which carries
+        # old warnings that are not ours. Lint src/ only, as CLAUDE.md says.
+        # oxlint exits 0 on warnings; it fails only on errors, so this gate
+        # catches a NEW error without drowning in 12 pre-existing warnings.
+        run: npx oxlint src/
+
+      - name: Build
+        run: npm run build
+
+  frontend-image:
+    name: frontend image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the frontend image
+        # Build only -- nothing is pushed. This is the one Docker check that
+        # needs no private engine, and it catches a broken Dockerfile or a
+        # missing build arg before deploy rather than after.
+        run: docker build -f frontend/Dockerfile -t stitch-frontend:ci frontend
+
+  backend:
+    name: backend (needs the private engine)
+    runs-on: ubuntu-latest
+    # SKIPPED BY DEFAULT, and deliberately so. `secrets.*` is not usable in a
+    # job-level `if` (GitHub evaluates it too late), so the switch is a repo
+    # VARIABLE instead: set `RUN_BACKEND_CI` to `true` under
+    # Settings -> Secrets and variables -> Actions -> Variables, once
+    # `OPENSTOUT_REPO` and `OPENSTOUT_TOKEN` secrets exist beside it.
+    # `workflow_dispatch` also forces it on, so you can test the job by hand
+    # before flipping the variable for everyone.
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.RUN_BACKEND_CI == 'true' }}
+    services:
+      redis:
+        # The suite needs a REAL Redis -- conftest.py fails with instructions
+        # rather than skipping, on purpose: a silently skipped integrity test
+        # is the same as no test.
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out OpenSTOUT
+        # The engine is private. Without a token that can read it, this job
+        # cannot run at all -- which is why it is gated above.
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.OPENSTOUT_REPO }}
+          token: ${{ secrets.OPENSTOUT_TOKEN }}
+          path: .openstout
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-java@v4
+        with:
+          # OPSIN runs on a real JRE through JPype. Without one the SELF-01
+          # self-consistency gate fails OPEN -- it would ship an unverified
+          # result as a verified one -- which is why app/jvm_guard.py refuses
+          # rather than degrades.
+          distribution: temurin
+          java-version: '21'
+
+      - name: Vendor the engine
+        run: OPENSTOUT_SRC="$GITHUB_WORKSPACE/.openstout/Project" ./scripts/vendor-openstout.sh
+
+      - name: Fetch CDK and centres
+        # Both are FETCHED, not vendored: public URLs, pinned SHA-256. The
+        # checksum is the point -- cdk_bridge's CIP labelling depends on CDK
+        # internals, so a silently different jar is exactly what
+        # cdk_bridge.self_check() exists to catch.
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          CDK_VERSION=2.12
+          CDK_SHA256=443d86e549edd659807a444770819a05f9ea626511f433ed99342c7568272e5a
+          CENTRES_VERSION=1.2.1
+          CENTRES_SHA256=6c5d5cafa9393ed7b667a2340222348cd15a9bbdd0d1b92518229f26cc5e87fb
+          curl -fsSL -o "vendor/cdk/cdk-${CDK_VERSION}.jar" \
+            "https://github.com/cdk/cdk/releases/download/cdk-${CDK_VERSION}/cdk-${CDK_VERSION}.jar"
+          echo "${CDK_SHA256}  vendor/cdk/cdk-${CDK_VERSION}.jar" | sha256sum -c -
+          curl -fsSL -o "vendor/opsin-resources/centres-cli-${CENTRES_VERSION}.jar" \
+            "https://github.com/SiMolecule/centres/releases/download/${CENTRES_VERSION}/centres.jar"
+          echo "${CENTRES_SHA256}  vendor/opsin-resources/centres-cli-${CENTRES_VERSION}.jar" | sha256sum -c -
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --quiet -r requirements.txt -r requirements-dev.txt
+
+      - name: Place the engine's runtime artifacts
+        # openstout resolves the OPSIN and centres jars from its OWN install
+        # root, not from vendor/. Skipping this leaves centres unresolved and
+        # cdk_bridge.self_check() fails with "L-alanine did not label as (S)".
+        working-directory: backend
+        run: PYTHONPATH="$PWD" .venv/bin/python scripts/place_opsin_resources.py
+
+      - name: Prove the CDK path works
+        # available() can return True while CIP labelling is silently dead.
+        # self_check() asserts the answer (L-alanine labels as S), which is
+        # the only thing that catches it.
+        working-directory: backend
+        run: |
+          PYTHONPATH="$PWD" .venv/bin/python -c "
+          from app import cdk_bridge
+          assert cdk_bridge.self_check(), 'CDK CIP labelling is broken'
+          print('cdk_bridge.self_check() OK')
+          "
+
+      - name: Test
+        # This script is the ONLY correct way to run the suite: a bare pytest
+        # prints a correct summary and then hangs ~10 minutes, because JPype's
+        # JVM will not let the process exit.
+        # Exit codes: 0 passed, 1 failed, 2 no summary (a real hang), 3 no
+        # interpreter found.
+        env:
+          REDIS_URL: redis://localhost:6379/0
+        run: backend/scripts/run-tests.sh
+
+      - name: Explain coverage census
+        # Not a gate -- test_explain_coverage.py is the gate. This prints the
+        # per-axis table into the log so a coverage change is visible in the
+        # run rather than only discoverable by running it locally.
+        working-directory: backend
+        env:
+          REDIS_URL: redis://localhost:6379/0
+        run: PYTHONPATH="$PWD" .venv/bin/python scripts/explain_census.py
