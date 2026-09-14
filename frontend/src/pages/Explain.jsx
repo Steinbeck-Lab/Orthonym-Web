@@ -42,8 +42,8 @@ function SegmentNode({ segment, path, activePath, setHoveredPath, togglePath }) 
       <button
         type="button"
         className={`explain-segment explain-segment--${segment.kind}${
-          isActive ? ' explain-segment--active' : ''
-        }`}
+          segment.owns_atoms === false ? ' explain-segment--ref' : ''
+        }${isActive ? ' explain-segment--active' : ''}`}
         onMouseEnter={() => setHoveredPath(path)}
         onMouseLeave={() => setHoveredPath(null)}
         onFocus={() => setHoveredPath(path)}
@@ -474,8 +474,10 @@ function Explain() {
                           <span
                             key={index}
                             className={`explain-name__part${
-                              activePath === piece.path ? ' explain-name__part--active' : ''
-                            }`}
+                              segmentAtPath(segments, piece.path)?.owns_atoms === false
+                                ? ' explain-name__part--ref'
+                                : ''
+                            }${activePath === piece.path ? ' explain-name__part--active' : ''}`}
                             onMouseEnter={() => setHoveredPath(piece.path)}
                             onMouseLeave={() => setHoveredPath(null)}
                             onFocus={() => setHoveredPath(piece.path)}
@@ -568,6 +570,18 @@ function Explain() {
                           <p className="explain-detail__explanation">
                             {activeSegment.explanation}
                           </p>
+                          {/* Referential parts (counting words, fusion
+                              brackets, indicated H, stereo) own no atoms of
+                              their own -- they point at the parent's. The
+                              dotted underline in the name says so at a glance;
+                              this line says it in words. Keyed on owns_atoms,
+                              the same field TierLamp-style form-not-hue marks
+                              read from, never on kind. */}
+                          {activeSegment.owns_atoms === false && (
+                            <p className="explain-detail__note">
+                              Notation — it points at the parent&rsquo;s atoms, and names none of its own.
+                            </p>
+                          )}
                         </>
                       ) : (
                         <p className="explain-detail__hint">
