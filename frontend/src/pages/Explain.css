@@ -479,6 +479,17 @@
   border-bottom-color: var(--ink);
 }
 
+/* A referential token (a counting word, a fusion bracket, an indicated H,
+   a stereo descriptor) owns no atoms of its own -- it points at the parent's.
+   A DOTTED rest-state underline says so before the pointer arrives, and it is
+   FORM not hue on purpose (CLAUDE.md's TierLamp rule): the mark survives
+   greyscale and colour blindness where a tint would not. Hover/active still
+   paint the border --ink at higher specificity, but leave the dotted STYLE
+   in place, so a notation part reads as notation even while lit. */
+.explain-name__part--ref {
+  border-bottom: 1px dotted var(--muted);
+}
+
 .explain-result__name-highlight {
   background: var(--glow-wash-strong);
   border-bottom: 1px solid var(--ink);
@@ -561,6 +572,17 @@
   color: var(--muted);
 }
 
+/* The words behind the dotted underline: shown only when the active part owns
+   no atoms. Muted and set below the explanation so it reads as a footnote to
+   the part, not a second claim about it. */
+.explain-detail__note {
+  margin-top: var(--s-xs);
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 /* -------------------- fallback segment list -------------------- */
 /* Used when the backend could not give per-character name spans. Rows on
    hairlines, the way Bugatti sets a career listing. */
@@ -615,6 +637,14 @@
   color: var(--muted);
   text-decoration: line-through;
   text-decoration-thickness: 1px;
+}
+
+/* A referential part in the fallback list wears the same dotted mark the
+   hoverable name uses -- notation, not an atom-owning part. Dotted UNDERLINE,
+   so it never collides with the line-THROUGH an unmapped part carries. */
+.explain-segment--ref .explain-segment__label {
+  text-decoration: underline dotted var(--muted);
+  text-underline-offset: 3px;
 }
 
 .explain-segment__explanation {
