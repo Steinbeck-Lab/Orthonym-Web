@@ -299,7 +299,10 @@
      way is a nav that feels slow. */
   .notch--bar:hover .brand__word,
   .notch--bar:focus-within .brand__word {
-    max-width: 12ch;
+    /* A cap, not a size: it only has to clear the word. The uppercased
+       wordmark at 0.26em tracking is 6.17em wide in Saira Condensed and 12ch
+       is 5.81em, which would clip its final M; 14ch (6.78em) clears it. */
+    max-width: 14ch;
     margin-left: 10px;
     opacity: 1;
     transition-delay: 0ms;
@@ -549,15 +552,15 @@
 }
 
 /* Arriving somewhere. The pill slides to the new route and, for one beat, the
-   crimson dot is drawn out into a short dash and released -- a thread pulled
-   tight. Same motif as the footer's self-sewing join, which is what makes it
-   a signature and not a trick. transform only, so it costs nothing, and the
-   dot keeps its own centre while it stretches. */
+   crimson dot is drawn out into a short dash and released. Same draw-in motif
+   as the footer's joining mark, which is what makes it a signature and not a
+   trick. transform only, so it costs nothing, and the dot keeps its own
+   centre while it stretches. */
 .site-nav--arrived .site-nav__link--active::before {
-  animation: nav-orthonym 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: nav-draw 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-@keyframes nav-orthonym {
+@keyframes nav-draw {
   0% {
     transform: scaleX(3.4);
     border-radius: 999px;
@@ -2849,7 +2852,7 @@ input.field__control {
   stroke: var(--hairline);
   stroke-width: 1.25;
   /* 6 + 6 = 12, and the animation below travels exactly 24 -- two whole
-     knots -- so the loop has no seam of its own. */
+     dash periods -- so the loop has no seam of its own. */
   stroke-dasharray: 6 6;
   transition:
     stroke 0.28s cubic-bezier(0.16, 1, 0.3, 1),
@@ -2864,7 +2867,7 @@ input.field__control {
   stroke-dasharray: none;
 }
 
-/* Under a file, the seam is being sewn: the dashes run. Declared AFTER
+/* Under a file, the seam is live: the dashes run. Declared AFTER
    --loaded on purpose -- same specificity, so the live state has to be the
    later rule or dragging over a card that already holds a file would show
    the settled seam instead of the running one. */

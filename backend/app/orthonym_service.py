@@ -17,7 +17,7 @@ Derivation logic (verified against the live orthonym package):
    produces is what ships.
 
 Tier -> status mapping used for BOTH namers (`classify`). The tier names are
-Orthonym's own, from `Orthonym.name_tiered`'s docstring:
+the Orthonym engine's own, from `Orthonym.name_tiered`'s docstring:
   - "pin_verified"        -> "pin"
   - "systematic_verified" -> "fallback"     (RT-verified via the general
     engine, or a trivial-retained name)
@@ -61,11 +61,11 @@ extra things are computed and attached:
   - depiction_svg: a 2D structure rendering of the input SMILES
     (app/depiction.py).
   - roundtrip_smiles / roundtrip_match: a SECOND, visible OPSIN round-trip
-    proof independent of Orthonym's own internal SELF-01 gate (SELF-01 runs
+    proof independent of the engine's own internal SELF-01 gate (SELF-01 runs
     inside name_tiered() and only ever surfaces as the tier/is_pin verdict,
     never the re-derived SMILES itself). This calls
     orthonym.validation.opsin_roundtrip.opsin_parse(name) directly --
-    Orthonym's OWN public wrapper around the SAME vendored jar +
+    the engine's OWN public wrapper around the SAME vendored jar +
     in-process JVM bridge already wired up for SELF-01 (backend/vendor/
     opsin-resources/, see place_opsin_resources.py) -- rather than a
     separate package with its own bundled jar. One jar, one JVM, one source
@@ -131,7 +131,7 @@ def classify(row: dict) -> tuple[str, Optional[str], str]:
         return "pin", row["name"], tier
     if tier == "systematic_verified":
         # RT-verified via the general engine or a trivial-retained name --
-        # which is exactly what Orthonym means by "fallback".
+        # which is exactly what this app means by "fallback".
         return "fallback", row["name"], tier
     if tier == "best_effort":
         return "best_effort", row["name"], tier
@@ -148,7 +148,7 @@ def classify(row: dict) -> tuple[str, Optional[str], str]:
 
 
 def _roundtrip_check(name: str, mol: Chem.Mol) -> tuple[Optional[str], Optional[bool]]:
-    """Round-trip `name` back through OPSIN (via Orthonym's own opsin_parse,
+    """Round-trip `name` back through OPSIN (via the engine's own opsin_parse,
     the same vendored jar/JVM as the internal SELF-01 gate) and compare the
     result to `mol` (the already-parsed input molecule) by FULL STANDARD
     INCHIKEY.
@@ -163,7 +163,7 @@ def _roundtrip_check(name: str, mol: Chem.Mol) -> tuple[Optional[str], Optional[
 
     The full InChIKey is the comparison that answers the question actually
     being asked ("did the name come back as this compound?"), and it is what
-    Orthonym's own SELF-01 uses for its stricter tiers. Measured on the
+    the engine's own SELF-01 uses for its stricter tiers. Measured on the
     three cases that matter:
 
         pair                          canonical SMILES   skeleton   full key

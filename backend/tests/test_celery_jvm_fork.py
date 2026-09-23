@@ -23,8 +23,8 @@ from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
-# The regression molecule from README.md. A fused polycyclic: Orthonym can
-# name it, but the PIN candidate does not round-trip, so SELF-01 suppresses
+# The regression molecule from README.md. A fused polycyclic: the Orthonym
+# engine can name it, but the PIN candidate does not round-trip, so SELF-01 suppresses
 # it and the general engine's verified fallback (tier T3) ships instead.
 # T3 IS round-trip verified -- T4 ("best_effort") is the unverified tier.
 FUSED_POLYCYCLIC = "C1CC2CCC1(CC2)C3CCC4(CCC5(CCCC5C4C3)C)C"

@@ -52,7 +52,7 @@ export const MAX_REMEMBERED = 8
  */
 export const UNKNOWN_EXPIRY_MAX_AGE_SECONDS = 24 * 60 * 60
 
-// The v1 retirement is a MIGRATION: it has to happen before the first read,
+// The retirement is a MIGRATION: it has to happen before the first read,
 // and exactly once. Doing it inside storageOrNull ran removeItem twice per
 // rememberJob/forgetJob (each of those resolves the storage itself and then
 // again via readJobs) for the whole life of the tab, long after the key was

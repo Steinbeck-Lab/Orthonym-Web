@@ -18,10 +18,11 @@ COPY . .
 # grepping the output, not assumed.
 #
 # THIS SITE's repository is the default, because it is public:
-# github.com/Kohulan/Orthonym-Web. It is NOT the naming engine -- Orthonym's
-# repository is private and answers 404, which is why this arg was empty for
-# a while, and the prose in About.jsx and Terms.jsx saying the engine is not
-# public is still true and must not be edited to match this link.
+# github.com/Kohulan/Orthonym-Web. It is NOT the naming engine -- the
+# Orthonym engine's repository is private and answers 404, which is why this
+# arg was empty for a while, and the prose in About.jsx and Terms.jsx saying
+# the engine is not public is still true and must not be edited to match this
+# link.
 #
 # Override to point a fork at its own source. The literal value `none` ships
 # no link and no notch separator (Navigation.jsx), which is the only way to

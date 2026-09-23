@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Refreshes backend/vendor/orthonym/ from the local Orthonym sibling project.
-# Orthonym isn't published on PyPI in the form Orthonym needs (name_tiered(),
-# general_fallback), so the backend depends on a vendored source snapshot
-# instead of an absolute host path -- Docker builds can't reach outside their
+# Refreshes backend/vendor/orthonym/ from the local Orthonym engine sibling
+# project. The engine isn't published on PyPI in the form this web app needs
+# (name_tiered(), general_fallback), so the backend depends on a vendored
+# source snapshot instead of an absolute host path -- Docker builds can't reach outside their
 # own build context, and a vendored copy keeps `pip install ./vendor/orthonym`
 # working the same in a container as on the host. Re-run this after pulling
-# Orthonym changes you want Orthonym to pick up.
+# engine changes you want the web app to pick up.
 set -euo pipefail
 
 SRC="${ORTHONYM_SRC:-/home/kohulan/Orthonym/Project}"
 DEST="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/backend/vendor/orthonym"
 
 if [ ! -f "$SRC/pyproject.toml" ]; then
-  echo "error: $SRC does not look like the Orthonym project (no pyproject.toml)" >&2
+  echo "error: $SRC does not look like the Orthonym engine project (no pyproject.toml)" >&2
   exit 1
 fi
 
@@ -34,8 +34,8 @@ echo "vendored $(find "$DEST/src/orthonym" -name '*.py' | wc -l) .py files + dat
 # orthonym/validation/opsin_grammar.py hard-requires an OPSIN reference
 # resource tree at a path computed as 4 parents-up from its own installed
 # location + "opsin/opsin-core/src/main/resources/..." (see that file's
-# _PROJECT_ROOT). That tree lives as a sibling of src/ in the Orthonym dev
-# checkout, NOT inside the orthonym package itself (pyproject.toml's
+# _PROJECT_ROOT). That tree lives as a sibling of src/ in the Orthonym engine
+# dev checkout, NOT inside the orthonym package itself (pyproject.toml's
 # packages = ["src/orthonym"] never ships it) -- so any install outside
 # a full dev checkout (a vendored copy, a hypothetical real PyPI release)
 # fails at import time without it. Vendor just the resources/ subtree (not
@@ -55,11 +55,11 @@ OPSIN_JAR_URL="https://github.com/dan2097/opsin/releases/download/${OPSIN_JAR_VE
 # Ubuntu deploy, 2026-09-08.
 mkdir -p "$OPSIN_VENDOR_BASE"
 
-# The jar comes from the Orthonym checkout when it is there, and from OPSIN's
-# own public release when it is not. A clone of Orthonym does NOT necessarily
-# carry it -- verified on a fresh --depth 1 clone -- and without it SELF-01
-# silently "fails open": a name that should be suppressed and replaced with an
-# honest fallback ships as if verified. Downloading beats warning.
+# The jar comes from the engine checkout when it is there, and from OPSIN's
+# own public release when it is not. A clone of the Orthonym engine does NOT
+# necessarily carry it -- verified on a fresh --depth 1 clone -- and without it
+# SELF-01 silently "fails open": a name that should be suppressed and replaced
+# with an honest fallback ships as if verified. Downloading beats warning.
 if [ -f "$SRC/$OPSIN_JAR" ]; then
   cp "$SRC/$OPSIN_JAR" "$OPSIN_VENDOR_BASE/$OPSIN_JAR"
   echo "vendored $OPSIN_JAR from the checkout ($(du -sh "$OPSIN_VENDOR_BASE/$OPSIN_JAR" | cut -f1))"
@@ -72,8 +72,8 @@ fi
 # The grammar resources: from the checkout if present, otherwise UNPACKED FROM
 # THE JAR. orthonym's validation/opsin_grammar.py wants them as real files at
 # PROJECT_ROOT + "opsin/opsin-core/src/main/resources/...", and that tree is a
-# sibling of src/ in a full Orthonym dev checkout -- a plain clone may not have
-# it, and then the package fails at import.
+# sibling of src/ in a full Orthonym engine dev checkout -- a plain clone may
+# not have it, and then the package fails at import.
 #
 # The jar is a complete substitute, not an approximation: its
 # uk/ac/cam/ch/wwmm/opsin/{resources/*,opsinbuild.props} entries were diffed
@@ -108,9 +108,9 @@ fi
 # as it does CDK.
 
 # --- cache invalidation -----------------------------------------------------
-# app/name_cache.py folds a digest of the INSTALLED Orthonym source into every
-# cache key, so this refresh invalidates the shared name cache automatically
-# once the new snapshot is pip-installed. That is the mechanism; the reminder
+# app/name_cache.py folds a digest of the INSTALLED Orthonym engine source into
+# every cache key, so this refresh invalidates the shared name cache
+# automatically once the new snapshot is pip-installed. That is the mechanism; the reminder
 # below is the belt to its braces, because the digest is only computed where
 # the package can be read (a zipimport or a stripped image falls back to the
 # version string alone).

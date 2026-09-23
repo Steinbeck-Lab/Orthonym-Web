@@ -23,7 +23,7 @@ import { NAMED_STATUSES, VERIFIED_STATUSES } from './statuses.js'
  * anything -- a real PIN was replaced by "there is no confidence tier for
  * this", and in the other direction the honest disclosure silently vanished.
  *
- * 'orthonym-verdict'   Orthonym produced this name, so its tier is a real verdict
+ * 'orthonym-verdict' Orthonym produced this name, so its tier is a real verdict
  *                    and principle 3 requires showing it.
  * 'user-supplied'    the user typed the name; Orthonym has no opinion on it, and
  *                    inventing a tier mark would misrepresent confidence.

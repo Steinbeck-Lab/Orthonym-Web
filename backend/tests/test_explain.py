@@ -271,7 +271,7 @@ def test_a_symmetric_molecule_unmaps_only_the_disputed_parts():
     # matches disagree about which carbon is which. The disputed parts must
     # go `unmapped` and their siblings must SURVIVE -- per-part failure is
     # the entire bug this task removes. Asserted as behaviour, not as exact
-    # atom counts, so Orthonym naming changes cannot make it brittle.
+    # atom counts, so Orthonym engine naming changes cannot make it brittle.
     from app.explain import explain_molecule
     from app.orthonym_service import get_primary_namer
 

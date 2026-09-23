@@ -116,9 +116,9 @@ const TIERS = [
 // Not for looks: a stroke can be DRAWN. Each rung's mark draws itself from
 // left to right as the drawer opens, and a dashed rule drawing dash by dash
 // is the clearest possible way to show what "dashed" means in this
-// vocabulary. It is the same sewing motif as the footer's join, the nav's
-// arriving dot and the drop zone's running seam, which makes it the system's
-// signature rather than a one-off flourish.
+// vocabulary. It is the same drawn-stroke motif as the footer's join, the
+// nav's arriving dot and the drop zone's running dashes, which makes it the
+// system's signature rather than a one-off flourish.
 //
 // The dasharray patterns ARE the grammar: solid pair (verified PIN), dashed
 // (verified fallback), dotted (unverified), one faint line (abstain), and a

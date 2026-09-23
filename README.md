@@ -5,7 +5,7 @@
   <img src="docs/screenshots/logo.png" alt="Orthonym" width="560">
 </picture>
 
-### Verified IUPAC names for Chemical Structures
+### A deterministic, rule-based SMILES-to-IUPAC name translator
 
 **A chemical structure goes in. A IUPAC name comes out — with the confidence it has actually earned.**
 
@@ -27,8 +27,8 @@
 Most structure-to-name tools return a string and leave you to trust it. When a name is wrong, it
 looks exactly like a name that is right.
 
-Orthonym is built the other way round. It is powered by **Orthonym**, a deterministic, rule-based
-naming engine — no neural network, no sampling, no temperature — and **every name it produces is
+Orthonym is built the other way round. It runs on **the Orthonym engine**, which is deterministic
+and rule-based — no neural network, no sampling, no temperature — and **every name it produces is
 parsed back by [OPSIN](https://github.com/dan2097/opsin) and compared against the structure you
 gave it.** What you see is the result of that check, stated plainly.
 
@@ -46,10 +46,10 @@ column.
 
 | Mark | Lamp | Tier | What it means |
 |:--|:--|:--|:--|
-| ▬▬ | ◉ green | **Preferred IUPAC name** | Worked to the strict rule, and read back clean. |
+| ▬▬ | ◉ green | **Preferred IUPAC name** | Built to the strict rule, and read back clean. |
 | ┄┄ | ◍ lime | **Fallback** | Reads back clean, but is not the preferred name. |
-| ⋯⋯ | ◌ amber | **Best effort** | The engine worked it. OPSIN could not confirm it. |
-| ── | ○ unlit | **Left unworked** | No name — it declined rather than guess. |
+| ⋯⋯ | ◌ amber | **Best effort** | The engine named it. OPSIN could not confirm it. |
+| ── | ○ unlit | **No name** | The engine declined rather than guess. |
 | ⊘ | ⊘ red | **Unreadable input** | Nothing to name: the structure could not be read. |
 
 **The shape carries the ladder; the colour only agrees with it.** The lamp beside each mark is
@@ -82,7 +82,7 @@ Anything it cannot place, it says so — the same rule as everywhere else.
 | **Explain** | The breakdown above. |
 | **About** | How it works, and a live health board for the service itself. |
 
-Built on [Orthonym](#the-engine) · [OPSIN 2.9.0](https://github.com/dan2097/opsin) ·
+Built on [the Orthonym engine](#the-engine) · [OPSIN 2.9.0](https://github.com/dan2097/opsin) ·
 [RDKit](https://www.rdkit.org/) · [CDK 2.12](https://cdk.github.io/) ·
 [Ketcher](https://github.com/epam/ketcher) · FastAPI · Celery · Redis · React 19
 
@@ -105,9 +105,10 @@ Full instructions, deployment, sizing and the job API: **[INSTALL.md](INSTALL.md
 
 ## The engine
 
-Orthonym is the web app. The naming engine, **Orthonym**, lives in its own repository and is **not
-public** — so `backend/vendor/` is populated from a local checkout, and a fresh clone cannot name a
-molecule until it is. See [The Orthonym dependency](INSTALL.md#the-orthonym-dependency).
+This repository, Orthonym-Web, is the web app. Its naming engine, **the Orthonym engine**, lives in
+its own repository and is **not public** — so `backend/vendor/` is populated from a local checkout,
+and a fresh clone cannot name a molecule until it is. See
+[The Orthonym engine dependency](INSTALL.md#the-orthonym-engine-dependency).
 
 Why this is not "STOUT-V2 in a browser": that neural model is a separate, unrelated project.
 Nothing here samples, and nothing here is a language model.

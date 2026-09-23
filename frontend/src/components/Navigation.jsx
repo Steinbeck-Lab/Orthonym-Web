@@ -5,7 +5,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 // centred, welded to the edge by a pair of concave fillets, so it reads as
 // carved out of the top of the page rather than floating over it. It was
 // briefly three separate islands; the owner asked for one ("I don't want 3
-// notches, move Orthonym and github to center, keep single notch").
+// notches, move [the wordmark] and github to center, keep single notch").
 //
 // AT REST it shows the crimson brand mark and the four route labels, and
 // nothing else. ON HOVER (or on focus, or on any pointer that cannot hover)
@@ -66,15 +66,16 @@ const NAV_LINKS = [
 //
 // The distinction matters, because this link used to mean something else and
 // was correctly switched off for it. It pointed at the naming ENGINE,
-// github.com/Kohulan/Orthonym, which is private and answers 404 to an
-// anonymous visitor -- a dead link in the header of every route. It now
-// points at Orthonym-Web, the published split of this web app, which is public.
+// whose repository (now github.com/Beilstein-Institut/Orthonym) is private
+// and answers 404 to an anonymous visitor -- a dead link in the header of
+// every route. It now points at Orthonym-Web, the published split of this web
+// app, which is public.
 //
 // So the label is honest as "GitHub" in the header but must not be read as
 // "the engine is open": Terms.jsx and About.jsx both still state, in prose,
-// that Orthonym's repository is not public, and those statements remain
-// TRUE and must not be "corrected" to match this link. The accessible name
-// below says which source it is, so nobody has to guess from context.
+// that the Orthonym engine's repository is not public, and those statements
+// remain TRUE and must not be "corrected" to match this link. The accessible
+// name below says which source it is, so nobody has to guess from context.
 //
 // Still overridable: a fork or a private deployment sets VITE_GITHUB_URL and
 // gets its own source. The literal `none` ships no link and no separator.
@@ -147,10 +148,9 @@ function Navigation() {
 
   // The one moment a nav can honestly celebrate: arriving somewhere. On a
   // route change the pill slides (below) and the crimson dot is pulled into a
-  // short dash and back, like a thread drawn tight -- the same motif as the
-  // footer's self-sewing join, which makes it a signature rather than a
-  // one-off trick. 380ms, and the class is removed afterwards so it can fire
-  // again on the next route.
+  // short dash and back -- the same draw-in motif as the footer's joining
+  // mark, which makes it a signature rather than a one-off trick. 380ms, and
+  // the class is removed afterwards so it can fire again on the next route.
   const [justMoved, setJustMoved] = useState(false)
   const firstRouteRef = useRef(true)
 

@@ -196,8 +196,8 @@ services:
       #
       # Unset now ships THIS SITE's own repository -- Navigation.jsx defaults
       # to github.com/Kohulan/Orthonym-Web, which is public. It does NOT link
-      # the naming engine: Orthonym's repository is still private, and the
-      # prose in Terms.jsx and About.jsx that says so is still true.
+      # the naming engine: the Orthonym engine's repository is still private,
+      # and the prose in Terms.jsx and About.jsx that says so is still true.
       #
       # Set VITE_GITHUB_URL to point a fork at its own source, or to the
       # literal `none` to ship no link at all. An empty value is NOT "off":

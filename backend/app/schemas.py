@@ -24,7 +24,7 @@ Status = Literal["pin", "fallback", "best_effort", "abstain", "error"]
 # frontend/src/components/Tile.jsx keeps its own copy -- it cannot import
 # Python -- the same accepted cross-language mirror as NAMED_STATUSES there.
 VERIFIED_STATUSES = frozenset({"pin", "fallback"})
-# Orthonym's own tier labels, from Orthonym.name_tiered's docstring. The
+# The Orthonym engine's own tier labels, from Orthonym.name_tiered's docstring. The
 # earlier T1/T3/T4/T5 codes were replaced upstream by these names; there is
 # no T-code anywhere in the engine any more. `pin_unverified` is documented
 # upstream as reserved (systematic-PIN certification) and is listed here so a
@@ -78,8 +78,8 @@ class ResultItem(BaseModel):
     # Populated for status in (pin, fallback, best_effort); null for
     # abstain/error. See app/depiction.py.
     depiction_svg: Optional[str] = None
-    # Visible OPSIN round-trip proof (independent of Orthonym's own
-    # internal SELF-01 gate -- uses Orthonym's own opsin_parse(), the same
+    # Visible OPSIN round-trip proof (independent of the engine's own
+    # internal SELF-01 gate -- uses the engine's own opsin_parse(), the same
     # vendored jar/JVM as SELF-01). Populated for status in (pin, fallback,
     # best_effort); null for abstain/error.
     roundtrip_smiles: Optional[str] = None

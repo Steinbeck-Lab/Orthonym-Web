@@ -196,7 +196,7 @@ def _canonical_or_error(
         )
     mol = Chem.MolFromSmiles(smiles)
     if mol is not None:
-        # Keep the AS-TYPED string, do not RDKit-canonicalise it. Orthonym's
+        # Keep the AS-TYPED string, do not RDKit-canonicalise it. The engine's
         # naming is not invariant to atom order: the same molecule written two
         # ways can name on one ordering and abstain on the other (measured on a
         # complex polycyclic -- the as-typed form named a verified fallback, the

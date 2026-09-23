@@ -2,11 +2,11 @@
 
 Three separate modules in orthonym each compute an identical PROJECT_ROOT as
 4 parents up from their OWN installed file location and expect real artifacts
-to be sitting there as siblings of "src/" in a full Orthonym dev checkout:
+to be sitting there as siblings of "src/" in a full Orthonym engine dev checkout:
 
-  orthonym/validation/opsin_grammar.py    -> opsin/opsin-core/src/main/resources/...
-  orthonym/validation/opsin_roundtrip.py  -> opsin-cli-2.9.0-jar-with-dependencies.jar
-  orthonym/perception/centres_bridge.py   -> centres-cli-1.2.1.jar
+  orthonym/validation/opsin_grammar.py     -> opsin/opsin-core/src/main/resources/...
+  orthonym/validation/opsin_roundtrip.py   -> opsin-cli-2.9.0-jar-with-dependencies.jar
+  orthonym/perception/centres_bridge.py    -> centres-cli-1.2.1.jar
 
 None of these ship with the pip package (pyproject.toml's packages =
 ["src/orthonym"] never includes them), and NONE are optional in the way
@@ -14,7 +14,7 @@ their graceful-degradation code paths suggest: without the two jars (and a
 JVM via jpype), the SELF-01 self-consistency gate silently "fails open" --
 it can ship a name that should have been suppressed and replaced with an
 honest fallback as if it were a verified PIN. Confirmed by direct A/B testing
-against the Orthonym dev checkout during Orthonym's Docker work: the exact
+against the Orthonym engine dev checkout during this web app's Docker work: the exact
 same molecule that correctly abstained/fell-back with these artifacts present
 instead returned an unverified, wrong "PIN" without them.
 

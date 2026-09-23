@@ -1,8 +1,8 @@
-"""CDK (Chemistry Development Kit) inside Orthonym's JVM, without touching its classpath.
+"""CDK (Chemistry Development Kit) inside the Orthonym engine's JVM, without touching its classpath.
 
 WHY A CLASSLOADER AND NOT A CLASSPATH ENTRY
 -------------------------------------------
-Orthonym's ``jvm_bridge`` owns the only ``startJVM`` call in the process. It boots with a
+The Orthonym engine's ``jvm_bridge`` owns the only ``startJVM`` call in the process. It boots with a
 FIXED classpath -- the OPSIN jar and the centres jar, resolved from PROJECT_ROOT -- and it
 records the pid that started the JVM, refusing to use one started by anybody else
 (``vendor/orthonym/src/orthonym/jvm_bridge.py``, "fork-safe"). Three consequences, each
@@ -46,7 +46,7 @@ from ours. So the centres jar is listed in this loader as well. URL order is loa
 ``com.simolecule.centres``. Reversing the two would resurrect the partial CDK.
 
 This costs a second copy of those 859 classes in the JVM's metaspace. That is the price of
-not modifying the vendored Orthonym snapshot, which must stay byte-identical to upstream
+not modifying the vendored Orthonym engine snapshot, which must stay byte-identical to upstream
 (see CLAUDE.md) or the name cache's engine fingerprint changes and every cached name is
 thrown away.
 
@@ -133,9 +133,9 @@ def _cdk_jar() -> Optional[str]:
 
 @lru_cache(maxsize=1)
 def _centres_jar() -> Optional[str]:
-    """The centres jar Orthonym already resolves, found the same way it does.
+    """The centres jar the Orthonym engine already resolves, found the same way it does.
 
-    Asking Orthonym for it rather than globbing our own copy means CIP labels
+    Asking the engine for it rather than globbing our own copy means CIP labels
     come from the same centres build the naming engine's stereo perception uses.
     A vendor refresh that bumps centres moves both together.
     """
@@ -191,7 +191,7 @@ def _loader() -> Any:
             from orthonym import jvm_bridge
 
             if not jvm_bridge._ensure_jvm():
-                _log_unavailable_once("Orthonym reports no usable JVM")
+                _log_unavailable_once("the Orthonym engine reports no usable JVM")
                 return None
             jvm_bridge._attach_thread()
         except Exception as exc:

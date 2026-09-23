@@ -19,10 +19,10 @@ import './Legal.css'
 //
 // The licence text below is the repository's own /LICENSE, reproduced
 // verbatim from the file rather than retyped. Owner decision this session:
-// Orthonym is MIT, © 2026 Kohulan Rajan, matching the vendored Orthonym
-// snapshot exactly (backend/vendor/orthonym/LICENSE) — the repo had no
-// LICENSE file at all before this page needed one, and /LICENSE was created
-// from that same text so the two can never disagree.
+// Orthonym (this web app) is MIT, © 2026 Kohulan Rajan, matching the vendored
+// Orthonym engine snapshot exactly (backend/vendor/orthonym/LICENSE) — the
+// repo had no LICENSE file at all before this page needed one, and /LICENSE
+// was created from that same text so the two can never disagree.
 //
 // The third-party list is deliberately NOT the full dependency manifest.
 // Every entry below is either copyleft (so a notice is owed), a vendored
@@ -60,11 +60,11 @@ SOFTWARE.`
 // frameworks that carry them.
 const THIRD_PARTY = [
   {
-    // NO href, deliberately. github.com/Kohulan/Orthonym is a PRIVATE
-    // repository — checked unauthenticated, it answers 404 — so linking it
-    // would hand every visitor a dead link that looks like a broken site.
+    // NO href, deliberately. github.com/Beilstein-Institut/Orthonym is a
+    // PRIVATE repository — checked unauthenticated, it answers 404 — so linking
+    // it would hand every visitor a dead link that looks like a broken site.
     // Give it an href again the day the repository is published.
-    name: 'Orthonym 1.0.0',
+    name: 'Orthonym engine 1.0.0',
     spdx: 'MIT',
     note: 'The rule-based SMILES-to-IUPAC naming engine this site exists to show. Vendored as a source snapshot under backend/vendor/orthonym and installed at image build time. © 2026 Kohulan Rajan. Its repository is not public.',
   },
@@ -146,9 +146,9 @@ const CONDITIONS = [
     id: 'licence',
     body: (
       <>
-        Orthonym is released under the MIT License, reproduced below, and so is the Orthonym engine
-        behind it. Bundled third-party components keep their own licences, as set out in the
-        sections that follow.
+        The Orthonym web app is released under the MIT License, reproduced below, and so is the
+        Orthonym engine behind it. Bundled third-party components keep their own licences, as set
+        out in the sections that follow.
       </>
     ),
   },
@@ -293,11 +293,11 @@ function Terms() {
           <div className="legal-section__head">
             <p className="legal-section__index">MIT</p>
             <h2 className="legal-section__title" id="terms-licence">
-              Orthonym — MIT License
+              Orthonym-Web — MIT License
             </h2>
             <p className="legal-section__note">
-              Reproduced verbatim from the <code>LICENSE</code> file at the root of Orthonym’s source
-              tree.
+              Reproduced verbatim from the <code>LICENSE</code> file at the root of the Orthonym-Web
+              source tree.
             </p>
           </div>
 
@@ -327,7 +327,7 @@ function Terms() {
               <li className="legal-party" key={entry.name}>
                 <p className="legal-party__head">
                   {/* An entry with no `href` renders as plain text rather than
-                      as a link to nowhere. Orthonym is the one such entry
+                      as a link to nowhere. The Orthonym engine is the one such entry
                       today: its repository is private and answers 404 to an
                       anonymous visitor. */}
                   {entry.href ? (
@@ -406,8 +406,9 @@ function Terms() {
             <h3>Citing Orthonym</h3>
             <p>
               If this site helped with work you publish, please cite the naming engine and the
-              site: <em>Orthonym v1.0.0</em> (Kohulan Rajan) for the names themselves, and Orthonym
-              for the interface that produced them. Names verified by round-trip were checked with{' '}
+              site: <em>Orthonym v1.0.0</em> (Kohulan Rajan) for the names themselves, and
+              Orthonym-Web for the interface that produced them. Names verified by round-trip were
+              checked with{' '}
               <a href="https://github.com/dan2097/opsin" target="_blank" rel="noopener noreferrer">
                 OPSIN 2.9.0
               </a>

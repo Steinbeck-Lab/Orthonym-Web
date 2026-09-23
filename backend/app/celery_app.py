@@ -6,10 +6,10 @@ long batch physically cannot occupy the last slot an interactive request
 needs. This mirrors ChemAudit's default/high_priority split.
 
 The prefork pool is deliberate and pinned. jvm_bridge.py's contract says
-Orthonym is built for a process pool where "laziness means the parent starts
-no JVM and each worker starts its own" -- prefork is exactly that. Under
--P threads or gevent, worker_process_init never fires, so no child would
-start a JVM or record a health status.
+the Orthonym engine is built for a process pool where "laziness means the
+parent starts no JVM and each worker starts its own" -- prefork is exactly
+that. Under -P threads or gevent, worker_process_init never fires, so no
+child would start a JVM or record a health status.
 
 What a lost JVM actually costs (see spec section 5, which an earlier version
 of this docstring got wrong): a child that refuses a JVM inherited across

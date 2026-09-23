@@ -11,7 +11,7 @@ That fact is still true. But it turns out to be the wrong question. OPSIN
 never needs to resolve a substituent standalone when parsing a real, valid,
 full chemical name -- it resolves each named substituent to its OWN
 ``Fragment`` (a real, disjoint set of atoms) as an ordinary internal step,
-*before* sewing every piece into one final structure. This module
+*before* joining every piece into one final structure. This module
 reflectively unlocks that internal pipeline
 (``Parser`` -> ``ComponentGenerator`` -> ``ComponentProcessor`` ->
 ``StructureBuilder``) and reads out each name part's own Fragment -- but,

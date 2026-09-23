@@ -161,9 +161,9 @@ export default function Dropzone({
       onDrop={handleDrop}
     >
       {/* The seam. A dashed rule is this system's mark for "provisional" and
-          the footer already sews one shut, so an empty target is drawn as a
-          seam waiting to be sewn -- and while a file is over it, the
-          dashes actually run. That running seam is this system's own answer
+          the footer already draws one closed, so an empty target is drawn as
+          an open dashed outline -- and while a file is over it, the dashes
+          actually run. That running outline is this system's own answer
           to the reference's travelling border light, in the vocabulary the
           rest of the app already speaks. SVG rather than a dashed border,
           because a border cannot animate its dashes.

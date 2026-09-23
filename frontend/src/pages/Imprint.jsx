@@ -11,11 +11,11 @@ import './Legal.css'
 // looks for. Same split the reference implementation uses
 // (Beilstein-Institut/BChemXtractWeb, frontend/src/pages/ImprintPage.tsx).
 //
-// WHOSE Impressum this is, and why: Orthonym is a showcase for Orthonym and
-// is to be hosted by the Steinbeck Lab, so the operator named here is the
-// Cheminformatics and Computational Metabolomics group at
-// Friedrich-Schiller-Universität Jena — the same entity, in the same shape,
-// that the group's own DECIMER.ai names in
+// WHOSE Impressum this is, and why: Orthonym (this web app) is a showcase for
+// the Orthonym engine and is to be hosted by the Steinbeck Lab, so the
+// operator named here is the Cheminformatics and Computational Metabolomics
+// group at Friedrich-Schiller-Universität Jena — the same entity, in the
+// same shape, that the group's own DECIMER.ai names in
 // resources/views/impressum.blade.php. Every fact below is taken from that
 // file rather than composed here, so the two sites cannot drift apart:
 //

@@ -256,7 +256,8 @@ def test_every_advertised_example_still_produces_the_status_it_claims(example):
     surface, each labelled with the tier it is supposed to demonstrate. The
     engine improving is enough to falsify one: the abstain example has
     already been replaced TWICE for exactly that reason, both times because
-    Orthonym got better and started naming a molecule that used to abstain.
+    the Orthonym engine got better and started naming a molecule that used to
+    abstain.
     So these are known to drift, and until now nothing failed when they did.
 
     verify_opsin_live.py proved exactly one of the four, against its own

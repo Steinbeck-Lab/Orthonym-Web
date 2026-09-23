@@ -2,17 +2,19 @@
 
 ## What this is
 
-Orthonym is the web app for **Orthonym**, a deterministic, rule-based SMILES→IUPAC naming engine.
-It is not STOUT-V2: that neural model is a separate, unrelated project.
+Orthonym-Web is the web app for **the Orthonym engine**, a deterministic, rule-based SMILES→IUPAC
+naming engine. It is not STOUT-V2: that neural model is a separate, unrelated project. In prose the
+app is "Orthonym" and the engine "the Orthonym engine"; never write "ORTHONYM", which is only the
+wordmark's CSS uppercasing.
 
-Stack: React 19 + Vite frontend; FastAPI + Celery + Redis + RDKit + Orthonym + OPSIN (JPype on a
-real JRE) backend. No database, no auth. Naming runs in Celery workers; Redis is the broker, the job
-store, the shared name cache and the rate-limit counters at once.
+Stack: React 19 + Vite frontend; FastAPI + Celery + Redis + RDKit + the Orthonym engine + OPSIN
+(JPype on a real JRE) backend. No database, no auth. Naming runs in Celery workers; Redis is the
+broker, the job store, the shared name cache and the rate-limit counters at once.
 
 **This repository does not contain the naming engine.** `backend/vendor/` is populated from a
-checkout of Orthonym, which is not public — see "The engine is not in this repo" below. A fresh
-clone builds the frontend and the API shell; it cannot name a molecule until the engine is vendored
-in.
+checkout of the Orthonym engine, which is not public — see "The engine is not in this repo" below.
+A fresh clone builds the frontend and the API shell; it cannot name a molecule until the engine is
+vendored in.
 
 ## Commands
 
@@ -53,7 +55,7 @@ docker compose up -d --build
 
 `backend/vendor/` holds **three** pieces, not four: `orthonym/` (the engine source) and
 `opsin-resources/` (the OPSIN grammar resources plus the `opsin-cli` jar) are populated by
-`scripts/vendor-orthonym.sh` out of an Orthonym checkout and are gitignored wholesale, because
+`scripts/vendor-orthonym.sh` out of an Orthonym engine checkout and are gitignored wholesale, because
 publishing them would publish the engine; `cdk/` holds only a tracked `NOTICE` — no jar is vendored
 there at all. `centres-cli` is not vendored anywhere any more (`scripts/vendor-orthonym.sh:105-106`);
 see below.
@@ -66,6 +68,10 @@ Then bump `_KEY_VERSION` in `backend/app/name_cache.py` by hand. Upstream develo
 version `1.0.0`, so version-keyed cache invalidation cannot fire on its own and a name computed by
 the old engine would survive the refresh.
 
+The backend imports package `orthonym` (class `Orthonym`, env `ORTHONYM_*`) from
+`Beilstein-Institut/Orthonym`. The backend image copies all of `backend/vendor/`, so keep nothing
+there but what `scripts/vendor-orthonym.sh` writes.
+
 **CDK**, and since 2026-09-07 **centres** as well, are FETCHED, not vendored: both release
 jars have public URLs, so `backend/Dockerfile` downloads each at build time and checks it against a
 pinned SHA-256 (CDK's is recorded in the tracked `backend/vendor/cdk/NOTICE`; centres' is a
@@ -75,10 +81,10 @@ same download path a fresh clone does. Centres used to be committed as a jar bec
 build was an unreleased snapshot (`develop @ d4b3cf0`) nobody could reproduce; the engine moved to
 the tagged `1.2.1` release, which is fetchable the same way CDK's always was.
 
-Without a live JVM and those jars, Orthonym's SELF-01 self-consistency gate **fails open**: a
-molecule that should report as a lower-confidence `fallback` ships as an unverified `pin`. That is
-why `app/jvm_guard.py` refuses rather than degrades, and why the Dockerfile proves the gate at build
-time.
+Without a live JVM and those jars, the Orthonym engine's SELF-01 self-consistency gate **fails
+open**: a molecule that should report as a lower-confidence `fallback` ships as an unverified `pin`.
+That is why `app/jvm_guard.py` refuses rather than degrades, and why the Dockerfile proves the gate
+at build time.
 
 ## Gotchas
 
@@ -87,8 +93,8 @@ Things the repo does not tell you, or tells you only after they cost time.
 **Environment**
 - `REDIS_URL` defaults to `redis://redis:6379/0`, the compose hostname. Outside compose, set
   `redis://localhost:6379/0`.
-- Port 8000 may be Orthonym's own compose backend or another project's container. Run a manual backend
-  on 8001; `vite.config.js` proxies to 8000, so repoint it for a browser check and revert.
+- Port 8000 may be Orthonym's own compose backend or another project's container. Run a manual
+  backend on 8001; `vite.config.js` proxies to 8000, so repoint it for a browser check and revert.
 - Docker Desktop stops on its own. A 502 through the Vite proxy plus a `docker.sock` error means the
   daemon is down, not the code.
 
@@ -98,13 +104,13 @@ Things the repo does not tell you, or tells you only after they cost time.
   1 failed, 2 no summary (a real hang).
 - The suite needs Redis; `conftest.py` fails with instructions instead of skipping.
 - Kill every Celery worker first: `pkill -9 -f "celery -A app.celery_app"`, and
-  `docker stop orthonym-worker-fast orthonym-worker-batch` when compose is up, because `pkill` does not
-  reach containers. A live worker consumes the jobs the tests submit and the concurrency-cap tests
-  then fail on correct code.
+  `docker stop orthonym-worker-fast orthonym-worker-batch` when compose is up, because `pkill` does
+  not reach containers. A live worker consumes the jobs the tests submit and the concurrency-cap
+  tests then fail on correct code.
 - Tests share the Redis DB with manual runs and are not namespaced. Leftover keys fail
   `test_rate_limit.py` and `test_jobs_api.py` on unmodified code; check
-  `docker exec orthonym-redis redis-cli --scan --pattern 'orthonym:*' | wc -l` and `FLUSHDB` before
-  trusting a before/after.
+  `docker exec orthonym-redis redis-cli --scan --pattern 'orthonym:*' | wc -l` and `FLUSHDB`
+  before trusting a before/after.
 
 **Backend**
 - uvicorn alone is not a backend: `/api/health` reports `DEGRADED` and every naming endpoint 503s

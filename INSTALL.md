@@ -4,8 +4,8 @@ Everything operational lives here: how to run it, how to deploy it, how to test 
 engine dependency actually requires. The [README](README.md) is the short version.
 
 > **Before anything else.** This repository does not contain the naming engine. `backend/vendor/`
-> is populated from a checkout of Orthonym, which is not public — see
-> [The Orthonym dependency](#the-orthonym-dependency). A fresh clone builds and runs the
+> is populated from a checkout of the Orthonym engine, which is not public — see
+> [The Orthonym engine dependency](#the-orthonym-engine-dependency). A fresh clone builds and runs the
 > frontend and the API shell, but cannot name a molecule until the engine is vendored in.
 >
 > Deploying to a server? [Deploying it publicly](#deploying-it-publicly) is a step-by-step
@@ -18,7 +18,7 @@ engine dependency actually requires. The [README](README.md) is the short versio
 - [Run locally without Docker](#run-locally-without-docker)
 - [Tests](#tests)
 - [The batch/job API](#the-batchjob-api)
-- [The Orthonym dependency](#the-orthonym-dependency)
+- [The Orthonym engine dependency](#the-orthonym-engine-dependency)
 - [Stopping](#stopping)
 
 ---
@@ -69,10 +69,10 @@ cd /opt/orthonym-web
 docker ps >/dev/null 2>&1 || echo "run: sudo usermod -aG docker $USER  -- then log out and back in"
 
 # authenticate however you prefer -- a fine-grained PAT with read access to
-# Kohulan/Orthonym, or a deploy key in ~/.ssh. Then:
+# Beilstein-Institut/Orthonym, or a deploy key in ~/.ssh. Then:
 gh auth login                                                 # or: eval "$(ssh-agent)"; ssh-add ~/.ssh/orthonym_deploy
 sudo mkdir -p /opt/orthonym && sudo chown "$USER:$USER" /opt/orthonym
-gh repo clone Kohulan/Orthonym /opt/orthonym -- --depth 1
+gh repo clone Beilstein-Institut/Orthonym /opt/orthonym -- --depth 1
 
 # populate backend/vendor/ from that checkout
 ORTHONYM_SRC=/opt/orthonym ./scripts/vendor-orthonym.sh
@@ -365,7 +365,7 @@ files, so an unattended box cannot fill its disk with worker logs.
 You need **four** processes, not two. Redis first:
 
 ```bash
-docker compose up -d redis    # service orthonym-redis, publishes localhost:6379
+docker compose up -d redis    # container orthonym-redis, publishes localhost:6379
 ```
 
 ```bash
@@ -414,14 +414,14 @@ environment variable: results live **24 h**, the shared name cache lives **7 day
 caps are **2** concurrent jobs, **20** jobs/hour, **60** naming requests/min, **300** polls/min,
 **1200** depictions/min.
 
-## The Orthonym dependency
+## The Orthonym engine dependency
 
-Orthonym isn't published on PyPI in the form Orthonym needs (`name_tiered()`, `general_fallback`), so
-`backend/requirements.txt` installs it from `backend/vendor/orthonym` — a snapshot, not a live path
-dependency, so a container build never has to reach outside its own context.
+The Orthonym engine isn't published on PyPI in the form this web app needs (`name_tiered()`,
+`general_fallback`), so `backend/requirements.txt` installs it from `backend/vendor/orthonym` — a
+snapshot, not a live path dependency, so a container build never has to reach outside its own context.
 
 **That snapshot is not in this repository, and neither are three of the four vendored artifacts.**
-`scripts/vendor-orthonym.sh` copies all of them out of an Orthonym checkout: the engine source, the
+`scripts/vendor-orthonym.sh` copies all of them out of an Orthonym engine checkout: the engine source, the
 OPSIN grammar resources, and the `opsin-cli` and `centres-cli` jars. Publishing them would publish
 the engine, so all four are gitignored. Run the script before your first build:
 
@@ -435,7 +435,7 @@ downloads it during the build and checks it against the SHA-256 recorded in
 the build context, so a build here exercises the same download path a fresh clone does. `centres-cli`
 cannot be fetched at all — its notice records it as a local Maven build from an unreleased commit.
 
-**Refresh the snapshot** after pulling Orthonym changes you want Orthonym to pick up:
+**Refresh the snapshot** after pulling engine changes you want the web app to pick up:
 
 ```bash
 ORTHONYM_SRC=/path/to/Orthonym/Project ./scripts/vendor-orthonym.sh
@@ -447,7 +447,7 @@ by the old engine would survive the refresh.
 
 ### The part that isn't optional: SELF-01 needs a real JVM
 
-Orthonym ships three modules that each compute an identical `PROJECT_ROOT` (4 parents up from their own installed file) and expect real artifacts sitting there as siblings of `src/` in a full dev checkout:
+The Orthonym engine ships three modules that each compute an identical `PROJECT_ROOT` (4 parents up from their own installed file) and expect real artifacts sitting there as siblings of `src/` in a full dev checkout:
 
 | Module | Expects |
 |---|---|
@@ -455,9 +455,9 @@ Orthonym ships three modules that each compute an identical `PROJECT_ROOT` (4 pa
 | `validation/opsin_roundtrip.py` | `opsin-cli-2.9.0-jar-with-dependencies.jar` |
 | `perception/centres_bridge.py` | `centres-cli-1.2.1.jar` (downloaded by the Dockerfile) |
 
-None of these ship with the pip package. `scripts/vendor-orthonym.sh` vendors all three into `backend/vendor/opsin-resources/`, and `backend/scripts/place_opsin_resources.py` (run once after every `pip install`, and baked into `backend/Dockerfile`) copies them to wherever orthonym actually got installed — it locates the target via `sysconfig`, not by guessing a venv layout, so it works the same locally and in a container.
+None of these ship with the pip package. `scripts/vendor-orthonym.sh` vendors all three into `backend/vendor/opsin-resources/`, and `backend/scripts/place_opsin_resources.py` (run once after every `pip install`, and baked into `backend/Dockerfile`) copies them to wherever `orthonym` actually got installed — it locates the target via `sysconfig`, not by guessing a venv layout, so it works the same locally and in a container.
 
-**This is not just packaging hygiene.** Without a live JVM (jpype + a JRE) and these two jars, Orthonym's SELF-01 self-consistency gate — the check that verifies a candidate name actually round-trips back to the right structure — silently **fails open**: confirmed by direct testing, a molecule that should honestly report as a lower-confidence `fallback` instead shipped as an unverified `pin`. `JPype1` is in `requirements.txt` and `backend/Dockerfile` installs `default-jre-headless` for exactly this reason. If you ever strip either out "to slim the image," re-run the regression check below first.
+**This is not just packaging hygiene.** Without a live JVM (jpype + a JRE) and these two jars, the Orthonym engine's SELF-01 self-consistency gate — the check that verifies a candidate name actually round-trips back to the right structure — silently **fails open**: confirmed by direct testing, a molecule that should honestly report as a lower-confidence `fallback` instead shipped as an unverified `pin`. `JPype1` is in `requirements.txt` and `backend/Dockerfile` installs `default-jre-headless` for exactly this reason. If you ever strip either out "to slim the image," re-run the regression check below first.
 
 That failure mode is why `app/jvm_guard.py` refuses rather than degrades: if no worker reports a live
 JVM, every naming endpoint — including `POST /api/jobs` — returns 503 instead of serving names with
@@ -472,7 +472,7 @@ drawing. RDKit remains the fallback for any process where the JVM will not come 
 **second SMILES parser**: a string RDKit refuses is offered to it before the input is called
 unreadable.
 
-It is **not on the JVM's classpath**, and cannot be: Orthonym owns the only `startJVM` call and
+It is **not on the JVM's classpath**, and cannot be: the Orthonym engine owns the only `startJVM` call and
 boots with a fixed one. `app/cdk_bridge.py` loads it in an isolated `java.net.URLClassLoader`
 instead — read that module's docstring before changing anything about it, especially the parent
 loader and the URL order, both of which are load-bearing and both of which fail in ways that look

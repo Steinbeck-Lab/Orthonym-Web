@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { checkHealth } from '../lib/api'
 import Icon from '../components/Icon'
-import ChartedName from '../components/ChartedName'
 import BrushCross from '../components/BrushCross'
 import RoundTripProof from '../components/RoundTripProof'
 import ThreadCard from '../components/ThreadCard'
@@ -125,9 +124,8 @@ function ServiceStatus() {
   )
 }
 
-// A sheet of the pattern. Every section is a numbered sheet with a title
-// block, because that is how a chart is bound: the reader always knows which
-// sheet they are on and what it is for.
+// A sheet of the page. Every section is a numbered sheet with a title block,
+// so the reader always knows which sheet they are on and what it is for.
 function Sheet({ id, index, title, note, children, reduced }) {
   const [ref, shown] = useReveal({ reduced })
   return (
@@ -151,19 +149,18 @@ function Sheet({ id, index, title, note, children, reduced }) {
   )
 }
 
-// The four tier marks, drawn as a pattern chart's symbol key.
+// The four tier marks, drawn as a symbol key.
 //
-// This is the single best fit between the two worlds and the reason the world
-// works at all: Orthonym's confidence tiers were ALREADY a set of monochrome
-// line symbols with fixed meanings -- double rule, dashed, dotted, faint --
-// which is precisely what a chart's key is. Nothing was invented to make them
-// fit. A reader who learns the key here recognises the same mark under a name
-// on every other page, which is what the product needs and what a key is for.
+// The product's confidence tiers were ALREADY a set of monochrome line
+// symbols with fixed meanings -- double rule, dashed, dotted, faint -- which
+// is precisely what a key is. Nothing was invented to make them fit. A reader
+// who learns the key here recognises the same mark under a name on every
+// other page, which is what the product needs and what a key is for.
 const KEY_ROWS = [
   {
     mark: 'pin',
     name: 'Preferred IUPAC Name',
-    body: 'Worked to the strict rule, and read back clean.',
+    body: 'Built to the strict rule, and read back clean.',
   },
   {
     mark: 'fallback',
@@ -173,19 +170,19 @@ const KEY_ROWS = [
   {
     mark: 'best',
     name: 'Best effort',
-    body: 'The engine worked it. OPSIN could not confirm it.',
+    body: 'The engine named it. OPSIN could not confirm it.',
   },
   {
     mark: 'abstain',
-    name: 'Left unworked',
-    body: 'No name — it declined rather than guess.',
+    name: 'No name',
+    body: 'The engine declined rather than guess.',
   },
 ]
 
-// The thread list. Real marks where the project publishes one; a typographic
+// The credits. Real marks where the project publishes one; a typographic
 // lockup where it does not. See ThreadCard for why that distinction is drawn
 // rather than smoothed over.
-const THREADS = [
+const CREDITS = [
   {
     code: '01',
     name: 'OPSIN',
@@ -208,14 +205,14 @@ const THREADS = [
   },
 ]
 
-// The three routes, written as a pattern's working instructions: what you do,
-// in order, on each. Row language rather than paragraph language, because a
-// chart tells you to work a row, not about working rows.
+// The three routes: what you do, in order, on each. Instruction language
+// rather than paragraph language, because each row tells you what to do, not
+// about doing it.
 const ROWS = [
   {
     n: 'I',
     title: 'Translate',
-    body: 'Paste, upload or draw a structure. The engine works the name and marks it with one of the four symbols opposite.',
+    body: 'Paste, upload or draw a structure. The engine builds the name and marks it with one of the four symbols opposite.',
   },
   {
     n: 'II',
@@ -225,51 +222,51 @@ const ROWS = [
   {
     n: 'III',
     title: 'Explain',
-    body: 'Unpicks a finished name into the parts it was worked from, each mapped to the atoms it covers. Anything it cannot place, it says so.',
+    body: 'Takes a finished name apart into the parts it was built from, each mapped to the atoms it covers. Anything it cannot place, it says so.',
   },
 ]
 
-// About Orthonym, worked as a pattern chart.
-//
-// The world was chosen by the owner from a hand of four (2026-09-06) and it is
-// the one that fits what the product does: a name worked from parts, in a
-// fixed order, to a written rule. The footer already sews itself shut and the
-// nav pulls a thread tight on arrival, so the page is not importing a metaphor
-// -- it is finally speaking the one the site already had.
+// About Orthonym, laid out as numbered sheets on squared paper.
 //
 // The page had been rebuilt twice before as a document in cards and failed on
 // four counts at once (too plain, too little imagery, wrong order, too
 // sparse), so this replaces the composition rather than passing over it again.
 //
-// The mapping is not decoration laid over content; every region of a real
-// chart already had a tenant here:
+// No region is decoration laid over content; each one holds a real part of
+// the product:
 //   the KEY      <- the four confidence tiers, already a set of line symbols
-//   the THREADS  <- the dependency credits, with their real marks as swatches
-//   the ROWS     <- the three routes, as working instructions
-//   the PIECE    <- the live round-trip, which is the finished thing itself
-//   the GAUGE    <- engine, version, licence, author, and whether it is up
+//   the CREDITS  <- the dependency credits, with their real marks as swatches
+//   the ROUTES   <- the three ways in, as instructions
+//   the PROOF    <- the live round-trip, which is the finished thing itself
+//   the DETAILS  <- engine, version, licence, author, and whether it is up
 function About() {
   const reduced = useReducedMotion()
 
   return (
     <>
-      {/* The pattern's cover sheet. */}
+      {/* The cover. */}
       <section className="chart-cover" aria-label="Introduction">
         <div className="chart-cover__plate">
-          {/* The name first, worked across the full measure. It is the
-              masthead of the pattern, so it leads. */}
-          <ChartedName />
+          {/* The wordmark first, across the full measure. It is the page's
+              masthead, so it leads. */}
+          <img
+            className="about-logo"
+            src="/logos/ORTHONYM.png"
+            alt="Orthonym"
+            width={1332}
+            height={294}
+          />
 
-          <h1 className="chart-cover__title">How a name is worked</h1>
+          <h1 className="chart-cover__title">How a name is built</h1>
           <p className="chart-cover__lede">
-            Orthonym builds an IUPAC name the way a chart builds a piece: from named parts, in a
-            fixed order, to a written rule. Nothing is guessed, and the finished work is checked
-            against the pattern before you are shown it.
+            Orthonym builds an IUPAC name from named parts, in a fixed order, to a written rule.
+            Nothing is guessed, and the finished name is checked against the structure before you
+            are shown it.
           </p>
 
           <dl className="chart-cover__gauge">
             <div>
-              <dt>Worked to</dt>
+              <dt>Standard</dt>
               <dd>IUPAC 2013</dd>
             </div>
             <div>
@@ -285,12 +282,12 @@ function About() {
       </section>
 
       <main className="chart">
-        {/* THE PIECE — the live proof, worked in front of the reader. */}
+        {/* THE PROOF — the live round trip, run in front of the reader. */}
         <Sheet
           id="piece"
           index="Sheet 1"
-          title="The finished piece"
-          note="Worked live, on this server, while you watch."
+          title="The finished name"
+          note="Named live, on this server, while you watch."
           reduced={reduced}
         >
           <RoundTripProof />
@@ -317,11 +314,11 @@ function About() {
           </dl>
         </Sheet>
 
-        {/* THE ROWS — the three routes as working instructions. */}
+        {/* THE ROUTES — the three ways in, as instructions. */}
         <Sheet
           id="rows"
           index="Sheet 3"
-          title="Working instructions"
+          title="Routes"
           note="Three ways in. The same engine behind each."
           reduced={reduced}
         >
@@ -338,26 +335,26 @@ function About() {
           </ol>
         </Sheet>
 
-        {/* THE THREADS — the credits, where a floss list belongs. */}
+        {/* THE CREDITS — what the work depends on. */}
         <Sheet
           id="threads"
           index="Sheet 4"
-          title="Threads"
+          title="Credits"
           note="What the work is made from. None of it is ours alone."
           reduced={reduced}
         >
           <ul className="threads" role="list">
-            {THREADS.map((t) => (
+            {CREDITS.map((t) => (
               <ThreadCard key={t.code} {...t} />
             ))}
           </ul>
         </Sheet>
 
-        {/* WHO WORKED IT. The two institutions get their own sheet rather than
-            a row in the thread list: a partnership is not a dependency, and
+        {/* WHO MADE IT. The two institutions get their own sheet rather than
+            a row in the credits: a partnership is not a dependency, and
             filing it as one undersold it.
             The join is BrushCross -- a painted mark at signature scale, NOT the
-            footer's sewn hairline. They are deliberately different: the
+            footer's hairline cross. They are deliberately different: the
             footer's × is punctuation inside a sentence, this one is the thing
             the sheet is about. Same letter, different drawing, different job. */}
         <Sheet
@@ -402,8 +399,8 @@ function About() {
           <p className="collab__line">An official collaboration for open science.</p>
         </Sheet>
 
-        {/* THE GAUGE — the maker's block that closes a pattern. */}
-        <Sheet id="gauge" index="Sheet 6" title="Maker's notes" reduced={reduced}>
+        {/* THE DETAILS — the facts that close the page. */}
+        <Sheet id="gauge" index="Sheet 6" title="Details" reduced={reduced}>
           <dl className="gauge">
             <div className="gauge__row">
               <dt>Engine</dt>
@@ -412,8 +409,8 @@ function About() {
             <div className="gauge__row">
               <dt>Source</dt>
               {/* No link: the upstream repository is private and answers 404
-                  to an anonymous visitor, and "Read the pattern itself"
-                  promises a target a reader cannot open. Terms.jsx and
+                  to an anonymous visitor, and a link to the source would
+                  promise a target a reader cannot open. Terms.jsx and
                   Navigation.jsx carry the same fact; the three move
                   together. */}
               <dd>
@@ -422,7 +419,7 @@ function About() {
               </dd>
             </div>
             <div className="gauge__row">
-              <dt>Worked by</dt>
+              <dt>Made by</dt>
               <dd>Kohulan Rajan</dd>
             </div>
             <div className="gauge__row gauge__row--status">

@@ -181,8 +181,8 @@ function Explain() {
       .then((result) => {
         // A PARTIAL result is a real case, not a contradiction: the
         // structure-in path can name a molecule and render it, yet fail to
-        // decompose the name. Verified live -- Orthonym names TNT's SMILES
-        // "2,4,6-trinitrotoluene", which OPSIN itself rejects ("Multiple
+        // decompose the name. Verified live -- the Orthonym engine names TNT's
+        // SMILES "2,4,6-trinitrotoluene", which OPSIN itself rejects ("Multiple
         // locants without a multiplier"). That response carries `name` and
         // `svg` alongside `error`. Throwing it away would hide a structure
         // we successfully drew, so keep the data and show the error beside

@@ -2,11 +2,11 @@
 // as a superscript.
 //
 // WHY THIS IS A FRONTEND PARSER AND NOT A BACKEND FIELD. The name is a plain
-// string end to end -- Orthonym emits it, orthonym_service passes it through
-// verbatim, and every one of the seven places Orthonym renders a name receives
-// that same string. Italics and superscripts are a property of the NAME'S OWN
-// SURFACE SYNTAX ("(2S)-", "N,N-", "1H-", "[1,2-a]", "0^4,9"), not of the
-// molecule, so they can be read off the string without asking the engine. That
+// string end to end -- the Orthonym engine emits it, orthonym_service passes it
+// through verbatim, and every one of the seven places the app renders a name
+// receives that same string. Italics and superscripts are a property of the
+// NAME'S OWN SURFACE SYNTAX ("(2S)-", "N,N-", "1H-", "[1,2-a]", "0^4,9"), not of
+// the molecule, so they can be read off the string without asking the engine. That
 // also makes /from-name work, where the name is the user's own typing and no
 // engine ran at all.
 //
@@ -31,7 +31,7 @@
 // from the grammar it could emit.
 
 /**
- * Element symbols that can stand as an italic locant, from Orthonym's own
+ * Element symbols that can stand as an italic locant, from the engine's own
  * table (assembly/naming_utils.py `_ITALIC_LOCANT_LETTERS`). Two-letter
  * symbols are listed FIRST so alternation prefers "Se" over "S".
  */
@@ -68,7 +68,7 @@ const TOKEN_START = '(^|[\\s\\-,([])'
  */
 const RULES = [
   // A. VON BAEYER / POLYSPIRO SUPERSCRIPT LOCANTS.
-  //    Orthonym writes these with a bare caret and says so in the emitter's
+  //    The engine writes these with a bare caret and says so in the emitter's
   //    own docstring ("PIN superscript typography", rules/polycyclic.py) --
   //    `tricyclo[5.3.2.0^4,9]dodecane`, `trispiro[2.1.2^5.1.3^9.1^3]tridecane`.
   //    The superscript runs to the next "." or "]", and is either a comma-

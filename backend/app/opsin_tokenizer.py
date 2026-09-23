@@ -117,7 +117,7 @@ def _load_symbol_table() -> dict:
 
 def _get_parser():
     """Returns OPSIN's ParseRules instance, or None if Java/the JVM/the
-    vendored jar isn't available. Reuses the SAME shared JVM orthonym's own
+    vendored jar isn't available. Reuses the SAME shared JVM the engine's own
     SELF-01 gate already starts (via opsin_available()) rather than booting
     a second one -- jpype allows exactly one JVM per process.
     """

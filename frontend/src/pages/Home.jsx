@@ -179,12 +179,13 @@ function Home() {
   }
 
   // Reveals settle per SMILES row (the batch "chase"), and within a row
-  // ThreadedName animates per character. The direction's STORY promises
+  // ResolvingName animates per character. The direction's STORY promises
   // "rule-by-rule" reveal, but the /api/translate contract (see lib/api.js)
   // returns only a finished name per row, not its rule-firing/fragment
-  // boundaries — Orthonym's name_tiered() doesn't expose that granularity
-  // today. Per-character is the honest stand-in for "assembled piece by
-  // piece" until a fragment-level API exists to reveal true rule order.
+  // boundaries — the Orthonym engine's name_tiered() doesn't expose that
+  // granularity today. Per-character is the honest stand-in for "assembled
+  // piece by piece" until a fragment-level API exists to reveal true rule
+  // order.
   function runTranslate(lines) {
     clearTimers()
     setFetchError(null)
@@ -492,15 +493,15 @@ function Home() {
           }
           ref={wordmarkRef}
         >
-          {/* The mark stands in for a letter. The letter it stands in for stays in the DOM
-              under display:none, because wordmarkMetrics() reads THIS
+          {/* The second O is the mark. The letter it stands in for stays in
+              the DOM under display:none, because wordmarkMetrics() reads THIS
               element's textContent to raster the flare's light source --
-              take the character out and the light drops a letter. Hidden that
-              way it is out of the accessibility tree too, so the mark's own
-              alt is the only "O" a screen reader meets. */}
+              take the character out and the light spells ORTHNYM. Hidden
+              that way it is out of the accessibility tree too, so the mark's
+              own alt is the only "O" a screen reader meets there. */}
           Orth
           <span className="home-hero__word-o">o</span>
-          <img className="home-hero__mark" src="/logos/orthonym.svg" alt="O" />
+          <img className="home-hero__mark" src="/logos/Orthonym.svg" alt="O" />
           nym
         </h1>
 

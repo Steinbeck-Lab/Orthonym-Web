@@ -249,17 +249,17 @@ def test_an_abstain_is_cached(redis_client):
 
 def test_the_key_changes_when_the_engine_source_changes(monkeypatch):
     """key-version-unmechanized: _ENGINE_VERSION cannot invalidate the cache,
-    because upstream Orthonym develops on a static "1.0.0" and does not bump
-    per change. A vendor refresh could therefore change naming behaviour while
-    the key stayed identical, serving names from the old engine beside tiers
-    computed by the new one -- the PRODUCT.md principle 2 violation the key
-    exists to prevent.
+    because the upstream Orthonym engine develops on a static "1.0.0" and does
+    not bump per change. A vendor refresh could therefore change naming
+    behaviour while the key stayed identical, serving names from the old engine
+    beside tiers computed by the new one -- the PRODUCT.md principle 2
+    violation the key exists to prevent.
 
     Until now the only defence was a hand-maintained counter with nothing in
     the vendor script or CI to catch a miss, and it HAS been missed: the
     v1 -> v2 bump happened only because that particular refresh broke loudly.
 
-    The key now carries a digest of the installed Orthonym source, so a
+    The key now carries a digest of the installed Orthonym engine source, so a
     refresh invalidates it whether or not anyone remembers.
     """
     before = name_cache.cache_key("CCO", best_effort=True)
@@ -298,8 +298,8 @@ def test_the_fast_and_batch_paths_agree_on_the_cache_key(redis_client):
 
     What this test does NOT assert any more: that three spellings of ethanol
     collapse to one key. Owner decision 2026-09-03 (commit 170174b) is to name
-    the SMILES the user actually typed, because Orthonym's naming is not
-    invariant to atom order -- a molecule can name on the typed ordering and
+    the SMILES the user actually typed, because the Orthonym engine's naming is
+    not invariant to atom order -- a molecule can name on the typed ordering and
     abstain on the RDKit-canonical one. So `_canonical_or_error` returns the
     input string untouched on the RDKit path, and two spellings legitimately
     take two cache entries. That costs efficiency, never correctness: the OPSIN

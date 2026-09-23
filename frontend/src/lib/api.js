@@ -1,4 +1,4 @@
-// Thin fetch wrappers around the Orthonym showcase API.
+// Thin fetch wrappers around the Orthonym backend API.
 // Contract:
 //   GET  /api/health           -> { status: string, opsin: string }
 //   GET  /api/examples         -> { examples: ExampleItem[] }

@@ -1,4 +1,4 @@
-#  CI for Orthonym.
+#  CI for Orthonym-Web.
 #
 # WHY THE BACKEND SUITE DOES NOT RUN HERE
 # ---------------------------------------
@@ -6,8 +6,9 @@
 # `app.celery_app`, and importing anything under `app.` pulls in the naming
 # engine -- measured, `import app.main` loads 136 `orthonym.*` modules. That
 # engine lives in `backend/vendor/orthonym/`, which `.gitignore` excludes on
-# purpose: publishing it would publish Orthonym, which is not public. A fresh
-# clone therefore has no engine and every backend test errors at collection.
+# purpose: publishing it would publish the Orthonym engine, which is not
+# public. A fresh clone therefore has no engine and every backend test errors
+# at collection.
 #
 # So this file runs what a public runner can genuinely run, and the `backend`
 # job below stays SKIPPED until you opt in (see its own comment for the two
@@ -112,7 +113,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Check out Orthonym
+      - name: Check out the Orthonym engine
         # The engine is private. Without a token that can read it, this job
         # cannot run at all -- which is why it is gated above.
         uses: actions/checkout@v7
@@ -163,9 +164,10 @@ jobs:
           .venv/bin/pip install --quiet -r requirements.txt -r requirements-dev.txt
 
       - name: Place the engine's runtime artifacts
-        # orthonym resolves the OPSIN and centres jars from its OWN install
-        # root, not from vendor/. Skipping this leaves centres unresolved and
-        # cdk_bridge.self_check() fails with "L-alanine did not label as (S)".
+        # The Orthonym engine resolves the OPSIN and centres jars from its OWN
+        # install root, not from vendor/. Skipping this leaves centres
+        # unresolved and cdk_bridge.self_check() fails with "L-alanine did not
+        # label as (S)".
         working-directory: backend
         run: PYTHONPATH="$PWD" .venv/bin/python scripts/place_opsin_resources.py
 
