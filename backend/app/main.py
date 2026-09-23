@@ -1,6 +1,6 @@
-"""STITCH backend: FastAPI app exposing the OpenSTOUT naming engine.
+"""Orthonym backend: the FastAPI app in front of the Orthonym naming engine.
 
-Endpoints (see STITCH API contract):
+Endpoints (see the Orthonym API contract):
   POST /api/translate
   GET  /api/health
   GET  /api/examples
@@ -36,7 +36,7 @@ from .schemas import (
 )
 from .tasks import explain_iupac_name, explain_smiles, name_to_smiles, translate_fast
 
-# Verified live against the real OpenSTOUT engine -- do not invent
+# Verified live against the real Orthonym engine -- do not invent
 # different examples.
 EXAMPLES = [
     {
@@ -55,7 +55,7 @@ EXAMPLES = [
         "expected_status": "fallback",
     },
     {
-        # This example has been replaced twice, both times because OpenSTOUT
+        # This example has been replaced twice, both times because the engine
         # got BETTER and started naming the molecule that used to abstain:
         #   1. "CC(C)(C)C1=CC2=C(C=C1)C1(C)CCC(C)(C)C2(C)C1" -- began
         #      escalating to a verified fallback.
@@ -64,7 +64,7 @@ EXAMPLES = [
         #      vendor refresh.
         # So an ORGANIC honest-abstain example is a moving target. Uranium
         # trioxide is stable in that role for a structural reason rather than
-        # a coverage gap: OpenSTOUT targets organic nomenclature, and it
+        # a coverage gap: the Orthonym engine targets organic nomenclature, and it
         # refuses here instead of guessing. Verified live to abstain on BOTH
         # the primary and the escalated namer.
         "label": "Uranium trioxide — outside organic nomenclature, honest abstain",
@@ -87,7 +87,7 @@ logging.basicConfig(level=logging.INFO)
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="STITCH backend")
+app = FastAPI(title="Orthonym backend")
 
 app.add_middleware(
     CORSMiddleware,

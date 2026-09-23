@@ -2,34 +2,34 @@ import { Link } from 'react-router-dom'
 import { LegalPage, LegalSection } from './LegalSection'
 import './Legal.css'
 
-// Terms of Use, followed by STITCH's own licence and the third-party
+// Terms of Use, followed by Orthonym's own licence and the third-party
 // attributions for the components whose licences require a notice (CDK and
 // centres, both copyleft) or which it is simply honest to cite.
 //
 // Structure and the eight numbered conditions follow the reference
 // implementation (Beilstein-Institut/BChemXtractWeb,
-// frontend/src/pages/TermsPage.tsx), retargeted at what STITCH actually is
+// frontend/src/pages/TermsPage.tsx), retargeted at what Orthonym actually is
 // and at the entity that operates it. Clause 3 is the one that changed most:
 // the reference disclaims "string representations (InChI, SMILES, molecular
 // formulas, RInChI)", and the equivalent claim here has to be made carefully,
-// because STITCH's whole product is that it TELLS you how much confidence it
+// because Orthonym's whole product is that it TELLS you how much confidence it
 // can claim for a name. Saying "may contain errors" flatly would understate
 // the product; saying nothing would overstate it. The clause therefore says
 // both: the tier is honest, and an honest tier is still not a warranty.
 //
 // The licence text below is the repository's own /LICENSE, reproduced
 // verbatim from the file rather than retyped. Owner decision this session:
-// STITCH is MIT, © 2026 Kohulan Rajan, matching the vendored OpenSTOUT
-// snapshot exactly (backend/vendor/openstout/LICENSE) — the repo had no
-// LICENSE file at all before this page needed one, and /LICENSE was created
-// from that same text so the two can never disagree.
+// Orthonym (this web app) is MIT, © 2026 Kohulan Rajan, matching the vendored
+// Orthonym engine snapshot exactly (backend/vendor/orthonym/LICENSE) — the
+// repo had no LICENSE file at all before this page needed one, and /LICENSE
+// was created from that same text so the two can never disagree.
 //
 // The third-party list is deliberately NOT the full dependency manifest.
 // Every entry below is either copyleft (so a notice is owed), a vendored
 // binary this repository actually redistributes, or the engine the product
 // is a showcase for. Everything else is a link to the manifest, as the
 // reference does. Provenance for the three jars is
-// backend/vendor/openstout/NOTICE and backend/vendor/cdk/NOTICE, both of
+// backend/vendor/orthonym/NOTICE and backend/vendor/cdk/NOTICE, both of
 // which are considerably more careful than this page can be, so this page
 // cites them rather than paraphrasing them.
 
@@ -60,13 +60,13 @@ SOFTWARE.`
 // frameworks that carry them.
 const THIRD_PARTY = [
   {
-    // NO href, deliberately. github.com/Kohulan/OpenSTOUT is a PRIVATE
-    // repository — checked unauthenticated, it answers 404 — so linking it
-    // would hand every visitor a dead link that looks like a broken site.
+    // NO href, deliberately. github.com/Beilstein-Institut/Orthonym is a
+    // PRIVATE repository — checked unauthenticated, it answers 404 — so linking
+    // it would hand every visitor a dead link that looks like a broken site.
     // Give it an href again the day the repository is published.
-    name: 'OpenSTOUT 1.0.0',
+    name: 'Orthonym engine 1.0.0',
     spdx: 'MIT',
-    note: 'The rule-based SMILES-to-IUPAC naming engine this site exists to show. Vendored as a source snapshot under backend/vendor/openstout and installed at image build time. © 2026 Kohulan Rajan. Its repository is not public.',
+    note: 'The rule-based SMILES-to-IUPAC naming engine this site exists to show. Vendored as a source snapshot under backend/vendor/orthonym and installed at image build time. © 2026 Kohulan Rajan. Its repository is not public.',
   },
   {
     name: 'OPSIN 2.9.0',
@@ -146,9 +146,9 @@ const CONDITIONS = [
     id: 'licence',
     body: (
       <>
-        STITCH is released under the MIT License, reproduced below, and so is the OpenSTOUT engine
-        behind it. Bundled third-party components keep their own licences, as set out in the
-        sections that follow.
+        The Orthonym web app is released under the MIT License, reproduced below, and so is the
+        Orthonym engine behind it. Bundled third-party components keep their own licences, as set
+        out in the sections that follow.
       </>
     ),
   },
@@ -156,7 +156,7 @@ const CONDITIONS = [
     id: 'free-use',
     body: (
       <>
-        Everybody is free to use STITCH to translate chemical structures into IUPAC names, and to use
+        Everybody is free to use Orthonym to translate chemical structures into IUPAC names, and to use
         the names it produces.
       </>
     ),
@@ -168,7 +168,7 @@ const CONDITIONS = [
         This site and its content are provided for use “as is”. No representation or warranty is made
         with respect to the site or its contents, including as to quality, completeness, timeliness or
         accuracy. Names, structures, molecular formulae and depictions are generated automatically.
-        STITCH states, for every name, how far it was able to verify that name — a verified name, a
+        Orthonym states, for every name, how far it was able to verify that name — a verified name, a
         fallback, a best-effort attempt or an abstention — and that statement is made honestly and is
         the point of the site. It is not a warranty that the name is correct. In particular, no
         result from this site should be relied upon as the sole basis for a regulatory, safety,
@@ -266,7 +266,7 @@ function Terms() {
   return (
     <LegalPage
       title="Terms of Use"
-      lede="What you may do with STITCH, what it promises, and what it does not."
+      lede="What you may do with Orthonym, what it promises, and what it does not."
       label="Terms of Use"
     >
         <LegalSection
@@ -293,11 +293,11 @@ function Terms() {
           <div className="legal-section__head">
             <p className="legal-section__index">MIT</p>
             <h2 className="legal-section__title" id="terms-licence">
-              STITCH — MIT License
+              Orthonym-Web — MIT License
             </h2>
             <p className="legal-section__note">
-              Reproduced verbatim from the <code>LICENSE</code> file at the root of STITCH’s source
-              tree.
+              Reproduced verbatim from the <code>LICENSE</code> file at the root of the Orthonym-Web
+              source tree.
             </p>
           </div>
 
@@ -327,7 +327,7 @@ function Terms() {
               <li className="legal-party" key={entry.name}>
                 <p className="legal-party__head">
                   {/* An entry with no `href` renders as plain text rather than
-                      as a link to nowhere. OpenSTOUT is the one such entry
+                      as a link to nowhere. The Orthonym engine is the one such entry
                       today: its repository is private and answers 404 to an
                       anonymous visitor. */}
                   {entry.href ? (
@@ -363,9 +363,9 @@ function Terms() {
 
         <LegalSection id="terms-copyleft" index="LGPL" title="Copyleft notice for the bundled jars">
             <p>
-              STITCH ships three Java archives unmodified and runs each of them as a separate
+              Orthonym ships three Java archives unmodified and runs each of them as a separate
               program: OPSIN, which verifies a name by parsing it back; centres, which assigns CIP
-              stereo descriptors; and CDK, which draws every structure on the site. STITCH does not
+              stereo descriptors; and CDK, which draws every structure on the site. Orthonym does not
               link against, embed or modify any of them.
             </p>
             <p>
@@ -400,14 +400,15 @@ function Terms() {
               The full provenance of every vendored artefact — version, SHA-256, how it is invoked,
               and which of its bundled components carry which terms — is recorded alongside the
               artefacts themselves, in <code>backend/vendor/cdk/NOTICE</code> and{' '}
-              <code>backend/vendor/openstout/NOTICE</code>. Ask the operator for a copy of either
+              <code>backend/vendor/orthonym/NOTICE</code>. Ask the operator for a copy of either
               if you need it; those files, not this page, are the authoritative record.
             </p>
-            <h3>Citing STITCH</h3>
+            <h3>Citing Orthonym</h3>
             <p>
               If this site helped with work you publish, please cite the naming engine and the
-              site: <em>OpenSTOUT v1.0.0</em> (Kohulan Rajan) for the names themselves, and STITCH
-              for the interface that produced them. Names verified by round-trip were checked with{' '}
+              site: <em>Orthonym v1.0.0</em> (Kohulan Rajan) for the names themselves, and
+              Orthonym-Web for the interface that produced them. Names verified by round-trip were
+              checked with{' '}
               <a href="https://github.com/dan2097/opsin" target="_blank" rel="noopener noreferrer">
                 OPSIN 2.9.0
               </a>

@@ -61,7 +61,7 @@ export default function NameResultsTable({ rows }) {
           <button
             type="button"
             className="btn btn--pastel btn--sm"
-            onClick={() => downloadText('stitch-from-name.csv', rowsToCsv(rows), 'text/csv')}
+            onClick={() => downloadText('orthonym-from-name.csv', rowsToCsv(rows), 'text/csv')}
           >
             <Icon name="download" />
             Download CSV
@@ -72,7 +72,7 @@ export default function NameResultsTable({ rows }) {
             disabled={written === 0}
             onClick={() => {
               const sdf = rowsToSdf(rows)
-              downloadText('stitch-from-name.sdf', sdf.text, 'chemical/x-mdl-sdfile')
+              downloadText('orthonym-from-name.sdf', sdf.text, 'chemical/x-mdl-sdfile')
             }}
           >
             <Icon name="download" />

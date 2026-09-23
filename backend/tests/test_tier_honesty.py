@@ -1,10 +1,10 @@
 """The confidence ladder must never label a name better than it was proved.
 
-STITCH's whole product claim is that a name's tier is honest: verified PIN ->
+Orthonym's whole product claim is that a name's tier is honest: verified PIN ->
 verified fallback -> best-effort (a real name, OPSIN-unverified) -> honest
 abstain. PRODUCT.md principle 3 forbids conflating them anywhere.
 
-Two separate guards live in openstout_service.translate_one and neither had a
+Two separate guards live in orthonym_service.translate_one and neither had a
 test:
 
   * `best_effort=False` must mean no OPSIN-unverified name can EVER be
@@ -17,7 +17,7 @@ test:
 
 import pytest
 
-from app import openstout_service
+from app import orthonym_service
 from app.main import EXAMPLES
 
 
@@ -43,13 +43,13 @@ def test_best_effort_false_never_consults_the_escalated_namer(monkeypatch):
             return {"tier": "best_effort", "name": "ethanol", "formula": None, "limit_code": None}
 
     monkeypatch.setattr(
-        openstout_service._namer,
+        orthonym_service._namer,
         "name_tiered",
         lambda smiles: {"tier": "abstain", "name": None, "formula": "C2H6O", "limit_code": None},
     )
-    monkeypatch.setattr(openstout_service, "_escalated_namer", _RecordingNamer())
+    monkeypatch.setattr(orthonym_service, "_escalated_namer", _RecordingNamer())
 
-    item = openstout_service.translate_one("CCO", best_effort=False)
+    item = orthonym_service.translate_one("CCO", best_effort=False)
 
     assert called == [], (
         "the escalated namer ran with best_effort=False; an OPSIN-unverified "
@@ -73,13 +73,13 @@ def test_best_effort_true_still_escalates(monkeypatch):
             return {"tier": "best_effort", "name": "ethanol", "formula": None, "limit_code": None}
 
     monkeypatch.setattr(
-        openstout_service._namer,
+        orthonym_service._namer,
         "name_tiered",
         lambda smiles: {"tier": "abstain", "name": None, "formula": "C2H6O", "limit_code": None},
     )
-    monkeypatch.setattr(openstout_service, "_escalated_namer", _RecordingNamer())
+    monkeypatch.setattr(orthonym_service, "_escalated_namer", _RecordingNamer())
 
-    item = openstout_service.translate_one("CCO", best_effort=True)
+    item = orthonym_service.translate_one("CCO", best_effort=True)
 
     assert called == ["CCO"], "the escalation never ran; best_effort=True is a no-op"
     assert item.status == "best_effort"
@@ -101,9 +101,9 @@ def test_a_pin_is_downgraded_when_opsin_could_not_verify_it(monkeypatch):
 
     Declining to cache a lie is not the same as declining to tell it.
     """
-    monkeypatch.setattr(openstout_service, "opsin_parse", lambda name: None)
+    monkeypatch.setattr(orthonym_service, "opsin_parse", lambda name: None)
 
-    item = openstout_service.translate_one("CCO", best_effort=True)
+    item = orthonym_service.translate_one("CCO", best_effort=True)
 
     assert item.roundtrip_smiles is None
     assert item.status == "best_effort", (
@@ -121,9 +121,9 @@ def test_an_unverifiable_name_abstains_when_the_caller_refused_unverified_ones(
     an OPSIN-unverified name to a caller who passed best_effort=False
     precisely to refuse them. For that caller the honest answer is abstain.
     """
-    monkeypatch.setattr(openstout_service, "opsin_parse", lambda name: None)
+    monkeypatch.setattr(orthonym_service, "opsin_parse", lambda name: None)
 
-    item = openstout_service.translate_one("CCO", best_effort=False)
+    item = orthonym_service.translate_one("CCO", best_effort=False)
 
     assert item.status == "abstain", (
         f"served status={item.status!r} to a caller who refused OPSIN-"
@@ -137,7 +137,7 @@ def test_a_genuinely_verified_pin_is_untouched():
     Without this, downgrading everything unconditionally would pass every
     assertion above.
     """
-    item = openstout_service.translate_one("CCO", best_effort=True)
+    item = orthonym_service.translate_one("CCO", best_effort=True)
 
     assert item.status == "pin"
     assert item.roundtrip_smiles is not None
@@ -150,14 +150,14 @@ def test_a_best_effort_name_is_not_downgraded_for_lacking_proof(monkeypatch):
     contradiction and must not push it to abstain. Only tiers that CLAIM
     verification (pin, fallback) are downgraded.
     """
-    monkeypatch.setattr(openstout_service, "opsin_parse", lambda name: None)
+    monkeypatch.setattr(orthonym_service, "opsin_parse", lambda name: None)
     monkeypatch.setattr(
-        openstout_service._namer,
+        orthonym_service._namer,
         "name_tiered",
         lambda smiles: {"tier": "best_effort", "name": "ethanol", "formula": None, "limit_code": None},
     )
 
-    item = openstout_service.translate_one("CCO", best_effort=True)
+    item = orthonym_service.translate_one("CCO", best_effort=True)
 
     assert item.status == "best_effort"
     assert item.name == "ethanol"
@@ -256,13 +256,14 @@ def test_every_advertised_example_still_produces_the_status_it_claims(example):
     surface, each labelled with the tier it is supposed to demonstrate. The
     engine improving is enough to falsify one: the abstain example has
     already been replaced TWICE for exactly that reason, both times because
-    OpenSTOUT got better and started naming a molecule that used to abstain.
+    the Orthonym engine got better and started naming a molecule that used to
+    abstain.
     So these are known to drift, and until now nothing failed when they did.
 
     verify_opsin_live.py proved exactly one of the four, against its own
     private copy of the SMILES rather than against EXAMPLES itself.
     """
-    from app.openstout_service import translate_one
+    from app.orthonym_service import translate_one
 
     result = translate_one(example["smiles"], best_effort=True)
 

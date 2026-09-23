@@ -16,7 +16,7 @@ import './App.css'
 //
 // Rebuilt 2026-09-05 on an owner-supplied reference ("aurora dream corner
 // whispers" + a soft centre glow + a noise-dot texture), at the BOLD strength
-// the owner picked and in STITCH's own ramp -- crimson, its wash and its deep
+// the owner picked and in Orthonym's own ramp -- crimson, its wash and its deep
 // shade, plus the cool greys. The reference's lilac, cream, pink and blue do
 // not survive the translation; four DIFFERENT hues would put colour on the
 // ground that a reader could mistake for a confidence tier, which the whole

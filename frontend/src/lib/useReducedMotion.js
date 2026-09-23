@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 const QUERY = '(prefers-reduced-motion: reduce)'
 
 // Tracks the user's OS-level motion preference live (not just at mount),
-// so the stitch-reveal animation is skipped instantly if the preference is
+// so the name-reveal animation is skipped instantly if the preference is
 // already set, and stops firing on future submits if the user changes it
 // mid-session without a page reload.
 export default function useReducedMotion() {

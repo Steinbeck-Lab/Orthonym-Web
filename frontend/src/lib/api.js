@@ -1,4 +1,4 @@
-// Thin fetch wrappers around the OpenSTOUT showcase API.
+// Thin fetch wrappers around the Orthonym backend API.
 // Contract:
 //   GET  /api/health           -> { status: string, opsin: string }
 //   GET  /api/examples         -> { examples: ExampleItem[] }
@@ -149,7 +149,7 @@ export async function fetchStructureFromName(name) {
  * Failure is per part, not per molecule: a part whose atoms could not be
  * pinned down comes back as an ordinary segment with `kind: "unmapped"`,
  * empty `atom_indices`/`highlight_atoms` and its siblings intact. A molecule
- * STITCH can't confidently name at all is not an error either — it comes
+ * Orthonym can't confidently name at all is not an error either — it comes
  * back as a normal 2xx response with `error` set; only a network-level
  * failure or non-2xx status rejects the promise.
  * @param {string} smiles

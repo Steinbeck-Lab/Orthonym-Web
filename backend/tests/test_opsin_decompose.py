@@ -99,9 +99,9 @@ def test_a_name_opsin_itself_cannot_parse_still_returns_none():
 def test_the_error_string_does_not_blame_opsin():
     """23 of the 25 names that reported "OPSIN could not parse this name"
     parse fine through the OPSIN 2.9.0 CLI. The message claimed a fact about
-    OPSIN that STITCH had not established.
+    OPSIN that Orthonym had not established.
     """
     from app.explain import explain_name
 
     payload = explain_name("dinitrogen tetroxide")
-    assert payload["error"] == "STITCH could not decompose this name."
+    assert payload["error"] == "Orthonym could not decompose this name."

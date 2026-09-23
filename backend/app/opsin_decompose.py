@@ -11,7 +11,7 @@ That fact is still true. But it turns out to be the wrong question. OPSIN
 never needs to resolve a substituent standalone when parsing a real, valid,
 full chemical name -- it resolves each named substituent to its OWN
 ``Fragment`` (a real, disjoint set of atoms) as an ordinary internal step,
-*before* stitching every piece into one final structure. This module
+*before* joining every piece into one final structure. This module
 reflectively unlocks that internal pipeline
 (``Parser`` -> ``ComponentGenerator`` -> ``ComponentProcessor`` ->
 ``StructureBuilder``) and reads out each name part's own Fragment -- but,
@@ -53,7 +53,7 @@ Two real, load-bearing constraints, both confirmed by direct testing:
    and explain.py turns that into a plain "could not decompose this name"
    error rather than any kind of partial answer. It never half-works.
    Because of this, the vendored jar version is pinned exactly
-   (``vendor-openstout.sh`` copies ``opsin-cli-2.9.0-jar-with-dependencies.
+   (``vendor-orthonym.sh`` copies ``opsin-cli-2.9.0-jar-with-dependencies.
    jar`` by exact filename, not a glob) and ``_Handles.__init__`` additionally
    asserts ``NameToStructure.getVersion() == PINNED_OPSIN_VERSION`` as an
    early, loud warning signal distinct from (and cheaper than) the full
@@ -208,7 +208,7 @@ def _get_handles() -> Optional[_Handles]:
         if _handles is not None:
             return _handles or None
         try:
-            from openstout.jvm_bridge import opsin_available
+            from orthonym.jvm_bridge import opsin_available
 
             if not opsin_available():
                 _handles = False
@@ -497,7 +497,7 @@ def decompose(name: str) -> Optional[Decomposition]:
         with _lock:
             # PreProcessor normalises the name string before parsing --
             # OPSIN's own first step (NameToStructure.java:137). Skipping it
-            # meant STITCH parsed a string OPSIN never would.
+            # meant Orthonym parsed a string OPSIN never would.
             processed = str(h.preprocess.invoke(None, name))
             parses = h.parse_method.invoke(h.parser, h.config, processed)
             if parses.size() == 0:

@@ -8,7 +8,7 @@ import DOMPurify from 'dompurify'
 // in exactly one place, for that reason. Do not re-duplicate any of this
 // into a future page; import it instead.
 
-// The SVG comes from STITCH's own backend (RDKit-generated structure
+// The SVG comes from Orthonym's own backend (RDKit-generated structure
 // drawing, never raw user text echoed into markup), but it's injected
 // directly into the DOM (see the callers' effects) -- unlike an <img
 // src="data:..."> elsewhere in this app, inlined SVG becomes live DOM and

@@ -6,10 +6,10 @@ long batch physically cannot occupy the last slot an interactive request
 needs. This mirrors ChemAudit's default/high_priority split.
 
 The prefork pool is deliberate and pinned. jvm_bridge.py's contract says
-OpenSTOUT is built for a process pool where "laziness means the parent starts
-no JVM and each worker starts its own" -- prefork is exactly that. Under
--P threads or gevent, worker_process_init never fires, so no child would
-start a JVM or record a health status.
+the Orthonym engine is built for a process pool where "laziness means the
+parent starts no JVM and each worker starts its own" -- prefork is exactly
+that. Under -P threads or gevent, worker_process_init never fires, so no
+child would start a JVM or record a health status.
 
 What a lost JVM actually costs (see spec section 5, which an earlier version
 of this docstring got wrong): a child that refuses a JVM inherited across
@@ -35,13 +35,13 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 celery_app = Celery(
-    "stitch",
+    "orthonym",
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
     include=["app.tasks"],
 )
 
-_exchange = Exchange("stitch", type="direct")
+_exchange = Exchange("orthonym", type="direct")
 
 celery_app.conf.update(
     task_serializer="json",
@@ -65,7 +65,7 @@ celery_app.conf.update(
         Queue("batch", _exchange, routing_key="batch"),
     ),
     task_default_queue="batch",
-    task_default_exchange="stitch",
+    task_default_exchange="orthonym",
     task_default_routing_key="batch",
     task_routes={
         "app.tasks.translate_job_inline": {"queue": "fast"},
@@ -143,7 +143,7 @@ def _opsin_liveness_probe() -> bool:
 
     Neither opsin_available() nor opsin_decompose.self_check() can substitute
     here -- both cache their answer for the life of the process
-    (openstout.jvm_bridge._ensure_jvm keys its cached _STATE on the pid), so
+    (orthonym.jvm_bridge._ensure_jvm keys its cached _STATE on the pid), so
     calling either per tick replays the boot decision exactly like the old
     code did. Only a real call through the JVM observes a JVM that has since
     died.
@@ -161,7 +161,7 @@ def _opsin_liveness_probe() -> bool:
     try:
         from rdkit import Chem
 
-        from app.openstout_service import opsin_parse
+        from app.orthonym_service import opsin_parse
 
         raw = opsin_parse(_LIVENESS_NAME)
         if not raw:
@@ -211,7 +211,7 @@ def _start_status_heartbeat(
     "fallback" shipped labelled "pin".
 
     Neither opsin_available() nor opsin_decompose.self_check() can serve as the
-    probe -- both cache per process (openstout.jvm_bridge._ensure_jvm keys its
+    probe -- both cache per process (orthonym.jvm_bridge._ensure_jvm keys its
     cached _STATE on the pid), so calling either per tick replays the boot
     decision exactly like the code this replaced. Only a real call through the
     JVM observes a JVM that has since died; _opsin_liveness_probe does one,
@@ -300,7 +300,7 @@ def _opsin_can_verify() -> bool:
     counted as having a usable OPSIN.
     """
     try:
-        from openstout.jvm_bridge import opsin_available
+        from orthonym.jvm_bridge import opsin_available
 
         return bool(opsin_available())
     except Exception:
@@ -386,7 +386,7 @@ def _start_child_jvm(**_kwargs) -> None:
     here, because a raise does not fail at all.
     """
     # Imported INSIDE the function, not at module scope: importing
-    # opsin_decompose (or openstout.jvm_bridge through it) in the Celery
+    # opsin_decompose (or orthonym.jvm_bridge through it) in the Celery
     # PARENT risks starting a JVM before fork, which is the exact condition
     # _assert_parent_has_no_jvm exists to prevent.
     from app import cdk_bridge, opsin_decompose

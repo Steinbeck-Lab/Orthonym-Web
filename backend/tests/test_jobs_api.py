@@ -509,7 +509,7 @@ def test_a_failed_jobs_csv_is_served_but_labelled(redis_client, job_id):
 
     response = client.get(f"/api/jobs/{job_id}/results.csv")
     assert response.status_code == 200
-    assert response.headers["X-STITCH-Job-Status"] == "failed"
+    assert response.headers["X-Orthonym-Job-Status"] == "failed"
     assert "-partial.csv" in response.headers["content-disposition"]
 
 
@@ -553,7 +553,7 @@ def test_retrievable_is_short_of_total_on_a_failed_job(redis_client, job_id):
 def test_a_done_jobs_status_and_csv_stop_claiming_completeness_if_rows_are_evicted(
     redis_client,
 ):
-    """C4: stitch:job:{id}:rows is TTL'd, and volatile-lru makes every
+    """C4: orthonym:job:{id}:rows is TTL'd, and volatile-lru makes every
     TTL'd key an eviction candidate at any moment regardless of remaining
     TTL -- so a job can close honestly as "done" and still have its rows
     key evicted minutes later. Both read paths must catch that, not just
@@ -574,7 +574,7 @@ def test_a_done_jobs_status_and_csv_stop_claiming_completeness_if_rows_are_evict
 
     csv_response = client.get(f"/api/jobs/{job_id}/results.csv")
     assert csv_response.status_code == 200
-    assert csv_response.headers["X-STITCH-Job-Status"] == "failed"
+    assert csv_response.headers["X-Orthonym-Job-Status"] == "failed"
     assert "-partial.csv" in csv_response.headers["content-disposition"]
     lines = [line for line in csv_response.text.splitlines() if line.strip()]
     assert len(lines) == 1, "CSV still served rows that no longer exist"
@@ -666,11 +666,11 @@ def test_unknown_job_is_404():
 def test_expired_job_is_410(redis_client):
     job_id = _submit("CCO\n")["job_id"]
     # Simulate the TTL elapsing: the meta key is gone, the rows key is not.
-    redis_client.delete(f"stitch:job:{job_id}:meta")
+    redis_client.delete(f"orthonym:job:{job_id}:meta")
     try:
         assert client.get(f"/api/jobs/{job_id}").status_code == 410
     finally:
-        redis_client.delete(f"stitch:job:{job_id}:rows")
+        redis_client.delete(f"orthonym:job:{job_id}:rows")
 
 
 def test_oversize_input_is_413(monkeypatch):

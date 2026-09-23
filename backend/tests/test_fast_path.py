@@ -168,14 +168,14 @@ def test_jobs_503_does_not_burn_the_hourly_quota(redis_client, no_worker_opsin):
     locked out of batch submission for up to an hour AFTER service
     recovers -- punishing a user for the outage, not their own usage.
     """
-    for key in redis_client.scan_iter(match="stitch:ip:testclient:hour:*"):
+    for key in redis_client.scan_iter(match="orthonym:ip:testclient:hour:*"):
         redis_client.delete(key)
 
     response = client.post("/api/jobs", json={"text": "CCO\n"})
     assert response.status_code == 503
 
     hour_keys = list(
-        redis_client.scan_iter(match="stitch:ip:testclient:hour:*")
+        redis_client.scan_iter(match="orthonym:ip:testclient:hour:*")
     )
     assert not hour_keys, (
         "a 503 (no live JVM) must not touch the hourly job-submission "

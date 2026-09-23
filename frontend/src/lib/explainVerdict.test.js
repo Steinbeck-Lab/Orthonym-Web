@@ -7,12 +7,12 @@ import { verdictKindFor, roundtripLine } from './explainVerdict.js'
 
 // ---------------------------------------------------------------- verdictKind
 
-test('a structure STITCH named carries a real verdict', () => {
-  assert.equal(verdictKindFor('smiles'), 'stitch-verdict')
-  assert.equal(verdictKindFor('draw'), 'stitch-verdict')
+test('a structure Orthonym named carries a real verdict', () => {
+  assert.equal(verdictKindFor('smiles'), 'orthonym-verdict')
+  assert.equal(verdictKindFor('draw'), 'orthonym-verdict')
 })
 
-test('a name the user typed carries no STITCH verdict', () => {
+test('a name the user typed carries no Orthonym verdict', () => {
   assert.equal(verdictKindFor('name'), 'user-supplied')
 })
 
@@ -26,12 +26,12 @@ test('nothing explained yet claims nothing at all', () => {
 // cannot rewrite a verdict that is already on screen.
 test('the claim is a property of the request, so a later tab change cannot alter it', () => {
   // A SMILES was explained. Whatever tab the user clicks next, this result was
-  // still produced by STITCH and still owes its tier.
+  // still produced by Orthonym and still owes its tier.
   const resultMode = 'smiles'
   for (const tabTheUserClicksNext of ['name', 'smiles', 'draw']) {
     assert.equal(
       verdictKindFor(resultMode),
-      'stitch-verdict',
+      'orthonym-verdict',
       `a result fetched as SMILES must keep its verdict while the ${tabTheUserClicksNext} tab is selected`
     )
   }

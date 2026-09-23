@@ -100,8 +100,8 @@
   /* The hairline is INTERNAL, which is the only place it survives
      (DESIGN.md:518) — cards are told apart by the gap and their shadow,
      never by a seam. 1px solid, not About's 2px dashed: that dashed rule is
-     the cross-stitch motif of the chart page, and a dashed rule under a
-     line of text is also uncomfortably close to a fallback tier mark. */
+     the About page's own motif, and a dashed rule under a line of text is
+     also uncomfortably close to a fallback tier mark. */
   border-bottom: 1px solid var(--hairline);
 }
 
@@ -318,9 +318,9 @@
    rather than by weight.
 
    AN ANCHOR HERE LOOKS LIKE A LINK. It did not for one iteration — it was
-   undecorated `--ink`, pixel-identical to the plain `<span>` the OpenSTOUT
-   entry renders because its repository is private, so a reader could not
-   tell which of the twelve names would do anything. The system's inline
+   undecorated `--ink`, pixel-identical to the plain `<span>` the Orthonym
+   engine entry renders because its repository is private, so a reader could
+   not tell which of the twelve names would do anything. The system's inline
    link is `--link` with a 1px underline; that is what these take, with
    `--accent-deep` as the hover depth DESIGN.md names. */
 /* Shared half. The link half is INHERITED: `--link`, the 1px underline and

@@ -66,7 +66,7 @@ def test_heartbeat_keeps_a_healthy_deployment_healthy_past_the_ttl(
     finally:
         stop.set()
         thread.join(timeout=2)
-        redis_store.get_redis().hdel("stitch:workers:opsin", str(pid))
+        redis_store.get_redis().hdel("orthonym:workers:opsin", str(pid))
 
 
 def test_heartbeat_survives_a_write_failure_and_keeps_beating(monkeypatch):
@@ -186,7 +186,7 @@ def test_the_heartbeat_probes_opsin_rather_than_replaying_the_boot_verdict(monke
 
     A real probe costs 0.19 ms (measured, mean over 200 calls), so running one
     every _WORKER_STATUS_TTL // 3 seconds is free. opsin_available() cannot
-    substitute: openstout.jvm_bridge._ensure_jvm caches its answer per
+    substitute: orthonym.jvm_bridge._ensure_jvm caches its answer per
     process, so it replays the boot decision exactly like the old code did.
     """
     import app.celery_app as celery_app
@@ -231,18 +231,18 @@ def test_the_liveness_probe_rejects_a_jvm_that_answers_wrongly(monkeypatch):
     assert on the ANSWER, not merely on the absence of an exception.
     """
     import app.celery_app as celery_app
-    from app import openstout_service
+    from app import orthonym_service
 
-    monkeypatch.setattr(openstout_service, "opsin_parse", lambda name: "not-a-smiles!!")
+    monkeypatch.setattr(orthonym_service, "opsin_parse", lambda name: "not-a-smiles!!")
     assert celery_app._opsin_liveness_probe() is False
 
-    monkeypatch.setattr(openstout_service, "opsin_parse", lambda name: None)
+    monkeypatch.setattr(orthonym_service, "opsin_parse", lambda name: None)
     assert celery_app._opsin_liveness_probe() is False
 
     def _boom(name):
         raise RuntimeError("JVM is gone")
 
-    monkeypatch.setattr(openstout_service, "opsin_parse", _boom)
+    monkeypatch.setattr(orthonym_service, "opsin_parse", _boom)
     assert celery_app._opsin_liveness_probe() is False, "a raising probe must fail closed"
 
 

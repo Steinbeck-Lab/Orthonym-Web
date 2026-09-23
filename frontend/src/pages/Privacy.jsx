@@ -20,7 +20,7 @@ import './Legal.css'
 //   * DECIMER.ai's policy (Steinbeck-Lab/DECIMER.ai,
 //     resources/views/privacy_policy.blade.php) carries a long Google
 //     Analytics section describing IP transfer to Google servers in the US.
-//     STITCH has no analytics of any kind — proven by grep across
+//     Orthonym has no analytics of any kind — proven by grep across
 //     frontend/src, index.html, package.json and vite.config.js for every
 //     common vendor: zero hits. Copying that section would have disclosed
 //     processing that does not exist.
@@ -44,7 +44,7 @@ import './Legal.css'
 // The log-retention paragraph in § 2 is the one place this page had to
 // refuse a nicer sentence. The reference says logs are deleted "within 2
 // weeks", and its own header comment admits that is only true because a host
-// cron enforces it. STITCH has NO time-based pruning: docker-compose.yml
+// cron enforces it. Orthonym has NO time-based pruning: docker-compose.yml
 // caps each container at 10 MB x 3 files and rotation is by size alone. So
 // the page states the criterion instead of inventing a period. If a pruning
 // job is ever added, this paragraph gets a number and this comment goes.
@@ -57,7 +57,7 @@ import './Legal.css'
 //   name_cache.py:107-157 the cache key is a SMILES hash, tied to no user
 //   jobs_api.py:330-336   uuid4 job id, secrets.token_urlsafe(32) owner token
 //   jobs_api.py:624-660   results endpoints take NO owner token — see § 3
-//   lib/jobStore.js:35-51 the one localStorage key STITCH itself writes
+//   lib/jobStore.js:41-57 the one localStorage key Orthonym itself writes
 //   docker-compose.yml:1-9 the log rotation cap
 // and, measured live rather than reasoned about: a request through the
 // frontend puts the visitor's address in nginx's access log and the nginx
@@ -221,7 +221,7 @@ function Privacy() {
           id="naming"
           index="§ 3"
           title="What is processed when you name a structure"
-          note="STITCH has no accounts, no sign-in and no user profiles. Nothing below is linked to a person."
+          note="Orthonym has no accounts, no sign-in and no user profiles. Nothing below is linked to a person."
         >
           <h3>Rate limiting</h3>
           <p>
@@ -291,7 +291,7 @@ function Privacy() {
           note="This site sets no cookies, which is why it shows you no consent banner."
         >
           <p>
-            STITCH sets no cookies of its own. There is no login, no session and nothing to
+            Orthonym sets no cookies of its own. There is no login, no session and nothing to
             remember about you between visits, so there is nothing to ask your consent for and no
             banner to dismiss.
           </p>
@@ -302,7 +302,7 @@ function Privacy() {
           </p>
           <ul>
             <li>
-              <code>stitch.jobs.v2</code> — a list of up to eight batch jobs you recently submitted,
+              <code>orthonym.jobs.v2</code> — a list of up to eight batch jobs you recently submitted,
               each with its job id, its owner token, how many molecules it held, when it expires and
               its status. Without it, closing the tab would lose the ability to return to, cancel or
               delete your own job. Entries are removed when the job expires, and in any case within

@@ -1,5 +1,5 @@
 /* ============================================================
-   STITCH — Inverted Bugatti
+   Orthonym — Inverted Bugatti
    The shell and the shared component vocabulary: the full-bleed page
    column, the wordmark bar, the route index, the footer, the bento
    mosaic every page composes with, and the four controls the whole site
@@ -299,7 +299,10 @@
      way is a nav that feels slow. */
   .notch--bar:hover .brand__word,
   .notch--bar:focus-within .brand__word {
-    max-width: 12ch;
+    /* A cap, not a size: it only has to clear the word. The uppercased
+       wordmark at 0.26em tracking is 6.17em wide in Saira Condensed and 12ch
+       is 5.81em, which would clip its final M; 14ch (6.78em) clears it. */
+    max-width: 14ch;
     margin-left: 10px;
     opacity: 1;
     transition-delay: 0ms;
@@ -403,7 +406,7 @@
 }
 
 /* -------------------- brand -------------------- */
-/* A small crimson molecule mark + the STITCH wordmark in the display face.
+/* A small crimson molecule mark + the Orthonym wordmark in the display face.
    Shared with the footer. */
 .brand {
   display: inline-flex;
@@ -549,15 +552,15 @@
 }
 
 /* Arriving somewhere. The pill slides to the new route and, for one beat, the
-   crimson dot is drawn out into a short dash and released -- a stitch pulled
-   tight. Same motif as the footer's self-sewing join, which is what makes it
-   a signature and not a trick. transform only, so it costs nothing, and the
-   dot keeps its own centre while it stretches. */
+   crimson dot is drawn out into a short dash and released. Same draw-in motif
+   as the footer's joining mark, which is what makes it a signature and not a
+   trick. transform only, so it costs nothing, and the dot keeps its own
+   centre while it stretches. */
 .site-nav--arrived .site-nav__link--active::before {
-  animation: nav-stitch 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: nav-draw 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-@keyframes nav-stitch {
+@keyframes nav-draw {
   0% {
     transform: scaleX(3.4);
     border-radius: 999px;
@@ -1770,7 +1773,7 @@ input.field__control {
 
 /* -------------------- site footer (pills on the ground) -------------------- */
 /* ChemAudit's footer is a full cinematic piece (giant wordmark, aurora,
-   coffee cup, marquee). STITCH keeps only its STRUCTURE — a copyright line,
+   coffee cup, marquee). Orthonym keeps only its STRUCTURE — a copyright line,
    a credit pill, a back-to-top button — and, by instruction, its lack of a
    BAND: no background, no top hairline, no keyline gradient. The strip is
    transparent and only the pill and the round button lift, so the footer
@@ -2849,7 +2852,7 @@ input.field__control {
   stroke: var(--hairline);
   stroke-width: 1.25;
   /* 6 + 6 = 12, and the animation below travels exactly 24 -- two whole
-     stitches -- so the loop has no seam of its own. */
+     dash periods -- so the loop has no seam of its own. */
   stroke-dasharray: 6 6;
   transition:
     stroke 0.28s cubic-bezier(0.16, 1, 0.3, 1),
@@ -2864,7 +2867,7 @@ input.field__control {
   stroke-dasharray: none;
 }
 
-/* Under a file, the seam is being sewn: the dashes run. Declared AFTER
+/* Under a file, the seam is live: the dashes run. Declared AFTER
    --loaded on purpose -- same specificity, so the live state has to be the
    later rule or dragging over a card that already holds a file would show
    the settled seam instead of the running one. */
@@ -2908,7 +2911,7 @@ input.field__control {
 
 /* THE PLATE. A stack of three rounded plates -- this one, plus two drawn
    behind it by pseudo-elements, each a little wider and fainter -- holding
-   STITCH's own two-atom bond mark. It replaced three thin stacked rules,
+   Orthonym's own two-atom bond mark. It replaced three thin stacked rules,
    which were the system's vocabulary but far too quiet to be the one thing
    the eye lands on in a 380px box.
    The stack is what says "a FILE of these", and it is the same figure the

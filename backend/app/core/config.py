@@ -1,4 +1,4 @@
-"""Central settings for the STITCH backend.
+"""Central settings for the Orthonym backend.
 
 Precedence is environment variable > deployment profile > code default, and
 it is implemented explicitly below because pydantic-settings' own ordering

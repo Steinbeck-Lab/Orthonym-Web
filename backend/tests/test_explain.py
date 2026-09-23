@@ -237,7 +237,7 @@ def test_structure_in_path_still_works_and_indices_are_in_range():
     # the USER's molecule -- and nothing else covers it. An out-of-range
     # index here is the signature of a broken remap.
     from app.explain import explain_molecule
-    from app.openstout_service import get_primary_namer
+    from app.orthonym_service import get_primary_namer
 
     result = explain_molecule("CCO", namer=get_primary_namer())
     assert result["error"] is None, result["error"]
@@ -255,7 +255,7 @@ def test_structure_in_path_never_emits_a_retired_segment_kind():
     # Both were removed from SegmentKind in Task 6; if either survives here
     # the response will fail schema validation at the API boundary.
     from app.explain import explain_molecule
-    from app.openstout_service import get_primary_namer
+    from app.orthonym_service import get_primary_namer
 
     result = explain_molecule("CCO", namer=get_primary_namer())
     kinds = {s["kind"] for s in result["segments"]}
@@ -271,9 +271,9 @@ def test_a_symmetric_molecule_unmaps_only_the_disputed_parts():
     # matches disagree about which carbon is which. The disputed parts must
     # go `unmapped` and their siblings must SURVIVE -- per-part failure is
     # the entire bug this task removes. Asserted as behaviour, not as exact
-    # atom counts, so OpenSTOUT naming changes cannot make it brittle.
+    # atom counts, so Orthonym engine naming changes cannot make it brittle.
     from app.explain import explain_molecule
-    from app.openstout_service import get_primary_namer
+    from app.orthonym_service import get_primary_namer
 
     result = explain_molecule(
         "CC(C)Cc1ccc(cc1)C(C)C(=O)O", namer=get_primary_namer()

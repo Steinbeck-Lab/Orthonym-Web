@@ -118,7 +118,7 @@ function IupacToSmiles() {
       <section className="page-hero" aria-label="Introduction">
         <h1 className="page-hero__title">Read the name back</h1>
         <p className="page-hero__lede">
-          Type an IUPAC name and STITCH parses it back into a molecule.
+          Type an IUPAC name and Orthonym parses it back into a molecule.
         </p>
       </section>
 
@@ -236,7 +236,7 @@ function TransportNotice({ error }) {
   if (error.status === 429) {
     return (
       <>
-        STITCH&rsquo;s request limit was hit &mdash; this page sends one request per name, and
+        Orthonym&rsquo;s request limit was hit &mdash; this page sends one request per name, and
         converting a lot of names in a short span can use it up. Wait a minute, then try again.
       </>
     )
@@ -249,7 +249,7 @@ function TransportNotice({ error }) {
     // every surface describes the same backend state the same way.
     return (
       <>
-        STITCH&rsquo;s backend is up, but no worker has a live JVM. Naming endpoints answer 503
+        Orthonym&rsquo;s backend is up, but no worker has a live JVM. Naming endpoints answer 503
         until a worker reports one.
       </>
     )
@@ -259,7 +259,7 @@ function TransportNotice({ error }) {
   }
   return (
     <>
-      Could not reach STITCH&rsquo;s backend ({error.message}). Is it running on{' '}
+      Could not reach Orthonym&rsquo;s backend ({error.message}). Is it running on{' '}
       <code>localhost:8000</code>?
     </>
   )

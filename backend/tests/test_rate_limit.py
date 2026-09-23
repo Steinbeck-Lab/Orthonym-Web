@@ -9,15 +9,15 @@ IP = "203.0.113.7"
 
 
 def _clean(redis_client) -> None:
-    for key in redis_client.scan_iter(match=f"stitch:ip:{IP}*"):
+    for key in redis_client.scan_iter(match=f"orthonym:ip:{IP}*"):
         redis_client.delete(key)
     # This file's tests create real job-meta hashes (via _admit /
     # test_a_finished_jobs_meta_self_heals_...) so check_and_register_job's
     # self-heal has something real to look at -- clean those up too rather
     # than leaving them to their 24h TTL.
-    for key in redis_client.scan_iter(match="stitch:job:job-*:meta"):
+    for key in redis_client.scan_iter(match="orthonym:job:job-*:meta"):
         redis_client.delete(key)
-    redis_client.delete("stitch:job:stale-job:meta")
+    redis_client.delete("orthonym:job:stale-job:meta")
 
 
 @pytest.fixture(autouse=True)
@@ -232,7 +232,7 @@ def test_a_finished_jobs_meta_self_heals_the_slot_without_an_explicit_release(
         get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 1
     )
     redis_store.create_job("stale-job", total=1, fmt="smiles_list", client_ip=IP)
-    redis_client.sadd(f"stitch:ip:{IP}:jobs", "stale-job")
+    redis_client.sadd(f"orthonym:ip:{IP}:jobs", "stale-job")
     redis_store.set_job_status("stale-job", "done")
 
     # Without self-healing this would 429: the set already has one member
@@ -384,7 +384,7 @@ def test_counter_keys_carry_a_ttl(redis_client, monkeypatch):
         get_settings(), "RATE_LIMIT_JOBS_PER_HOUR", 100
     )
     ratelimit.check_job_allowed(IP)
-    keys = list(redis_client.scan_iter(match=f"stitch:ip:{IP}:hour:*"))
+    keys = list(redis_client.scan_iter(match=f"orthonym:ip:{IP}:hour:*"))
     assert keys, "hourly counter was never written"
     # A counter without a TTL would ban an IP forever.
     assert all(redis_client.ttl(k) > 0 for k in keys)
@@ -401,7 +401,7 @@ def test_the_jobs_set_ttl_is_armed_once_not_refreshed_on_every_admission(
     )
     monkeypatch.setattr(get_settings(), "JOB_RESULT_TTL_SECONDS", 1000)
     _admit(IP, "job-a")
-    key = f"stitch:ip:{IP}:jobs"
+    key = f"orthonym:ip:{IP}:jobs"
     ttl_after_first = redis_client.ttl(key)
     assert ttl_after_first > 0
 
@@ -478,7 +478,7 @@ def test_submitting_and_finishing_a_job_over_http_frees_the_slot_without_polling
         response = client.post("/api/jobs", json={"text": "CCO\n"})
         assert response.status_code == 200, response.text
         # fastapi.testclient.TestClient always reports this as the peer.
-        assert redis_client.scard("stitch:ip:testclient:jobs") == 0, (
+        assert redis_client.scard("orthonym:ip:testclient:jobs") == 0, (
             "a job that already finished (eager mode) still occupies its "
             "concurrent-job slot"
         )

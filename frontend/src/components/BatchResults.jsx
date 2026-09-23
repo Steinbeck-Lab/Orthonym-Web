@@ -172,7 +172,7 @@ function NameCell({ row }) {
   //
   // The formula rides along HERE rather than in a column of its own, because
   // the engine only ever fills it for an abstain -- it is the consolation for
-  // a molecule it would not name (openstout_service.py). A Formula column
+  // a molecule it would not name (orthonym_service.py). A Formula column
   // would therefore be empty on every named row, which measured out as 12
   // dashes in 13 rows the first time this shipped.
   return (

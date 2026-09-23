@@ -1,4 +1,4 @@
-"""Every Redis key STITCH uses, and nothing else.
+"""Every Redis key Orthonym uses, and nothing else.
 
 One module owns the key strings so a rename is a single edit and no caller
 can invent a key that misses its TTL. Job results are deliberately
@@ -6,7 +6,7 @@ transient: the no-database rule in CLAUDE.md means Redis is the only store,
 so an untagged key would grow without bound.
 
 ONE deliberate exception, stated here so nobody "fixes" it: the worker
-registry `stitch:workers:opsin` carries NO key-level TTL at all
+registry `orthonym:workers:opsin` carries NO key-level TTL at all
 (record_worker_opsin_status prunes stale FIELDS instead). That is correct and
 load-bearing -- Redis runs with volatile-lru, which can only evict keys that
 HAVE an expiry, so giving this one a TTL would make the worker registry
@@ -28,7 +28,7 @@ from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-_KEY_PREFIX = "stitch"
+_KEY_PREFIX = "orthonym"
 # Long enough that a worker restart is visible within a poll or two, short
 # enough that a dead worker's "ok" cannot linger and make health lie.
 _WORKER_STATUS_TTL = 120
@@ -61,7 +61,7 @@ def job_chunk_key(job_id: str, index: int) -> str:
 
 
 # ONE hash, field = worker pid, value = "ok:<unix ts>" / "failed:<unix ts>".
-# Round 3 review, finding 3: a distinct "stitch:worker:{pid}:opsin" key per
+# Round 3 review, finding 3: a distinct "orthonym:worker:{pid}:opsin" key per
 # worker made any_worker_has_opsin() scan_iter() the WHOLE keyspace on
 # every naming request and on GET /api/health (which has no rate limiter
 # at all) -- measured at 0.372 s over 200,000 keys, an ordinary size once

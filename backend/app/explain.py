@@ -40,7 +40,7 @@ from typing import NamedTuple, Optional
 from rdkit import Chem
 from rdkit.Chem.Draw import rdMolDraw2D
 
-from openstout import OpenSTOUT
+from orthonym import Orthonym
 
 from .glossary import describe_locant, describe_part, describe_token
 from .name_tokens import (
@@ -792,9 +792,9 @@ def explain_name(name: str) -> dict:
             "segments": [],
             # NOT "OPSIN could not parse this name" -- measured, 23 of 25
             # names that reported that parse fine through the OPSIN 2.9.0
-            # CLI, and it fired on names STITCH generated itself
-            # (octadecanoic acid). The honest claim is about STITCH.
-            "error": "STITCH could not decompose this name.",
+            # CLI, and it fired on names Orthonym generated itself
+            # (octadecanoic acid). The honest claim is about Orthonym.
+            "error": "Orthonym could not decompose this name.",
         }
 
     mol = Chem.MolFromSmiles(result.smiles)
@@ -904,9 +904,9 @@ def _remap_segment(segment: dict, matches) -> dict:
     }
 
 
-def explain_molecule(smiles: str, namer: OpenSTOUT) -> dict:
+def explain_molecule(smiles: str, namer: Orthonym) -> dict:
     """Build an explanation for `smiles`, using `namer` (the SAME primary
-    OpenSTOUT instance /api/translate uses, for a consistent name) to name
+    Orthonym instance /api/translate uses, for a consistent name) to name
     it. Returns a dict matching ExplainResponse's shape (see schemas.py).
 
     The structure-in path of spec §3.4: name the molecule, decompose that
@@ -939,7 +939,7 @@ def explain_molecule(smiles: str, namer: OpenSTOUT) -> dict:
             "atom_points": [],
             "total_atoms": mol.GetNumAtoms(),
             "segments": [],
-            "error": "STITCH could not confidently name this molecule, so "
+            "error": "Orthonym could not confidently name this molecule, so "
             "there is nothing to explain.",
         }
 
@@ -980,7 +980,7 @@ def explain_molecule(smiles: str, namer: OpenSTOUT) -> dict:
         # that does not account for every heavy atom does not describe this
         # molecule, and rule 3 already says what to do about that.
         logger.warning(
-            "explain: the name STITCH generated (%r) re-parses to %d heavy "
+            "explain: the name Orthonym generated (%r) re-parses to %d heavy "
             "atoms but this molecule has %d -- the name does not describe "
             "the whole structure, so no part of it can be mapped honestly; "
             "reporting every part as unmapped",

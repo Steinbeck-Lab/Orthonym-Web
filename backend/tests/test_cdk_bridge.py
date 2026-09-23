@@ -143,7 +143,7 @@ class TestDepictionEnginePreference:
 class TestCanonicalisationFallback:
     """app.inputs is the gate EVERY naming path passes through first.
 
-    A fallback added only to openstout_service.translate_one would be
+    A fallback added only to orthonym_service.translate_one would be
     unreachable, because _canonical_or_error turns the molecule into an error
     row before the namer is ever asked. These tests are what pin that down.
     """
@@ -193,7 +193,7 @@ def test_a_cdk_only_structure_gets_a_verdict_not_a_parse_error():
     were deleted and the row went back to being an error... except that it
     would not, which is what the second assertion pins down.
     """
-    from app.openstout_service import translate_one
+    from app.orthonym_service import translate_one
 
     item = translate_one(RDKIT_REJECTS_CDK_ACCEPTS)
     assert item.status == "abstain"
@@ -208,16 +208,16 @@ def test_a_named_cdk_only_structure_cannot_claim_verification(monkeypatch):
     branch, but the branch exists and SELF-01 fails OPEN, so an untested path
     to a "pin" badge is exactly the failure this repo has shipped before.
     """
-    from app import openstout_service
+    from app import orthonym_service
 
     class _Namer:
         def name_tiered(self, smiles):
             return {"name": "trimethylazanium", "tier": "pin_verified"}
 
-    monkeypatch.setattr(openstout_service, "_namer", _Namer())
-    monkeypatch.setattr(openstout_service, "_escalated_namer", _Namer())
+    monkeypatch.setattr(orthonym_service, "_namer", _Namer())
+    monkeypatch.setattr(orthonym_service, "_escalated_namer", _Namer())
 
-    item = openstout_service.translate_one(RDKIT_REJECTS_CDK_ACCEPTS)
+    item = orthonym_service.translate_one(RDKIT_REJECTS_CDK_ACCEPTS)
     assert item.name == "trimethylazanium"
     assert item.roundtrip_smiles is None
     assert item.roundtrip_match is None
@@ -228,23 +228,23 @@ def test_a_named_cdk_only_structure_cannot_claim_verification(monkeypatch):
 
 def test_a_named_cdk_only_structure_is_refused_when_best_effort_is_off(monkeypatch):
     """Fail-closed pair: a caller who refused unverified names gets an abstain."""
-    from app import openstout_service
+    from app import orthonym_service
 
     class _Namer:
         def name_tiered(self, smiles):
             return {"name": "trimethylazanium", "tier": "pin_verified"}
 
-    monkeypatch.setattr(openstout_service, "_namer", _Namer())
-    monkeypatch.setattr(openstout_service, "_escalated_namer", _Namer())
+    monkeypatch.setattr(orthonym_service, "_namer", _Namer())
+    monkeypatch.setattr(orthonym_service, "_escalated_namer", _Namer())
 
-    item = openstout_service.translate_one(RDKIT_REJECTS_CDK_ACCEPTS, best_effort=False)
+    item = orthonym_service.translate_one(RDKIT_REJECTS_CDK_ACCEPTS, best_effort=False)
     assert item.status == "abstain"
     assert item.name is None
 
 
 def test_truly_unparseable_smiles_is_still_an_error():
     """Fail-closed: CDK must not launder nonsense into a result."""
-    from app.openstout_service import translate_one
+    from app.orthonym_service import translate_one
 
     item = translate_one(NEITHER_TOOLKIT_ACCEPTS)
     assert item.status == "error"

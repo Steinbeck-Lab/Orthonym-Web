@@ -602,7 +602,7 @@ def _actual_status(job_id: str, meta: dict[str, str]) -> str:
     assembled row count short of `total` means the job failed, never
     "done"), applied again here at READ time.
 
-    stitch:job:{id}:rows (redis_store.job_rows_key) is TTL'd, and
+    orthonym:job:{id}:rows (redis_store.job_rows_key) is TTL'd, and
     docker-compose.yml runs `--maxmemory-policy volatile-lru`, which makes
     every TTL'd key an eviction candidate at any moment regardless of its
     remaining TTL -- so a job can close honestly as "done" and still have
@@ -698,7 +698,7 @@ def job_results_csv(request: Request, job_id: str) -> StreamingResponse:
     The same is true of a "done" job whose rows key was evicted after the
     fact (see _actual_status): its rows are gone the same way a genuinely
     failed job's are short, so it is served through the SAME -partial /
-    X-STITCH-Job-Status machinery rather than refused outright (final
+    X-Orthonym-Job-Status machinery rather than refused outright (final
     review report, C4).
     """
     check_download_allowed(client_ip(request))
@@ -733,9 +733,9 @@ def job_results_csv(request: Request, job_id: str) -> StreamingResponse:
         media_type="text/csv",
         headers={
             "Content-Disposition": (
-                f'attachment; filename="stitch-{job_id}{suffix}.csv"'
+                f'attachment; filename="orthonym-{job_id}{suffix}.csv"'
             ),
-            "X-STITCH-Job-Status": status,
+            "X-Orthonym-Job-Status": status,
         },
     )
 

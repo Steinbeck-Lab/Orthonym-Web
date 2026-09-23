@@ -17,7 +17,7 @@ from __future__ import annotations
 import pytest
 
 from app import name_cache
-from app.openstout_service import translate_one
+from app.orthonym_service import translate_one
 from app.schemas import VERIFIED_STATUSES
 
 # Two molecules the engine names and verifies cleanly. If either ever stops

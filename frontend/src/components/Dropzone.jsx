@@ -9,7 +9,7 @@ import Icon from './Icon'
 // changes while a file is over the target, and per-file rows once something
 // has landed. None of its code is here.
 //
-// What is STITCH's own is what fills those rows. This product's first
+// What is Orthonym's own is what fills those rows. This product's first
 // principle is that determinism must be PROVABLE, not asserted (PRODUCT.md),
 // and /api/parse-preview already answers with the first few records exactly
 // as it read them. So a landed file does not get a filename and a tick: it
@@ -25,7 +25,7 @@ import Icon from './Icon'
 // codebase already factors Switch and ExampleChips: both are used by exactly
 // one page and both live here.
 
-// ONE statement of which formats STITCH reads. The picker's `accept`, the
+// ONE statement of which formats Orthonym reads. The picker's `accept`, the
 // pattern a DROPPED file is checked against (a drop never passes through
 // `accept`), the line on the face and the rejection sentence are all derived
 // from this array -- they were four separate literals, and the hint had
@@ -138,7 +138,7 @@ export default function Dropzone({
     // the picker's `accept`, and "unsupported file type" is a better answer
     // than a 400 after a 50 MB upload.
     if (!ACCEPTED_FILE_RE.test(chosen.name)) {
-      onReject?.(`STITCH reads ${spellOutFormats()} — "${chosen.name}" is none of those.`)
+      onReject?.(`Orthonym reads ${spellOutFormats()} — "${chosen.name}" is none of those.`)
       return
     }
     onFile(chosen)
@@ -161,9 +161,9 @@ export default function Dropzone({
       onDrop={handleDrop}
     >
       {/* The seam. A dashed rule is this system's mark for "provisional" and
-          the footer already sews one shut, so an empty target is drawn as a
-          seam waiting to be stitched -- and while a file is over it, the
-          dashes actually run. That running seam is this system's own answer
+          the footer already draws one closed, so an empty target is drawn as
+          an open dashed outline -- and while a file is over it, the dashes
+          actually run. That running outline is this system's own answer
           to the reference's travelling border light, in the vocabulary the
           rest of the app already speaks. SVG rather than a dashed border,
           because a border cannot animate its dashes.
@@ -278,7 +278,7 @@ export default function Dropzone({
       ) : (
         <label htmlFor={inputId} className="dropzone__face">
           {/* THE PLATE. A stack of rounded plates (two drawn by CSS behind
-              this one) holding STITCH's OWN mark: the same two-atom bond the
+              this one) holding Orthonym's OWN mark: the same two-atom bond the
               header and footer wear. The reference puts a generic upload
               glyph here; a target that only ever accepts molecules should
               say molecules. Ink, not crimson -- this card already spends the

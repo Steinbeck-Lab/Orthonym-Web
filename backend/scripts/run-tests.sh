@@ -22,11 +22,11 @@ set -uo pipefail
 
 cd "$(dirname "$0")/.."
 
-LOG=${STITCH_TEST_LOG:-/tmp/stitch-pytest.log}
+LOG=${ORTHONYM_TEST_LOG:-/tmp/orthonym-pytest.log}
 : > "$LOG"
 
 # .venv-mac and .venv are not interchangeable: a venv is tied to the OS
-# and interpreter it was built with, and openstout pulls in compiled
+# and interpreter it was built with, and orthonym pulls in compiled
 # native deps (rdkit, JPype's JVM bridge), so a Linux .venv cannot run on
 # macOS and vice versa. Prefer .venv-mac when it exists so the
 # maintainer's macOS workflow stays byte-identical to before this
@@ -59,12 +59,12 @@ PYTEST_PID=$!
 #
 # The outcome list must be COMPLETE, not just the common three: a -q run whose
 # summary is "1 xfailed in 0.01s" or "1 skipped in 0.00s" matched neither
-# alternative, so the waiter below burned the full STITCH_TEST_WAIT and then
+# alternative, so the waiter below burned the full ORTHONYM_TEST_WAIT and then
 # reported a hang on a suite that had finished in milliseconds. Third bug from
 # this one regex; add any outcome word pytest can print, never a subset.
 _OUTCOMES='passed|failed|error|errors|skipped|xfailed|xpassed|deselected|warning|warnings'
 SUMMARY="^(=+ .*($_OUTCOMES|no tests ran)|[0-9]+ ($_OUTCOMES)|no tests ran)"
-WAIT_SECONDS=${STITCH_TEST_WAIT:-180}
+WAIT_SECONDS=${ORTHONYM_TEST_WAIT:-180}
 
 for _ in $(seq 1 "$WAIT_SECONDS"); do
     grep -qE "$SUMMARY" "$LOG" && break

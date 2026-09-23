@@ -110,7 +110,7 @@ fn resolveDarkColor(radiance: vec3f) -> vec3f {
   // with vec4f(grained, 1.0): light ADDED to a black page, which is the only
   // way a flare can work on black.
   //
-  // STITCH's hero is on a light grey ground, and light-on-light is invisible
+  // Orthonym's hero is on a light grey ground, and light-on-light is invisible
   // -- measured, not assumed: with the frame emitted as premultiplied light
   // the rays vanished completely and only the halo around the letters showed.
   // So the frame is INVERTED here into a crimson veil and the canvas is

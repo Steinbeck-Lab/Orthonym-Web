@@ -1,11 +1,11 @@
-"""CDK (Chemistry Development Kit) inside OpenSTOUT's JVM, without touching its classpath.
+"""CDK (Chemistry Development Kit) inside the Orthonym engine's JVM, without touching its classpath.
 
 WHY A CLASSLOADER AND NOT A CLASSPATH ENTRY
 -------------------------------------------
-OpenSTOUT's ``jvm_bridge`` owns the only ``startJVM`` call in the process. It boots with a
+The Orthonym engine's ``jvm_bridge`` owns the only ``startJVM`` call in the process. It boots with a
 FIXED classpath -- the OPSIN jar and the centres jar, resolved from PROJECT_ROOT -- and it
 records the pid that started the JVM, refusing to use one started by anybody else
-(``vendor/openstout/src/openstout/jvm_bridge.py``, "fork-safe"). Three consequences, each
+(``vendor/orthonym/src/orthonym/jvm_bridge.py``, "fork-safe"). Three consequences, each
 verified rather than assumed:
 
 * We must not call ``startJVM`` ourselves. If we did, ``_start`` would see
@@ -46,7 +46,7 @@ from ours. So the centres jar is listed in this loader as well. URL order is loa
 ``com.simolecule.centres``. Reversing the two would resurrect the partial CDK.
 
 This costs a second copy of those 859 classes in the JVM's metaspace. That is the price of
-not modifying the vendored OpenSTOUT snapshot, which must stay byte-identical to upstream
+not modifying the vendored Orthonym engine snapshot, which must stay byte-identical to upstream
 (see CLAUDE.md) or the name cache's engine fingerprint changes and every cached name is
 thrown away.
 
@@ -118,11 +118,11 @@ def _log_unavailable_once(reason: str) -> None:
 def _cdk_jar() -> Optional[str]:
     """The vendored CDK jar, or None.
 
-    ``STITCH_CDK_JAR`` overrides it -- the escape hatch for pinning a different
+    ``ORTHONYM_CDK_JAR`` overrides it -- the escape hatch for pinning a different
     CDK build without rebuilding the image, and what the tests use to simulate
     a missing jar.
     """
-    override = os.environ.get("STITCH_CDK_JAR")
+    override = os.environ.get("ORTHONYM_CDK_JAR")
     if override:
         return override if Path(override).exists() else None
     # backend/app/cdk_bridge.py -> backend/vendor/cdk/
@@ -133,14 +133,14 @@ def _cdk_jar() -> Optional[str]:
 
 @lru_cache(maxsize=1)
 def _centres_jar() -> Optional[str]:
-    """The centres jar OpenSTOUT already resolves, found the same way it does.
+    """The centres jar the Orthonym engine already resolves, found the same way it does.
 
-    Asking OpenSTOUT for it rather than globbing our own copy means CIP labels
+    Asking the engine for it rather than globbing our own copy means CIP labels
     come from the same centres build the naming engine's stereo perception uses.
     A vendor refresh that bumps centres moves both together.
     """
     try:
-        from openstout.perception.centres_bridge import _find_centres_jar
+        from orthonym.perception.centres_bridge import _find_centres_jar
 
         return _find_centres_jar()
     except Exception:  # pragma: no cover - import guard
@@ -188,10 +188,10 @@ def _loader() -> Any:
         _LOADER_PID = pid
 
         try:
-            from openstout import jvm_bridge
+            from orthonym import jvm_bridge
 
             if not jvm_bridge._ensure_jvm():
-                _log_unavailable_once("OpenSTOUT reports no usable JVM")
+                _log_unavailable_once("the Orthonym engine reports no usable JVM")
                 return None
             jvm_bridge._attach_thread()
         except Exception as exc:

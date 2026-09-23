@@ -16,7 +16,7 @@ from app import redis_store
 
 
 def require_a_live_jvm() -> None:
-    """OpenSTOUT's SELF-01 gate fails OPEN without a JVM, shipping a
+    """The Orthonym engine's SELF-01 gate fails OPEN without a JVM, shipping a
     fallback labelled as a verified PIN. Serving a name -- or, for
     POST /api/jobs, DISPATCHING a batch that will go on to name molecules
     with nobody verifying the tier -- in that state would break PRODUCT.md

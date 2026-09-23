@@ -1,5 +1,5 @@
 /* ============================================================
-   STITCH — Home (Translate) + the shared result mosaic
+   Orthonym — Home (Translate) + the shared result mosaic
 
    The workbench is one bento mosaic, not a page of cards: the input cell
    and every result cell sit in the same grid, welded by 1px hairline
@@ -147,17 +147,19 @@
        with `add` by default, which is exactly this.
        The column is anchored to the CENTRE of the word and offset in `em`,
        so it holds the mark through every step of the type clamp rather than
-       drifting with the viewport. -0.41em is the measured distance from the
-       word's centre to the mark's, and 0.78em is the mark's own width plus a
-       hair; the letters on either side keep their break because the spill is
-       narrower than the 0.14em tracking. */
+       drifting with the viewport. +0.14em is the distance from the word's
+       centre to the mark's -- ORTH is wider than NYM, so the mark sits right
+       of centre -- computed from Saira Condensed's advances and the mark's
+       margins below, not measured; change either and re-measure. 0.78em is
+       the mark's own width plus a hair; the letters on either side keep their
+       break because the spill is narrower than the 0.14em tracking. */
     --mark-column: linear-gradient(#000, #000);
     -webkit-mask-image: var(--break-bands), var(--mark-column);
     mask-image: var(--break-bands), var(--mark-column);
     -webkit-mask-size: auto, 0.78em 100%;
     mask-size: auto, 0.78em 100%;
-    -webkit-mask-position: 0 0, calc(50% - 0.41em) center;
-    mask-position: 0 0, calc(50% - 0.41em) center;
+    -webkit-mask-position: 0 0, calc(50% + 0.14em) center;
+    mask-position: 0 0, calc(50% + 0.14em) center;
     -webkit-mask-repeat: repeat, no-repeat;
     mask-repeat: repeat, no-repeat;
   }
@@ -173,10 +175,10 @@
   text-shadow: none;
 }
 
-/* THE I IS THE MARK. The letter it replaces is still in the heading, hidden:
-   wordmark-raster.ts reads the heading's textContent to build the flare's
-   light source, so without the "i" the light would spell STTCH. */
-.home-hero__word-i {
+/* THE SECOND O IS THE MARK. The letter it replaces is still in the heading,
+   hidden: wordmark-raster.ts reads the heading's textContent to build the
+   flare's light source, so without the "o" the light would spell ORTHNYM. */
+.home-hero__word-o {
   display: none;
 }
 
@@ -191,11 +193,22 @@
   width: auto;
   height: 0.688em;
   vertical-align: baseline;
-  /* Nudged left, and the same amount given back on the right so the word's
-     total advance is unchanged: the mark's own art is not centred in its box
-     -- the shards break out to the left of the glass -- so squaring the box
-     with its neighbours leaves the GLASS reading a touch right of centre. */
-  margin-inline: -0.1em 0.1em;
+  /* The mark takes EXACTLY the room of the O it replaces. That slot is the
+     O's advance (0.518em) plus the 0.14em tracking it would carry -- an
+     image gets no letter-spacing of its own -- so 0.658em. The box is 0.599em
+     wide (0.688em x the art's 959/1102), which leaves 0.06em for the two
+     margins together. Holding the slot matters beyond looks: the flare
+     rasters the heading's textContent, O included, so the lit N-Y-M track
+     the real ones only while the mark advances like an O.
+     The split is uneven because the art is: the shards break out to the left
+     of the glass and the needle to the right, and the glass's own axis sits
+     at 53% of the box (511 of the viewBox's 959 units, measured on the widest
+     row, the waist and the foot alike). -0.06em puts that axis on the O's
+     centre line (0.259em into its slot), and the 0.12em on the right gives
+     the rest back. The glass then clears H and N by 0.29em at its widest,
+     against 0.26em round an O in this face; the shards and the needle hang
+     into those gaps the way they do in the logo lockup. */
+  margin-inline: -0.06em 0.12em;
 }
 
 .home-hero__tagline {
@@ -209,26 +222,6 @@
   font-size: var(--t-body-md);
   line-height: 1.5;
   color: var(--body-strong);
-}
-
-/* The six letters that spell the name. Bold is otherwise reserved for the
-   big stat figures, and this is the one other place the system spends it --
-   it is carrying meaning here, not emphasis. Under the pointer each letter
-   steps to crimson and glows; nothing moves, so there is nothing for
-   reduced-motion to switch off. */
-.home-hero__cap {
-  font-weight: 700;
-  color: var(--ink);
-  transition:
-    color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
-    text-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.home-hero__cap:hover {
-  color: var(--accent);
-  text-shadow:
-    0 0 2px color-mix(in srgb, var(--accent) 60%, transparent),
-    0 0 14px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 /* -------------------- the mosaic -------------------- */
@@ -690,13 +683,13 @@
 
 /* --- the thread ----------------------------------------------------- */
 
-/* FIVE STITCHES ON ONE THREAD, and this is the panel's whole idea. The
+/* FIVE RUNGS ON ONE THREAD, and this is the panel's whole idea. The
    ladder used to be five rows whose only claim to being ordered was that
    they were printed in order. Now a single thread runs down the left and
-   each rung is stitched onto it, which is the same motif as the footer's
-   self-sewing join, the nav's arriving dot, the drop zone's running seam and
-   the marks that draw themselves inside these very rungs -- the system's
-   signature, applied to the thing the signature is about.
+   each rung reaches back to it with a short tick, which is the same draw-in
+   motif as the footer's joining mark, the nav's arriving dot, the drop zone's
+   running seam and the marks that draw themselves inside these very rungs --
+   the system's signature, applied to the thing the signature is about.
    The thread FADES over its last stretch. That is not a flourish: the fifth
    rung is where confidence runs out, and a line that stops being a line says
    so without a caption. */
@@ -756,9 +749,8 @@
   transition: background-color 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* The stitch: a short tick reaching back to the thread. It grows on hover,
-   which is the whole hover state this row needs -- the rung is being pulled
-   a little tighter. */
+/* The tick: a short rule reaching back to the thread. It grows on hover,
+   which is the whole hover state this row needs. */
 .rung::before {
   content: '';
   position: absolute;
@@ -941,7 +933,7 @@
   }
 }
 
-/* The mark is stitched in behind its own row: 90ms after the row starts, so
+/* The mark draws in behind its own row: 90ms after the row starts, so
    the name is already legible when its rule appears under it. 1200 is
    comfortably longer than any stroke here, so one dash covers the whole line
    before it retracts. */
@@ -1253,7 +1245,7 @@
   text-transform: none;
   color: var(--ink);
   /* normal, not break-word: breaks land only at spaces, hyphens and the
-     <wbr> points StitchedName inserts after brackets — never mid-token. */
+     <wbr> points ResolvingName inserts after brackets — never mid-token. */
   overflow-wrap: normal;
   word-break: normal;
 }

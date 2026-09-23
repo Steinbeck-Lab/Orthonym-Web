@@ -196,7 +196,7 @@ def _canonical_or_error(
         )
     mol = Chem.MolFromSmiles(smiles)
     if mol is not None:
-        # Keep the AS-TYPED string, do not RDKit-canonicalise it. OpenSTOUT's
+        # Keep the AS-TYPED string, do not RDKit-canonicalise it. The engine's
         # naming is not invariant to atom order: the same molecule written two
         # ways can name on one ordering and abstain on the other (measured on a
         # complex polycyclic -- the as-typed form named a verified fallback, the
@@ -223,7 +223,7 @@ def _canonical_or_error(
     # "could not parse".
     #
     # This gate is the reason the fallback has to live here and not only in
-    # openstout_service.translate_one: EVERY path into the namer -- the paste
+    # orthonym_service.translate_one: EVERY path into the namer -- the paste
     # box, an upload, and the fast path -- routes through _canonicalize first
     # (app/main.py), so a string that dies here never reaches translate_one at
     # all and a fallback added only there would be unreachable code.

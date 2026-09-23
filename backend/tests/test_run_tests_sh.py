@@ -8,7 +8,7 @@ because nothing here ever ran the script against a failure.
 
 The inner pytest deliberately targets a file outside the repo so the real
 conftest.py (which requires Redis) never loads: these cases are about the
-shell script's exit code, not about STITCH.
+shell script's exit code, not about Orthonym.
 """
 
 import subprocess
@@ -44,10 +44,10 @@ def run(tmp_path, body, extra_args):
         env={
             "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
             "HOME": str(tmp_path),
-            # Isolated log: the default /tmp/stitch-pytest.log is shared, and
+            # Isolated log: the default /tmp/orthonym-pytest.log is shared, and
             # a concurrent run would otherwise read the other one's summary.
-            "STITCH_TEST_LOG": str(tmp_path / "probe.log"),
-            "STITCH_TEST_WAIT": "60",
+            "ORTHONYM_TEST_LOG": str(tmp_path / "probe.log"),
+            "ORTHONYM_TEST_WAIT": "60",
         },
     ).returncode
 

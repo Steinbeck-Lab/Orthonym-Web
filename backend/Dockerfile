@@ -6,7 +6,7 @@
 # the CDK and SELF-01 regression checks in README.md.
 FROM python:3.12-slim-bookworm
 
-# A JRE is required at runtime, not just build time: openstout's SELF-01
+# A JRE is required at runtime, not just build time: the Orthonym engine's SELF-01
 # self-consistency gate needs a live JVM (via jpype) to actually round-trip
 # candidate names through the vendored OPSIN/centres jars. Without it, SELF-01
 # silently "fails open" and can ship a name that should have been suppressed
@@ -53,9 +53,9 @@ WORKDIR /code
 
 # CDK is FETCHED, not vendored, and it is the only one of the four vendored
 # artifacts that can be: its release jar has a public URL. The other three --
-# the OpenSTOUT source, the OPSIN grammar resources and the opsin-cli and
-# centres-cli jars -- are copied out of a private OpenSTOUT checkout by
-# scripts/vendor-openstout.sh, so a clone has to run that first (see README).
+# the Orthonym engine source, the OPSIN grammar resources and the opsin-cli and
+# centres-cli jars -- are copied out of a private Orthonym engine checkout by
+# scripts/vendor-orthonym.sh, so a clone has to run that first (see README).
 #
 # Pinned to an exact release AND checked against the SHA-256 recorded in
 # vendor/cdk/NOTICE, which is tracked alongside this file. The check is the
@@ -76,7 +76,7 @@ WORKDIR /code
 #
 # TWO things about this download are load-bearing:
 #   * The release ASSET is called `centres.jar`, but it is renamed to
-#     `centres-cli-1.2.1.jar` here, because openstout's `_find_centres_jar()`
+#     `centres-cli-1.2.1.jar` here, because orthonym's `_find_centres_jar()`
 #     globs `centres-cli-*.jar`. A differently-named file is invisible to it
 #     and CIP labelling silently falls back to RDKit.
 #   * That glob returns the HIGHEST version present, so a stale
@@ -108,7 +108,7 @@ COPY config/ ./config/
 COPY app/ ./app/
 
 # place_opsin_resources.py above only PLACES the jars. This proves they
-# work: OpenSTOUT's SELF-01 gate fails OPEN without a live JVM, so an image
+# work: the Orthonym engine's SELF-01 gate fails OPEN without a live JVM, so an image
 # that lost default-jre-headless would build fine and then mislabel every
 # confidence tier. A fused polycyclic must come back "fallback", never
 # "pin". Fail the build here rather than discover it in production.
@@ -116,7 +116,7 @@ COPY scripts/verify_opsin_live.py ./scripts/verify_opsin_live.py
 
 # Non-root at runtime. Every step above needs root (apt, pip into system
 # site-packages, and place_opsin_resources.py writing jars next to the
-# installed openstout); nothing below writes to disk at all -- the name
+# installed orthonym package); nothing below writes to disk at all -- the name
 # cache, job store and rate-limit counters are all Redis.
 #
 # --create-home is load-bearing, not tidiness: fontconfig builds its cache
@@ -130,9 +130,9 @@ COPY scripts/verify_opsin_live.py ./scripts/verify_opsin_live.py
 # the runtime user cannot is exactly the failure this gate exists to catch,
 # and it fails OPEN (an unverified name shipped as a PIN), so it must be
 # proved under the real runtime identity, not a more privileged one.
-RUN useradd --create-home --uid 10001 stitch \
-    && chown -R stitch:stitch /code
-USER stitch
+RUN useradd --create-home --uid 10001 orthonym \
+    && chown -R orthonym:orthonym /code
+USER orthonym
 
 RUN PYTHONPATH=/code python scripts/verify_opsin_live.py
 

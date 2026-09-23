@@ -2,7 +2,7 @@
 //
 // The server issues `owner_token` exactly once, in the response to
 // POST /api/jobs, and never again. It is the only thing that authorises
-// cancel and delete, because STITCH has no accounts: ownership here IS
+// cancel and delete, because Orthonym has no accounts: ownership here IS
 // possession of a secret handed to the submitter. Hold it only in React state
 // and a page reload silently loses the ability to stop a 10,000-molecule job
 // that will then hold one of the caller's two slots for its whole run.
@@ -34,8 +34,14 @@ import { isTerminal } from './batchJob.js'
 // being stuck. The store now holds only jobs that might still need stopping
 // (see rememberJob and BatchResults), and the new key retires every v1 entry
 // on the first load rather than restoring one last stale panel.
-const STORAGE_KEY = 'stitch.jobs.v2'
-const RETIRED_KEYS = ['stitch.jobs.v1']
+//
+// The app's rename to Orthonym moved the key's prefix but not its schema: the
+// pre-rename v2 key is retired by the same mechanism, so it is cleared on the
+// first load instead of lingering beside the new one. Nothing is lost by it:
+// the server's job keys changed prefix in the same rename, so no job listed
+// under the old key could still be answered for.
+const STORAGE_KEY = 'orthonym.jobs.v2'
+const RETIRED_KEYS = ['stitch.jobs.v1', 'stitch.jobs.v2']
 
 /** Most recent jobs kept. Small on purpose: this is a convenience, not a log. */
 export const MAX_REMEMBERED = 8
@@ -52,7 +58,7 @@ export const MAX_REMEMBERED = 8
  */
 export const UNKNOWN_EXPIRY_MAX_AGE_SECONDS = 24 * 60 * 60
 
-// The v1 retirement is a MIGRATION: it has to happen before the first read,
+// The retirement is a MIGRATION: it has to happen before the first read,
 // and exactly once. Doing it inside storageOrNull ran removeItem twice per
 // rememberJob/forgetJob (each of those resolves the storage itself and then
 // again via readJobs) for the whole life of the tab, long after the key was

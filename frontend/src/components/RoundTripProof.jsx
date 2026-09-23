@@ -6,7 +6,7 @@ import { STATE_CLASS, STATE_LABEL } from '../lib/statuses'
 import ChemName from './Typeset'
 
 /**
- * The About page's centrepiece: STITCH's own round-trip check, RUN LIVE.
+ * The About page's centrepiece: Orthonym's own round-trip check, RUN LIVE.
  *
  * Every other naming tool asserts its accuracy in prose. This one can show it,
  * so the page shows it: a real molecule goes through the real engine on the

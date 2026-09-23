@@ -2,11 +2,11 @@ from app import name_cache
 from app.schemas import ResultItem
 
 
-def test_key_embeds_the_openstout_version():
-    import openstout
+def test_key_embeds_the_orthonym_version():
+    import orthonym
 
     key = name_cache.cache_key("CCO", best_effort=True)
-    assert openstout.__version__ in key
+    assert orthonym.__version__ in key
 
 
 def test_a_version_bump_changes_the_key(monkeypatch):
@@ -98,9 +98,9 @@ def test_a_genuinely_verified_pin_is_still_cached(redis_client):
     """Vacuity guard for the fix above: a real round-trip proof must still
     be cached, so the fix is not simply disabling the cache outright.
     """
-    from app import openstout_service
+    from app import orthonym_service
 
-    item = openstout_service.translate_one("CCO", best_effort=True)
+    item = orthonym_service.translate_one("CCO", best_effort=True)
     assert item.status == "pin"
     assert item.roundtrip_smiles is not None
 
@@ -162,9 +162,9 @@ def test_the_cached_payload_carries_no_depiction(redis_client):
     That made the cache the single largest source of the eviction pressure
     behind the partial-results and 404-instead-of-410 failures.
     """
-    from app import openstout_service
+    from app import orthonym_service
 
-    item = openstout_service.translate_one("CCO", best_effort=True)
+    item = orthonym_service.translate_one("CCO", best_effort=True)
     assert item.depiction_svg is not None, "precondition: this row has a picture"
 
     key = name_cache.cache_key(item.smiles, best_effort=True)
@@ -192,9 +192,9 @@ def test_a_cache_hit_still_comes_back_with_a_picture(redis_client):
     identical on a cache hit and a cache miss -- delete both together and the
     fast path silently starts returning results with no structure image.
     """
-    from app import openstout_service, tasks
+    from app import orthonym_service, tasks
 
-    item = openstout_service.translate_one("CCO", best_effort=True)
+    item = orthonym_service.translate_one("CCO", best_effort=True)
     key = name_cache.cache_key("CCO", best_effort=True)
     redis_client.delete(key)
     try:
@@ -249,17 +249,17 @@ def test_an_abstain_is_cached(redis_client):
 
 def test_the_key_changes_when_the_engine_source_changes(monkeypatch):
     """key-version-unmechanized: _ENGINE_VERSION cannot invalidate the cache,
-    because upstream OpenSTOUT develops on a static "1.0.0" and does not bump
-    per change. A vendor refresh could therefore change naming behaviour while
-    the key stayed identical, serving names from the old engine beside tiers
-    computed by the new one -- the PRODUCT.md principle 2 violation the key
-    exists to prevent.
+    because the upstream Orthonym engine develops on a static "1.0.0" and does
+    not bump per change. A vendor refresh could therefore change naming
+    behaviour while the key stayed identical, serving names from the old engine
+    beside tiers computed by the new one -- the PRODUCT.md principle 2
+    violation the key exists to prevent.
 
     Until now the only defence was a hand-maintained counter with nothing in
     the vendor script or CI to catch a miss, and it HAS been missed: the
     v1 -> v2 bump happened only because that particular refresh broke loudly.
 
-    The key now carries a digest of the installed OpenSTOUT source, so a
+    The key now carries a digest of the installed Orthonym engine source, so a
     refresh invalidates it whether or not anyone remembers.
     """
     before = name_cache.cache_key("CCO", best_effort=True)
@@ -298,8 +298,8 @@ def test_the_fast_and_batch_paths_agree_on_the_cache_key(redis_client):
 
     What this test does NOT assert any more: that three spellings of ethanol
     collapse to one key. Owner decision 2026-09-03 (commit 170174b) is to name
-    the SMILES the user actually typed, because OpenSTOUT's naming is not
-    invariant to atom order -- a molecule can name on the typed ordering and
+    the SMILES the user actually typed, because the Orthonym engine's naming is
+    not invariant to atom order -- a molecule can name on the typed ordering and
     abstain on the RDKit-canonical one. So `_canonical_or_error` returns the
     input string untouched on the RDKit path, and two spellings legitimately
     take two cache entries. That costs efficiency, never correctness: the OPSIN

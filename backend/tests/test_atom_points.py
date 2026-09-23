@@ -1,5 +1,5 @@
 from app.explain import explain_molecule, explain_name
-from app.openstout_service import get_primary_namer
+from app.orthonym_service import get_primary_namer
 from tests.conftest import CAFFEINE
 
 # Must match _EXPLAIN_WIDTH / _EXPLAIN_HEIGHT in explain.py.

@@ -1,4 +1,4 @@
-"""Per-IP caps. STITCH has no accounts, so this is the only thing between a
+"""Per-IP caps. Orthonym has no accounts, so this is the only thing between a
 public queue and one script filling it.
 
 Deliberately crude: two counters and one set. Anything more would need
@@ -43,14 +43,14 @@ _MINUTE = 60
 # the same pre-admission count and all pass the cap (round 1 review,
 # Critical 2 / TOCTOU).
 #
-# The literal 'stitch:job:' / ':meta' below must track
+# The literal 'orthonym:job:' / ':meta' below must track
 # app.redis_store.job_meta_key's format -- pinned by
 # tests/test_redis_keys.py::test_keys_are_namespaced_and_stable, so a
 # rename there is caught immediately rather than silently breaking this.
 _ADMIT_JOB_SCRIPT = """
 local members = redis.call('SMEMBERS', KEYS[1])
 for _, jid in ipairs(members) do
-    local status = redis.call('HGET', 'stitch:job:' .. jid .. ':meta', 'status')
+    local status = redis.call('HGET', 'orthonym:job:' .. jid .. ':meta', 'status')
     if (status == false) or (status == 'done') or (status == 'failed') then
         redis.call('SREM', KEYS[1], jid)
     end
@@ -153,23 +153,23 @@ def client_ip(request: Request) -> str:
 
 
 def _hour_key(ip: str) -> str:
-    return f"stitch:ip:{ip}:hour:{int(time.time()) // _HOUR}"
+    return f"orthonym:ip:{ip}:hour:{int(time.time()) // _HOUR}"
 
 
 def _minute_key(ip: str) -> str:
-    return f"stitch:ip:{ip}:minute:{int(time.time()) // _MINUTE}"
+    return f"orthonym:ip:{ip}:minute:{int(time.time()) // _MINUTE}"
 
 
 def _depict_minute_key(ip: str) -> str:
-    return f"stitch:ip:{ip}:depict:{int(time.time()) // _MINUTE}"
+    return f"orthonym:ip:{ip}:depict:{int(time.time()) // _MINUTE}"
 
 
 def _poll_minute_key(ip: str) -> str:
-    return f"stitch:ip:{ip}:poll:{int(time.time()) // _MINUTE}"
+    return f"orthonym:ip:{ip}:poll:{int(time.time()) // _MINUTE}"
 
 
 def _download_minute_key(ip: str) -> str:
-    return f"stitch:ip:{ip}:download:{int(time.time()) // _MINUTE}"
+    return f"orthonym:ip:{ip}:download:{int(time.time()) // _MINUTE}"
 
 
 def _reject_if_concurrent_cap_exceeded(ip: str) -> None:

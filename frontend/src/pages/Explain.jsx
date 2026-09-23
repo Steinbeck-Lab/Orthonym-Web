@@ -89,17 +89,17 @@ function Explain() {
   const [validationNote, setValidationNote] = useState(null)
   const [hoveredPath, setHoveredPath] = useState(null)
   const [pinnedPath, setPinnedPath] = useState(null)
-  // The confidence tier for a molecule STITCH itself named. /api/explain does
+  // The confidence tier for a molecule Orthonym itself named. /api/explain does
   // not return one, so it comes from /api/translate alongside -- see
   // runExplain. Null in 'name' mode on purpose: the user supplied the name,
-  // so there is no STITCH verdict on it to report.
+  // so there is no Orthonym verdict on it to report.
   const [tierRow, setTierRow] = useState(null)
   // The mode the DISPLAYED result was fetched with, which is not the same thing
   // as the tab currently selected. The tier disclosure below used to branch on
   // `mode` itself, so switching tabs after a result had landed rewrote the
   // verdict without re-running anything: explain a SMILES, then click the
   // IUPAC name tab, and a real "verified PIN" was replaced by "there is no
-  // STITCH confidence tier for it" -- a false statement about a name STITCH
+  // Orthonym confidence tier for it" -- a false statement about a name Orthonym
   // produced, and a tier hidden that PRODUCT.md principle 3 requires wherever
   // a name appears. The reverse lost the honest disclosure instead. Set by
   // runExplain alongside the request it describes.
@@ -159,7 +159,7 @@ function Explain() {
 
     const request = requestMode === 'name' ? explainName(value) : explainMolecule(value)
 
-    // A drawn or typed STRUCTURE is something STITCH names itself, so its
+    // A drawn or typed STRUCTURE is something Orthonym names itself, so its
     // confidence tier is a real verdict and PRODUCT.md principle 3 requires it
     // wherever that name appears. /api/explain carries no tier -- Teach.jsx
     // used to note exactly that and simply show nothing -- so fetch it
@@ -181,8 +181,8 @@ function Explain() {
       .then((result) => {
         // A PARTIAL result is a real case, not a contradiction: the
         // structure-in path can name a molecule and render it, yet fail to
-        // decompose the name. Verified live -- OpenSTOUT names TNT's SMILES
-        // "2,4,6-trinitrotoluene", which OPSIN itself rejects ("Multiple
+        // decompose the name. Verified live -- the Orthonym engine names TNT's
+        // SMILES "2,4,6-trinitrotoluene", which OPSIN itself rejects ("Multiple
         // locants without a multiplier"). That response carries `name` and
         // `svg` alongside `error`. Throwing it away would hide a structure
         // we successfully drew, so keep the data and show the error beside
@@ -278,7 +278,7 @@ function Explain() {
       <section className="page-hero" aria-label="Introduction">
         <h1 className="page-hero__title">Show the working</h1>
         <p className="page-hero__lede">
-          STITCH does not just give a molecule a name — this page shows how it got there.
+          Orthonym does not just give a molecule a name — this page shows how it got there.
         </p>
       </section>
 
@@ -405,7 +405,7 @@ function Explain() {
         </form>
 
         <p className="page-about-note">
-          Read how this works, and STITCH&rsquo;s measured accuracy, on the{' '}
+          Read how this works, and Orthonym&rsquo;s measured accuracy, on the{' '}
           <Link to="/about" className="about-link">
             About
           </Link>{' '}
@@ -416,7 +416,7 @@ function Explain() {
       <section className="explain-results" aria-label="Explanation">
         {fetchError && (
           <p className="notice" role="alert">
-            Could not reach STITCH&rsquo;s backend ({fetchError}). Is it running on{' '}
+            Could not reach Orthonym&rsquo;s backend ({fetchError}). Is it running on{' '}
             <code>localhost:8000</code>?
           </p>
         )}
@@ -515,24 +515,24 @@ function Explain() {
                   )}
                   {/* /api/explain returns the name and its decomposition but
                       no confidence tier. For a STRUCTURE the tier is a real
-                      STITCH verdict, so runExplain fetches it from
+                      Orthonym verdict, so runExplain fetches it from
                       /api/translate alongside and it is shown here -- PRODUCT.md
                       principle 3 requires it wherever a name appears.
 
                       For a name the USER typed there is no verdict to report:
-                      STITCH did not produce that name, so it has no opinion on
+                      Orthonym did not produce that name, so it has no opinion on
                       whether it is a PIN. Saying so plainly is the honest
                       option; inventing a tier mark would misrepresent
                       confidence, which the product forbids. */}
                   {verdictKindFor(resultMode) === 'user-supplied' ? (
                     <p className="explain-tier-note">
                       This breakdown is of the name <em>you</em> supplied, so there is no
-                      STITCH confidence tier for it. Draw or paste a structure instead, or
+                      Orthonym confidence tier for it. Draw or paste a structure instead, or
                       run the molecule through{' '}
                       <Link to="/" className="about-link">
                         Translate
                       </Link>
-                      , to see whether STITCH&rsquo;s own name for it is a verified PIN, a
+                      , to see whether Orthonym&rsquo;s own name for it is a verified PIN, a
                       fallback, or a best effort.
                     </p>
                   ) : (

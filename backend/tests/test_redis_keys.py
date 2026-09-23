@@ -4,9 +4,9 @@ from app import redis_store
 
 
 def test_keys_are_namespaced_and_stable():
-    assert redis_store.job_meta_key("abc") == "stitch:job:abc:meta"
-    assert redis_store.job_rows_key("abc") == "stitch:job:abc:rows"
-    assert redis_store.job_chunk_key("abc", 3) == "stitch:job:abc:chunk:3"
+    assert redis_store.job_meta_key("abc") == "orthonym:job:abc:meta"
+    assert redis_store.job_rows_key("abc") == "orthonym:job:abc:rows"
+    assert redis_store.job_chunk_key("abc", 3) == "orthonym:job:abc:chunk:3"
 
 
 def test_create_job_records_totals_and_status(redis_client, job_id):
@@ -232,17 +232,17 @@ def test_worker_opsin_status_round_trips(redis_client):
     # `is True` assertion is satisfied by the FIXTURE, not by the write under
     # test -- mutation showed 3 of the 4 tests for this function still passed
     # with record_worker_opsin_status neutered.
-    redis_client.delete("stitch:workers:opsin")
+    redis_client.delete("orthonym:workers:opsin")
 
     redis_store.record_worker_opsin_status(999001, ok=True)
     try:
         assert redis_store.any_worker_has_opsin() is True
-        assert redis_client.hget("stitch:workers:opsin", "999001") is not None, (
+        assert redis_client.hget("orthonym:workers:opsin", "999001") is not None, (
             "any_worker_has_opsin() said yes but this pid's field is absent, "
             "so something else answered for it"
         )
     finally:
-        redis_client.hdel("stitch:workers:opsin", "999001")
+        redis_client.hdel("orthonym:workers:opsin", "999001")
 
 
 def test_a_failed_worker_does_not_count_as_having_opsin(redis_client):
@@ -250,10 +250,10 @@ def test_a_failed_worker_does_not_count_as_having_opsin(redis_client):
     # healthy"), so a stray ok field from another test -- or from a later
     # task's autouse fixture -- would mask the thing being tested. Round 3
     # review, finding 3: worker status moved from one key per pid
-    # ("stitch:worker:{pid}:opsin", scan_iter-discovered) to a single hash
-    # ("stitch:workers:opsin", field = pid) so any_worker_has_opsin() never
+    # ("orthonym:worker:{pid}:opsin", scan_iter-discovered) to a single hash
+    # ("orthonym:workers:opsin", field = pid) so any_worker_has_opsin() never
     # scans the keyspace.
-    redis_client.delete("stitch:workers:opsin")
+    redis_client.delete("orthonym:workers:opsin")
 
     redis_store.record_worker_opsin_status(999002, ok=False)
     try:
@@ -268,12 +268,12 @@ def test_a_failed_worker_does_not_count_as_having_opsin(redis_client):
         # cannot tell "the writer correctly stored a failure" from "the
         # writer dropped failure statuses on the floor" -- and the second is
         # a worker that silently never reports its own breakage.
-        assert redis_client.hget("stitch:workers:opsin", "999002") is not None, (
+        assert redis_client.hget("orthonym:workers:opsin", "999002") is not None, (
             "the failure status was never written; any_worker_has_opsin() "
             "returned False only because the hash is empty"
         )
     finally:
-        redis_client.hdel("stitch:workers:opsin", "999002")
+        redis_client.hdel("orthonym:workers:opsin", "999002")
 
 
 def test_record_worker_opsin_status_prunes_stale_entries_on_write(
@@ -285,14 +285,14 @@ def test_record_worker_opsin_status_prunes_stale_entries_on_write(
 
     monkeypatch.setattr(redis_store, "_WORKER_STATUS_TTL", 1, raising=False)
     redis_client.hset(
-        "stitch:workers:opsin", "999003", f"ok:{int(time.time()) - 10}"
+        "orthonym:workers:opsin", "999003", f"ok:{int(time.time()) - 10}"
     )
     try:
         redis_store.record_worker_opsin_status(999004, ok=True)
-        assert redis_client.hget("stitch:workers:opsin", "999003") is None
-        assert redis_client.hget("stitch:workers:opsin", "999004") is not None
+        assert redis_client.hget("orthonym:workers:opsin", "999003") is None
+        assert redis_client.hget("orthonym:workers:opsin", "999004") is not None
     finally:
-        redis_client.hdel("stitch:workers:opsin", "999003", "999004")
+        redis_client.hdel("orthonym:workers:opsin", "999003", "999004")
 
 
 def test_any_worker_has_opsin_ignores_an_aged_out_entry(
@@ -303,15 +303,15 @@ def test_any_worker_has_opsin_ignores_an_aged_out_entry(
     # the other half of the same guarantee.
     import time
 
-    redis_client.delete("stitch:workers:opsin")
+    redis_client.delete("orthonym:workers:opsin")
     monkeypatch.setattr(redis_store, "_WORKER_STATUS_TTL", 1, raising=False)
     redis_client.hset(
-        "stitch:workers:opsin", "999005", f"ok:{int(time.time()) - 10}"
+        "orthonym:workers:opsin", "999005", f"ok:{int(time.time()) - 10}"
     )
     try:
         assert redis_store.any_worker_has_opsin() is False
     finally:
-        redis_client.hdel("stitch:workers:opsin", "999005")
+        redis_client.hdel("orthonym:workers:opsin", "999005")
 
 
 def test_closing_a_job_does_not_push_its_expiry_past_what_it_promised(redis_client):

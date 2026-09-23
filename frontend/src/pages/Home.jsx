@@ -108,7 +108,7 @@ function Home() {
   const [examplesError, setExamplesError] = useState(null)
   const [rows, setRows] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)
-  // Best-effort mode. Defaults ON, which is the behaviour STITCH has always
+  // Best-effort mode. Defaults ON, which is the behaviour Orthonym has always
   // shipped: a molecule the strict namer abstains on gets retried against
   // the escalated one. Turning it off makes the engine strict — it can then
   // only ever return a verified name or an honest abstain.
@@ -179,12 +179,13 @@ function Home() {
   }
 
   // Reveals settle per SMILES row (the batch "chase"), and within a row
-  // StitchedName animates per character. The direction's STORY promises
+  // ResolvingName animates per character. The direction's STORY promises
   // "rule-by-rule" reveal, but the /api/translate contract (see lib/api.js)
   // returns only a finished name per row, not its rule-firing/fragment
-  // boundaries — OpenSTOUT's name_tiered() doesn't expose that granularity
-  // today. Per-character is the honest stand-in for "assembled piece by
-  // piece" until a fragment-level API exists to reveal true rule order.
+  // boundaries — the Orthonym engine's name_tiered() doesn't expose that
+  // granularity today. Per-character is the honest stand-in for "assembled
+  // piece by piece" until a fragment-level API exists to reveal true rule
+  // order.
   function runTranslate(lines) {
     clearTimers()
     setFetchError(null)
@@ -465,7 +466,7 @@ function Home() {
           when the owner replaced both with the wordmark and had the lede
           dropped outright (that copy still lives on About).
           The light is the real thing: vgpu's nextjs-flare (vercel-labs/vgpu,
-          MIT), vendored into src/lib/flare and pointed at STITCH's own
+          MIT), vendored into src/lib/flare and pointed at Orthonym's own
           wordmark -- a 48-step ray walk jittered by blue noise over a
           separable blur chain, raking light along the letter OUTLINES the way
           Next's "N" is lit. Not a glow in the middle of the card; the
@@ -492,28 +493,19 @@ function Home() {
           }
           ref={wordmarkRef}
         >
-          {/* The I is the mark. The letter it stands in for stays in the DOM
-              under display:none, because wordmarkMetrics() reads THIS
+          {/* The second O is the mark. The letter it stands in for stays in
+              the DOM under display:none, because wordmarkMetrics() reads THIS
               element's textContent to raster the flare's light source --
-              take the character out and the light spells STTCH. Hidden that
-              way it is out of the accessibility tree too, so the mark's own
-              alt is the only "I" a screen reader meets. */}
-          St
-          <span className="home-hero__word-i">i</span>
-          <img className="home-hero__mark" src="/logos/stitch.svg" alt="I" />
-          tch
+              take the character out and the light spells ORTHNYM. Hidden
+              that way it is out of the accessibility tree too, so the mark's
+              own alt is the only "O" a screen reader meets there. */}
+          Orth
+          <span className="home-hero__word-o">o</span>
+          <img className="home-hero__mark" src="/logos/Orthonym.svg" alt="O" />
+          nym
         </h1>
 
-        {/* The bold letters spell STITCH: S-T-I-T-C-H. "Ch" keeps the word's
-            real spelling rather than shouting CH to force the acronym --
-            the pattern still reads. Each one glows crimson under the
-            pointer, which is the whole reason they are marked at all. */}
-        <p className="home-hero__tagline">
-          <b className="home-hero__cap">S</b>MILES <b className="home-hero__cap">T</b>o{' '}
-          <b className="home-hero__cap">I</b>UPAC name{' '}
-          <b className="home-hero__cap">T</b>ranslator for{' '}
-          <b className="home-hero__cap">Ch</b>emistry
-        </p>
+        <p className="home-hero__tagline">Verified IUPAC names for Chemical Structures</p>
       </section>
 
       {/* ONE geometry per state, and the state is "is there anything to
@@ -530,7 +522,7 @@ function Home() {
       >
         {fetchError && (
           <p className="workbench__alert" role="alert">
-            Could not reach STITCH&rsquo;s backend ({fetchError}). Is it running on{' '}
+            Could not reach Orthonym&rsquo;s backend ({fetchError}). Is it running on{' '}
             <code>localhost:8000</code>?
           </p>
         )}
@@ -556,7 +548,7 @@ function Home() {
 
             Still radios, not buttons: a keyboard gets arrow-key movement for
             free and the current choice is announced. */}
-        <div className="input-tabs" role="radiogroup" aria-label="How to give STITCH molecules">
+        <div className="input-tabs" role="radiogroup" aria-label="How to give Orthonym molecules">
           <label className={inputMode === 'paste' ? 'input-tab input-tab--on' : 'input-tab'}>
             <input
               type="radio"

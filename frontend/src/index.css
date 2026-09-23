@@ -1,5 +1,5 @@
 /* ============================================================
-   STITCH — Inverted Bugatti
+   Orthonym — Inverted Bugatti
    Global tokens, reset, base typography, themed browser chrome.
 
    The world: Bugatti's marketing system (getdesign.md/bugatti), which
@@ -69,7 +69,7 @@
      same hue at 7.69:1 rather than dropped -- the system keeps exactly
      one non-monochrome color, as designed.
 
-     --glow is STITCH's own named exception, kept from the previous world
+     --glow is Orthonym's own named exception, kept from the previous world
      because it is a function, not decoration: it marks "you are pointing
      at these atoms right now" on Explain/Learn, independent of whether
      the name is confirmed. It only ever appears as a pale wash behind
@@ -80,7 +80,7 @@
 
   /* -- the one brand accent: ChemAudit's "Laboratory Crimson" ----------
      A later instruction adopted ChemAudit's header/footer and asked for its
-     crimson to come in as STITCH's single accent ("adapt to Bugatti but not
+     crimson to come in as Orthonym's single accent ("adapt to Bugatti but not
      too much"). This is a deliberate departure from the source's zero-accent
      rule, confined to CHROME only: the header logo mark + active route, the
      primary action button, inline links, the focus ring, and a faint footer

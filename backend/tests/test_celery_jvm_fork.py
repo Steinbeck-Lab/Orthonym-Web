@@ -23,8 +23,8 @@ from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
-# The regression molecule from README.md. A fused polycyclic: OpenSTOUT can
-# name it, but the PIN candidate does not round-trip, so SELF-01 suppresses
+# The regression molecule from README.md. A fused polycyclic: the Orthonym
+# engine can name it, but the PIN candidate does not round-trip, so SELF-01 suppresses
 # it and the general engine's verified fallback (tier T3) ships instead.
 # T3 IS round-trip verified -- T4 ("best_effort") is the unverified tier.
 FUSED_POLYCYCLIC = "C1CC2CCC1(CC2)C3CCC4(CCC5(CCCC5C4C3)C)C"
@@ -35,7 +35,7 @@ FUSED_POLYCYCLIC = "C1CC2CCC1(CC2)C3CCC4(CCC5(CCCC5C4C3)C)C"
 
 _IMPORT_PROBE = (
     "import sys, os; "
-    "import app.openstout_service; "
+    "import app.orthonym_service; "
     "import jpype; "
     "sys.stdout.write('JVM_STARTED=%s' % jpype.isJVMStarted()); "
     "sys.stdout.flush(); "
@@ -49,9 +49,9 @@ FUSED_POLYCYCLIC = "C1CC2CCC1(CC2)C3CCC4(CCC5(CCCC5C4C3)C)C"
 
 
 def _child(queue):
-    from openstout import jvm_bridge
+    from orthonym import jvm_bridge
 
-    from app.openstout_service import translate_one
+    from app.orthonym_service import translate_one
 
     result = translate_one(FUSED_POLYCYCLIC, best_effort=True)
     queue.put({
@@ -71,7 +71,7 @@ def _child(queue):
 if __name__ == "__main__":
     import jpype
 
-    import app.openstout_service  # the parent imports, exactly as Celery does
+    import app.orthonym_service  # the parent imports, exactly as Celery does
 
     parent_jvm_before_fork = jpype.isJVMStarted()
 
@@ -107,13 +107,13 @@ def test_parent_import_does_not_start_a_jvm():
     """Importing the service must not start a JVM. Probed in a FRESH process.
 
     The property is about a fresh Celery parent: it imports
-    app.openstout_service, builds both namers, and must still own no JVM --
+    app.orthonym_service, builds both namers, and must still own no JVM --
     because jvm_bridge refuses a JVM started by another pid, so every forked
     child would degrade to subprocess OPSIN and lose /explain entirely.
     """
     result = _run_probe(_IMPORT_PROBE, timeout=300)
     assert "JVM_STARTED=False" in result.stdout, (
-        "Importing app.openstout_service started a JVM in a fresh process. "
+        "Importing app.orthonym_service started a JVM in a fresh process. "
         "Children forked from such a parent refuse that JVM, fall back to a "
         "~216 ms subprocess per OPSIN call, and lose /explain and /teach.\n"
         f"stdout: {result.stdout!r}\nstderr: {result.stderr[-2000:]!r}"

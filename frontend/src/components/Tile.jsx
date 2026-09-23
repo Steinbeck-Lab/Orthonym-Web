@@ -1,7 +1,7 @@
 import { NAMED_STATUSES, STATE_CLASS, STATE_LABEL, VERIFIED_STATUSES } from '../lib/statuses'
 import useDepiction from '../lib/useDepiction'
 import CopyButton from './CopyButton'
-import StitchedName from './StitchedName'
+import ResolvingName from './ResolvingName'
 import TierLamp from './TierLamp'
 import { ChemFormula } from './Typeset'
 
@@ -44,7 +44,7 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
       {!isPending && NAMED_STATUSES.has(status) && (
         <div className={`tile__name-block tile__name-block--${STATE_CLASS[status]}`}>
           <span className="tile__name-line">
-            <StitchedName name={name} animate={animateName} />
+            <ResolvingName name={name} animate={animateName} />
             <CopyButton text={name} />
           </span>
         </div>
@@ -57,7 +57,7 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
               the words; nested, it flows inline with them and needs no
               layout rule of its own here.
               `fresh` on the tile that is resolving into place is the one
-              moment a PIN's lamp breathes -- the same signal StitchedName
+              moment a PIN's lamp breathes -- the same signal ResolvingName
               already animates on, so the two read as one arrival rather
               than two effects. */}
           <span className="tile__verify-label">

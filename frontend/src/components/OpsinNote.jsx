@@ -58,8 +58,8 @@ export default function OpsinNote() {
           <div className="prose">
             <p>
               The name goes straight to OPSIN. This direction runs through OPSIN, not
-              STITCH&rsquo;s own naming engine &mdash; that engine turns structures into
-              names; going the other way needs a name-to-structure parser instead.
+              the Orthonym engine &mdash; that engine turns structures into names;
+              going the other way needs a name-to-structure parser instead.
             </p>
             <p>
               OPSIN parses, it does not look up. It works the structure out from the

@@ -1,13 +1,14 @@
-#  CI for STITCH.
+#  CI for Orthonym-Web.
 #
 # WHY THE BACKEND SUITE DOES NOT RUN HERE
 # ---------------------------------------
 # It cannot, on a public runner. `backend/tests/conftest.py` imports
 # `app.celery_app`, and importing anything under `app.` pulls in the naming
-# engine -- measured, `import app.main` loads 136 `openstout.*` modules. That
-# engine lives in `backend/vendor/openstout/`, which `.gitignore` excludes on
-# purpose: publishing it would publish OpenSTOUT, which is not public. A fresh
-# clone therefore has no engine and every backend test errors at collection.
+# engine -- measured, `import app.main` loads 136 `orthonym.*` modules. That
+# engine lives in `backend/vendor/orthonym/`, which `.gitignore` excludes on
+# purpose: publishing it would publish the Orthonym engine, which is not
+# public. A fresh clone therefore has no engine and every backend test errors
+# at collection.
 #
 # So this file runs what a public runner can genuinely run, and the `backend`
 # job below stays SKIPPED until you opt in (see its own comment for the two
@@ -84,7 +85,7 @@ jobs:
         # Build only -- nothing is pushed. This is the one Docker check that
         # needs no private engine, and it catches a broken Dockerfile or a
         # missing build arg before deploy rather than after.
-        run: docker build -f frontend/Dockerfile -t stitch-frontend:ci frontend
+        run: docker build -f frontend/Dockerfile -t orthonym-frontend:ci frontend
 
   backend:
     name: backend (needs the private engine)
@@ -93,7 +94,7 @@ jobs:
     # job-level `if` (GitHub evaluates it too late), so the switch is a repo
     # VARIABLE instead: set `RUN_BACKEND_CI` to `true` under
     # Settings -> Secrets and variables -> Actions -> Variables, once
-    # `OPENSTOUT_REPO` and `OPENSTOUT_TOKEN` secrets exist beside it.
+    # `ORTHONYM_REPO` and `ORTHONYM_TOKEN` secrets exist beside it.
     # `workflow_dispatch` also forces it on, so you can test the job by hand
     # before flipping the variable for everyone.
     if: ${{ github.event_name == 'workflow_dispatch' || vars.RUN_BACKEND_CI == 'true' }}
@@ -112,14 +113,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Check out OpenSTOUT
+      - name: Check out the Orthonym engine
         # The engine is private. Without a token that can read it, this job
         # cannot run at all -- which is why it is gated above.
         uses: actions/checkout@v7
         with:
-          repository: ${{ secrets.OPENSTOUT_REPO }}
-          token: ${{ secrets.OPENSTOUT_TOKEN }}
-          path: .openstout
+          repository: ${{ secrets.ORTHONYM_REPO }}
+          token: ${{ secrets.ORTHONYM_TOKEN }}
+          path: .orthonym
 
       - uses: actions/setup-python@v7
         with:
@@ -135,7 +136,7 @@ jobs:
           java-version: '21'
 
       - name: Vendor the engine
-        run: OPENSTOUT_SRC="$GITHUB_WORKSPACE/.openstout/Project" ./scripts/vendor-openstout.sh
+        run: ORTHONYM_SRC="$GITHUB_WORKSPACE/.orthonym/Project" ./scripts/vendor-orthonym.sh
 
       - name: Fetch CDK and centres
         # Both are FETCHED, not vendored: public URLs, pinned SHA-256. The
@@ -163,9 +164,10 @@ jobs:
           .venv/bin/pip install --quiet -r requirements.txt -r requirements-dev.txt
 
       - name: Place the engine's runtime artifacts
-        # openstout resolves the OPSIN and centres jars from its OWN install
-        # root, not from vendor/. Skipping this leaves centres unresolved and
-        # cdk_bridge.self_check() fails with "L-alanine did not label as (S)".
+        # The Orthonym engine resolves the OPSIN and centres jars from its OWN
+        # install root, not from vendor/. Skipping this leaves centres
+        # unresolved and cdk_bridge.self_check() fails with "L-alanine did not
+        # label as (S)".
         working-directory: backend
         run: PYTHONPATH="$PWD" .venv/bin/python scripts/place_opsin_resources.py
 

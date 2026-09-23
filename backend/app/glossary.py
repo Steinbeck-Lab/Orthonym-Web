@@ -110,7 +110,7 @@ def describe_part(kind: str, text: str, locant: str | None, atom_count: int) -> 
         )
     elif kind == "unmapped":
         return (
-            f'"{label}" is part of this name, but STITCH could not work out '
+            f'"{label}" is part of this name, but Orthonym could not work out '
             f"which atoms it refers to. The other parts are unaffected."
         )
 
@@ -168,7 +168,7 @@ def describe_locant(kind: str, locant: str, element: str | None = None) -> str:
     if kind == "unmapped":
         return (
             f"Position {locant} — this part of the name refers to position "
-            f"{locant}, but STITCH could not work out which atom that is "
+            f"{locant}, but Orthonym could not work out which atom that is "
             f"here. The other parts are unaffected."
         )
     return f"Position {locant}."

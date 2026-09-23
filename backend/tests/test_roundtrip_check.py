@@ -20,7 +20,7 @@ so they need the environment backend/scripts/run-tests.sh sets up.
 import pytest
 from rdkit import Chem
 
-from app.openstout_service import _roundtrip_check
+from app.orthonym_service import _roundtrip_check
 
 
 def _check(name: str, smiles: str):
@@ -100,7 +100,7 @@ def test_an_unparseable_name_reports_unavailable_not_mismatch():
     """(None, None), not (something, False).
 
     The difference is load-bearing: a null round trip means OPSIN could not
-    answer, and openstout_service downgrades a verified tier on exactly that
+    answer, and orthonym_service downgrades a verified tier on exactly that
     signal. Reporting it as a mismatch instead would leave the verified label
     in place.
     """

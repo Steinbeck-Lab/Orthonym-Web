@@ -3,7 +3,7 @@
 PRODUCT.md principle 2 says never overstate measured accuracy. A cache is
 the easy way to violate it: serve a name an older engine produced and the
 displayed tier no longer describes the engine that is installed. So the key
-embeds the OpenSTOUT version and the namer flags that change the answer. A
+embeds the Orthonym engine version and the namer flags that change the answer. A
 version bump therefore invalidates everything with no migration step.
 """
 
@@ -13,15 +13,15 @@ import hashlib
 import logging
 import pathlib
 
-import openstout
+import orthonym
 
 from app.core.config import get_settings
 from app.redis_store import get_redis
 from app.schemas import VERIFIED_STATUSES, ResultItem
 
-# BUMP THIS whenever the vendored OpenSTOUT snapshot is refreshed.
+# BUMP THIS whenever the vendored Orthonym engine snapshot is refreshed.
 #
-# The key embeds openstout.__version__ so a release bump invalidates the
+# The key embeds orthonym.__version__ so a release bump invalidates the
 # cache automatically -- but upstream develops on a static "1.0.0" and does
 # not bump per change, so a vendor refresh can change naming behaviour while
 # the version string stays identical. That would serve names from the old
@@ -40,19 +40,19 @@ logger = logging.getLogger(__name__)
 # glycine was cached as a MISMATCH on a correct PIN. The engine fingerprint
 # below cannot see a change in THIS app's code, which is exactly what this
 # manual counter is for.
-# v5 (2026-09-11): vendor refresh to the latest OpenSTOUT. 261 modules against
+# v5 (2026-09-11): vendor refresh to the latest Orthonym engine. 261 modules against
 #     the previous 254 -- seven new handlers (chalcogen_oxide,
 #     imidoyl_thioyl_halide among them) and edits across every package, all
 #     still stamped "1.0.0" upstream, so _ENGINE_VERSION cannot see it.
-# v6 (2026-09-14): vendor refresh to OpenSTOUT f9a6fdf (2026-09-13 "sync:
-#     OpenSTOUT engine update"). 263 modules against the previous 261, still
+# v6 (2026-09-14): vendor refresh to the Orthonym engine at f9a6fdf (an
+#     upstream engine sync of 2026-09-13). 263 modules against the previous 261, still
 #     stamped "1.0.0" upstream, so _ENGINE_VERSION still cannot see it.
 _KEY_VERSION = "v6"
-_ENGINE_VERSION = openstout.__version__
+_ENGINE_VERSION = orthonym.__version__
 
 
 def _engine_fingerprint() -> str:
-    """A digest of the OpenSTOUT source actually installed in this process.
+    """A digest of the Orthonym engine source actually installed in this process.
 
     This is what makes the cache key self-invalidating, and it is why the
     manual counter above is now a belt rather than the only thing holding the
@@ -63,7 +63,7 @@ def _engine_fingerprint() -> str:
     v1 -> v2 bump was made only because the tier rename happened to break
     loudly.
 
-    Hashing the INSTALLED package rather than backend/vendor/openstout is
+    Hashing the INSTALLED package rather than backend/vendor/orthonym is
     deliberate: what matters is the code that will actually name molecules in
     this process, which in a container is the copy pip installed. Measured at
     40 ms over 253 files, paid once at import, never per request.
@@ -73,14 +73,14 @@ def _engine_fingerprint() -> str:
     worse than before -- and _KEY_VERSION still covers it.
     """
     try:
-        root = pathlib.Path(openstout.__file__).resolve().parent
+        root = pathlib.Path(orthonym.__file__).resolve().parent
         digest = hashlib.sha256()
         for path in sorted(root.rglob("*.py")):
             digest.update(path.read_bytes())
         return digest.hexdigest()[:12]
     except Exception:  # noqa: BLE001 - a cache key must never fail to build
         logger.warning(
-            "name_cache: could not fingerprint the installed OpenSTOUT "
+            "name_cache: could not fingerprint the installed Orthonym engine "
             "source; falling back to the version string alone. A vendor "
             "refresh will NOT invalidate the cache automatically -- bump "
             "_KEY_VERSION by hand.",
@@ -114,7 +114,7 @@ def cache_key(canonical_smiles: str, best_effort: bool, verify: bool = True) -> 
     flags = f"be={int(best_effort)},v={int(verify)}"
     digest = hashlib.sha256(canonical_smiles.encode("utf-8")).hexdigest()
     return (
-        f"stitch:name:{_KEY_VERSION}:{_ENGINE_VERSION}:"
+        f"orthonym:name:{_KEY_VERSION}:{_ENGINE_VERSION}:"
         f"{_ENGINE_FINGERPRINT}:{flags}:{digest}"
     )
 
@@ -133,8 +133,8 @@ def put_cached(item: ResultItem, best_effort: bool, verify: bool = True) -> None
         return
     if item.status in VERIFIED_STATUSES and item.roundtrip_smiles is None:
         # This is the fingerprint of SELF-01 having failed open, not merely
-        # a missing nicety. _roundtrip_check (openstout_service.py) calls
-        # the SAME opsin_parse() that OpenSTOUT's internal SELF-01 gate
+        # a missing nicety. _roundtrip_check (orthonym_service.py) calls
+        # the SAME opsin_parse() that the engine's internal SELF-01 gate
         # uses, so for a tier that CLAIMS verification (pin_verified /
         # systematic_verified -> "pin"/"fallback" here), "OPSIN is
         # reachable but cannot interpret this name" cannot happen -- if it

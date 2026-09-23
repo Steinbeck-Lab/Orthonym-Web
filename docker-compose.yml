@@ -11,7 +11,7 @@ x-logging: &default-logging
 services:
   redis:
     image: redis:7-alpine
-    container_name: stitch-redis
+    container_name: orthonym-redis
     # volatile-lru, NOT allkeys-lru: Celery broker messages carry no TTL, so
     # allkeys-lru would evict queued work and silently lose jobs. Only the
     # TTL'd keys (results, cache, counters) are eligible for eviction.
@@ -35,13 +35,13 @@ services:
     mem_limit: ${REDIS_MEM_LIMIT:-3g}
     logging: *default-logging
     networks:
-      - stitch-network
+      - orthonym-network
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: stitch-backend
+    container_name: orthonym-backend
     ports:
       # 127.0.0.1, NOT 0.0.0.0. This binding and TRUST_PROXY_HEADERS below
       # are a PAIR and neither is safe alone -- an adversarial review of the
@@ -87,7 +87,7 @@ services:
     mem_limit: ${BACKEND_MEM_LIMIT:-1500m}
     logging: *default-logging
     networks:
-      - stitch-network
+      - orthonym-network
 
   # Interactive requests: single molecules, explain, name->SMILES. A
   # dedicated worker is the only thing that guarantees a long batch cannot
@@ -96,7 +96,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: stitch-worker-fast
+    container_name: orthonym-worker-fast
     command: >
       celery -A app.celery_app worker
       --loglevel=${CELERY_LOG_LEVEL:-info}
@@ -107,7 +107,7 @@ services:
       - DEPLOYMENT_PROFILE=${DEPLOYMENT_PROFILE:-medium}
       # Each forked child holds its own JVM. 512 MB x concurrency, so this
       # is a memory dial, not a performance one.
-      - OPENSTOUT_JVM_XMX=${OPENSTOUT_JVM_XMX:-512m}
+      - ORTHONYM_JVM_XMX=${ORTHONYM_JVM_XMX:-512m}
       - PYTHONUNBUFFERED=1
     depends_on:
       redis:
@@ -143,22 +143,22 @@ services:
       retries: 3
       start_period: 120s
     # Sized from the JVM dial above, not guessed: each forked child holds its
-    # own JVM at OPENSTOUT_JVM_XMX heap plus roughly as much again in
+    # own JVM at ORTHONYM_JVM_XMX heap plus roughly as much again in
     # non-heap (metaspace, code cache, the loaded jars), and the parent
     # carries python and RDKit. At the defaults -- 512m x 2 children -- that
     # is about 2.3 GB, and 3g leaves the headroom. RAISE THIS whenever
-    # CELERY_WORKERS_FAST or OPENSTOUT_JVM_XMX goes up, or the kernel kills
+    # CELERY_WORKERS_FAST or ORTHONYM_JVM_XMX goes up, or the kernel kills
     # the worker mid-job instead of the job failing honestly.
     mem_limit: ${WORKER_MEM_LIMIT:-3g}
     logging: *default-logging
     networks:
-      - stitch-network
+      - orthonym-network
 
   worker-batch:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: stitch-worker-batch
+    container_name: orthonym-worker-batch
     command: >
       celery -A app.celery_app worker
       --loglevel=${CELERY_LOG_LEVEL:-info}
@@ -167,7 +167,7 @@ services:
     environment:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - DEPLOYMENT_PROFILE=${DEPLOYMENT_PROFILE:-medium}
-      - OPENSTOUT_JVM_XMX=${OPENSTOUT_JVM_XMX:-512m}
+      - ORTHONYM_JVM_XMX=${ORTHONYM_JVM_XMX:-512m}
       - PYTHONUNBUFFERED=1
     depends_on:
       redis:
@@ -183,7 +183,7 @@ services:
     mem_limit: ${WORKER_MEM_LIMIT:-3g}
     logging: *default-logging
     networks:
-      - stitch-network
+      - orthonym-network
 
   frontend:
     build:
@@ -195,9 +195,9 @@ services:
       # frontend/Dockerfile carries the full reasoning.
       #
       # Unset now ships THIS SITE's own repository -- Navigation.jsx defaults
-      # to github.com/Kohulan/STITCH-Web, which is public. It does NOT link
-      # the naming engine: OpenSTOUT's repository is still private, and the
-      # prose in Terms.jsx and About.jsx that says so is still true.
+      # to github.com/Kohulan/Orthonym-Web, which is public. It does NOT link
+      # the naming engine: the Orthonym engine's repository is still private,
+      # and the prose in Terms.jsx and About.jsx that says so is still true.
       #
       # Set VITE_GITHUB_URL to point a fork at its own source, or to the
       # literal `none` to ship no link at all. An empty value is NOT "off":
@@ -206,7 +206,7 @@ services:
       # link. frontend/Dockerfile carries the default.
       args:
         VITE_GITHUB_URL: ${VITE_GITHUB_URL:-}
-    container_name: stitch-frontend
+    container_name: orthonym-frontend
     ports:
       # LOOPBACK BY DEFAULT, and still plain HTTP: this speaks no TLS, so a
       # terminator holding the real certificate belongs in front of it on any
@@ -237,9 +237,9 @@ services:
     mem_limit: ${FRONTEND_MEM_LIMIT:-256m}
     logging: *default-logging
     networks:
-      - stitch-network
+      - orthonym-network
 
 networks:
-  stitch-network:
-    name: stitch-network
+  orthonym-network:
+    name: orthonym-network
     driver: bridge

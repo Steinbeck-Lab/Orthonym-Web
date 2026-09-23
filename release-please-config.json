@@ -3,7 +3,7 @@
   "packages": {
     ".": {
       "release-type": "simple",
-      "package-name": "stitch",
+      "package-name": "orthonym-web",
       "changelog-path": "CHANGELOG.md",
       "include-component-in-tag": false,
       "include-v-in-tag": true,
@@ -40,7 +40,7 @@
     "release-type is `simple`: it owns .release-please-manifest.json as the",
     "source of truth and writes the version back into frontend/package.json",
     "through extra-files. The backend has no version file of its own and does",
-    "not need one; app/name_cache.py already embeds openstout.__version__ for",
+    "not need one; app/name_cache.py already embeds orthonym.__version__ for",
     "the only versioning that is load-bearing at runtime (cache invalidation).",
     "",
     "Starting at 0.1.0 on purpose. Under semver, 0.x says breaking changes are",

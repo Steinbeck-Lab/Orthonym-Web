@@ -5,11 +5,11 @@ import { NavLink, useLocation } from 'react-router-dom'
 // centred, welded to the edge by a pair of concave fillets, so it reads as
 // carved out of the top of the page rather than floating over it. It was
 // briefly three separate islands; the owner asked for one ("I don't want 3
-// notches, move STITCH and github to center, keep single notch").
+// notches, move [the wordmark] and github to center, keep single notch").
 //
 // AT REST it shows the crimson brand mark and the four route labels, and
 // nothing else. ON HOVER (or on focus, or on any pointer that cannot hover)
-// it GROWS OUTWARD from its centre to reveal the STITCH wordmark on the left
+// it GROWS OUTWARD from its centre to reveal the Orthonym wordmark on the left
 // and GitHub on the right, each fenced off by a hairline "|". Confirmed with
 // the owner before building: the mark stays put at rest, so the site is
 // never logo-less, and only the wordmark slides in.
@@ -33,7 +33,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 // codebase that has none of those, and it owns the whole page as a fixed
 // full-screen shell. The SHAPE was ported; none of its code was.
 //
-// STITCH's own world is otherwise unchanged: the Saira wordmark, the mono
+// Orthonym's own world is otherwise unchanged: the Saira wordmark, the mono
 // nav, white cards on the grey ground, the one crimson accent, and no theme
 // toggle (this build is light-only).
 //
@@ -66,15 +66,16 @@ const NAV_LINKS = [
 //
 // The distinction matters, because this link used to mean something else and
 // was correctly switched off for it. It pointed at the naming ENGINE,
-// github.com/Kohulan/OpenSTOUT, which is private and answers 404 to an
-// anonymous visitor -- a dead link in the header of every route. It now
-// points at STITCH-Web, the published split of this web app, which is public.
+// whose repository (now github.com/Beilstein-Institut/Orthonym) is private
+// and answers 404 to an anonymous visitor -- a dead link in the header of
+// every route. It now points at Orthonym-Web, the published split of this web
+// app, which is public.
 //
 // So the label is honest as "GitHub" in the header but must not be read as
 // "the engine is open": Terms.jsx and About.jsx both still state, in prose,
-// that OpenSTOUT's repository is not public, and those statements remain
-// TRUE and must not be "corrected" to match this link. The accessible name
-// below says which source it is, so nobody has to guess from context.
+// that the Orthonym engine's repository is not public, and those statements
+// remain TRUE and must not be "corrected" to match this link. The accessible
+// name below says which source it is, so nobody has to guess from context.
 //
 // Still overridable: a fork or a private deployment sets VITE_GITHUB_URL and
 // gets its own source. The literal `none` ships no link and no separator.
@@ -84,11 +85,11 @@ const NAV_LINKS = [
 // undefined, so `??` would keep the empty string and silently ship no link --
 // which is exactly the bug this line replaced. `||` treats empty as absent,
 // and `none` is then the explicit way to say "off".
-const GITHUB_URL_DEFAULT = 'https://github.com/Kohulan/STITCH-Web'
+const GITHUB_URL_DEFAULT = 'https://github.com/Kohulan/Orthonym-Web'
 const GITHUB_URL_RAW = import.meta.env.VITE_GITHUB_URL || GITHUB_URL_DEFAULT
 const GITHUB_URL = GITHUB_URL_RAW === 'none' ? null : GITHUB_URL_RAW
 
-// A minimal molecule/stitch mark: two nodes joined by a bond, one stroke
+// A minimal molecule mark: two nodes joined by a bond, one stroke
 // weight, inheriting the crimson accent via currentColor.
 function BrandMark() {
   return (
@@ -147,10 +148,9 @@ function Navigation() {
 
   // The one moment a nav can honestly celebrate: arriving somewhere. On a
   // route change the pill slides (below) and the crimson dot is pulled into a
-  // short dash and back, like a stitch drawn tight -- the same motif as the
-  // footer's self-sewing join, which makes it a signature rather than a
-  // one-off trick. 380ms, and the class is removed afterwards so it can fire
-  // again on the next route.
+  // short dash and back -- the same draw-in motif as the footer's joining
+  // mark, which makes it a signature rather than a one-off trick. 380ms, and
+  // the class is removed afterwards so it can fire again on the next route.
   const [justMoved, setJustMoved] = useState(false)
   const firstRouteRef = useRef(true)
 
@@ -230,9 +230,9 @@ function Navigation() {
             link move into the panel below. */}
         <div className="notch notch--bar">
           <NotchWings />
-          <NavLink to="/" end className="brand" aria-label="STITCH — home">
+          <NavLink to="/" end className="brand" aria-label="Orthonym — home">
             <BrandMark />
-            <span className="brand__word">Stitch</span>
+            <span className="brand__word">Orthonym</span>
           </NavLink>
 
           <span className="notch__rule" aria-hidden="true" />

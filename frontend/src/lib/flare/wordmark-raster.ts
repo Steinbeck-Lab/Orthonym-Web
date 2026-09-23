@@ -1,4 +1,4 @@
-// The flare's light source: the STITCH wordmark, drawn as OUTLINES.
+// The flare's light source: the Orthonym wordmark, drawn as OUTLINES.
 //
 // This file replaces upstream's logo-raster.ts, which held the Next.js "N" as
 // an SVG string and rasterised it through an <img>. Two reasons it could not

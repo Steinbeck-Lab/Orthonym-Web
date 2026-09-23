@@ -1,4 +1,4 @@
-"""The Celery tasks. Every OPSIN call in STITCH now happens in one of these.
+"""The Celery tasks. Every OPSIN call in Orthonym now happens in one of these.
 
 Two shapes rather than one: the fast path runs a whole small list in a
 single task, and the batch path splits into chunks with a chord. A chord for
@@ -16,7 +16,7 @@ from celery.exceptions import SoftTimeLimitExceeded
 
 from app import name_cache, redis_store
 from app.celery_app import celery_app
-from app.openstout_service import translate_one
+from app.orthonym_service import translate_one
 from app.schemas import BatchRow, ResultItem
 
 logger = logging.getLogger(__name__)
@@ -288,7 +288,7 @@ def translate_job_inline(
     attempt, and "it self-heals via _close_job at the end" does not hold
     for an attempt that never reaches its own end -- even though the
     job's real rows are still sitting there, complete, in
-    stitch:job:{id}:rows. begin_chunk closes this by never touching the
+    orthonym:job:{id}:rows. begin_chunk closes this by never touching the
     status at all once the job is genuinely terminal.
     """
     if not redis_store.begin_chunk(job_id):
@@ -505,7 +505,7 @@ def translate_fast(
 @celery_app.task(name="app.tasks.explain_smiles")
 def explain_smiles(smiles: str) -> dict:
     from app.explain import explain_molecule
-    from app.openstout_service import get_primary_namer
+    from app.orthonym_service import get_primary_namer
 
     return explain_molecule(smiles, namer=get_primary_namer())
 
@@ -550,7 +550,7 @@ def _molblock_2d(mol):
 
 @celery_app.task(name="app.tasks.name_to_smiles")
 def name_to_smiles(name: str) -> dict:
-    from openstout.validation.opsin_roundtrip import opsin_parse
+    from orthonym.validation.opsin_roundtrip import opsin_parse
     from rdkit import Chem
 
     from app.depiction import structure_svg_data_uri
@@ -572,7 +572,7 @@ def name_to_smiles(name: str) -> dict:
     # `mol` (MolToInchiKey) -- both run RDKit's InChI canonicalization from
     # scratch, so computing it twice was ~2x the cost for the same answer
     # (measured: 0.124 ms/molecule vs 0.060 ms/molecule over 5 molecules x
-    # 500 iterations). `app.openstout_service._inchikey(mol)` looks like the
+    # 500 iterations). `app.orthonym_service._inchikey(mol)` looks like the
     # natural helper to reuse here, but it takes a Mol and would recompute
     # the InChI internally -- that's the exact waste this avoids, so this
     # path deliberately does not call it.

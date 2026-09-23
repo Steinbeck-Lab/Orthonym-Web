@@ -90,7 +90,7 @@ function Footer() {
             They are `<Link>`, not `<a>`: an `<a href>` inside the router
             shell reloads the whole app for an in-app route. */}
         <p className="site-footer__copyright">
-          &copy; {year} STITCH. All rights reserved.
+          &copy; {year} Orthonym. All rights reserved.
           <span className="site-footer__legal">
             <Link to="/imprint">Impressum</Link>
             <Link to="/privacy">Privacy</Link>

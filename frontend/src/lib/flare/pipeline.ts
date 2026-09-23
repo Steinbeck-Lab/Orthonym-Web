@@ -78,7 +78,7 @@ const LOGO_HEIGHT_RATIO = 0.62;
 const MAX_RENDER_WIDTH = 1920;
 const PULSE_TRANSITION_SECONDS = 2;
 const PULSE_FLOOR = 0.2;
-// Next's flare is a blue-white (179, 191, 255). STITCH has exactly one
+// Next's flare is a blue-white (179, 191, 255). Orthonym has exactly one
 // accent and this is it -- --accent #c41e3a, lifted toward white so the
 // hottest part of a ray still reads as light rather than as paint.
 const FLARE_COLOR = [1, 96 / 255, 122 / 255] as const;
@@ -170,7 +170,7 @@ export class FlarePipeline {
 
       // VENDORED CHANGE: the caller supplies the placement. Their
       // centeredPlacement() sizes a PORTRAIT logo from min(width, height) and
-      // centres it; STITCH's logo is a wide wordmark that has to sit exactly
+      // centres it; Orthonym's logo is a wide wordmark that has to sit exactly
       // where the DOM <h1> sits, or the lit letters and the real letters do
       // not line up. centeredPlacement is kept below, unused, so this file
       // still reads against upstream.

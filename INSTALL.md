@@ -1,11 +1,11 @@
-# Installing and running STITCH
+# Installing and running Orthonym
 
 Everything operational lives here: how to run it, how to deploy it, how to test it, and what the
 engine dependency actually requires. The [README](README.md) is the short version.
 
 > **Before anything else.** This repository does not contain the naming engine. `backend/vendor/`
-> is populated from a checkout of OpenSTOUT, which is not public — see
-> [The OpenSTOUT dependency](#the-openstout-dependency). A fresh clone builds and runs the
+> is populated from a checkout of the Orthonym engine, which is not public — see
+> [The Orthonym engine dependency](#the-orthonym-engine-dependency). A fresh clone builds and runs the
 > frontend and the API shell, but cannot name a molecule until the engine is vendored in.
 >
 > Deploying to a server? [Deploying it publicly](#deploying-it-publicly) is a step-by-step
@@ -18,7 +18,7 @@ engine dependency actually requires. The [README](README.md) is the short versio
 - [Run locally without Docker](#run-locally-without-docker)
 - [Tests](#tests)
 - [The batch/job API](#the-batchjob-api)
-- [The OpenSTOUT dependency](#the-openstout-dependency)
+- [The Orthonym engine dependency](#the-orthonym-engine-dependency)
 - [Stopping](#stopping)
 
 ---
@@ -45,7 +45,7 @@ curl -s http://127.0.0.1:8000/api/health
 ## Deploying it publicly
 
 A concrete runbook for a **4-core / 16 GB Ubuntu VM with Docker already installed**, behind
-**Caddy** for HTTPS. Substitute your own hostname for `stitch.example.org` throughout.
+**Caddy** for HTTPS. Substitute your own hostname for `orthonym.example.org` throughout.
 
 Everything below assumes the DNS `A`/`AAAA` record for that hostname already points at the VM —
 Caddy will not be able to get a certificate until it does.
@@ -60,29 +60,29 @@ sudo apt-get update && sudo apt-get install -y git gh        # gh only if you us
 # /opt is root-owned, so take ownership BEFORE cloning rather than cloning with
 # sudo -- a root-owned tree makes every later `git pull` and `docker compose`
 # need sudo too, and mixes root-written files into a directory you then edit.
-sudo mkdir -p /opt/stitch && sudo chown "$USER:$USER" /opt/stitch
-git clone https://github.com/Kohulan/STITCH-Web.git /opt/stitch
-cd /opt/stitch
+sudo mkdir -p /opt/orthonym-web && sudo chown "$USER:$USER" /opt/orthonym-web
+git clone https://github.com/Kohulan/Orthonym-Web.git /opt/orthonym-web
+cd /opt/orthonym-web
 
 # "Docker is installed" does not mean your user may talk to it. If this prints
 # the hint, run it and start a new login shell (`newgrp docker` for this one).
 docker ps >/dev/null 2>&1 || echo "run: sudo usermod -aG docker $USER  -- then log out and back in"
 
 # authenticate however you prefer -- a fine-grained PAT with read access to
-# Kohulan/OpenSTOUT, or a deploy key in ~/.ssh. Then:
-gh auth login                                                 # or: eval "$(ssh-agent)"; ssh-add ~/.ssh/openstout_deploy
-sudo mkdir -p /opt/openstout && sudo chown "$USER:$USER" /opt/openstout
-gh repo clone Kohulan/OpenSTOUT /opt/openstout -- --depth 1
+# Beilstein-Institut/Orthonym, or a deploy key in ~/.ssh. Then:
+gh auth login                                                 # or: eval "$(ssh-agent)"; ssh-add ~/.ssh/orthonym_deploy
+sudo mkdir -p /opt/orthonym && sudo chown "$USER:$USER" /opt/orthonym
+gh repo clone Beilstein-Institut/Orthonym /opt/orthonym -- --depth 1
 
 # populate backend/vendor/ from that checkout
-OPENSTOUT_SRC=/opt/openstout ./scripts/vendor-openstout.sh
+ORTHONYM_SRC=/opt/orthonym ./scripts/vendor-orthonym.sh
 ```
 
 Check it landed before going further — a missing engine fails at image build, not at runtime,
 but the error is long and this is quicker:
 
 ```bash
-ls backend/vendor/openstout/src/openstout/__init__.py \
+ls backend/vendor/orthonym/src/orthonym/__init__.py \
    backend/vendor/opsin-resources/opsin-cli-2.9.0-jar-with-dependencies.jar
 ```
 
@@ -167,7 +167,7 @@ sudo apt-get update && sudo apt-get install -y caddy
 Then replace `/etc/caddy/Caddyfile` with:
 
 ```caddyfile
-stitch.example.org {
+orthonym.example.org {
     encode zstd gzip
     reverse_proxy 127.0.0.1:8080
 }
@@ -193,7 +193,7 @@ Ask that team for a vhost. They need three things from you:
 
 | | |
 |---|---|
-| hostname | `stitch.example.org` |
+| hostname | `orthonym.example.org` |
 | upstream | `http://<this VM's internal IP>:8080` |
 | must forward | `Host`, `X-Forwarded-For`, `X-Forwarded-Proto` |
 
@@ -253,11 +253,11 @@ sudo ufw enable
 Run these from your laptop, not the VM — the point is to test the path a visitor takes.
 
 ```bash
-curl -sI https://stitch.example.org | head -3                    # 200, and a valid cert
-curl -s  https://stitch.example.org/api/health                   # {"status":"OK",...}
+curl -sI https://orthonym.example.org | head -3                    # 200, and a valid cert
+curl -s  https://orthonym.example.org/api/health                   # {"status":"OK",...}
 
 # the round-trip gate, end to end: ethanol must be `pin`, the fused polycyclic `fallback`
-curl -s -X POST https://stitch.example.org/api/translate \
+curl -s -X POST https://orthonym.example.org/api/translate \
   -H 'Content-Type: application/json' \
   -d '{"smiles":["CCO","C1CC2CCC1(CC2)C3CCC4(CCC5(CCCC5C4C3)C)C"]}' | head -c 400
 ```
@@ -267,7 +267,7 @@ of per-visitor ones, `X-Forwarded-For` is not reaching the app and every cap is 
 
 ```bash
 # on the VM, after making a request from your laptop
-docker exec stitch-redis redis-cli --scan --pattern 'stitch:ip:*' | head
+docker exec orthonym-redis redis-cli --scan --pattern 'orthonym:ip:*' | head
 # expect your laptop's public IP in the key name -- NOT 127.0.0.1 or a 172.x address
 ```
 
@@ -278,11 +278,11 @@ Auth. Do it here rather than asking whoever runs the upstream proxy — nothing 
 outside this VM, and it lifts in one command.
 
 ```bash
-cd /opt/stitch
+cd /opt/orthonym-web
 mkdir -p ops/snippets
 
 # the credential. openssl is already present; apache2-utils is not needed.
-printf 'stitch:%s\n' "$(openssl passwd -apr1 'CHOOSE-A-PASSWORD')" > ops/htpasswd
+printf 'orthonym:%s\n' "$(openssl passwd -apr1 'CHOOSE-A-PASSWORD')" > ops/htpasswd
 chmod 600 ops/htpasswd
 
 cat > ops/snippets/auth.conf <<'EOF'
@@ -290,7 +290,7 @@ satisfy any;
 allow 127.0.0.1;
 allow ::1;
 deny all;
-auth_basic "STITCH — preview";
+auth_basic "Orthonym — preview";
 auth_basic_user_file /etc/nginx/htpasswd;
 EOF
 
@@ -319,9 +319,9 @@ Verify all four, not just the first:
 
 ```bash
 curl -s -o /dev/null -w 'no creds:   %{http_code}\n' http://10.232.0.68:8080/          # 401
-curl -s -u stitch:PASS -o /dev/null -w 'with creds: %{http_code}\n' http://10.232.0.68:8080/   # 200
+curl -s -u orthonym:PASS -o /dev/null -w 'with creds: %{http_code}\n' http://10.232.0.68:8080/   # 200
 curl -s -o /dev/null -w 'api gated:  %{http_code}\n' http://10.232.0.68:8080/api/health # 401
-sleep 12; docker inspect --format 'health: {{.State.Health.Status}}' stitch-frontend    # healthy
+sleep 12; docker inspect --format 'health: {{.State.Health.Status}}' orthonym-frontend    # healthy
 ```
 
 **To remove it**, which is the point of doing it this way:
@@ -338,10 +338,20 @@ not suit protecting anything sensitive.
 ### 7. Updating
 
 ```bash
-cd /opt/stitch && git pull
-OPENSTOUT_SRC=/opt/openstout ./scripts/vendor-openstout.sh     # only if the engine moved
+cd /opt/orthonym-web && git pull
+ORTHONYM_SRC=/opt/orthonym ./scripts/vendor-orthonym.sh     # only if the engine moved
 docker compose up -d --build
 ```
+
+**An install from before the rename** (at `/opt/stitch`) keeps working from its old folder. Run
+`docker compose down` there **before** `git pull`, so the old `stitch-*` containers are removed;
+then rename `OPENSTOUT_JVM_XMX` to `ORTHONYM_JVM_XMX` in `.env` (under the old name the value is
+silently ignored and the workers fall back to 512 MB), clone the renamed engine to `/opt/orthonym`
+with a credential that can read `Beilstein-Institut/Orthonym` (one issued for the old engine
+repository may not) and re-vendor as in step 1 (a snapshot vendored before the rename will not
+import), then delete the pre-rename engine folder under `backend/vendor/` (it is no longer
+gitignored, and the backend image copies all of `backend/vendor/`), and the next
+`docker compose up -d --build` starts the containers as `orthonym-*`.
 
 If the engine did move, bump `_KEY_VERSION` in `backend/app/name_cache.py` first — upstream
 develops on a static version, so the version-keyed cache cannot invalidate itself and names
@@ -365,7 +375,7 @@ files, so an unattended box cannot fill its disk with worker logs.
 You need **four** processes, not two. Redis first:
 
 ```bash
-docker compose up -d redis    # service stitch-redis, publishes localhost:6379
+docker compose up -d redis    # container orthonym-redis, publishes localhost:6379
 ```
 
 ```bash
@@ -414,19 +424,19 @@ environment variable: results live **24 h**, the shared name cache lives **7 day
 caps are **2** concurrent jobs, **20** jobs/hour, **60** naming requests/min, **300** polls/min,
 **1200** depictions/min.
 
-## The OpenSTOUT dependency
+## The Orthonym engine dependency
 
-OpenSTOUT isn't published on PyPI in the form STITCH needs (`name_tiered()`, `general_fallback`), so
-`backend/requirements.txt` installs it from `backend/vendor/openstout` — a snapshot, not a live path
-dependency, so a container build never has to reach outside its own context.
+The Orthonym engine isn't published on PyPI in the form this web app needs (`name_tiered()`,
+`general_fallback`), so `backend/requirements.txt` installs it from `backend/vendor/orthonym` — a
+snapshot, not a live path dependency, so a container build never has to reach outside its own context.
 
 **That snapshot is not in this repository, and neither are three of the four vendored artifacts.**
-`scripts/vendor-openstout.sh` copies all of them out of an OpenSTOUT checkout: the engine source, the
+`scripts/vendor-orthonym.sh` copies all of them out of an Orthonym engine checkout: the engine source, the
 OPSIN grammar resources, and the `opsin-cli` and `centres-cli` jars. Publishing them would publish
 the engine, so all four are gitignored. Run the script before your first build:
 
 ```bash
-OPENSTOUT_SRC=/path/to/OpenSTOUT/Project ./scripts/vendor-openstout.sh
+ORTHONYM_SRC=/path/to/Orthonym/Project ./scripts/vendor-orthonym.sh
 ```
 
 The exception is **CDK**, the only vendored artifact with a public release URL: `backend/Dockerfile`
@@ -435,10 +445,10 @@ downloads it during the build and checks it against the SHA-256 recorded in
 the build context, so a build here exercises the same download path a fresh clone does. `centres-cli`
 cannot be fetched at all — its notice records it as a local Maven build from an unreleased commit.
 
-**Refresh the snapshot** after pulling OpenSTOUT changes you want STITCH to pick up:
+**Refresh the snapshot** after pulling engine changes you want the web app to pick up:
 
 ```bash
-OPENSTOUT_SRC=/path/to/OpenSTOUT/Project ./scripts/vendor-openstout.sh
+ORTHONYM_SRC=/path/to/Orthonym/Project ./scripts/vendor-orthonym.sh
 ```
 
 Then **bump `_KEY_VERSION` in `backend/app/name_cache.py` by hand.** Upstream develops on a static
@@ -447,7 +457,7 @@ by the old engine would survive the refresh.
 
 ### The part that isn't optional: SELF-01 needs a real JVM
 
-OpenSTOUT ships three modules that each compute an identical `PROJECT_ROOT` (4 parents up from their own installed file) and expect real artifacts sitting there as siblings of `src/` in a full dev checkout:
+The Orthonym engine ships three modules that each compute an identical `PROJECT_ROOT` (4 parents up from their own installed file) and expect real artifacts sitting there as siblings of `src/` in a full dev checkout:
 
 | Module | Expects |
 |---|---|
@@ -455,9 +465,9 @@ OpenSTOUT ships three modules that each compute an identical `PROJECT_ROOT` (4 p
 | `validation/opsin_roundtrip.py` | `opsin-cli-2.9.0-jar-with-dependencies.jar` |
 | `perception/centres_bridge.py` | `centres-cli-1.2.1.jar` (downloaded by the Dockerfile) |
 
-None of these ship with the pip package. `scripts/vendor-openstout.sh` vendors all three into `backend/vendor/opsin-resources/`, and `backend/scripts/place_opsin_resources.py` (run once after every `pip install`, and baked into `backend/Dockerfile`) copies them to wherever openstout actually got installed — it locates the target via `sysconfig`, not by guessing a venv layout, so it works the same locally and in a container.
+None of these ship with the pip package. `scripts/vendor-orthonym.sh` vendors all three into `backend/vendor/opsin-resources/`, and `backend/scripts/place_opsin_resources.py` (run once after every `pip install`, and baked into `backend/Dockerfile`) copies them to wherever `orthonym` actually got installed — it locates the target via `sysconfig`, not by guessing a venv layout, so it works the same locally and in a container.
 
-**This is not just packaging hygiene.** Without a live JVM (jpype + a JRE) and these two jars, OpenSTOUT's SELF-01 self-consistency gate — the check that verifies a candidate name actually round-trips back to the right structure — silently **fails open**: confirmed by direct testing, a molecule that should honestly report as a lower-confidence `fallback` instead shipped as an unverified `pin`. `JPype1` is in `requirements.txt` and `backend/Dockerfile` installs `default-jre-headless` for exactly this reason. If you ever strip either out "to slim the image," re-run the regression check below first.
+**This is not just packaging hygiene.** Without a live JVM (jpype + a JRE) and these two jars, the Orthonym engine's SELF-01 self-consistency gate — the check that verifies a candidate name actually round-trips back to the right structure — silently **fails open**: confirmed by direct testing, a molecule that should honestly report as a lower-confidence `fallback` instead shipped as an unverified `pin`. `JPype1` is in `requirements.txt` and `backend/Dockerfile` installs `default-jre-headless` for exactly this reason. If you ever strip either out "to slim the image," re-run the regression check below first.
 
 That failure mode is why `app/jvm_guard.py` refuses rather than degrades: if no worker reports a live
 JVM, every naming endpoint — including `POST /api/jobs` — returns 503 instead of serving names with
@@ -472,7 +482,7 @@ drawing. RDKit remains the fallback for any process where the JVM will not come 
 **second SMILES parser**: a string RDKit refuses is offered to it before the input is called
 unreadable.
 
-It is **not on the JVM's classpath**, and cannot be: OpenSTOUT owns the only `startJVM` call and
+It is **not on the JVM's classpath**, and cannot be: the Orthonym engine owns the only `startJVM` call and
 boots with a fixed one. `app/cdk_bridge.py` loads it in an isolated `java.net.URLClassLoader`
 instead — read that module's docstring before changing anything about it, especially the parent
 loader and the URL order, both of which are load-bearing and both of which fail in ways that look

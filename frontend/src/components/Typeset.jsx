@@ -2,7 +2,7 @@
 //
 // The rules live in lib/nameTypography.js; this file is only the markup for
 // them. It is deliberately thin, because there is no single place a name is
-// rendered in STITCH -- there are seven, across four pages, in two typefaces
+// rendered in Orthonym -- there are seven, across four pages, in two typefaces
 // -- and each of them needs the same typography inside its own wrapper.
 //
 // ELEMENT CHOICE. <i> and not <em>: this is the technical-convention italic

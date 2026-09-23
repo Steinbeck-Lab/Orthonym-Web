@@ -11,11 +11,11 @@ import './Legal.css'
 // looks for. Same split the reference implementation uses
 // (Beilstein-Institut/BChemXtractWeb, frontend/src/pages/ImprintPage.tsx).
 //
-// WHOSE Impressum this is, and why: STITCH is a showcase for OpenSTOUT and
-// is to be hosted by the Steinbeck Lab, so the operator named here is the
-// Cheminformatics and Computational Metabolomics group at
-// Friedrich-Schiller-Universität Jena — the same entity, in the same shape,
-// that the group's own DECIMER.ai names in
+// WHOSE Impressum this is, and why: Orthonym (this web app) is a showcase for
+// the Orthonym engine and is to be hosted by the Steinbeck Lab, so the
+// operator named here is the Cheminformatics and Computational Metabolomics
+// group at Friedrich-Schiller-Universität Jena — the same entity, in the
+// same shape, that the group's own DECIMER.ai names in
 // resources/views/impressum.blade.php. Every fact below is taken from that
 // file rather than composed here, so the two sites cannot drift apart:
 //
@@ -180,8 +180,8 @@ function Imprint() {
 
         <LegalSection id="imprint-names" index="Accuracy" title="About the names this site produces">
             <p>
-              STITCH generates IUPAC names automatically, by rule, from the structure you give it.
-              Every name is shown with the confidence STITCH is able to claim for it, and a name
+              Orthonym generates IUPAC names automatically, by rule, from the structure you give it.
+              Every name is shown with the confidence Orthonym is able to claim for it, and a name
               that could not be verified is labelled as such rather than presented as if it had
               been. That labelling is the point of the site and it is not decoration.
             </p>

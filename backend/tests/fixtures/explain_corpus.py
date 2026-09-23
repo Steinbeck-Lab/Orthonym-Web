@@ -75,7 +75,7 @@ CURATED: list[tuple[str, str]] = [
 
 # Names OPSIN 2.9.0 itself genuinely cannot parse. Verified against
 # opsin-cli-2.9.0-jar-with-dependencies.jar directly, not inferred from a
-# STITCH failure. These are the only permitted ENGINE_ERROR rows.
+# Orthonym failure. These are the only permitted ENGINE_ERROR rows.
 OPSIN_CANNOT_PARSE: frozenset[str] = frozenset({
     "(1R,2S,3r,4R,5S,6s)-cyclohexane-1,2,3,4,5,6-hexol",
     "dinitrogen tetroxide",

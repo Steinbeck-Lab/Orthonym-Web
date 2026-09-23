@@ -28,7 +28,7 @@ import TierLamp from './TierLamp'
 // rows, strongest first: the vertical order IS the descent, and it no longer
 // needs the staircase offset the five-column version used to fake one.
 //
-// The hard constraint is what makes it interesting: confidence in STITCH is
+// The hard constraint is what makes it interesting: confidence in Orthonym is
 // MONOCHROME, always (DESIGN.md's one-accent rule, the crimson never touches
 // a tier). So the hierarchy here is built from scale, rhythm, weight and
 // motion instead of colour, and every specimen is the exact rule a real
@@ -69,7 +69,7 @@ const TIERS = [
   },
   {
     // "Could not confirm" and NOT "verification did not run", because it did.
-    // openstout_service calls _roundtrip_check for every named result: pin,
+    // orthonym_service calls _roundtrip_check for every named result: pin,
     // fallback and best_effort alike, and best-effort mode has no bearing on
     // whether OPSIN is consulted. What the mode changes is whether a name the
     // check failed to confirm may be SHOWN at all; with it off, that molecule
@@ -93,13 +93,13 @@ const TIERS = [
     ordinal: '04',
     label: STATE_SHORT.abstain,
     body: 'The engine declined rather than guess.',
-    // Only an abstain carries a formula (openstout_service.py sets it
+    // Only an abstain carries a formula (orthonym_service.py sets it
     // nowhere else), which is exactly why it is worth saying here.
     detail: 'A molecular formula stands in for the name.',
   },
   {
     // Not only an unreadable SMILES: RDKit failing to parse gives this status
-    // (openstout_service.py), and so does a naming exception on a batch row
+    // (orthonym_service.py), and so does a naming exception on a batch row
     // ("Naming failed: ...", tasks.py). The old line said "The SMILES could
     // not be read", which was false for the second case.
     key: 'error',
@@ -116,9 +116,9 @@ const TIERS = [
 // Not for looks: a stroke can be DRAWN. Each rung's mark draws itself from
 // left to right as the drawer opens, and a dashed rule drawing dash by dash
 // is the clearest possible way to show what "dashed" means in this
-// vocabulary. It is the same stitching motif as the footer's join, the nav's
-// arriving dot and the drop zone's running seam, which makes it the system's
-// signature rather than a one-off flourish.
+// vocabulary. It is the same drawn-stroke motif as the footer's join, the
+// nav's arriving dot and the drop zone's running dashes, which makes it the
+// system's signature rather than a one-off flourish.
 //
 // The dasharray patterns ARE the grammar: solid pair (verified PIN), dashed
 // (verified fallback), dotted (unverified), one faint line (abstain), and a

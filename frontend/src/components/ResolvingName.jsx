@@ -20,7 +20,7 @@ import { nameRuns, applyRuns } from '../lib/nameTypography'
 
 const TAG = { italic: 'i', super: 'sup', sub: 'sub' }
 
-export default function StitchedName({ name, animate }) {
+export default function ResolvingName({ name, animate }) {
   // IUPAC typography first, character cells inside it: the italic run of a
   // stereodescriptor has to wrap whole cells, and a cell cannot be half
   // italic. The cell index keeps counting ACROSS pieces so the reveal still

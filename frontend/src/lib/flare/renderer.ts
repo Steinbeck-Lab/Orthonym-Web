@@ -15,7 +15,7 @@ import {
 // VENDORED from vgpu's nextjs-flare example (vercel-labs/vgpu, MIT) and
 // changed in four places, each marked "VENDORED CHANGE" here or in the file
 // it touches:
-//   1. The light source is STITCH's wordmark, measured off the live <h1> and
+//   1. The light source is Orthonym's wordmark, measured off the live <h1> and
 //      stroked into a canvas, instead of the Next.js "N" SVG.
 //   2. The placement is that <h1>'s own rectangle, so the lit letters land on
 //      the real ones rather than in the middle of a square.
@@ -318,7 +318,7 @@ export function createRenderer({
     // lands in the renderer chunk (180 kB), which a visitor without WebGPU
     // never fetches.
     if (disposed) return;
-    const nextGpu = await init({ label: "stitch-wordmark-flare" });
+    const nextGpu = await init({ label: "orthonym-wordmark-flare" });
     if (disposed) {
       try {
         nextGpu.dispose();

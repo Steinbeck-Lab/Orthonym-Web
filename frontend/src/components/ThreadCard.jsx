@@ -1,11 +1,10 @@
 /**
- * One entry in the thread list — a pattern chart's materials card.
+ * One entry in the credits list — a materials card for one dependency.
  *
- * Every embroidery pattern ships a floss list: which threads the piece is
- * worked in, their maker's code, and where each one is used. That is exactly
- * the shape of STITCH's dependency credits, so the credits go here rather than
- * into a paragraph of prose: a reader scanning for "what is this built on"
- * finds it in the place the world has already taught them to look.
+ * Each card says what Orthonym is built on: the project, a short code for it,
+ * and where it is used. The credits go here rather than into a paragraph of
+ * prose, so a reader scanning for "what is this built on" finds each answer
+ * in a list they can scan.
  *
  * TWO KINDS OF SWATCH, and the difference is disclosed rather than papered
  * over. RDKit, ChEBI and the Beilstein-Institut publish real marks and those

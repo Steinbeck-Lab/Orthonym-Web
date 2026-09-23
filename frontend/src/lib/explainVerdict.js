@@ -5,7 +5,7 @@
 // `node --test "src/**/*.test.js"` with no transform step, so a file
 // containing JSX cannot be imported by a test at all. A decision that stays in
 // a .jsx file is a decision no test in this repo can reach, and both of these
-// are decisions about how confident STITCH claims to be -- PRODUCT.md
+// are decisions about how confident Orthonym claims to be -- PRODUCT.md
 // principle 3, the thing the product is for. They belong somewhere provable.
 //
 // Neither function knows anything about React, tabs, or the DOM.
@@ -23,9 +23,9 @@ import { NAMED_STATUSES, VERIFIED_STATUSES } from './statuses.js'
  * anything -- a real PIN was replaced by "there is no confidence tier for
  * this", and in the other direction the honest disclosure silently vanished.
  *
- * 'stitch-verdict'   STITCH produced this name, so its tier is a real verdict
+ * 'orthonym-verdict' Orthonym produced this name, so its tier is a real verdict
  *                    and principle 3 requires showing it.
- * 'user-supplied'    the user typed the name; STITCH has no opinion on it, and
+ * 'user-supplied'    the user typed the name; Orthonym has no opinion on it, and
  *                    inventing a tier mark would misrepresent confidence.
  * 'none'             nothing has been explained yet.
  *
@@ -33,7 +33,7 @@ import { NAMED_STATUSES, VERIFIED_STATUSES } from './statuses.js'
  */
 export function verdictKindFor(resultMode) {
   if (resultMode === null || resultMode === undefined) return 'none'
-  return resultMode === 'name' ? 'user-supplied' : 'stitch-verdict'
+  return resultMode === 'name' ? 'user-supplied' : 'orthonym-verdict'
 }
 
 /**

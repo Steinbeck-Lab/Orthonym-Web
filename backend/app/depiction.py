@@ -1,6 +1,6 @@
 """2D structure depiction: CDK first, RDKit as the safety net.
 
-`structure_svg_data_uri` is the one entry point, used by app.openstout_service
+`structure_svg_data_uri` is the one entry point, used by app.orthonym_service
 and app.tasks (the naming paths) and app.jobs_api (GET /api/depict). It packages
 the result as a self-contained "data:image/svg+xml;base64,..." URI so the
 frontend can drop it straight into an <img src> with no image-serving endpoint.

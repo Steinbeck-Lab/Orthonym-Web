@@ -76,7 +76,7 @@ import re
 import threading
 from typing import NamedTuple, Optional
 
-from openstout.validation.opsin_roundtrip import PROJECT_ROOT
+from orthonym.validation.opsin_roundtrip import PROJECT_ROOT
 
 _SUFFIX_CATEGORIES = frozenset({"nonAcidStemSuffix", "suffixesThatCanBeModifiedByAPrefix"})
 _MULTIPLIER_CATEGORY = "diOrTri"
@@ -117,7 +117,7 @@ def _load_symbol_table() -> dict:
 
 def _get_parser():
     """Returns OPSIN's ParseRules instance, or None if Java/the JVM/the
-    vendored jar isn't available. Reuses the SAME shared JVM openstout's own
+    vendored jar isn't available. Reuses the SAME shared JVM the engine's own
     SELF-01 gate already starts (via opsin_available()) rather than booting
     a second one -- jpype allows exactly one JVM per process.
     """
@@ -131,7 +131,7 @@ def _get_parser():
             return _opsin_parser
         _load_attempted = True
         try:
-            from openstout.jvm_bridge import opsin_available
+            from orthonym.jvm_bridge import opsin_available
 
             if not opsin_available():
                 return None

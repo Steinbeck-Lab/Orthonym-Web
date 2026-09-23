@@ -1,15 +1,15 @@
-"""Translation logic: SMILES -> ResultItem, backed by the OpenSTOUT engine.
+"""Translation logic: SMILES -> ResultItem, backed by the Orthonym engine.
 
-Derivation logic (verified against the live openstout package):
+Derivation logic (verified against the live orthonym package):
 
 1. Validate with RDKit first. If it can't parse, status="error".
-2. Otherwise call the shared, process-wide PRIMARY OpenSTOUT(style="pin",
+2. Otherwise call the shared, process-wide PRIMARY Orthonym(style="pin",
    general_fallback=True) namer's `name_tiered(smiles)` and classify it
    (see `classify` below).
 3. If the primary pass did NOT abstain, use its result as-is.
 4. If the primary pass DID abstain (tier `abstain`), escalate: run the SAME
    `name_tiered(smiles)` call against a SECOND, more aggressive namer --
-   OpenSTOUT(style="pin", general_fallback=True,
+   Orthonym(style="pin", general_fallback=True,
    general_fallback_unverified=True, allow_aromatic_general=True) -- and
    classify ITS result instead. This escalated pass may still land on a
    verified fallback (`systematic_verified`), a genuinely OPSIN-unverified name (`best_effort` ->
@@ -17,7 +17,7 @@ Derivation logic (verified against the live openstout package):
    produces is what ships.
 
 Tier -> status mapping used for BOTH namers (`classify`). The tier names are
-OpenSTOUT's own, from `OpenSTOUT.name_tiered`'s docstring:
+the Orthonym engine's own, from `Orthonym.name_tiered`'s docstring:
   - "pin_verified"        -> "pin"
   - "systematic_verified" -> "fallback"     (RT-verified via the general
     engine, or a trivial-retained name)
@@ -61,18 +61,18 @@ extra things are computed and attached:
   - depiction_svg: a 2D structure rendering of the input SMILES
     (app/depiction.py).
   - roundtrip_smiles / roundtrip_match: a SECOND, visible OPSIN round-trip
-    proof independent of OpenSTOUT's own internal SELF-01 gate (SELF-01 runs
+    proof independent of the engine's own internal SELF-01 gate (SELF-01 runs
     inside name_tiered() and only ever surfaces as the tier/is_pin verdict,
     never the re-derived SMILES itself). This calls
-    openstout.validation.opsin_roundtrip.opsin_parse(name) directly --
-    OpenSTOUT's OWN public wrapper around the SAME vendored jar +
+    orthonym.validation.opsin_roundtrip.opsin_parse(name) directly --
+    the engine's OWN public wrapper around the SAME vendored jar +
     in-process JVM bridge already wired up for SELF-01 (backend/vendor/
     opsin-resources/, see place_opsin_resources.py) -- rather than a
     separate package with its own bundled jar. One jar, one JVM, one source
     of truth for "what does OPSIN say," reused for both the internal gate
     and this visible proof.
 
-The OpenSTOUT namers are expensive to construct, so exactly one instance of
+The Orthonym namers are expensive to construct, so exactly one instance of
 each is built at module import time and reused across all requests/SMILES.
 """
 
@@ -81,8 +81,8 @@ from typing import Optional
 from rdkit import Chem
 from rdkit.Chem.inchi import MolToInchiKey
 
-from openstout import OpenSTOUT
-from openstout.validation.opsin_roundtrip import opsin_parse
+from orthonym import Orthonym
+from orthonym.validation.opsin_roundtrip import opsin_parse
 
 from . import cdk_bridge
 from .depiction import structure_svg_data_uri
@@ -92,13 +92,13 @@ from .schemas import VERIFIED_STATUSES, ResultItem
 # REQUIRED for both correctness (general_fallback=True is what enables
 # fallback/`systematic_verified`/`best_effort` results at all -- the bare default only ever produces
 # PIN-or-abstain) and performance (namer construction is not free).
-_namer = OpenSTOUT(style="pin", general_fallback=True)
+_namer = Orthonym(style="pin", general_fallback=True)
 
 
-def get_primary_namer() -> OpenSTOUT:
+def get_primary_namer() -> Orthonym:
     """The same primary namer /api/translate uses. Exposed so other
     endpoints (e.g. /api/explain) name a molecule identically to how
-    /api/translate would -- a fresh OpenSTOUT() with different flags would
+    /api/translate would -- a fresh Orthonym() with different flags would
     silently produce a different name for the same input.
     """
     return _namer
@@ -109,7 +109,7 @@ def get_primary_namer() -> OpenSTOUT:
 # (tier `best_effort`, surfaced as "best_effort"); allow_aromatic_general=True widens
 # what the general engine will attempt on aromatic systems. Built once at
 # import time for the same reasons as `_namer`.
-_escalated_namer = OpenSTOUT(
+_escalated_namer = Orthonym(
     style="pin",
     general_fallback=True,
     general_fallback_unverified=True,
@@ -131,7 +131,7 @@ def classify(row: dict) -> tuple[str, Optional[str], str]:
         return "pin", row["name"], tier
     if tier == "systematic_verified":
         # RT-verified via the general engine or a trivial-retained name --
-        # which is exactly what STITCH means by "fallback".
+        # which is exactly what this app means by "fallback".
         return "fallback", row["name"], tier
     if tier == "best_effort":
         return "best_effort", row["name"], tier
@@ -148,7 +148,7 @@ def classify(row: dict) -> tuple[str, Optional[str], str]:
 
 
 def _roundtrip_check(name: str, mol: Chem.Mol) -> tuple[Optional[str], Optional[bool]]:
-    """Round-trip `name` back through OPSIN (via OpenSTOUT's own opsin_parse,
+    """Round-trip `name` back through OPSIN (via the engine's own opsin_parse,
     the same vendored jar/JVM as the internal SELF-01 gate) and compare the
     result to `mol` (the already-parsed input molecule) by FULL STANDARD
     INCHIKEY.
@@ -163,7 +163,7 @@ def _roundtrip_check(name: str, mol: Chem.Mol) -> tuple[Optional[str], Optional[
 
     The full InChIKey is the comparison that answers the question actually
     being asked ("did the name come back as this compound?"), and it is what
-    OpenSTOUT's own SELF-01 uses for its stricter tiers. Measured on the
+    the engine's own SELF-01 uses for its stricter tiers. Measured on the
     three cases that matter:
 
         pair                          canonical SMILES   skeleton   full key

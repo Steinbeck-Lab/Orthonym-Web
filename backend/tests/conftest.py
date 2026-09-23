@@ -57,7 +57,7 @@ def job_id(redis_client):
     """A unique job id, with every key it could own deleted afterwards."""
     new_id = f"test-{uuid.uuid4().hex[:12]}"
     yield new_id
-    for key in redis_client.scan_iter(match=f"stitch:job:{new_id}*"):
+    for key in redis_client.scan_iter(match=f"orthonym:job:{new_id}*"):
         redis_client.delete(key)
 
 
@@ -117,7 +117,7 @@ def _reset_rate_limit_state():
     if client is None:
         yield
         return
-    for key in client.scan_iter(match="stitch:ip:*"):
+    for key in client.scan_iter(match="orthonym:ip:*"):
         client.delete(key)
     yield
 
@@ -141,7 +141,7 @@ def pretend_a_worker_has_opsin():
 
     record_worker_opsin_status(999999, ok=True)
     yield
-    client.hdel("stitch:workers:opsin", "999999")
+    client.hdel("orthonym:workers:opsin", "999999")
 
 
 @pytest.fixture
@@ -156,5 +156,5 @@ def no_worker_opsin(pretend_a_worker_has_opsin):
     """
     from app.redis_store import get_redis
 
-    get_redis().delete("stitch:workers:opsin")
+    get_redis().delete("orthonym:workers:opsin")
     yield

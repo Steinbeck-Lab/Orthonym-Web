@@ -1,30 +1,25 @@
 /* ============================================================
-   STITCH — About, worked as a PATTERN CHART
+   Orthonym — About, laid out as numbered SHEETS on squared paper
 
-   The world was chosen by the owner from a hand of four (2026-09-06). It is
-   the one the site already half-spoke: the footer sews itself shut, the nav
-   pulls a stitch tight on arrival, and the product is called STITCH. This page
-   finally says it out loud.
-
-   The grammar of a real chart, and what each part holds here:
-     the GRID     the ruled ground everything is worked on
+   What each part holds:
+     the GRID     the ruled ground everything sits on
      the KEY      the four confidence tiers -- already line symbols
-     the THREADS  the dependency credits, real marks as swatches
-     the ROWS     the three routes, as working instructions
-     the PIECE    the live round-trip: the finished thing itself
-     the GAUGE    engine, version, licence, maker, and whether it is up
+     the CREDITS  the dependency credits, real marks as swatches
+     the ROUTES   the three ways in, as instructions
+     the PROOF    the live round-trip: the finished thing itself
+     the DETAILS  engine, version, licence, author, and whether it is up
 
-   The palette does NOT change: crimson, ink, the greys. Crimson simply stops
-   being an accent and becomes the THREAD, which is what a red thread on a
-   ruled ground has always been. Two earlier attempts at this page were a
-   document in cards; this is a replacement, not a third pass.
+   The palette does NOT change: crimson, ink, the greys. Crimson is the one
+   accent (`--thread`), used for the dashed edges, the indices and the marks.
+   Two earlier attempts at this page were a document in cards; this is a
+   replacement, not a third pass.
    ============================================================ */
 
 /* -------------------- the ruled ground -------------------- */
-/* A chart is squares. This is the one place a two-axis grid overlay is not
-   decoration: the measuring tool IS the subject, and every alignment on the
-   page answers to it. The cell is 22px so a symbol, a numeral and a line of
-   mono all sit on it without fractional rounding. */
+/* Squared paper. This is the one place a two-axis grid overlay is not
+   decoration: every alignment on the page answers to it. The cell is 22px so
+   a symbol, a numeral and a line of mono all sit on it without fractional
+   rounding. */
 .chart,
 .chart-cover {
   --cell: 22px;
@@ -38,18 +33,18 @@
   padding-inline: var(--shell-pad);
 }
 
-/* The cover plate: a worked swatch pinned to the ground, ruled like the chart
-   it introduces. Its grid is the same cell as the sheets below, so the whole
+/* The cover plate, pinned to the ground and ruled like the sheets it
+   introduces. Its grid is the same cell as the sheets below, so the whole
    page reads as one piece of squared paper. */
-/* FULL MEASURE, and the band is what earns it. Every earlier arrangement put
-   the copy in columns beside a motif and left a 300-800px void, so the plate
-   was narrowed to hide the problem. The real fix is the one the owner asked
-   for: the charted name runs the full width at the top, and the title and lede
-   each sit on ONE line beneath it. A single line of type spanning 1600px is
-   the thing that actually uses a wide measure -- three wrapped lines in a
+/* FULL MEASURE, and the wordmark is what earns it. Every earlier arrangement
+   put the copy in columns beside a motif and left a 300-800px void, so the
+   plate was narrowed to hide the problem. The real fix is the one the owner
+   asked for: the wordmark runs the full width at the top, and the title and
+   lede each sit on ONE line beneath it. A single line of type spanning 1600px
+   is the thing that actually uses a wide measure -- three wrapped lines in a
    column never will.
    The width is also a legibility requirement now, not just a look: the lede is
-   199 characters, and one line of it inside a 76rem plate would be 11px type.
+   184 characters, and one line of it inside a 76rem plate would be 11px type.
    At the full measure it is 16px. */
 .chart-cover__plate {
   position: relative;
@@ -59,9 +54,9 @@
   padding: clamp(var(--s-xl), 5vw, 3.5rem);
   border-radius: var(--r-card);
   box-shadow: var(--card-shadow);
-  /* A RUNNING STITCH edge, not a border: dashes at the cell pitch, in thread
-     crimson. This is the page's signature and it is drawn with border-style
-     rather than an image so it stays crisp at any zoom. */
+  /* A DASHED edge in the accent crimson. This is the page's signature and it
+     is drawn with border-style rather than an image so it stays crisp at any
+     zoom. */
   border: 2px dashed color-mix(in srgb, var(--thread) 42%, transparent);
 }
 
@@ -71,85 +66,21 @@
    cause never changed -- a 1762px plate holding roughly 1030px of content puts
    the surplus somewhere, and every two-column version put it between the two
    halves.
-   A single column with a FULL-MEASURE band underneath cannot leave one: the
-   band is 35 cells wide and takes whatever the plate gives it. The layout that
-   worked is simpler than all three grids that failed, which is usually the
-   tell. */
+   A single column with a FULL-MEASURE wordmark on top cannot leave one: the
+   wordmark takes whatever the plate gives it. The layout that worked is
+   simpler than all three grids that failed, which is usually the tell. */
 
-/* The sampler band: the plate's full measure, at its own 5:1 proportion. */
-.charted {
+/* The wordmark: the plate's full measure, at its own 1332:294 proportion.
+   The width/height attributes on the <img> reserve that ratio before the PNG
+   arrives, so the title and lede do not jump down when it loads. Black
+   letters on a transparent ground, which is why it sits on the plate's white
+   `--card` and nowhere darker. */
+.about-logo {
   display: block;
   width: 100%;
+  max-width: 100%;
   height: auto;
   margin: 0 0 clamp(var(--s-xl), 4vw, 3rem);
-  overflow: visible;
-}
-
-.charted__grid line {
-  /* `--grid-ink` inherits into SVG children from `.chart-cover`, so the band's
-     squares are the same value the three plates use, not a second copy of it. */
-  stroke: var(--grid-ink);
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke;
-}
-
-/* The thread. This is where the accent stops being an accent and becomes the
-   material -- a red thread on squared paper, which is the oldest version of
-   this page's own idea. */
-/* NO `vector-effect: non-scaling-stroke` here, and that is required rather
-   than an omission: non-scaling-stroke resolves the dash pattern in viewport
-   pixels instead of user units, which would make the `stroke-dasharray` below
-   unrelated to the length of the leg it is meant to cover. In user units the
-   leg is exactly 9.05 long (6.4 across and 6.4 down), so a dasharray of 9.1
-   covers it once and can be pulled on. The stroke scaling with the band is
-   also the better look: thread gets thicker as the piece gets bigger. */
-.charted__leg {
-  stroke: var(--thread);
-  stroke-width: 1.9;
-  stroke-linecap: round;
-}
-
-/* The ring works itself in, one stitch at a time, then stops. Not a loop: a
-   piece is worked once. Off under reduced motion, where it is simply there. */
-/* SEWN, one stitch at a time, in the order a hand works them: row by row,
-   left to right (`--n`, set row-major in ChartedName). Each stitch lays its
-   first diagonal, then crosses it -- which is what a cross stitch IS, and why
-   this is two staggered strokes rather than one fade.
-   The thread is pulled through by animating `stroke-dashoffset` from the leg's
-   full length to zero: the line does not appear, it arrives from one hole and
-   travels to the other. */
-.charted__leg {
-  stroke-dasharray: 9.1;
-  stroke-dashoffset: 0;
-}
-
-.charted__leg--first {
-  animation: charted-pull 150ms ease-out backwards;
-  animation-delay: calc(var(--n, 0) * 26ms);
-}
-
-.charted__leg--second {
-  animation: charted-pull 150ms ease-out backwards;
-  /* Crosses the first only after it has landed. */
-  animation-delay: calc(var(--n, 0) * 26ms + 90ms);
-}
-
-@keyframes charted-pull {
-  from {
-    stroke-dashoffset: 9.1;
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-/* The piece is simply already finished. */
-@media (prefers-reduced-motion: reduce) {
-  .charted__leg--first,
-  .charted__leg--second {
-    animation: none;
-    stroke-dashoffset: 0;
-  }
 }
 
 .chart-cover__title {
@@ -172,7 +103,7 @@
 
 /* Also one line, and it holds it the same way: the full measure, no cap, and
    a size that scales with the viewport rather than a fixed one that would
-   overflow. Below the breakpoint where 199 characters stop fitting legibly it
+   overflow. Below the breakpoint where 184 characters stop fitting legibly it
    is allowed to wrap again -- an unreadable single line is not the ask. */
 .chart-cover__lede {
   margin: var(--s-md) 0 0;
@@ -190,8 +121,8 @@
   }
 }
 
-/* The gauge block a pattern carries on its cover: what it is worked to, on
-   what, by what method. Real chart furniture, holding real facts. */
+/* The fact row on the cover: what standard it follows, on what engine, by
+   what method. Real facts, set as a small table. */
 .chart-cover__gauge {
   display: flex;
   flex-wrap: wrap;
@@ -218,8 +149,8 @@
   color: var(--ink);
 }
 
-/* THE SQUARED GROUND, in one place. Three surfaces are worked on squares --
-   the cover plate, each working-instruction swatch and the collaboration plate
+/* THE SQUARED GROUND, in one place. Three surfaces sit on squares -- the
+   cover plate, each route's card and the collaboration plate
    -- and each carried its own copy of these five declarations. The copies had
    already drifted before the paint was dry: `.row` was missing
    `background-position: center`, so its grid started from its own corner while
@@ -271,15 +202,14 @@
   }
 }
 
-/* A sheet's title block, ruled off from its body the way a chart rules its
-   header off from its squares. */
+/* A sheet's title block, ruled off from its body. */
 .sheet__head {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--s-xxs);
   padding-bottom: var(--s-md);
   margin-bottom: var(--s-xl);
-  /* The running stitch again, on the rule this time -- one motif, used
+  /* The dashed edge again, on the rule this time -- one motif, used
      wherever an edge or a division occurs. */
   border-bottom: 2px dashed color-mix(in srgb, var(--thread) 34%, transparent);
 }
@@ -461,7 +391,7 @@
   }
 }
 
-/* Each instruction is worked on its own squared swatch. */
+/* Each route sits on its own squared card. */
 .row {
   padding: var(--s-lg);
   border: 1px solid var(--hairline);
@@ -494,10 +424,10 @@
   color: var(--body);
 }
 
-/* -------------------- the threads -------------------- */
-/* A floss list: code, swatch, name, and what it is used for. The logos live
-   here because this is where a pattern puts its materials, and because a
-   credit given its own row reads as a credit rather than as a logo wall. */
+/* -------------------- the credits -------------------- */
+/* A credit list: code, swatch, name, and what it is used for. The logos live
+   here because this is where the page lists what it is built on, and because
+   a credit given its own row reads as a credit rather than as a logo wall. */
 .threads {
   margin: 0;
   padding: 0;
@@ -598,8 +528,8 @@
 }
 
 /* -------------------- the collaboration -------------------- */
-/* Two institutions, joined by the site's own stitched cross. It gets its own
-   sheet rather than a row in the thread list because a partnership is not a
+/* Two institutions, joined by a painted cross. It gets its own sheet rather
+   than a row in the credits because a partnership is not a
    dependency: OPSIN is something the work USES, this is who the work IS.
    Both marks are shown unaltered, at a shared optical height rather than a
    shared box height -- the Beilstein mark is 876x202 and the Jena mark
@@ -641,8 +571,9 @@
   height: clamp(44px, 6.4vw, 74px);
 }
 
-/* BIG, and painted. The footer's × is punctuation at 0.8rem that sews itself
-   shut; this one is the statement the sheet is about, so it is sized like one.
+/* BIG, and painted. The footer's × is punctuation at 0.8rem that draws
+   itself in; this one is the statement the sheet is about, so it is sized
+   like one.
    The strokes are filled outlines rather than stroked lines -- see BrushCross
    for why a brush cannot be a stroke-width. */
 .collab__x {
@@ -1565,8 +1496,8 @@
    Four things move, and they are one gesture rather than four effects:
      the two partners lean IN toward each other
      the × is re-painted, stroke by stroke, in the order a hand makes them
-     a stitch line sews itself under the claim
-     the plate lifts a little and its running-stitch edge draws tighter
+     a dashed line draws itself under the claim
+     the plate lifts a little and its dashed edge darkens
    `:has()` is what lets the caption respond, because it is a SIBLING of the
    plate rather than a child -- the same selector this codebase already relies
    on for /explain's clay tabs. */
@@ -1656,9 +1587,9 @@
   }
 }
 
-/* A stitch line, sewn under the claim while the join is being made. Dashes on
-   a gradient rather than a border, so it can be drawn ON: `scaleX` from the
-   left grows the line the way a needle travels. */
+/* A dashed line, drawn under the claim while the join is being made. Dashes
+   on a gradient rather than a border, so it can be drawn ON: `scaleX` from
+   the left grows the line from one end to the other. */
 .collab__line::after {
   content: '';
   position: absolute;
@@ -1681,7 +1612,7 @@
 }
 
 /* Reduced motion keeps the RELATIONSHIP and drops the travel: the edge still
-   tightens and the stitch line is simply present, so a reader who asked for
+   darkens and the dashed line is simply present, so a reader who asked for
    less movement still gets the feedback that this block is interactive. */
 @media (prefers-reduced-motion: reduce) {
   .collab,
