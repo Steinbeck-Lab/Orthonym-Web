@@ -1180,9 +1180,15 @@
 
 /* Best effort: a real name that OPSIN could not confirm. The rule goes
    dotted AND drops to --muted, so it reads as weaker at a glance without
-   ever becoming a colour code. */
+   ever becoming a colour code. The dots are DRAWN, not a `dotted` border:
+   measured, Chrome renders a 1px dotted border at 1x as one flat grey line
+   (every pixel luma 179), which reads as the abstain hairline below --
+   two tiers told apart by grey value only. Real 2px dots on a 5px pitch
+   stay dots at 1x and 2x. */
 .tile__name-block--best-effort::after {
-  border-bottom: 1px dotted var(--muted);
+  height: 2px;
+  background: radial-gradient(circle at 1px 1px, var(--muted) 1px, transparent 1.25px) 0 0 / 5px 2px
+    repeat-x;
 }
 
 /* Honest abstain: the slot is present and ruled, and deliberately empty.
@@ -1963,9 +1969,12 @@
   border-bottom: 1px dashed var(--ink);
 }
 
+/* Drawn dots, not a `dotted` border: see .tile__name-block--best-effort. */
 .batch__name--best-effort,
 .batch__tally-item--best-effort {
-  border-bottom: 1px dotted var(--muted);
+  padding-bottom: 4px;
+  background: radial-gradient(circle at 1px 1px, var(--muted) 1px, transparent 1.25px) left bottom /
+    5px 2px repeat-x;
 }
 
 .batch__name--abstain,
