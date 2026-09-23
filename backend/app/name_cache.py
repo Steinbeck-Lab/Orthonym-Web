@@ -44,7 +44,10 @@ logger = logging.getLogger(__name__)
 #     the previous 254 -- seven new handlers (chalcogen_oxide,
 #     imidoyl_thioyl_halide among them) and edits across every package, all
 #     still stamped "1.0.0" upstream, so _ENGINE_VERSION cannot see it.
-_KEY_VERSION = "v5"
+# v6 (2026-09-14): vendor refresh to Orthonym f9a6fdf (2026-09-13 "sync:
+#     Orthonym engine update"). 263 modules against the previous 261, still
+#     stamped "1.0.0" upstream, so _ENGINE_VERSION still cannot see it.
+_KEY_VERSION = "v6"
 _ENGINE_VERSION = orthonym.__version__
 
 
