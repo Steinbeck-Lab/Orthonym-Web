@@ -52,9 +52,15 @@ export default function ResolvingName({ name, animate }) {
             // mid-token: the per-character spans would otherwise let a line
             // break land inside a word (e.g. "propanoic"). A <wbr> after a
             // closing bracket, brace, or comma gives the wrapper a legal break
-            // opportunity there; hyphens already provide their own. With these
-            // in place, `overflow-wrap: normal` never has to break a token.
-            if (char === ')' || char === ']' || char === '}' || char === ',') {
+            // opportunity there; hyphens already provide their own. Styled
+            // runs get none: a raised locant such as `10,19` is one mark (the
+            // same rule as breakSegments in lib/nameTypography.js).
+            const next = piece.text[index + 1] ?? ''
+            if (
+              !TAG[piece.style] &&
+              (char === ')' || char === ']' || char === '}' || char === ',') &&
+              !'-,)]}'.includes(next || 'x')
+            ) {
               return [cell, <wbr key={`w${pieceIndex}-${index}`} />]
             }
             return [cell]

@@ -47,10 +47,10 @@ column.
 | Mark | Lamp | Tier | What it means |
 |:--|:--|:--|:--|
 | ▬▬ | ◉ green | **Preferred IUPAC name** | Built to the strict rule, and read back clean. |
-| ┄┄ | ◍ lime | **Fallback** | Reads back clean, but is not the preferred name. |
-| ⋯⋯ | ◌ amber | **Best effort** | The engine named it. OPSIN could not confirm it. |
+| ┄┄ | ◍ lime | **Fallback** | Reads back clean, but is not a verified preferred name. |
+| ⋯⋯ | ◌ amber | **Best effort** | The engine named it, but could not verify it. |
 | ── | ○ unlit | **No name** | The engine declined rather than guess. |
-| ⊘ | ⊘ red | **Unreadable input** | Nothing to name: the structure could not be read. |
+| ⊘ | ⊘ red | **Unreadable input** | No name could be produced: the input could not be read, or naming failed. |
 
 **The shape carries the ladder; the colour only agrees with it.** The lamp beside each mark is
 neon, but its *form* is that tier's own rule — double, dashed, dotted, plain, struck — so the five
@@ -64,7 +64,7 @@ not finished the job.
 
 ## Show the working
 
-`/explain` takes a finished name apart and maps every fragment to the atoms it covers. Hover a
+`/explain` takes a name apart as OPSIN reads it and maps each part to the atoms it names. Hover a
 piece of the name; the atoms it accounts for light up.
 
 <div align="center">

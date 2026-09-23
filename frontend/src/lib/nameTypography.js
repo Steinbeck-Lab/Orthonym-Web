@@ -370,3 +370,20 @@ export function applyRuns(text, runs, from = 0, to = text.length) {
   if (cursor < to) pieces.push({ text: text.slice(cursor, to), style: null })
   return pieces
 }
+
+/**
+ * Where a displayed name may wrap. A long IUPAC name must break only at a
+ * chemical boundary, never inside a token: a split locant reads as a
+ * different name. So an unstyled run is cut AFTER each `)`, `]`, `}` and `,`
+ * (hyphens already break on their own), and each cut becomes a <wbr> in the
+ * markup. Styled runs are never cut: a raised bridge locant such as `10,19`
+ * is one mark, and a break inside it would read as two bridges.
+ *
+ * Display only. The string itself is untouched, and <wbr> adds no text to
+ * a copy of the page.
+ */
+export function breakSegments(text) {
+  // No cut before a hyphen, a comma or another closer: print keeps those at
+  // the end of the line, so a line never starts with one.
+  return text.split(/(?<=[)\]},])(?![-,)\]}])/)
+}

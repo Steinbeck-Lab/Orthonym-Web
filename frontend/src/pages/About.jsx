@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { checkHealth } from '../lib/api'
 import Icon from '../components/Icon'
 import BrushCross from '../components/BrushCross'
-import RoundTripProof from '../components/RoundTripProof'
-import ThreadCard from '../components/ThreadCard'
-import useReducedMotion from '../lib/useReducedMotion'
-import useReveal from '../lib/useReveal'
+import LoopGlyph from '../components/LoopGlyph'
+import RoundTripLoop from '../components/RoundTripLoop'
+import TierLamp from '../components/TierLamp'
+import TierRule from '../components/TierRule'
 import './About.css'
 
 // Four phases, not three. `degraded` is the one that was missing when this
@@ -64,15 +65,11 @@ function ServiceStatus() {
   const rawDisplay = isChecking ? '—' : raw !== null ? JSON.stringify(raw, null, 2) : error
 
   return (
-    <div className="status-board" role="status" aria-live="polite" aria-busy={isChecking}>
+    <div className="status-board">
       <div className="status-board__row">
-        {/* THE LAMP. A live-status light, the way a status page shows one --
-            and it reports LIVENESS, not the verdict: it says a real check is
-            running and how recently it answered. The verdict stays where it
-            was, in the rule beside it and in the words, so colour is never the
-            only thing carrying a health claim (DESIGN.md's rule, kept). The
-            one state it does encode by itself is the honest one: when nothing
-            answers, the light goes out. */}
+        {/* THE LAMP reports LIVENESS, not the verdict: the verdict stays in the
+            rule beside it and in the words, so colour never carries a health
+            claim alone. When nothing answers, the light goes out. */}
         <span className={`status-lamp status-lamp--${phase}`} aria-hidden="true">
           <span className="status-lamp__glow" />
           <span className="status-lamp__core" />
@@ -98,7 +95,9 @@ function ServiceStatus() {
           )}
         </span>
 
-        <div className="status-board__text">
+        {/* Only the words are the live region, so a check reads out the
+            state, not the button label and the disclosure with it. */}
+        <div className="status-board__text" role="status" aria-live="polite" aria-busy={isChecking}>
           <p className="status-board__label">{STATE_LABEL[phase]}</p>
           {phase === 'degraded' && raw?.opsin && (
             <p className="prose-sm status-board__reason">
@@ -124,314 +123,276 @@ function ServiceStatus() {
   )
 }
 
-// A sheet of the page. Every section is a numbered sheet with a title block,
-// so the reader always knows which sheet they are on and what it is for.
-function Sheet({ id, index, title, note, children, reduced }) {
-  const [ref, shown] = useReveal({ reduced })
-  return (
-    <section
-      id={id}
-      ref={ref}
-      className={`sheet${shown ? ' is-shown' : ''}`}
-      aria-labelledby={`${id}-title`}
-    >
-      <header className="sheet__head">
-        <span className="sheet__index" aria-hidden="true">
-          {index}
-        </span>
-        <h2 className="sheet__title" id={`${id}-title`}>
-          {title}
-        </h2>
-        {note && <p className="sheet__note">{note}</p>}
-      </header>
-      <div className="sheet__body">{children}</div>
-    </section>
-  )
-}
-
-// The four tier marks, drawn as a symbol key.
-//
-// The product's confidence tiers were ALREADY a set of monochrome line
-// symbols with fixed meanings -- double rule, dashed, dotted, faint -- which
-// is precisely what a key is. Nothing was invented to make them fit. A reader
-// who learns the key here recognises the same mark under a name on every
-// other page, which is what the product needs and what a key is for.
-const KEY_ROWS = [
+// Where a name can stop. The four tiers, each drawn as how far round the loop
+// its line gets, and each wearing the rule it carries under every name on the
+// site. `reach` is in quarters of the loop: station 2 sits at 1/4, station 4 at
+// 3/4, and 1 is the loop closed.
+const EXITS = [
   {
-    mark: 'pin',
-    name: 'Preferred IUPAC Name',
+    status: 'pin',
+    name: 'Preferred IUPAC name',
     body: 'Built to the strict rule, and read back clean.',
+    where: 'The loop closes on a name from the strict rules.',
+    reach: 1,
   },
   {
-    mark: 'fallback',
+    status: 'fallback',
     name: 'Fallback',
-    body: 'Reads back clean, but is not the preferred name.',
+    body: 'Reads back clean, but is not a verified preferred name.',
+    where: 'The loop closes. The name follows the general rules, or is a retained name.',
+    reach: 1,
   },
   {
-    mark: 'best',
+    status: 'best_effort',
     name: 'Best effort',
-    body: 'The engine named it. OPSIN could not confirm it.',
+    body: 'The engine named it, but could not verify it.',
+    where: 'The loop does not close.',
+    reach: 0.75,
   },
   {
-    mark: 'abstain',
+    status: 'abstain',
     name: 'No name',
     body: 'The engine declined rather than guess.',
+    where: 'The line stops at step 2.',
+    reach: 0.25,
   },
 ]
 
-// The credits. Real marks where the project publishes one; a typographic
-// lockup where it does not. See ThreadCard for why that distinction is drawn
-// rather than smoothed over.
+const PATTERN = { pin: 'pin', fallback: 'fallback', best_effort: 'best', abstain: 'abstain' }
+
+// The three ways in, each shown by which part of the loop it runs.
+const WAYS = [
+  {
+    to: '/',
+    title: 'Translate',
+    body: 'Paste, upload or draw a structure. With OPSIN verify on (the default) it runs the whole loop, and every result gets its mark.',
+    nodes: [1, 2, 3, 4],
+  },
+  {
+    to: '/from-name',
+    title: 'Name → Structure',
+    body: 'Type a name and get the structure. This is step 3 on its own, run by OPSIN rather than the engine backwards, because reading a name is a different job from writing one.',
+    nodes: [3],
+  },
+  {
+    to: '/explain',
+    title: 'Explain',
+    body: 'Takes a name apart as OPSIN reads it, whether Orthonym wrote it or you typed it, and maps each part to the atoms it names. Notation that names no atoms of its own is marked as notation; a part it cannot place is marked as unmapped.',
+    nodes: [2, 3],
+  },
+]
+
+// Who does each step. Real marks where the project publishes one.
 const CREDITS = [
   {
-    code: '01',
+    // No link: the engine's repository is private (see Details).
+    name: 'Orthonym rule engine',
+    role: 'Writes the name at step 2, from fixed naming rules. No model, no training data.',
+    nodes: [2],
+  },
+  {
     name: 'OPSIN',
-    role: 'Reads a name back into a structure. Every verification on this site is its answer, not ours.',
+    role: 'Reads the name back into a structure at step 3. Every read-back on this site is its answer, not ours.',
     href: 'https://github.com/dan2097/opsin',
+    nodes: [3],
   },
   {
-    code: '02',
     name: 'RDKit',
-    role: 'Molecular perception, and the drawings.',
-    logo: '/logos/rdkit.png',
-    alt: 'RDKit',
+    role: 'Reads the structure at step 1, and compares the two structures at step 4 by InChIKey (by canonical SMILES when no key can be computed). It also draws them if CDK is unavailable.',
     href: 'https://www.rdkit.org/',
+    logo: '/logos/rdkit.png',
+    nodes: [1, 4],
   },
   {
-    code: '03',
-    name: 'IUPAC Blue Book',
-    role: 'The 2013 recommendations — the rules the engine works to, not a style of its own.',
-    href: 'https://iupac.org/what-we-do/books/bluebook/',
+    // backend/app/depiction.py: CDK first, RDKit only as the fallback.
+    // Logo: https://cdk.github.io/img/logo.png, trimmed and scaled to 96px.
+    name: 'CDK',
+    role: 'Draws both structures you compare, and marks a stereocentre the input leaves undefined as (?).',
+    href: 'https://cdk.github.io/',
+    logo: '/logos/cdk.png',
+    nodes: [1, 3],
   },
 ]
 
-// The three routes: what you do, in order, on each. Instruction language
-// rather than paragraph language, because each row tells you what to do, not
-// about doing it.
-const ROWS = [
-  {
-    n: 'I',
-    title: 'Translate',
-    body: 'Paste, upload or draw a structure. The engine builds the name and marks it with one of the four symbols opposite.',
-  },
-  {
-    n: 'II',
-    title: 'Name → Structure',
-    body: 'The reverse. This one runs on OPSIN rather than the engine backwards, because reading a name is a different craft from writing one.',
-  },
-  {
-    n: 'III',
-    title: 'Explain',
-    body: 'Takes a finished name apart into the parts it was built from, each mapped to the atoms it covers. Anything it cannot place, it says so.',
-  },
-]
-
-// About Orthonym, laid out as numbered sheets on squared paper.
-//
-// The page had been rebuilt twice before as a document in cards and failed on
-// four counts at once (too plain, too little imagery, wrong order, too
-// sparse), so this replaces the composition rather than passing over it again.
-//
-// No region is decoration laid over content; each one holds a real part of
-// the product:
-//   the KEY      <- the four confidence tiers, already a set of line symbols
-//   the CREDITS  <- the dependency credits, with their real marks as swatches
-//   the ROUTES   <- the three ways in, as instructions
-//   the PROOF    <- the live round-trip, which is the finished thing itself
-//   the DETAILS  <- engine, version, licence, author, and whether it is up
 function About() {
-  const reduced = useReducedMotion()
-
   return (
-    <>
-      {/* The cover. */}
-      <section className="chart-cover" aria-label="Introduction">
-        <div className="chart-cover__plate">
-          {/* The wordmark first, across the full measure. It is the page's
-              masthead, so it leads. */}
+    <main className="about">
+      {/* The masthead and the loop share one card: the page opens on the
+          engine at work, not on a paragraph about it. */}
+      <section className="about-hero card" aria-labelledby="about-title">
+        <header className="about-hero__head">
           <img
-            className="about-logo"
+            className="about-hero__logo"
             src="/logos/ORTHONYM.png"
             alt="Orthonym"
             width={1332}
             height={294}
           />
-
-          <h1 className="chart-cover__title">How a name is built</h1>
-          <p className="chart-cover__lede">
-            Orthonym builds an IUPAC name from named parts, in a fixed order, to a written rule.
-            Nothing is guessed, and the finished name is checked against the structure before you
-            are shown it.
+          <h1 className="about-hero__title" id="about-title">
+            How a name is built, and checked
+          </h1>
+          <p className="about-hero__lede">
+            The engine writes the name by rule. OPSIN, which never sees the structure, reads it back.
+            If the same structure comes back and the engine's own check agrees, the loop closes.
           </p>
-
-          <dl className="chart-cover__gauge">
-            <div>
-              <dt>Standard</dt>
-              <dd>IUPAC 2013</dd>
-            </div>
-            <div>
-              <dt>Engine</dt>
-              <dd>Orthonym v1.0.0</dd>
-            </div>
-            <div>
-              <dt>Method</dt>
-              <dd>Rule-based</dd>
-            </div>
-          </dl>
-        </div>
+        </header>
+        <RoundTripLoop />
       </section>
 
-      <main className="chart">
-        {/* THE PROOF — the live round trip, run in front of the reader. */}
-        <Sheet
-          id="piece"
-          index="Sheet 1"
-          title="The finished name"
-          note="Named live, on this server, while you watch."
-          reduced={reduced}
-        >
-          <RoundTripProof />
-        </Sheet>
+      <section className="exits card" id="key" aria-labelledby="exits-title">
+        <div className="about-section__head">
+          <h2 className="about-section__title" id="exits-title">
+            Where a name can stop
+          </h2>
+          <p className="about-section__note">
+            Every result the engine returns ends at one of these four. A fifth mark, a struck ring,
+            means no name could be produced: the input could not be read, or naming failed.
+          </p>
+        </div>
+        <ul className="exits__list" role="list">
+          {EXITS.map((e) => (
+            <li className="exit" key={e.status}>
+              <LoopGlyph
+                reach={e.reach}
+                pattern={PATTERN[e.status]}
+                nodes={[1, 2, 3, 4].slice(0, Math.min(4, Math.round(e.reach * 4) + 1))}
+              />
+              <p className="exit__name">
+                <TierLamp status={e.status} />
+                <span>{e.name}</span>
+              </p>
+              <TierRule status={e.status} className="exit__rule" />
+              <p className="exit__body">{e.body}</p>
+              <p className="exit__where">{e.where}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
 
-        {/* THE KEY — the symbols, which the product already had. */}
-        <Sheet
-          id="key"
-          index="Sheet 2"
-          title="Key"
-          note="Every name on this site carries one of these four marks."
-          reduced={reduced}
-        >
-          <dl className="key">
-            {KEY_ROWS.map((row) => (
-              <div className="key__row" key={row.mark}>
-                <dt>
-                  <span className={`key__mark key__mark--${row.mark}`} aria-hidden="true" />
-                  <span className="key__name">{row.name}</span>
-                </dt>
-                <dd>{row.body}</dd>
-              </div>
-            ))}
-          </dl>
-        </Sheet>
-
-        {/* THE ROUTES — the three ways in, as instructions. */}
-        <Sheet
-          id="rows"
-          index="Sheet 3"
-          title="Routes"
-          note="Three ways in. The same engine behind each."
-          reduced={reduced}
-        >
-          <ol className="rows" role="list">
-            {ROWS.map((row) => (
-              <li className="row" key={row.n}>
-                <span className="row__n" aria-hidden="true">
-                  {row.n}
-                </span>
-                <h3 className="row__title">{row.title}</h3>
-                <p className="row__body">{row.body}</p>
+      <div className="about-pair">
+        <section className="card about-list" aria-labelledby="ways-title">
+          <div className="about-section__head">
+            <h2 className="about-section__title" id="ways-title">
+              Three ways onto the loop
+            </h2>
+            <p className="about-section__note">Each runs part of the same loop.</p>
+          </div>
+          <ul className="about-list__rows" role="list">
+            {WAYS.map((w) => (
+              <li className="about-list__row" key={w.to}>
+                <LoopGlyph nodes={w.nodes} />
+                <div>
+                  <h3 className="about-list__name">
+                    <Link to={w.to}>{w.title}</Link>
+                  </h3>
+                  <p className="about-list__body">{w.body}</p>
+                </div>
               </li>
             ))}
-          </ol>
-        </Sheet>
+          </ul>
+        </section>
 
-        {/* THE CREDITS — what the work depends on. */}
-        <Sheet
-          id="threads"
-          index="Sheet 4"
-          title="Credits"
-          note="What the work is made from. None of it is ours alone."
-          reduced={reduced}
-        >
-          <ul className="threads" role="list">
-            {CREDITS.map((t) => (
-              <ThreadCard key={t.code} {...t} />
+        <section className="card about-list" aria-labelledby="credits-title">
+          <div className="about-section__head">
+            <h2 className="about-section__title" id="credits-title">
+              Who does each step
+            </h2>
+            <p className="about-section__note">None of it is ours alone.</p>
+          </div>
+          <ul className="about-list__rows" role="list">
+            {CREDITS.map((c) => (
+              <li className="about-list__row" key={c.name}>
+                <LoopGlyph nodes={c.nodes} />
+                <div>
+                  <h3 className="about-list__name">
+                    {c.href ? (
+                      <a href={c.href} target="_blank" rel="noopener noreferrer">
+                        {c.logo && <img className="about-list__logo" src={c.logo} alt="" />}
+                        {c.name}
+                      </a>
+                    ) : (
+                      c.name
+                    )}
+                  </h3>
+                  <p className="about-list__body">{c.role}</p>
+                </div>
+              </li>
             ))}
           </ul>
-        </Sheet>
+        </section>
+      </div>
 
-        {/* WHO MADE IT. The two institutions get their own sheet rather than
-            a row in the credits: a partnership is not a dependency, and
-            filing it as one undersold it.
-            The join is BrushCross -- a painted mark at signature scale, NOT the
-            footer's hairline cross. They are deliberately different: the
-            footer's × is punctuation inside a sentence, this one is the thing
-            the sheet is about. Same letter, different drawing, different job. */}
-        <Sheet
-          id="collaboration"
-          index="Sheet 5"
-          title="Worked together"
-          reduced={reduced}
-        >
-          <div className="collab">
-            <a
-              className="collab__org"
-              href="https://www.beilstein-institut.de/en/"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <img
-                src="/Logo_Beilstein_schmal_RGB.svg"
-                alt="Beilstein-Institut"
-                width={876}
-                height={202}
-              />
-            </a>
+      {/* WHO MADE IT. A partnership is not a dependency, so it is not a row in
+          the credits. The join is BrushCross, a painted mark at signature
+          scale, not the footer's hairline cross. */}
+      <section className="collab-card card" aria-labelledby="collab-title">
+        <h2 className="about-section__title collab-card__title" id="collab-title">
+          Made together
+        </h2>
+        <div className="collab">
+          <a
+            className="collab__org"
+            href="https://www.beilstein-institut.de/en/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <img src="/Logo_Beilstein_schmal_RGB.svg" alt="Beilstein-Institut" width={876} height={202} />
+          </a>
+          <span className="sr-only">and</span>
+          <BrushCross className="collab__x" />
+          <a
+            className="collab__org"
+            href="https://cheminf.uni-jena.de"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <img
+              src="/logos/steinbeck.png"
+              alt="Natural Products Cheminformatics, Friedrich Schiller University Jena — the Steinbeck Lab"
+              width={1666}
+              height={400}
+            />
+          </a>
+        </div>
+        <p className="collab__line">An official collaboration for open science.</p>
+      </section>
 
-            <span className="sr-only">and</span>
-            <BrushCross className="collab__x" />
-
-            <a
-              className="collab__org"
-              href="https://cheminf.uni-jena.de"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <img
-                src="/logos/steinbeck.png"
-                alt="Natural Products Cheminformatics, Friedrich Schiller University Jena — the Steinbeck Lab"
-                width={1666}
-                height={400}
-              />
-            </a>
+      <section className="details card" aria-labelledby="details-title">
+        <h2 className="about-section__title" id="details-title">
+          Details
+        </h2>
+        <dl className="details__list">
+          <div className="details__row">
+            <dt>Engine</dt>
+            <dd>Orthonym v1.0.0: deterministic and rule-based, not a language model.</dd>
           </div>
-
-          <p className="collab__line">An official collaboration for open science.</p>
-        </Sheet>
-
-        {/* THE DETAILS — the facts that close the page. */}
-        <Sheet id="gauge" index="Sheet 6" title="Details" reduced={reduced}>
-          <dl className="gauge">
-            <div className="gauge__row">
-              <dt>Engine</dt>
-              <dd>Orthonym v1.0.0 — deterministic and rule-based, not a language model.</dd>
-            </div>
-            <div className="gauge__row">
-              <dt>Source</dt>
-              {/* No link: the upstream repository is private and answers 404
-                  to an anonymous visitor, and a link to the source would
-                  promise a target a reader cannot open. Terms.jsx and
-                  Navigation.jsx carry the same fact; the three move
-                  together. */}
-              <dd>
-                MIT licence. Vendored as a source snapshot; the upstream repository is not yet
-                public.
-              </dd>
-            </div>
-            <div className="gauge__row">
-              <dt>Made by</dt>
-              <dd>Kohulan Rajan</dd>
-            </div>
-            <div className="gauge__row gauge__row--status">
-              <dt>Right now</dt>
-              <dd>
-                <ServiceStatus />
-              </dd>
-            </div>
-          </dl>
-        </Sheet>
-      </main>
-    </>
+          <div className="details__row">
+            <dt>Method</dt>
+            <dd>Rule-based naming engine.</dd>
+          </div>
+          <div className="details__row">
+            <dt>Source</dt>
+            {/* No link: the upstream repository is private and answers 404
+                to an anonymous visitor, and a link to the source would
+                promise a target a reader cannot open. Terms.jsx and
+                Navigation.jsx carry the same fact; the three move together. */}
+            <dd>
+              MIT licence. Vendored as a source snapshot; the upstream repository is not yet public.
+            </dd>
+          </div>
+          <div className="details__row">
+            <dt>Made by</dt>
+            <dd>Kohulan Rajan</dd>
+          </div>
+          <div className="details__row details__row--status">
+            <dt>Right now</dt>
+            <dd>
+              <ServiceStatus />
+            </dd>
+          </div>
+        </dl>
+      </section>
+    </main>
   )
 }
 

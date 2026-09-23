@@ -359,3 +359,21 @@ test('an empty formula yields no runs', () => {
   assert.deepEqual(formulaRuns(''), [])
   assert.deepEqual(formulaRuns(null), [])
 })
+
+test('breakSegments cuts only after closing brackets and commas', async () => {
+  const { breakSegments } = await import('./nameTypography.js')
+  assert.deepEqual(breakSegments('2-[4-(2-methylpropyl)phenyl]propanoic acid'), [
+    '2-[4-(2-methylpropyl)',
+    'phenyl]',
+    'propanoic acid',
+  ])
+  assert.deepEqual(breakSegments('1,3,7-trimethyl'), ['1,', '3,', '7-trimethyl'])
+  // A line never starts with a hyphen, a comma or another closer.
+  assert.deepEqual(breakSegments('henicosa-1(20),2,4,8-tetraene'), ['henicosa-1(20),', '2,', '4,', '8-tetraene'])
+  assert.deepEqual(breakSegments('(7R,10S)-4,16-dihydroxy'), ['(7R,', '10S)-4,', '16-dihydroxy'])
+  // Nothing to cut: one segment, the text unchanged.
+  assert.deepEqual(breakSegments('ethanol'), ['ethanol'])
+  // Round trip: the segments always rebuild the exact string.
+  const name = '(7R,10S)-4,16-dihydroxy-13-methyl-6-oxa-13-azahexacyclo[12.6.1.0^5,20]henicosa-1(20),2-diene'
+  assert.equal(breakSegments(name).join(''), name)
+})

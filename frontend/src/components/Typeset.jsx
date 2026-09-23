@@ -17,7 +17,8 @@
 // still what the copy button, the CSV and the SDF write, because all three
 // read the data object and never the page.
 
-import { nameRuns, formulaRuns, applyRuns } from '../lib/nameTypography'
+import { Fragment } from 'react'
+import { nameRuns, formulaRuns, applyRuns, breakSegments } from '../lib/nameTypography'
 
 const TAG = { italic: 'i', super: 'sup', sub: 'sub' }
 
@@ -28,13 +29,27 @@ const TAG = { italic: 'i', super: 'sup', sub: 'sub' }
  * the name by the backend's `name_range` offsets into hover targets, then asks
  * nameTypography for the runs inside each target's range and hands them here.
  */
-export function Pieces({ pieces }) {
+export function Pieces({ pieces, breaks = true }) {
   return (
     <>
       {pieces.map((piece, index) => {
         if (piece.style === 'hidden') return null
         const Tag = TAG[piece.style]
-        if (!Tag) return piece.text
+        // Plain text gets a <wbr> at each chemical boundary (breakSegments);
+        // a styled run stays whole, so a raised locant never splits.
+        if (!Tag) {
+          if (!breaks) return piece.text
+          return (
+            <Fragment key={index}>
+              {breakSegments(piece.text).map((segment, i) => (
+                <Fragment key={i}>
+                  {i > 0 && <wbr />}
+                  {segment}
+                </Fragment>
+              ))}
+            </Fragment>
+          )
+        }
         return (
           <Tag key={index} className="chem-mark">
             {piece.text}

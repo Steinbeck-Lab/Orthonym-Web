@@ -89,24 +89,10 @@ const GITHUB_URL_DEFAULT = 'https://github.com/Kohulan/Orthonym-Web'
 const GITHUB_URL_RAW = import.meta.env.VITE_GITHUB_URL || GITHUB_URL_DEFAULT
 const GITHUB_URL = GITHUB_URL_RAW === 'none' ? null : GITHUB_URL_RAW
 
-// A minimal molecule mark: two nodes joined by a bond, one stroke
-// weight, inheriting the crimson accent via currentColor.
+// The pint from the wordmark, standing in for the O on the home page and for
+// the whole name here. Decorative: the link's aria-label already names it.
 function BrandMark() {
-  return (
-    <svg
-      className="brand__mark"
-      viewBox="0 0 32 32"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.4"
-      strokeLinecap="round"
-      aria-hidden="true"
-    >
-      <line x1="11" y1="21" x2="21" y2="11" />
-      <circle cx="8" cy="24" r="3.5" fill="currentColor" stroke="none" />
-      <circle cx="24" cy="8" r="3.5" fill="currentColor" stroke="none" />
-    </svg>
-  )
+  return <img className="brand__mark" src="/logos/Orthonym.svg" alt="" aria-hidden="true" />
 }
 
 function GitHubMark() {
