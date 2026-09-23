@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ConfidenceReport from '../components/ConfidenceReport'
 import { verdictKindFor } from '../lib/explainVerdict'
@@ -467,12 +467,17 @@ function Explain() {
                   <span className="explain-result__name-label">Name</span>
                   {name && spansAvailable ? (
                     <p className="explain-result__name explain-name" aria-live="polite">
-                      {sliceName(name, nameTargets(segments)).map((piece, index) =>
-                        piece.path === null ? (
-                          <span key={index}><Pieces pieces={applyRuns(name, nameStyle, piece.start, piece.end)} /></span>
+                      {sliceName(name, nameTargets(segments)).map((piece, index) => (
+                        <Fragment key={index}>
+                        {/* A part is one hover target, so it never wraps
+                            inside; the line may break BETWEEN parts where
+                            the name has a chemical boundary. */}
+                        {index > 0 && /[)\]},]/.test(name[piece.start - 1] || '') &&
+                          !'-,)]}'.includes(name[piece.start] || 'x') && <wbr />}
+                        {piece.path === null ? (
+                          <span><Pieces pieces={applyRuns(name, nameStyle, piece.start, piece.end)} /></span>
                         ) : (
                           <span
-                            key={index}
                             className={`explain-name__part${
                               segmentAtPath(segments, piece.path)?.owns_atoms === false
                                 ? ' explain-name__part--ref'
@@ -503,10 +508,11 @@ function Explain() {
                             // focused part as "pressed" would be false.
                             aria-pressed={pinnedPath === piece.path}
                           >
-                            <Pieces pieces={applyRuns(name, nameStyle, piece.start, piece.end)} />
+                            <Pieces pieces={applyRuns(name, nameStyle, piece.start, piece.end)} breaks={false} />
                           </span>
-                        )
-                      )}
+                        )}
+                        </Fragment>
+                      ))}
                     </p>
                   ) : (
                     <p className="explain-result__name" aria-live="polite">

@@ -1,138 +1,449 @@
 /* ============================================================
-   Orthonym — About, laid out as numbered SHEETS on squared paper
+   Orthonym — About: the page is the loop a name travels.
 
-   What each part holds:
-     the GRID     the ruled ground everything sits on
-     the KEY      the four confidence tiers -- already line symbols
-     the CREDITS  the dependency credits, real marks as swatches
-     the ROUTES   the three ways in, as instructions
-     the PROOF    the live round-trip: the finished thing itself
-     the DETAILS  engine, version, licence, author, and whether it is up
-
-   The palette does NOT change: crimson, ink, the greys. Crimson is the one
-   accent (`--thread`), used for the dashed edges, the indices and the marks.
-   Two earlier attempts at this page were a document in cards; this is a
-   replacement, not a third pass.
+   The site's world is unchanged here -- grey ground, white cards, crimson
+   only in chrome, the three faces, tiers drawn as line forms. What is new is
+   one ink line: structure in (1), named by rule (2), read back by OPSIN (3),
+   verdict (4). The live demo runs on it at the top, and every section below
+   points back at it with the same loop at icon size (LoopGlyph).
    ============================================================ */
 
-/* -------------------- the ruled ground -------------------- */
-/* Squared paper. This is the one place a two-axis grid overlay is not
-   decoration: every alignment on the page answers to it. The cell is 22px so
-   a symbol, a numeral and a line of mono all sit on it without fractional
-   rounding. */
-.chart,
-.chart-cover {
-  --cell: 22px;
-  --grid-ink: color-mix(in srgb, var(--ink) 9%, transparent);
-  --thread: var(--accent);
-}
-
-.chart-cover {
-  position: relative;
-  padding-block: clamp(3rem, 12vh, 7rem) clamp(2rem, 6vh, 4rem);
-  padding-inline: var(--shell-pad);
-}
-
-/* The cover plate, pinned to the ground and ruled like the sheets it
-   introduces. Its grid is the same cell as the sheets below, so the whole
-   page reads as one piece of squared paper. */
-/* FULL MEASURE, and the wordmark is what earns it. Every earlier arrangement
-   put the copy in columns beside a motif and left a 300-800px void, so the
-   plate was narrowed to hide the problem. The real fix is the one the owner
-   asked for: the wordmark runs the full width at the top, and the title and
-   lede each sit on ONE line beneath it. A single line of type spanning 1600px
-   is the thing that actually uses a wide measure -- three wrapped lines in a
-   column never will.
-   The width is also a legibility requirement now, not just a look: the lede is
-   184 characters, and one line of it inside a 76rem plate would be 11px type.
-   At the full measure it is 16px. */
-.chart-cover__plate {
-  position: relative;
+.about {
+  --thread: var(--accent); /* BrushCross paints with this */
   width: 100%;
   max-width: var(--shell-max);
   margin-inline: auto;
-  padding: clamp(var(--s-xl), 5vw, 3.5rem);
-  border-radius: var(--r-card);
-  box-shadow: var(--card-shadow);
-  /* A DASHED edge in the accent crimson. This is the page's signature and it
-     is drawn with border-style rather than an image so it stays crisp at any
-     zoom. */
-  border: 2px dashed color-mix(in srgb, var(--thread) 42%, transparent);
+  padding: var(--s-md) var(--shell-pad) 0;
+  display: grid;
+  gap: var(--gap);
 }
 
-/* THE HOLE IN THE MIDDLE, and how it was finally closed. Three arrangements
-   measured one at 1890px: ~800px with the motif pinned to the far right,
-   ~440px with it in a fraction column, ~339px with content-sized columns. The
-   cause never changed -- a 1762px plate holding roughly 1030px of content puts
-   the surplus somewhere, and every two-column version put it between the two
-   halves.
-   A single column with a FULL-MEASURE wordmark on top cannot leave one: the
-   wordmark takes whatever the plate gives it. The layout that worked is
-   simpler than all three grids that failed, which is usually the tell. */
+/* -------------------- the hero card -------------------- */
+.about-hero {
+  display: grid;
+  gap: var(--s-lg);
+  padding: clamp(var(--s-lg), 3vw, var(--s-xl)) clamp(var(--s-lg), 4vw, 3.5rem)
+    clamp(var(--s-lg), 4vw, 3.5rem);
+}
 
-/* The wordmark: the plate's full measure, at its own 1332:294 proportion.
-   The width/height attributes on the <img> reserve that ratio before the PNG
-   arrives, so the title and lede do not jump down when it loads. Black
-   letters on a transparent ground, which is why it sits on the plate's white
-   `--card` and nowhere darker. */
-.about-logo {
+.about-hero__head {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-sm);
+  text-align: center;
+}
+
+/* A masthead, not the whole first screen: the loop has to be visible too. */
+.about-hero__logo {
   display: block;
-  width: 100%;
-  max-width: 100%;
+  width: min(520px, 82%);
   height: auto;
-  margin: 0 0 clamp(var(--s-xl), 4vw, 3rem);
 }
 
-.chart-cover__title {
-  margin: 0;
+.about-hero__title {
+  margin: var(--s-xxs) 0 0;
   font-family: var(--font-display);
-  /* ONE LINE, by instruction. `nowrap` states the intent and the vw-scaled
-     size is what keeps it honest at every width -- a nowrap title with a fixed
-     size would simply overflow instead of wrapping. */
-  white-space: nowrap;
-  font-size: clamp(1.5rem, 5.4vw, 5rem);
+  font-size: var(--t-display-lg);
   font-weight: 400;
-  line-height: 0.95;
-  letter-spacing: 0.02em;
+  line-height: 1.1;
+  letter-spacing: var(--track-display-lg);
   text-transform: uppercase;
+  text-wrap: balance;
   color: var(--ink);
 }
 
-/* The title owns its own column now, so it needs no clearing measure -- only
-   a reading one, which the column already gives it. */
-
-/* Also one line, and it holds it the same way: the full measure, no cap, and
-   a size that scales with the viewport rather than a fixed one that would
-   overflow. Below the breakpoint where 184 characters stop fitting legibly it
-   is allowed to wrap again -- an unreadable single line is not the ask. */
-.chart-cover__lede {
-  margin: var(--s-md) 0 0;
-  max-width: none;
+.about-hero__lede {
+  max-width: 75ch;
+  margin: 0;
   font-family: var(--font-body);
-  font-size: var(--t-body-sm);
+  font-size: 1.0625rem;
   line-height: 1.6;
+  text-wrap: pretty;
   color: var(--body);
 }
 
-@media (min-width: 1200px) {
-  .chart-cover__lede {
-    white-space: nowrap;
-    font-size: clamp(0.82rem, 1.02vw, 1rem);
+/* -------------------- the loop -------------------- */
+/* Three columns, three rows: station 2 on top, 1 and 3 at the sides, 4 at
+   the bottom, the picker in the middle. The stations sit in a SUBGRID so
+   they are one list for a screen reader and still land in the outer grid's
+   cells, the hub's cell included. The ink line is an SVG under the tiles,
+   drawn through the tile centres that RoundTripLoop measures. */
+.loop__stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 1.35fr) minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  column-gap: clamp(var(--s-lg), 4vw, var(--s-xxl));
+  row-gap: var(--s-md);
+  max-width: 1180px;
+  margin-inline: auto;
+}
+
+.loop__track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.loop__route {
+  fill: none;
+  stroke: var(--hairline-strong);
+  stroke-width: 1.5;
+}
+
+.loop__line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-dasharray: 1 1;
+  stroke-dashoffset: 1;
+}
+
+/* Once the loop closes, the line wears the tier's own rule: a PIN's double
+   rule (a thick ink line with a card-white core), a fallback's dash (set
+   inline, because the dash is measured in px against the line's length). */
+.loop__track--closed.loop__track--pin .loop__line {
+  stroke-width: 5;
+}
+
+.loop__line-inner {
+  fill: none;
+  stroke: var(--card);
+  stroke-width: 1.6;
+}
+
+/* A line that stops short keeps its reach and takes its tier's form: the
+   animated ink line hands over to a patterned copy masked to the same
+   length (RoundTripLoop). Dotted and muted for a best effort, faint for no
+   name -- the same forms as the key below. A verified tier whose read-back
+   failed keeps plain ink: stopping short already says it did not close, and
+   borrowing another tier's form would say something false. */
+.loop__track--stopped .loop__line {
+  opacity: 0;
+}
+
+.loop__line-stopped {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.loop__track--abstain .loop__line-stopped {
+  stroke: var(--muted);
+}
+
+.loop__track--best-effort .loop__line-stopped {
+  stroke: var(--muted);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-dasharray: 0.1 7;
+}
+
+.loop__node {
+  fill: var(--card);
+  stroke: var(--hairline-strong);
+  stroke-width: 1.5;
+  transition:
+    fill 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    stroke 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.loop__node.is-lit {
+  fill: var(--ink);
+  stroke: var(--ink);
+}
+
+/* The traveller. It rides the same path as the line (offset-path), under the
+   tiles, so it disappears into a station and comes out the other side. */
+.loop__dot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ink);
+  box-shadow: 0 0 0 4px var(--card);
+  offset-rotate: 0deg;
+  offset-anchor: center;
+  offset-distance: 0%;
+  pointer-events: none;
+  transition:
+    opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Where the line stopped short (visible on the phone rail; on desktop the
+   stop sits under a station tile): an empty ring, the same unlit ring the tier
+   lamp uses for a declined name. */
+.loop__dot--stopped {
+  width: 16px;
+  height: 16px;
+  background: var(--card);
+  box-shadow:
+    inset 0 0 0 2px var(--muted),
+    0 0 0 4px var(--card);
+}
+
+.loop__dot--home {
+  opacity: 0;
+}
+
+.loop__stations {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+  grid-template-columns: subgrid;
+  grid-template-rows: subgrid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  pointer-events: none;
+}
+
+.station--in {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.station--name {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.station--back {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.station--verdict {
+  grid-column: 2;
+  grid-row: 3;
+}
+
+/* A station the line has not reached is an outline; one it has reached is
+   filled. Text never fades: an unreached station is still read. */
+.station {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-sm);
+  min-width: 0;
+  padding: var(--s-md);
+  background: var(--card);
+  border-radius: var(--r-card-sm);
+  box-shadow: inset 0 0 0 1.5px var(--hairline-strong);
+  pointer-events: auto;
+  transition:
+    background-color 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.station.is-lit {
+  background: var(--card-soft);
+  box-shadow: inset 0 0 0 1.5px transparent;
+}
+
+.station__title {
+  display: flex;
+  align-items: center;
+  gap: var(--s-xs);
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+  transition: color 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.station.is-lit .station__title {
+  color: var(--ink);
+}
+
+/* The station number, the same node the line passes through. */
+.station__n {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+  letter-spacing: 0;
+  transition:
+    background-color 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    color 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.station.is-lit .station__n {
+  background: var(--ink);
+  color: var(--card);
+  box-shadow: none;
+}
+
+.station__plate {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: clamp(120px, 11vw, 150px);
+  overflow: hidden;
+  background: var(--card);
+  border-radius: 10px;
+}
+
+/* Pinned to the frame, so a tall drawing is scaled down, never cropped. */
+.station__plate img {
+  position: absolute;
+  inset: 8px;
+  display: block;
+  width: calc(100% - 16px);
+  height: calc(100% - 16px);
+  object-fit: contain;
+}
+
+.station__plate-empty {
+  padding: var(--s-md);
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  text-align: center;
+  color: var(--muted);
+}
+
+.station__smiles {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  color: var(--body);
+}
+
+.station__name-block {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-xs);
+}
+
+/* The name is typeset by ChemName; it is never uppercased here. */
+.station__name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 1.7vw, 1.625rem);
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: 0.04em;
+  /* ChemName marks the chemical boundaries (breakSegments), so a name wraps
+     after a bracket, comma or hyphen and never inside a raised locant.
+     break-word stays only as the last resort for a run too long for the
+     line. */
+  overflow-wrap: break-word;
+  text-wrap: pretty;
+  color: var(--ink);
+}
+
+/* A long name steps down, so its longest unbreakable run (a von Baeyer
+   bracket such as morphine's) fits the station at every desktop width. */
+.station__name--long {
+  font-size: clamp(1.0625rem, 1.2vw, 1.25rem);
+}
+
+.station__declined {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--t-title-md);
+  line-height: 1.3;
+  color: var(--ink);
+}
+
+.station__note,
+.station__verdict {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.station__verdict {
+  color: var(--body);
+}
+
+.station__verdict--waiting {
+  color: var(--muted);
+}
+
+.station__tier {
+  display: flex;
+  align-items: center;
+  gap: var(--s-xs);
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--t-title-md);
+  line-height: 1.25;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.station__waiting {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 2rem;
+}
+
+.station__waiting span {
+  width: 22px;
+  height: 2px;
+  background: var(--hairline-strong);
+  animation: loop-wait 1.2s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.station__waiting span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.station__waiting span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes loop-wait {
+  0%,
+  100% {
+    background-color: var(--hairline-strong);
+  }
+  50% {
+    background-color: var(--ink);
   }
 }
 
-/* The fact row on the cover: what standard it follows, on what engine, by
-   what method. Real facts, set as a small table. */
-.chart-cover__gauge {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-lg) var(--s-xxl);
-  margin: var(--s-lg) 0 0;
-  padding-top: var(--s-lg);
-  border-top: 1px solid var(--hairline);
+/* -------------------- the hub: which molecule -------------------- */
+.loop__hub {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  align-self: center;
+  justify-self: center;
+  gap: var(--s-sm);
+  grid-column: 2;
+  grid-row: 2;
+  padding: var(--s-md);
+  text-align: center;
 }
 
-.chart-cover__gauge dt {
+.loop__hub-label {
+  margin: 0;
   font-family: var(--font-mono);
   font-size: var(--t-caption);
   letter-spacing: var(--track-caption);
@@ -140,234 +451,424 @@
   color: var(--muted);
 }
 
-.chart-cover__gauge dd {
-  margin: var(--s-xxs) 0 0;
-  font-family: var(--font-display);
-  font-size: var(--t-title-md);
-  letter-spacing: var(--track-display-md);
-  text-transform: uppercase;
-  color: var(--ink);
-}
-
-/* THE SQUARED GROUND, in one place. Three surfaces sit on squares -- the
-   cover plate, each route's card and the collaboration plate
-   -- and each carried its own copy of these five declarations. The copies had
-   already drifted before the paint was dry: `.row` was missing
-   `background-position: center`, so its grid started from its own corner while
-   the other two started from their centre, and the three surfaces did not
-   agree about where a square begins.
-   Centring is what makes a plate's squares symmetric about it, so it belongs
-   to all three. */
-.chart-cover__plate,
-.row,
-.collab {
-  background-color: var(--card);
-  background-image:
-    linear-gradient(var(--grid-ink) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-ink) 1px, transparent 1px);
-  background-size: var(--cell) var(--cell);
-  background-position: center;
-}
-
-/* -------------------- the sheets -------------------- */
-.chart {
+.loop__picker {
   display: flex;
   flex-direction: column;
-  gap: var(--s-xxl);
-  width: 100%;
-  max-width: var(--shell-max);
-  margin-inline: auto;
-  padding-inline: var(--shell-pad);
-  padding-bottom: var(--s-xxl);
+  align-items: center;
+  gap: var(--s-xs);
 }
 
-.sheet {
-  opacity: 0;
-  transform: translateY(12px);
+/* The system's example-chip grammar: an underlined mono word that steps to
+   ink, with the chosen one underlined in full ink. */
+.loop__pick {
+  padding: 2px 0 4px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: inset 0 -1px 0 var(--hairline-strong);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
   transition:
-    opacity 560ms cubic-bezier(0.16, 1, 0.3, 1),
-    transform 560ms cubic-bezier(0.16, 1, 0.3, 1);
+    color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.sheet.is-shown {
-  opacity: 1;
-  transform: none;
+.loop__pick:hover {
+  color: var(--ink);
+  box-shadow: inset 0 -1px 0 var(--ink);
+}
+
+.loop__pick--on {
+  color: var(--ink);
+  box-shadow: inset 0 -2px 0 var(--ink);
+}
+
+/* The rotation's own control (WCAG 2.2.2): quieter than a pick, but always
+   there while the rotation can move. */
+.loop__play {
+  margin-top: var(--s-xs);
+  padding: 2px 0;
+  background: transparent;
+  border: 0;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-color: var(--hairline-strong);
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.loop__play:hover {
+  color: var(--ink);
+  text-decoration-color: var(--ink);
+}
+
+.loop__play:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.loop__failed {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-sm);
+}
+
+.loop__pick:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.loop__hub-note,
+.loop__offline {
+  max-width: 22ch;
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.loop__offline {
+  max-width: 30ch;
+  color: var(--body);
+}
+
+/* Phones: the tiles stack and the loop becomes a narrow rail down their left
+   edge (RoundTripLoop detects the stack and draws it so). The picker moves
+   first, because it is what you act on. */
+@media (max-width: 760px) {
+  .loop__stage {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-lg);
+  }
+
+  .loop__stations {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-md);
+    padding-left: 44px;
+  }
+
+  .loop__hub {
+    padding: 0;
+  }
+
+  .loop__picker {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--s-xs) var(--s-md);
+  }
+
+  .loop__hub-note {
+    max-width: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sheet {
-    opacity: 1;
-    transform: none;
+  .station,
+  .station__title,
+  .station__n,
+  .loop__node,
+  .loop__dot {
     transition: none;
+  }
+
+  .station__waiting span {
+    animation: none;
   }
 }
 
-/* A sheet's title block, ruled off from its body. */
-.sheet__head {
+/* -------------------- sections below the loop -------------------- */
+.exits,
+.about-list,
+.collab-card,
+.details {
+  padding: clamp(var(--s-lg), 3.5vw, var(--s-xl));
+}
+
+.about-section__head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
   gap: var(--s-xxs);
-  padding-bottom: var(--s-md);
-  margin-bottom: var(--s-xl);
-  /* The dashed edge again, on the rule this time -- one motif, used
-     wherever an edge or a division occurs. */
-  border-bottom: 2px dashed color-mix(in srgb, var(--thread) 34%, transparent);
+  margin-bottom: var(--s-lg);
 }
 
-.sheet__index {
-  font-family: var(--font-mono);
-  font-size: var(--t-caption);
-  letter-spacing: var(--track-caption);
-  text-transform: uppercase;
-  color: var(--thread);
-}
-
-.sheet__title {
+.about-section__title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  font-size: var(--t-display-md);
   font-weight: 400;
-  line-height: 1.05;
+  line-height: 1.15;
   letter-spacing: var(--track-display-md);
   text-transform: uppercase;
   color: var(--ink);
 }
 
-.sheet__note {
-  margin: var(--s-xxs) 0 0;
-  max-width: 60ch;
+.about-section__note {
+  margin: 0;
   font-family: var(--font-body);
   font-size: var(--t-body-sm);
-  line-height: 1.55;
+  line-height: 1.5;
   color: var(--muted);
 }
 
-/* -------------------- the key -------------------- */
-/* Four symbols, FOUR ACROSS, each on its own claymorphic block (owner
-   instruction 2026-09-06). The clay physics are the ones already established
-   on /explain's input tabs -- a light top edge, a shaded underside, a contact
-   shadow and a cast shadow -- so the site has one idea of what clay is rather
-   than two. The tabs are pills that press IN when chosen; these are static
-   cards that never press, so the two are separate rules rather than one
-   parameterised block pretending they are the same control.
-   The symbols themselves stay monochrome on their own white cell: a tier is
-   carried by its mark and its words, never by the crimson, because an accent
-   on a tier reads as endorsement of a result the engine may be unsure of. */
-.key {
-  margin: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-lg);
+/* -------------------- the loop at icon size -------------------- */
+.loop-glyph {
+  display: block;
+  flex: none;
+  overflow: visible;
 }
 
-@media (min-width: 640px) {
-  .key {
+.loop-glyph__route {
+  fill: none;
+  stroke: var(--hairline-strong);
+  stroke-width: 1.2;
+}
+
+.loop-glyph__line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.6;
+}
+
+.loop-glyph--pin .loop-glyph__line {
+  stroke-width: 3.6;
+}
+
+.loop-glyph__inner {
+  fill: none;
+  stroke: var(--card);
+  stroke-width: 1.2;
+}
+
+/* Dash lengths are in hundredths of the loop (the line's pathLength). */
+.loop-glyph--fallback .loop-glyph__line {
+  stroke-dasharray: 4 3;
+}
+
+.loop-glyph--best .loop-glyph__line {
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-dasharray: 0.01 2.6;
+}
+
+.loop-glyph--abstain .loop-glyph__line {
+  stroke: var(--muted);
+}
+
+.loop-glyph__node {
+  fill: var(--card);
+  stroke: var(--hairline-strong);
+  stroke-width: 1.2;
+}
+
+.loop-glyph__node.is-on {
+  fill: var(--ink);
+  stroke: var(--ink);
+}
+
+.loop-glyph__stop {
+  fill: var(--card);
+  stroke: var(--muted);
+  stroke-width: 1.4;
+}
+
+/* -------------------- where a name can stop -------------------- */
+.exits__list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.exit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-sm);
+  min-width: 0;
+  padding-inline: var(--s-lg);
+  border-left: 1px solid var(--hairline);
+}
+
+.exit:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.exit:last-child {
+  padding-right: 0;
+}
+
+.exit__name {
+  display: flex;
+  align-items: center;
+  gap: var(--s-xs);
+  margin: var(--s-xs) 0 0;
+  font-family: var(--font-display);
+  font-size: var(--t-title-md);
+  line-height: 1.25;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* The rule every name on the site carries, drawn (TierRule), at a name's
+   measure. */
+.tier-rule {
+  display: block;
+  width: min(100%, 30ch);
+  height: 6px;
+  overflow: visible;
+}
+
+.tier-rule line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.tier-rule--fallback line {
+  stroke-dasharray: 6 4;
+}
+
+.tier-rule--best-effort line {
+  stroke: var(--muted);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-dasharray: 0.1 5;
+}
+
+.tier-rule--abstain line {
+  stroke: var(--hairline-strong);
+}
+
+.exit__body,
+.exit__where {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.55;
+  color: var(--body);
+}
+
+.exit__where {
+  color: var(--muted);
+}
+
+@media (max-width: 1000px) {
+  .exits__list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: var(--s-lg);
+  }
+
+  .exit:nth-child(odd) {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .exit:nth-child(even) {
+    padding-right: 0;
+  }
+
+  .exit:nth-child(n + 3) {
+    padding-top: var(--s-lg);
+    border-top: 1px solid var(--hairline);
+  }
+}
+
+@media (max-width: 560px) {
+  .exits__list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .exit,
+  .exit:nth-child(n) {
+    padding-inline: 0;
+    border-left: 0;
+  }
+
+  .exit + .exit {
+    padding-top: var(--s-lg);
+    border-top: 1px solid var(--hairline);
+  }
+}
+
+/* -------------------- ways in, and credits -------------------- */
+.about-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap);
+}
+
+@media (min-width: 960px) {
+  .about-pair {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (min-width: 1100px) {
-  .key {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
+.about-list__rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.key__row {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-sm);
-  padding: var(--s-lg);
-  border-radius: var(--r-card);
-
-  /* Clay: a body, not a border. */
-  background: linear-gradient(180deg, var(--card) 0%, var(--accent-wash) 100%);
-  border: 1px solid color-mix(in srgb, var(--accent) 12%, transparent);
-  box-shadow:
-    /* the light catching the top of a soft body */
-    inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    /* the mass of the body, shading toward its underside */
-    inset 0 -4px 6px -3px color-mix(in srgb, var(--accent-deep) 22%, transparent),
-    /* contact, then cast */
-    0 1px 2px color-mix(in srgb, var(--accent-deep) 12%, transparent),
-    0 10px 18px -10px color-mix(in srgb, var(--accent-deep) 30%, transparent);
-  transition:
-    transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-/* Lifts, the way a soft body does when you reach for it. */
-.key__row:hover {
-  transform: translateY(-2px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    inset 0 -4px 6px -3px color-mix(in srgb, var(--accent-deep) 26%, transparent),
-    0 2px 4px color-mix(in srgb, var(--accent-deep) 14%, transparent),
-    0 16px 26px -12px color-mix(in srgb, var(--accent-deep) 36%, transparent);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .key__row {
-    transition: none;
-  }
-  .key__row:hover {
-    transform: none;
-  }
-}
-
-.key__row dt {
-  display: flex;
-  align-items: center;
+.about-list__row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-items: start;
   gap: var(--s-md);
+  padding: var(--s-md) 0;
+  border-top: 1px solid var(--hairline);
 }
 
-/* The symbol's own printed cell, sunk INTO the clay rather than sitting on it
-   -- the one inset here is what makes the block read as a moulded body with a
-   stamp pressed into its face. */
-.key__mark {
-  flex: 0 0 auto;
-  width: calc(var(--cell) * 2.2);
-  height: calc(var(--cell) * 2.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: var(--canvas);
-  border-radius: var(--r-card-sm);
-  box-shadow: inset 0 1px 3px color-mix(in srgb, var(--accent-deep) 22%, transparent);
+.about-list__row:first-child {
+  padding-top: 0;
+  border-top: 0;
 }
 
-.key__mark::before {
-  content: '';
-  width: 66%;
-}
-
-.key__mark--pin::before {
-  border-top: 1px solid var(--ink);
-  border-bottom: 1px solid var(--ink);
-  height: 4px;
-}
-
-.key__mark--fallback::before {
-  border-top: 1px dashed var(--ink);
-}
-
-.key__mark--best::before {
-  border-top: 1px dotted var(--ink);
-}
-
-.key__mark--abstain::before {
-  border-top: 1px solid var(--hairline-strong);
-}
-
-.key__name {
+.about-list__name {
+  margin: 0 0 var(--s-xxs);
   font-family: var(--font-display);
   font-size: var(--t-title-md);
-  line-height: 1.2;
-  letter-spacing: var(--track-display-md);
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--ink);
 }
 
-.key__row dd {
+.about-list__name a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--hairline-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 5px;
+  transition: text-decoration-color 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.about-list__name a:hover {
+  text-decoration-color: var(--accent);
+}
+
+.about-list__logo {
+  width: auto;
+  height: 1.05em;
+  margin-right: var(--s-xs);
+  vertical-align: -0.15em;
+}
+
+.about-list__body {
+  max-width: 60ch;
   margin: 0;
   font-family: var(--font-body);
   font-size: var(--t-body-sm);
@@ -375,179 +876,24 @@
   color: var(--body);
 }
 
-/* -------------------- the rows -------------------- */
-.rows {
+/* -------------------- made together -------------------- */
+.collab-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
   gap: var(--s-lg);
-  margin: 0;
-  padding: 0;
+  text-align: center;
 }
 
-@media (min-width: 900px) {
-  .rows {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--s-xl);
-  }
-}
-
-/* Each route sits on its own squared card. */
-.row {
-  padding: var(--s-lg);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-card-sm);
-}
-
-.row__n {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: var(--t-caption);
-  letter-spacing: var(--track-caption);
-  color: var(--thread);
-}
-
-.row__title {
-  margin: var(--s-xs) 0 var(--s-sm);
-  font-family: var(--font-display);
-  font-size: var(--t-title-md);
-  font-weight: 400;
-  letter-spacing: var(--track-display-md);
-  text-transform: uppercase;
-  color: var(--ink);
-}
-
-.row__body {
-  margin: 0;
-  font-family: var(--font-body);
-  font-size: var(--t-body-sm);
-  line-height: 1.6;
-  color: var(--body);
-}
-
-/* -------------------- the credits -------------------- */
-/* A credit list: code, swatch, name, and what it is used for. The logos live
-   here because this is where the page lists what it is built on, and because
-   a credit given its own row reads as a credit rather than as a logo wall. */
-.threads {
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.thread {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-areas:
-    'code swatch'
-    'name name'
-    'role role';
-  align-items: center;
-  gap: var(--s-xs) var(--s-md);
-  padding-block: var(--s-lg);
-  border-top: 1px solid var(--hairline);
-}
-
-.thread:first-child {
-  border-top: 0;
-  padding-top: 0;
-}
-
-@media (min-width: 800px) {
-  .thread {
-    grid-template-columns: 3rem 9rem minmax(0, 14rem) minmax(0, 1fr);
-    grid-template-areas: 'code swatch name role';
-    gap: var(--s-lg);
-  }
-}
-
-.thread__code {
-  grid-area: code;
-  font-family: var(--font-mono);
-  font-size: var(--t-caption);
-  letter-spacing: var(--track-caption);
-  color: var(--thread);
-}
-
-/* The swatch well. A logo is someone else's mark, so it is shown unaltered on
-   a neutral plate and never recoloured, masked or tinted to match this page. */
-.thread__swatch {
-  grid-area: swatch;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  min-height: calc(var(--cell) * 2);
-}
-
-.thread__logo {
-  max-height: calc(var(--cell) * 2);
-  max-width: 9rem;
-  width: auto;
-  object-fit: contain;
-}
-
-/* Used where a project publishes no mark at all -- IUPAC's site refuses
-   scripted downloads and OPSIN, a Java library, has never had one. Set in this
-   page's own face so it reads as this page's typography, never as a logo
-   somebody invented for them. */
-.thread__lockup {
-  font-family: var(--font-display);
-  font-size: var(--t-title-md);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted);
-  border-bottom: 2px dashed color-mix(in srgb, var(--thread) 40%, transparent);
-  padding-bottom: 2px;
-}
-
-.thread__name {
-  grid-area: name;
-  font-family: var(--font-display);
-  font-size: var(--t-title-md);
-  letter-spacing: var(--track-display-md);
-  text-transform: uppercase;
-  color: var(--ink);
-}
-
-.thread__name a {
-  color: inherit;
-  text-decoration: none;
-  border-bottom: 1px solid var(--hairline-strong);
-}
-
-.thread__name a:hover {
-  border-bottom-color: var(--ink);
-}
-
-.thread__role {
-  grid-area: role;
-  font-family: var(--font-body);
-  font-size: var(--t-body-sm);
-  line-height: 1.6;
-  color: var(--body);
-}
-
-/* -------------------- the collaboration -------------------- */
-/* Two institutions, joined by a painted cross. It gets its own sheet rather
-   than a row in the credits because a partnership is not a
-   dependency: OPSIN is something the work USES, this is who the work IS.
-   Both marks are shown unaltered, at a shared optical height rather than a
-   shared box height -- the Beilstein mark is 876x202 and the Jena mark
-   1666x400, so matching their boxes would have made one visibly larger than
-   the other. Height-capped, width auto, and neither is recoloured or masked:
-   somebody else's identity is not this page's material to restyle. */
+/* Both marks unaltered, at a shared OPTICAL height rather than a shared box
+   height -- the Beilstein mark is 876x202 and the Jena mark 1666x400. Neither
+   is recoloured or masked: somebody else's identity is not this page's
+   material to restyle. */
 .collab {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: var(--s-lg) var(--s-xl);
-  padding: clamp(var(--s-xl), 5vw, 3rem) var(--s-lg);
-  border: 2px dashed color-mix(in srgb, var(--thread) 34%, transparent);
-  border-radius: var(--r-card);
-  transition:
-    border-color 0.32s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .collab__org {
@@ -565,17 +911,10 @@
   object-fit: contain;
 }
 
-/* The Jena mark carries its own wordmark at a smaller optical size than the
-   Beilstein one, so it is given slightly more height to sit level with it. */
 .collab__org:last-of-type img {
   height: clamp(44px, 6.4vw, 74px);
 }
 
-/* BIG, and painted. The footer's × is punctuation at 0.8rem that draws
-   itself in; this one is the statement the sheet is about, so it is sized
-   like one.
-   The strokes are filled outlines rather than stroked lines -- see BrushCross
-   for why a brush cannot be a stroke-width. */
 .collab__x {
   flex: none;
   width: clamp(3.5rem, 9vw, 7rem);
@@ -583,8 +922,6 @@
   overflow: visible;
 }
 
-/* The wet head carries full paint; the drying bristles and thrown flecks sit
-   slightly back, which is what stops the split reading as a solid fan. */
 .brush-x__body {
   fill: var(--thread);
 }
@@ -599,36 +936,51 @@
   opacity: 0.62;
 }
 
-/* PAINTED ON, one stroke then the other, in the order and direction a hand
-   makes them. A clip sweep, never an opacity fade: paint is laid ACROSS a
-   surface, and a mark that fades up has not been painted, it has appeared.
-   The easing is deliberately fast-in: a brush stroke starts at speed and
-   decelerates as the arm finishes, which `cubic-bezier(0.22, 1, 0.36, 1)`
-   gives and a symmetric ease does not. */
-.sheet.is-shown .brush-x__stroke--1 {
-  animation: brush-lay-right 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.sheet.is-shown .brush-x__stroke--2 {
-  animation: brush-lay-left 460ms cubic-bezier(0.22, 1, 0.36, 1) 200ms both;
-}
-
-/* The mark settles a half-degree after the second stroke lands, the way a
-   hand-made thing is never quite square. Once, on arrival. */
-.sheet.is-shown .brush-x {
-  animation: brush-settle 700ms cubic-bezier(0.16, 1, 0.3, 1) 420ms both;
-}
-
-@keyframes brush-settle {
-  from {
-    transform: rotate(-2.2deg) scale(0.97);
-  }
-  to {
-    transform: rotate(0deg) scale(1);
+@media (max-width: 560px) {
+  .collab {
+    flex-direction: column;
+    gap: var(--s-md);
   }
 }
 
-@keyframes brush-lay-right {
+.collab__line {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--t-body-md);
+  line-height: 1.5;
+  color: var(--body);
+}
+
+/* The one interaction here: pointing at the pair makes the join again. The
+   partners lean in and the cross is repainted stroke by stroke. The repaint
+   keyframes have their own names, because an unchanged animation-name keeps
+   its finished state instead of restarting. */
+.collab:hover .collab__org:first-of-type {
+  transform: translateX(10px);
+}
+
+.collab:hover .collab__org:last-of-type {
+  transform: translateX(-10px);
+}
+
+.collab:hover .brush-x {
+  animation: brush-press 620ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.collab:hover .brush-x__stroke--1 {
+  animation: brush-repaint-right 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.collab:hover .brush-x__stroke--2 {
+  animation: brush-repaint-left 400ms cubic-bezier(0.22, 1, 0.36, 1) 150ms both;
+}
+
+.collab:hover .brush-x__bristle,
+.collab:hover .brush-x__fleck {
+  animation: brush-wet 620ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes brush-repaint-right {
   from {
     clip-path: inset(0 100% 0 0);
   }
@@ -637,7 +989,7 @@
   }
 }
 
-@keyframes brush-lay-left {
+@keyframes brush-repaint-left {
   from {
     clip-path: inset(0 0 0 100%);
   }
@@ -646,63 +998,65 @@
   }
 }
 
-/* The paint is simply already dry. */
-/* The paint is simply already dry. */
+@keyframes brush-press {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  38% {
+    transform: rotate(-3.5deg) scale(1.07);
+  }
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+@keyframes brush-wet {
+  0% {
+    opacity: 0.5;
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.82;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .sheet.is-shown .brush-x__stroke--1,
-  .sheet.is-shown .brush-x__stroke--2,
-  .sheet.is-shown .brush-x {
+  .collab__org {
+    transition: none;
+  }
+
+  .collab:hover .collab__org:first-of-type,
+  .collab:hover .collab__org:last-of-type {
+    transform: none;
+  }
+
+  .collab:hover .brush-x,
+  .collab:hover .brush-x__stroke--1,
+  .collab:hover .brush-x__stroke--2,
+  .collab:hover .brush-x__bristle,
+  .collab:hover .brush-x__fleck {
     animation: none;
   }
 }
 
-/* The claim, and it is the owner's to make: an official collaboration for
-   open science. Centred under the two marks it describes, in the display face
-   at reading size -- a statement, not a caption. */
-.collab__line {
-  position: relative;
-  display: table;
-  margin: var(--s-lg) auto 0;
-  padding-bottom: var(--s-xs);
-  text-align: center;
-  font-family: var(--font-display);
-  font-size: clamp(1.1rem, 2.2vw, 1.5rem);
-  font-weight: 400;
-  line-height: 1.4;
-  letter-spacing: var(--track-display-md);
-  text-transform: uppercase;
-  color: var(--ink);
-}
-
-/* -------------------- the gauge -------------------- */
-.gauge {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.gauge__row {
+/* -------------------- details -------------------- */
+.details__list {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-xxs);
-  padding-block: var(--s-md);
+  margin: var(--s-lg) 0 0;
+}
+
+.details__row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 11rem) minmax(0, 1fr);
+  gap: var(--s-lg);
+  padding: var(--s-md) 0;
   border-top: 1px solid var(--hairline);
 }
 
-.gauge__row:first-child {
-  border-top: 0;
-  padding-top: 0;
-}
-
-@media (min-width: 720px) {
-  .gauge__row {
-    grid-template-columns: 12rem minmax(0, 1fr);
-    gap: var(--s-lg);
-    align-items: baseline;
-  }
-}
-
-.gauge dt {
+.details__row dt {
+  padding-top: 3px;
   font-family: var(--font-mono);
   font-size: var(--t-caption);
   letter-spacing: var(--track-caption);
@@ -710,17 +1064,20 @@
   color: var(--muted);
 }
 
-.gauge dd {
+.details__row dd {
+  min-width: 0;
   margin: 0;
   font-family: var(--font-body);
-  font-size: var(--t-body-sm);
-  line-height: 1.6;
+  font-size: var(--t-body-md);
+  line-height: 1.55;
   color: var(--body);
-  max-width: 68ch;
 }
 
-.gauge__row--status {
-  align-items: start;
+@media (max-width: 560px) {
+  .details__row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-xs);
+  }
 }
 
 /* -------------------- service status board -------------------- */
@@ -909,474 +1266,6 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-
-/* ============================================================
-   The live round-trip proof
-
-   The page's centrepiece and its whole argument. Everything here serves one
-   reading: a molecule goes in, a name comes out by rule, an INDEPENDENT parser
-   reads that name back, and the two structures are put side by side for the
-   reader to judge. The stages are a numbered list in the markup because that
-   is what they are -- an ordered sequence -- and the numbers are suppressed
-   visually because the connector already carries the order.
-   ============================================================ */
-
-/* THE DARK FEATURE CELL. `--card-dark` and its `--on-dark` / `--muted-on-dark`
-   / `--hairline-on-dark` companions have been in the system since the card
-   bento landed and, until now, NO surface used them -- they were kept for the
-   next cell that earned one. This is it: the page has exactly one argument,
-   this is that argument running live, and inverting it is what makes a reader
-   scrolling past stop. One dark cell per view is the documented ceiling, so
-   nothing else on this page takes it.
-   The structures stay on their own light plates inside it: a CDK depiction is
-   black linework on transparency, and inverting the card does not invert the
-   drawing. Plates rather than filters -- a hue-rotate on a chemical structure
-   would recolour the element colours, which are meaning, not decoration. */
-.rtp {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-xl);
-  padding: clamp(var(--s-xl), 4vw, 3.5rem);
-  background: var(--card-dark);
-  color: var(--on-dark);
-  border-radius: var(--r-card);
-  box-shadow: var(--card-shadow);
-  border: 1px solid var(--card-dark);
-  overflow: hidden;
-}
-
-/* A single soft crimson bloom in the top-left of the dark cell, so the black
-   reads as lit rather than as a flat rectangle. Behind everything, inert. */
-.rtp::before {
-  content: '';
-  position: absolute;
-  inset: -30% 40% 40% -20%;
-  background: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--accent) 40%, transparent),
-    transparent 65%
-  );
-  opacity: 0.5;
-  pointer-events: none;
-}
-
-.rtp > * {
-  position: relative;
-  /* The cell spans the full shell for drama; its CONTENT does not. Without
-     this the pipeline sat in the left third of a 1000px+ black rectangle and
-     the rest read as abandoned -- worst on the abstain slide, which has no
-     structure pair to fill it. A wide band with a measured column inside it
-     reads as deliberate; wide text on a wide band reads as unfinished. */
-  width: 100%;
-  max-width: 60rem;
-  margin-inline: auto;
-}
-
-.rtp__head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-sm);
-  max-width: 64ch;
-}
-
-.rtp__title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: clamp(1.75rem, 3.4vw, 2.75rem);
-  font-weight: 400;
-  line-height: 1.15;
-  letter-spacing: var(--track-display-md);
-  text-transform: uppercase;
-  color: var(--on-dark);
-}
-
-.rtp__lede {
-  margin: 0;
-  font-family: var(--font-body);
-  font-size: var(--t-body-md);
-  line-height: 1.55;
-  color: var(--muted-on-dark);
-  max-width: 58ch;
-}
-
-.rtp__stage {
-  min-height: 0;
-}
-
-.rtp__flow {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  margin: 0;
-  padding: 0;
-}
-
-/* Each stage hangs off a vertical spine, and the spine IS the argument's
-   direction -- it is what makes five separate facts read as one sequence.
-   The dot is the joint; the line is the flow between joints. */
-.rtp__step {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-xs);
-  padding: 0 0 var(--s-lg) var(--s-xl);
-  border-left: 1px solid var(--hairline-on-dark);
-}
-
-.rtp__step::before {
-  content: '';
-  position: absolute;
-  left: -4.5px;
-  top: 6px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--card-dark);
-  border: 1px solid color-mix(in srgb, var(--on-dark) 45%, transparent);
-}
-
-/* The last joint closes the spine: no trailing line past the verdict. */
-.rtp__step--verdict {
-  padding-bottom: 0;
-  border-left-color: transparent;
-}
-
-.rtp__step-label {
-  font-family: var(--font-mono);
-  font-size: var(--t-caption);
-  line-height: 1.5;
-  letter-spacing: var(--track-caption);
-  text-transform: uppercase;
-  color: var(--muted-on-dark);
-}
-
-/* A SMILES is data, so it is set in the mono face and allowed to wrap
-   anywhere -- these strings have no spaces and would otherwise push the card
-   wider than the column on a phone. */
-.rtp__smiles {
-  font-family: var(--font-mono);
-  font-size: var(--t-body-sm);
-  line-height: 1.6;
-  color: color-mix(in srgb, var(--on-dark) 82%, transparent);
-  overflow-wrap: anywhere;
-}
-
-/* The name is the largest thing in the proof, in the display face, at its
-   true case and weight 400 -- a chemical name is never uppercased and never
-   bolded, because case and weight are semantic in nomenclature. */
-.rtp__name {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: clamp(1.25rem, 2.2vw, 1.75rem);
-  font-weight: 400;
-  line-height: 1.3;
-  letter-spacing: 0.04em;
-  color: var(--on-dark);
-  overflow-wrap: anywhere;
-}
-
-/* An abstain is a RESULT, and it is set like one -- same weight and presence
-   as a name, not as an error. The engine refusing to guess is the behaviour
-   the product is proudest of. */
-.rtp__declined {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-xs);
-  font-family: var(--font-display);
-  font-size: clamp(1.1rem, 1.8vw, 1.4rem);
-  font-weight: 400;
-  line-height: 1.3;
-  letter-spacing: 0.04em;
-  color: var(--on-dark);
-}
-
-.rtp__declined-note {
-  font-family: var(--font-body);
-  font-size: var(--t-body-sm);
-  letter-spacing: 0;
-  line-height: 1.55;
-  color: var(--muted-on-dark);
-  max-width: 56ch;
-}
-
-/* -------------------- the two structures -------------------- */
-.rtp__pair {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-md);
-  align-items: center;
-  margin-top: var(--s-xs);
-}
-
-@media (min-width: 700px) {
-  .rtp__pair {
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    gap: var(--s-lg);
-  }
-}
-
-.rtp__panel {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-sm);
-  align-items: center;
-  padding: var(--s-lg) var(--s-md) var(--s-md);
-  /* A LIGHT plate on the dark cell. The depiction is black linework with
-     coloured heteroatoms; it needs its own ground, and inverting or filtering
-     it would recolour element colours that carry meaning. */
-  background: var(--canvas);
-  border-radius: var(--r-card-sm);
-}
-
-/* No aspect-ratio: a CDK depiction with CIP labels round the edges does not
-   share one, and forcing a box on it is what pushed the name out of view on
-   the result tiles. A floor and a cap instead. */
-.rtp__panel img {
-  display: block;
-  width: 100%;
-  /* CAPPED, because the panel is not: at 1762px the two panels are ~500px
-     wide each, and a 100%-wide depiction left the molecule as a small mark
-     adrift in a large grey rectangle. A drawing the reader is being asked to
-     COMPARE against another has to be the thing they see, so the image takes
-     the width it needs and centres in whatever the panel has. */
-  max-width: 340px;
-  margin-inline: auto;
-  min-height: 150px;
-  max-height: 220px;
-  object-fit: contain;
-}
-
-.rtp__panel-empty {
-  display: block;
-  width: 100%;
-  min-height: 150px;
-}
-
-.rtp__panel figcaption {
-  font-family: var(--font-mono);
-  font-size: var(--t-caption);
-  letter-spacing: var(--track-caption);
-  text-transform: uppercase;
-  color: var(--muted);
-  text-align: center;
-}
-
-/* The join between the two panels: a hairline on a phone (where the panels
-   stack) and a horizontal one on a wide screen. Drawn, not a glyph -- an
-   arrow character here would be an icon made of type. */
-.rtp__pair-join {
-  justify-self: center;
-  width: 1px;
-  height: 24px;
-  background: color-mix(in srgb, var(--on-dark) 40%, transparent);
-}
-
-@media (min-width: 700px) {
-  .rtp__pair-join {
-    width: 28px;
-    height: 1px;
-  }
-}
-
-/* -------------------- the verdict -------------------- */
-/* Monochrome, always. A confidence tier is carried by weight-of-grey and by
-   the words, and it never takes the crimson accent -- the accent belongs to
-   chrome and to one primary button, and a tier wearing it would read as a
-   brand endorsement of a result the engine may not be sure about. */
-/* Monochrome on the dark cell exactly as it is on a light one: a tier is
-   carried by weight and by the words, never by the crimson accent. */
-.rtp__tier {
-  font-family: var(--font-mono);
-  font-size: var(--t-caption);
-  line-height: 1.4;
-  letter-spacing: var(--track-caption);
-  text-transform: uppercase;
-  color: var(--on-dark);
-}
-
-.rtp__tier--fallback,
-.rtp__tier--best-effort,
-.rtp__tier--abstain {
-  color: var(--muted-on-dark);
-}
-
-.rtp__verdict {
-  margin: 0;
-  font-family: var(--font-body);
-  font-size: var(--t-body-md);
-  line-height: 1.55;
-  color: var(--on-dark);
-  max-width: 60ch;
-}
-
-/* -------------------- waiting -------------------- */
-/* The same three shimmering dashes the rest of the app waits with, so a
-   pending name here reads as the same event as a pending name anywhere else. */
-.rtp__waiting {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-block: var(--s-xs);
-}
-
-.rtp__waiting-dash {
-  height: 2px;
-  background: color-mix(in srgb, var(--on-dark) 35%, transparent);
-  animation: rtp-wait 1.4s ease-in-out infinite;
-}
-
-.rtp__waiting-dash:nth-child(1) {
-  width: 62%;
-}
-.rtp__waiting-dash:nth-child(2) {
-  width: 38%;
-  animation-delay: 160ms;
-}
-.rtp__waiting-dash:nth-child(3) {
-  width: 52%;
-  animation-delay: 320ms;
-}
-
-@keyframes rtp-wait {
-  0%,
-  100% {
-    opacity: 0.35;
-  }
-  50% {
-    opacity: 0.85;
-  }
-}
-
-.rtp__offline {
-  margin: 0;
-  font-family: var(--font-body);
-  font-size: var(--t-body-md);
-  line-height: 1.55;
-  color: var(--on-dark);
-  max-width: 62ch;
-}
-
-/* -------------------- the picker -------------------- */
-.rtp__picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-xs) var(--s-md);
-  padding-top: var(--s-lg);
-  border-top: 1px solid var(--hairline-on-dark);
-}
-
-/* Tag vocabulary, not buttons: the label IS the control, over a hairline that
-   steps to ink when chosen. Four molecules named in the open, so the reader
-   can see there are four and pick the awkward one. */
-.rtp__pick {
-  padding: 0;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--on-dark) 30%, transparent);
-  border-radius: 0;
-  font-family: var(--font-mono);
-  font-size: var(--t-caption);
-  line-height: 1.8;
-  letter-spacing: var(--track-caption);
-  text-transform: uppercase;
-  color: var(--muted-on-dark);
-  cursor: pointer;
-  transition:
-    color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
-    border-color 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.rtp__pick:hover {
-  color: var(--on-dark);
-  border-bottom-color: var(--on-dark);
-}
-
-.rtp__pick--on {
-  color: var(--on-dark);
-  border-bottom-color: var(--on-dark);
-}
-
-.rtp__pick:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-
-/* -------------------- staging the sequence -------------------- */
-/* The one authored moment on this page: the stages arrive in order, so the
-   reader watches the argument being made rather than finding it already
-   finished. From an already-legible default (never invisible), on the
-   system's own exponential ease-out. */
-.rtp--ready .rtp__step {
-  animation: rtp-step-in 520ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
-}
-
-.rtp--ready .rtp__step--in {
-  animation-delay: 0ms;
-}
-.rtp--ready .rtp__step--name {
-  animation-delay: 140ms;
-}
-.rtp--ready .rtp__step--back {
-  animation-delay: 300ms;
-}
-.rtp--ready .rtp__step--compare {
-  animation-delay: 460ms;
-}
-.rtp--ready .rtp__step--verdict {
-  animation-delay: 640ms;
-}
-
-@keyframes rtp-step-in {
-  from {
-    opacity: 0.25;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-/* The structures draw themselves in: a wipe, not a fade, so it reads as
-   drawing rather than as loading. clip-path and opacity only -- nothing here
-   relayouts. */
-.rtp--ready .rtp__panel img {
-  animation: rtp-draw 700ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
-  animation-delay: 560ms;
-}
-
-@keyframes rtp-draw {
-  from {
-    clip-path: inset(0 100% 0 0);
-    opacity: 0.4;
-  }
-  to {
-    clip-path: inset(0 0 0 0);
-    opacity: 1;
-  }
-}
-
-/* Reduced motion keeps every stage and every word, and loses only the
-   movement: no stagger, no wipe, no shimmer. The proof still proves. */
-.rtp--still .rtp__step,
-.rtp--still .rtp__panel img {
-  animation: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .rtp__step,
-  .rtp__panel img,
-  .rtp__waiting-dash {
-    animation: none;
-  }
-  .rtp__pick {
-    transition: none;
-  }
-}
-
 /* -------------------- the live lamp -------------------- */
 /* A status light, and it reports LIVENESS rather than the verdict: it says a
    real check ran and how it went, while the rule and the sentence beside it
@@ -1489,157 +1378,3 @@
   }
 }
 
-/* -------------------- the join, re-made on hover -------------------- */
-/* Hovering the collaboration RE-PERFORMS it. That is the whole thesis of the
-   interaction: the block is about two parties being joined, so pointing at it
-   makes the join again rather than merely highlighting a box.
-   Four things move, and they are one gesture rather than four effects:
-     the two partners lean IN toward each other
-     the × is re-painted, stroke by stroke, in the order a hand makes them
-     a dashed line draws itself under the claim
-     the plate lifts a little and its dashed edge darkens
-   `:has()` is what lets the caption respond, because it is a SIBLING of the
-   plate rather than a child -- the same selector this codebase already relies
-   on for /explain's clay tabs. */
-
-.sheet__body:has(.collab:hover) .collab {
-  transform: translateY(-2px);
-  border-color: color-mix(in srgb, var(--thread) 62%, transparent);
-}
-
-/* The partners close the gap. Each moves toward the ×, never past it. */
-.collab:hover .collab__org:first-of-type {
-  transform: translateX(10px);
-}
-
-.collab:hover .collab__org:last-of-type {
-  transform: translateX(-10px);
-}
-
-/* THE × IS PAINTED AGAIN, and this needs its OWN keyframe names rather than
-   the arrival's. MEASURED: pointing these at `brush-lay-right`/`-left` did
-   nothing at all -- the arrival animation had already run under the same name,
-   and a browser that sees an unchanged `animation-name` keeps the finished
-   state instead of restarting it. Renaming is the whole fix.
-   Three things happen together, so the mark is REMADE rather than merely
-   re-revealed: the brush presses into the surface, and each stroke is wiped on
-   again in the order a hand makes them. */
-.collab:hover .brush-x {
-  animation: brush-press 620ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.collab:hover .brush-x__stroke--1 {
-  animation: brush-repaint-right 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.collab:hover .brush-x__stroke--2 {
-  animation: brush-repaint-left 400ms cubic-bezier(0.22, 1, 0.36, 1) 150ms both;
-}
-
-/* Fresh paint: the drying bristles and thrown flecks come up to full strength
-   while the stroke is being remade, then settle back. */
-.collab:hover .brush-x__bristle,
-.collab:hover .brush-x__fleck {
-  animation: brush-wet 620ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes brush-repaint-right {
-  from {
-    clip-path: inset(0 100% 0 0);
-  }
-  to {
-    clip-path: inset(0 -10% 0 0);
-  }
-}
-
-@keyframes brush-repaint-left {
-  from {
-    clip-path: inset(0 0 0 100%);
-  }
-  to {
-    clip-path: inset(0 0 0 -10%);
-  }
-}
-
-/* The press: the brush leans into the paper and comes back. Rotation and
-   scale only -- both composited, neither relayouts. */
-@keyframes brush-press {
-  0% {
-    transform: rotate(0deg) scale(1);
-  }
-  38% {
-    transform: rotate(-3.5deg) scale(1.07);
-  }
-  100% {
-    transform: rotate(0deg) scale(1);
-  }
-}
-
-@keyframes brush-wet {
-  0% {
-    opacity: 0.5;
-  }
-  40% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0.82;
-  }
-}
-
-/* A dashed line, drawn under the claim while the join is being made. Dashes
-   on a gradient rather than a border, so it can be drawn ON: `scaleX` from
-   the left grows the line from one end to the other. */
-.collab__line::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 2px;
-  background: repeating-linear-gradient(
-    90deg,
-    var(--thread) 0 6px,
-    transparent 6px 12px
-  );
-  transform: scaleX(0);
-  transform-origin: left center;
-  transition: transform 0.52s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.sheet__body:has(.collab:hover) .collab__line::after {
-  transform: scaleX(1);
-}
-
-/* Reduced motion keeps the RELATIONSHIP and drops the travel: the edge still
-   darkens and the dashed line is simply present, so a reader who asked for
-   less movement still gets the feedback that this block is interactive. */
-@media (prefers-reduced-motion: reduce) {
-  .collab,
-  .collab__org,
-  .collab__line::after {
-    transition: none;
-  }
-
-  .sheet__body:has(.collab:hover) .collab {
-    transform: none;
-  }
-
-  .collab:hover .collab__org:first-of-type,
-  .collab:hover .collab__org:last-of-type {
-    transform: none;
-  }
-
-  .collab:hover .brush-x,
-  .collab:hover .brush-x__stroke--1,
-  .collab:hover .brush-x__stroke--2,
-  .collab:hover .brush-x__bristle,
-  .collab:hover .brush-x__fleck {
-    animation: none;
-  }
-
-  .sheet__body:has(.collab:hover) .collab__line::after {
-    transform: scaleX(1);
-    transition: none;
-  }
-}

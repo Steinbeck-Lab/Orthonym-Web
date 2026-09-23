@@ -406,8 +406,7 @@
 }
 
 /* -------------------- brand -------------------- */
-/* A small crimson molecule mark + the Orthonym wordmark in the display face.
-   Shared with the footer. */
+/* The pint mark + the Orthonym wordmark in the display face. */
 .brand {
   display: inline-flex;
   align-items: center;
@@ -418,9 +417,8 @@
 
 .brand__mark {
   display: block;
-  width: 26px;
-  height: 26px;
-  color: var(--accent); /* the SVG strokes/fills currentColor */
+  width: auto;
+  height: 30px; /* the pint is taller than wide (959:1102), so height sets its size */
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
