@@ -1,3 +1,7 @@
+# Fixed, not derived from the checkout's folder name, so images, networks and
+# volumes are called orthonym-web-* wherever the repository is cloned.
+name: orthonym-web
+
 # Docker's default json-file driver keeps logs forever. The workers log a
 # line per molecule at INFO, so an unattended public deployment fills the
 # host disk in weeks and takes the whole box down with it -- including the
