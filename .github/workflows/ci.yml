@@ -136,7 +136,7 @@ jobs:
           java-version: '21'
 
       - name: Vendor the engine
-        run: ORTHONYM_SRC="$GITHUB_WORKSPACE/.orthonym/Project" ./scripts/vendor-orthonym.sh
+        run: ORTHONYM_SRC="$GITHUB_WORKSPACE/.orthonym" ./scripts/vendor-orthonym.sh
 
       - name: Fetch CDK and centres
         # Both are FETCHED, not vendored: public URLs, pinned SHA-256. The

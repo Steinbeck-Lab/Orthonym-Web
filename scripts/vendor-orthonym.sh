@@ -8,7 +8,7 @@
 # engine changes you want the web app to pick up.
 set -euo pipefail
 
-SRC="${ORTHONYM_SRC:-/home/kohulan/Orthonym/Project}"
+SRC="${ORTHONYM_SRC:-/home/kohulan/Orthonym}"
 DEST="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/backend/vendor/orthonym"
 
 if [ ! -f "$SRC/pyproject.toml" ]; then

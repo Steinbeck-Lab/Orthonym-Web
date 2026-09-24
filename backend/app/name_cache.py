@@ -47,7 +47,10 @@ logger = logging.getLogger(__name__)
 # v6 (2026-09-14): vendor refresh to the Orthonym engine at f9a6fdf (an
 #     upstream engine sync of 2026-09-13). 263 modules against the previous 261, still
 #     stamped "1.0.0" upstream, so _ENGINE_VERSION still cannot see it.
-_KEY_VERSION = "v6"
+# v7 (2026-09-24): vendor refresh to the Orthonym engine at 06b82cc. 265
+#     modules against the previous 263 (sulfate_ester and nested_memo are
+#     new), still stamped "1.0.0" upstream.
+_KEY_VERSION = "v7"
 _ENGINE_VERSION = orthonym.__version__
 
 

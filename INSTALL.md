@@ -426,7 +426,7 @@ OPSIN grammar resources, and the `opsin-cli` and `centres-cli` jars. Publishing 
 the engine, so all four are gitignored. Run the script before your first build:
 
 ```bash
-ORTHONYM_SRC=/path/to/Orthonym/Project ./scripts/vendor-orthonym.sh
+ORTHONYM_SRC=/path/to/Orthonym ./scripts/vendor-orthonym.sh
 ```
 
 The exception is **CDK**, the only vendored artifact with a public release URL: `backend/Dockerfile`
@@ -438,7 +438,7 @@ cannot be fetched at all — its notice records it as a local Maven build from a
 **Refresh the snapshot** after pulling engine changes you want the web app to pick up:
 
 ```bash
-ORTHONYM_SRC=/path/to/Orthonym/Project ./scripts/vendor-orthonym.sh
+ORTHONYM_SRC=/path/to/Orthonym ./scripts/vendor-orthonym.sh
 ```
 
 Then **bump `_KEY_VERSION` in `backend/app/name_cache.py` by hand.** Upstream develops on a static

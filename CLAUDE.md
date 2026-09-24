@@ -61,7 +61,7 @@ there at all. `centres-cli` is not vendored anywhere any more (`scripts/vendor-o
 see below.
 
 ```bash
-ORTHONYM_SRC=/path/to/Orthonym/Project ./scripts/vendor-orthonym.sh
+ORTHONYM_SRC=/path/to/Orthonym ./scripts/vendor-orthonym.sh
 ```
 
 Then bump `_KEY_VERSION` in `backend/app/name_cache.py` by hand. Upstream develops on a static
