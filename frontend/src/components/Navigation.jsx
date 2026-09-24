@@ -85,7 +85,7 @@ const NAV_LINKS = [
 // undefined, so `??` would keep the empty string and silently ship no link --
 // which is exactly the bug this line replaced. `||` treats empty as absent,
 // and `none` is then the explicit way to say "off".
-const GITHUB_URL_DEFAULT = 'https://github.com/Kohulan/Orthonym-Web'
+const GITHUB_URL_DEFAULT = 'https://github.com/Steinbeck-Lab/Orthonym-Web'
 const GITHUB_URL_RAW = import.meta.env.VITE_GITHUB_URL || GITHUB_URL_DEFAULT
 const GITHUB_URL = GITHUB_URL_RAW === 'none' ? null : GITHUB_URL_RAW
 

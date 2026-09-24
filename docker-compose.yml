@@ -199,7 +199,7 @@ services:
       # frontend/Dockerfile carries the full reasoning.
       #
       # Unset now ships THIS SITE's own repository -- Navigation.jsx defaults
-      # to github.com/Kohulan/Orthonym-Web, which is public. It does NOT link
+      # to github.com/Steinbeck-Lab/Orthonym-Web, which is public. It does NOT link
       # the naming engine: the Orthonym engine's repository is still private,
       # and the prose in Terms.jsx and About.jsx that says so is still true.
       #

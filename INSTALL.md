@@ -61,7 +61,7 @@ sudo apt-get update && sudo apt-get install -y git gh        # gh only if you us
 # sudo -- a root-owned tree makes every later `git pull` and `docker compose`
 # need sudo too, and mixes root-written files into a directory you then edit.
 sudo mkdir -p /opt/orthonym-web && sudo chown "$USER:$USER" /opt/orthonym-web
-git clone https://github.com/Kohulan/Orthonym-Web.git /opt/orthonym-web
+git clone https://github.com/Steinbeck-Lab/Orthonym-Web.git /opt/orthonym-web
 cd /opt/orthonym-web
 
 # "Docker is installed" does not mean your user may talk to it. If this prints

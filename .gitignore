@@ -21,7 +21,7 @@ dist/
 
 # ---------------------------------------------------------------------------
 # LOCAL-ONLY: everything below stays on the maintainer's machine and is kept
-# out of the published repository (github.com/Kohulan/Orthonym-Web), which was
+# out of the published repository (github.com/Steinbeck-Lab/Orthonym-Web), which was
 # rewritten on 2026-09-07 so none of it appears in any commit.
 # ---------------------------------------------------------------------------
 
