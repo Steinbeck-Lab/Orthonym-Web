@@ -343,6 +343,19 @@ ORTHONYM_SRC=/opt/orthonym ./scripts/vendor-orthonym.sh     # only if the engine
 docker compose up -d --build
 ```
 
+**An install cloned before 2026-09-24** cannot `git pull`: the repository's history was rewritten
+that day. Update it in place instead, which keeps every gitignored file (`.env`,
+`docker-compose.override.yml`, `ops/`, `backend/vendor/`). Stop the stack first:
+
+```bash
+docker compose down
+git status --short          # a local edit to a tracked file (frontend/nginx.conf?) is lost below: save it
+git fetch origin && git reset --hard origin/main
+```
+
+Then compare `.env` with `.env.example` for any setting added since, re-vendor as in step 1, and
+run `docker compose up -d --build`.
+
 If the engine did move, bump `_KEY_VERSION` in `backend/app/name_cache.py` first — upstream
 develops on a static version, so the version-keyed cache cannot invalidate itself and names
 computed by the old engine would survive the update.
