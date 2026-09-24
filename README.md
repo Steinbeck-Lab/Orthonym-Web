@@ -122,6 +122,6 @@ under copyleft terms; the running site states all of them on its Terms page, and
 <div align="center">
 <br>
 <sub>Made with ☕ by <a href="https://kohulanr.com">Kohulan Rajan</a> at the
-<a href="https://www.beilstein-institut.de/en/">Beilstein-Institut</a> ✕
+<a href="https://www.beilstein-institut.de/en/">Beilstein-Institut</a> <img src="docs/screenshots/credit-x.svg" alt="✕" height="10">
 <a href="https://cheminf.uni-jena.de">Steinbeck Lab</a></sub>
 </div>
