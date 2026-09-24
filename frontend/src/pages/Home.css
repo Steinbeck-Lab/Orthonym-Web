@@ -191,24 +191,25 @@
 .home-hero__mark {
   display: inline-block;
   width: auto;
-  height: 0.688em;
-  vertical-align: baseline;
-  /* The mark takes EXACTLY the room of the O it replaces. That slot is the
-     O's advance (0.518em) plus the 0.14em tracking it would carry -- an
-     image gets no letter-spacing of its own -- so 0.658em. The box is 0.599em
-     wide (0.688em x the art's 959/1102), which leaves 0.06em for the two
-     margins together. Holding the slot matters beyond looks: the flare
-     rasters the heading's textContent, O included, so the lit N-Y-M track
-     the real ones only while the mark advances like an O.
-     The split is uneven because the art is: the shards break out to the left
-     of the glass and the needle to the right, and the glass's own axis sits
-     at 53% of the box (511 of the viewBox's 959 units, measured on the widest
-     row, the waist and the foot alike). -0.06em puts that axis on the O's
-     centre line (0.259em into its slot), and the 0.12em on the right gives
-     the rest back. The glass then clears H and N by 0.29em at its widest,
-     against 0.26em round an O in this face; the shards and the needle hang
-     into those gaps the way they do in the logo lockup. */
-  margin-inline: -0.06em 0.12em;
+  height: 0.873em;
+  vertical-align: -0.088em;
+  /* The GLASS, not the image box, is sized to the O it replaces. The art's
+     viewBox is 193 x 372 and the glass fills 300 of those 372 units (y 38 to
+     338), so a box of 0.873em draws a glass 0.704em tall: the O's full
+     height in this face, 0.696em above the baseline plus its 0.008em
+     overshoot below. -0.088em drops the box so the glass's foot lands on
+     that overshoot rather than 34 units of empty viewBox above it.
+     The mark also takes EXACTLY the room of the O: its advance (0.518em)
+     plus the 0.14em tracking it would carry -- an image gets no
+     letter-spacing of its own -- so 0.658em. The box is 0.453em wide
+     (0.873em x 193/372), which leaves 0.205em for the two margins. The
+     glass's axis sits at 48.8% of the box (x 18 to 170 of 193), so 0.038em
+     on the left puts it on the O's centre line (0.259em into its slot) and
+     0.167em on the right gives the rest back. Holding the slot matters
+     beyond looks: the flare rasters the heading's textContent, O included,
+     so the lit N-Y-M track the real ones only while the mark advances like
+     an O. */
+  margin-inline: 0.038em 0.167em;
 }
 
 .home-hero__tagline {
