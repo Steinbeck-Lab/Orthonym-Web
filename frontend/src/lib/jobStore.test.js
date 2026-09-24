@@ -8,6 +8,7 @@ import {
   pruneExpired,
   readJobs,
   rememberJob,
+  sweepOldJobKeys,
   withJob,
 } from './jobStore.js'
 
@@ -126,4 +127,22 @@ test('rememberJob still keeps the jobs that might need stopping', () => {
     assert.equal(entry?.ownerToken, 'tok')
   }
   assert.ok(map.has(JOB_STORAGE_KEY), 'written under the current key')
+})
+
+test('sweepOldJobKeys drops job lists under any other key and keeps the rest', () => {
+  const map = new Map([
+    [JOB_STORAGE_KEY, '[]'],
+    ['orthonym.jobs.v1', '[]'],
+    ['other.jobs.v2', '[]'],
+    ['theme', 'dark'],
+  ])
+  const keys = () => [...map.keys()]
+  sweepOldJobKeys({
+    get length() {
+      return map.size
+    },
+    key: (i) => keys()[i] ?? null,
+    removeItem: (k) => map.delete(k),
+  })
+  assert.deepEqual(keys(), [JOB_STORAGE_KEY, 'theme'])
 })

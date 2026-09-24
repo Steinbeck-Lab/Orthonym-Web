@@ -32,10 +32,8 @@ import { isTerminal } from './batchJob.js'
 // came back on every reload, including a hard reload, which cannot clear
 // localStorage. Nothing in the app could shift it and it read as the page
 // being stuck. The store now holds only jobs that might still need stopping
-// (see rememberJob and BatchResults), and the new key retires every v1 entry
-// on the first load rather than restoring one last stale panel.
+// (see rememberJob and BatchResults).
 const STORAGE_KEY = 'orthonym.jobs.v2'
-const RETIRED_KEYS = ['orthonym.jobs.v1']
 
 /** Most recent jobs kept. Small on purpose: this is a convenience, not a log. */
 export const MAX_REMEMBERED = 8
@@ -52,21 +50,28 @@ export const MAX_REMEMBERED = 8
  */
 export const UNKNOWN_EXPIRY_MAX_AGE_SECONDS = 24 * 60 * 60
 
-// The retirement is a MIGRATION: it has to happen before the first read,
-// and exactly once. Doing it inside storageOrNull ran removeItem twice per
-// rememberJob/forgetJob (each of those resolves the storage itself and then
-// again via readJobs) for the whole life of the tab, long after the key was
-// gone.
-let retired = false
+/**
+ * Removes job lists written under any other key, such as an older schema
+ * version. Their jobs are gone from the server, so all they still
+ * hold is dead owner tokens. Exported so the rule can be tested directly.
+ */
+export function sweepOldJobKeys(storage) {
+  for (let i = storage.length - 1; i >= 0; i -= 1) {
+    const key = storage.key(i)
+    if (key !== STORAGE_KEY && /^[a-z]+\.jobs\.v\d+$/.test(key)) storage.removeItem(key)
+  }
+}
+
+// Once per tab, before the first read: doing it on every access would run
+// the sweep twice per rememberJob/forgetJob for the whole life of the tab.
+let swept = false
 
 function storageOrNull() {
   try {
     const storage = window.localStorage ?? null
-    if (storage && !retired) {
-      retired = true
-      // A superseded schema left in place is dead weight that only ever
-      // confuses the next reader of a browser's storage panel.
-      for (const key of RETIRED_KEYS) storage.removeItem(key)
+    if (storage && !swept) {
+      swept = true
+      sweepOldJobKeys(storage)
     }
     return storage
   } catch {

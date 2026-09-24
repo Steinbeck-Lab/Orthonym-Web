@@ -57,7 +57,7 @@ import './Legal.css'
 //   name_cache.py:107-157 the cache key is a SMILES hash, tied to no user
 //   jobs_api.py:330-336   uuid4 job id, secrets.token_urlsafe(32) owner token
 //   jobs_api.py:624-660   results endpoints take NO owner token — see § 3
-//   lib/jobStore.js:41-57 the one localStorage key Orthonym itself writes
+//   lib/jobStore.js STORAGE_KEY, the one localStorage key Orthonym itself writes
 //   docker-compose.yml:1-9 the log rotation cap
 // and, measured live rather than reasoned about: a request through the
 // frontend puts the visitor's address in nginx's access log and the nginx
