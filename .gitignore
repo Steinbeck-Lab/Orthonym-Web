@@ -31,8 +31,14 @@ dist/
 # centres-cli jars -- out of a checkout of the Orthonym engine, which is a
 # private repository. Publishing the vendored snapshot would publish the
 # engine. A fresh clone populates this directory with that script; see README.
-backend/vendor/orthonym/
-backend/vendor/opsin-resources/
+#
+# The whole directory is ignored, not a list of names: anything a vendor run
+# leaves there stays ignored, so no checkout can publish it by accident.
+# backend/vendor/cdk/NOTICE is the one tracked file.
+backend/vendor/*
+!backend/vendor/cdk/
+backend/vendor/cdk/*
+!backend/vendor/cdk/NOTICE
 # Nothing in there is tracked any more, centres included. It was, for one
 # commit, because centres-cli-1.5.jar was an unreleased local Maven build with
 # no download. The engine moved to the tagged 1.2.1 release on 2026-09-07, so
