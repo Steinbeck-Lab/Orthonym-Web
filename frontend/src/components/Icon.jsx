@@ -6,6 +6,7 @@ import {
   Check,
   Copy,
   Download,
+  ExternalLink,
   Plus,
   RefreshCw,
   Square,
@@ -45,6 +46,8 @@ const ICONS = {
   plus: Plus,
   back: ArrowLeft,
   forward: ArrowRight,
+  // Leaves this site. Paired only with a link whose label says where to.
+  external: ExternalLink,
   // Sort direction. ONE glyph, rotated by CSS for descending, so the two
   // states are the same drawn arrow rather than two icons a reader has to
   // tell apart at 12px.

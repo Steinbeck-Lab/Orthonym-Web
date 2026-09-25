@@ -55,7 +55,11 @@ logger = logging.getLogger(__name__)
 #     pin_unverified to "fallback" (was "best_effort"), and the no-round-trip
 #     demotion keeps the engine's tier instead of rewriting it, so a cached v7
 #     row can carry the old status and tier.
-_KEY_VERSION = "v8"
+# v9 (2026-09-25): no engine change. A best_effort=False abstain that withheld
+#     a name the engine had found now carries limit_code "withheld_unchecked";
+#     a cached v8 copy of that row lacks it and would offer "Report SMILES on
+#     GitHub" for a molecule the engine had named.
+_KEY_VERSION = "v9"
 _ENGINE_VERSION = orthonym.__version__
 
 

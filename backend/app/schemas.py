@@ -24,6 +24,16 @@ Status = Literal["pin", "fallback", "best_effort", "abstain", "error"]
 # frontend/src/lib/statuses.js keeps its own copy -- it cannot import
 # Python -- the same accepted cross-language mirror as NAMED_STATUSES there.
 VERIFIED_STATUSES = frozenset({"pin", "fallback"})
+
+# The limit_codes THIS APP assigns (lowercase; the engine's own are
+# uppercase, e.g. UNNAMEABLE). frontend/src/lib/github.js keys "Report SMILES
+# on GitHub" on them, so they are defined once, here, beside the other
+# cross-language mirror: an engine crash, a batch chunk that ran out of time,
+# and an abstain the caller's best-effort switch forced on a name the engine
+# had found.
+ENGINE_ERROR = "engine_error"
+TIMEOUT = "timeout"
+WITHHELD_UNCHECKED = "withheld_unchecked"
 # The Orthonym engine's own tier labels, from Orthonym.name_tiered's docstring. The
 # earlier T1/T3/T4/T5 codes were replaced upstream by these names; there is
 # no T-code anywhere in the engine any more. `pin_unverified` is a name in PIN
@@ -239,6 +249,10 @@ class JobStatusResponse(BaseModel):
     counts: dict[str, int] = {}
     created_at: int
     expires_at: int
+    # The switches the job was named with (redis_store.create_job). None for
+    # a job created before they were recorded.
+    best_effort: Optional[bool] = None
+    verify: Optional[bool] = None
 
 
 class JobResultsResponse(BaseModel):

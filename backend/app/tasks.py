@@ -17,7 +17,7 @@ from celery.exceptions import SoftTimeLimitExceeded
 from app import name_cache, redis_store
 from app.celery_app import celery_app
 from app.orthonym_service import translate_one
-from app.schemas import BatchRow, ResultItem
+from app.schemas import ENGINE_ERROR, TIMEOUT, BatchRow, ResultItem
 
 logger = logging.getLogger(__name__)
 
@@ -93,14 +93,37 @@ def _row(index: int, raw_input: str, input_id: str | None, named: dict) -> dict:
     ).model_dump()
 
 
-def _error_row(index: int, raw_input: str, input_id: str | None, message: str) -> dict:
+def _error_row(
+    index: int,
+    raw_input: str,
+    input_id: str | None,
+    message: str,
+    smiles: str | None = None,
+    limit_code: str | None = None,
+) -> dict:
+    # `smiles` only when the input DID parse (a crash or a timeout): a bug
+    # report needs the structure, and for an SDF record `raw_input` is just
+    # "SDF record N".
     return BatchRow(
         index=index,
         input=raw_input,
         input_id=input_id,
+        smiles=smiles,
         status="error",
+        limit_code=limit_code,
         error=message,
     ).model_dump()
+
+
+def _unparsed_row(item: dict) -> dict:
+    """The row for an input that already failed to parse, with its own reason.
+
+    ONE builder, because two loops need it -- _name_prepared, and
+    _timed_out_rows for a parse failure that sat after the molecule a timeout
+    interrupted -- and a copy in each is how the timeout path once lost the
+    reason and wrote "Timed out" instead.
+    """
+    return _error_row(item["index"], item["raw_input"], item["input_id"], item["error"])
 
 
 def _name_prepared(
@@ -122,9 +145,7 @@ def _name_prepared(
     for offset, item in enumerate(prepared):
         index = item["index"]
         if item["smiles"] is None:
-            rows.append(
-                _error_row(index, item["raw_input"], item["input_id"], item["error"])
-            )
+            rows.append(_unparsed_row(item))
             failed += 1
             continue
         try:
@@ -143,6 +164,8 @@ def _name_prepared(
                     item["raw_input"],
                     item["input_id"],
                     f"Naming failed: {exc}",
+                    smiles=item["smiles"],
+                    limit_code=ENGINE_ERROR,
                 )
             )
             failed += 1
@@ -162,12 +185,30 @@ def _timed_out_rows(timeout: _ChunkTimedOut) -> tuple[list[dict], int]:
     """
     rows = list(timeout.rows)
     failed = timeout.failed
-    for item in timeout.remaining:
-        row = _error_row(
-            item["index"], item["raw_input"], item["input_id"], "Timed out"
+    for position, item in enumerate(timeout.remaining):
+        if item["smiles"] is None:
+            # This one had already failed to PARSE, before any time ran out.
+            # Keep that reason: relabelling it "Timed out" told the visitor a
+            # retry could help an input that can never be read.
+            rows.append(_unparsed_row(item))
+            failed += 1
+            continue
+        rows.append(
+            _error_row(
+                item["index"],
+                item["raw_input"],
+                item["input_id"],
+                "Timed out",
+                # Only remaining[0] was being named when the limit fired; the
+                # rest never reached the engine. So only it carries the
+                # structure, which is what makes it -- and only it -- a
+                # "Report SMILES on GitHub" row (frontend/src/lib/github.js). Claiming
+                # the engine failed on a molecule it never tried is a report
+                # nobody can reproduce.
+                smiles=item["smiles"] if position == 0 else None,
+                limit_code=TIMEOUT,
+            )
         )
-        row["limit_code"] = "timeout"
-        rows.append(row)
         failed += 1
     return rows, failed
 
@@ -378,7 +419,7 @@ def mark_job_failed(request, exc, traceback, job_id: str) -> None:
         redis_store.remove_ip_job(meta.get("ip", "unknown"), job_id)
 
 
-def _fast_error_item(smiles: str, message: str) -> dict:
+def _fast_error_item(smiles: str, message: str, limit_code: str | None = None) -> dict:
     """An error row for the FAST path, shaped as a ResultItem.
 
     NOT _error_row: that builds a BatchRow, whose `smiles` is Optional and
@@ -398,7 +439,7 @@ def _fast_error_item(smiles: str, message: str) -> dict:
         name=None,
         tier=None,
         formula=None,
-        limit_code=None,
+        limit_code=limit_code,
         error=message,
         depiction_svg=None,
         roundtrip_smiles=None,
@@ -476,7 +517,9 @@ def translate_fast(
             # per-row error. The last upstream tier rename made classify()
             # raise on live rows; the next one will too.
             logger.exception("Naming failed for %s", smiles)
-            rows.append(_fast_error_item(smiles, f"Naming failed: {exc}"))
+            rows.append(
+                _fast_error_item(smiles, f"Naming failed: {exc}", limit_code=ENGINE_ERROR)
+            )
             continue
         if result_item.depiction_svg is None and result_item.status in (
             "pin",

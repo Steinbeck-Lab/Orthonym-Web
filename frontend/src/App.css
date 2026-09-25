@@ -2608,6 +2608,49 @@ input.field__control {
   color: var(--muted);
 }
 
+/* The quiet mono pill two result actions share, defined once: the batch
+   table's Draw (a <button>, Home.css adds what a button needs) and "Report
+   SMILES on GitHub" (a link, ReportLink.jsx). The same quiet voice as the
+   no-name text it follows, so it offers a next step without competing with
+   the tier label above it. */
+.batch__draw,
+.report-link {
+  padding: 4px 10px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-pill);
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.batch__draw:hover,
+.report-link:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+/* The report link's own layout: its own line where it follows text, and it
+   WRAPS rather than holding its width -- nowrap made it wider than a 320px
+   tile's content box and set the min-width of whichever table column held it. */
+.report-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6ch;
+  align-self: flex-start;
+  width: fit-content;
+  max-width: 100%;
+  text-decoration: none;
+}
+
+/* Its own line under the no-name text in both tables. */
+.results-cell--name .report-link,
+.batch__table .report-link {
+  display: flex;
+  margin-top: var(--s-xs);
+}
+
 .results-cell--name {
   min-width: 12ch;
   vertical-align: middle;

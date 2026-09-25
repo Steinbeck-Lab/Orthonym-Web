@@ -67,6 +67,8 @@ def test_submit_then_poll_then_read_results(redis_client):
     assert status["status"] == "done"
     assert status["total"] == 2
     assert status["done"] == 2
+    # The defaults, echoed: a report filed from this job states them.
+    assert (status["best_effort"], status["verify"]) == (True, True)
 
     results = client.get(f"/api/jobs/{job_id}/results").json()
     assert [r["index"] for r in results["rows"]] == [0, 1]
@@ -74,6 +76,18 @@ def test_submit_then_poll_then_read_results(redis_client):
     assert results["rows"][0]["status"] == "pin"
     # A batch row must never carry a picture.
     assert "depiction_svg" not in results["rows"][0]
+
+
+def test_a_job_echoes_the_switches_it_was_named_with(redis_client):
+    """An abstain under best-effort OFF is not one the default settings
+    reproduce, so "Report SMILES on GitHub" must be able to say which
+    settings produced it -- and a batch row does not carry them."""
+    response = client.post(
+        "/api/jobs", json={"text": "CCO\n", "best_effort": False, "verify": False}
+    )
+    assert response.status_code == 200, response.text
+    status = client.get(f"/api/jobs/{response.json()['job_id']}").json()
+    assert (status["best_effort"], status["verify"]) == (False, False)
 
 
 def test_results_are_paginated(redis_client):
@@ -301,6 +315,46 @@ def test_a_soft_time_limit_keeps_named_rows_and_times_out_the_rest(
     assert len(rows) == 4, "the timeout lost rows instead of marking them"
     assert rows[0]["status"] == "pin"
     assert [r["limit_code"] for r in rows[2:]] == ["timeout", "timeout"]
+    # Only the molecule that was being named when the limit fired carries its
+    # structure, so only it gets "Report SMILES on GitHub" (frontend/src/lib/github.js).
+    # CCCCC never reached the engine; reporting it as a failure would be false.
+    assert [r["smiles"] for r in rows[2:]] == ["CCCC", None]
+
+
+def test_a_timeout_keeps_the_parse_error_of_an_unreadable_row_after_it(
+    redis_client, job_id, monkeypatch
+):
+    """An input that failed to PARSE is not a timeout, even if it sits after
+    the molecule the limit interrupted. It used to be relabelled "Timed out"
+    with limit_code "timeout", which lost the real reason and suggested a
+    retry could help."""
+    from celery.exceptions import SoftTimeLimitExceeded
+
+    from app import redis_store, tasks
+
+    def fake_name_one(smiles, best_effort, verify=True):
+        raise SoftTimeLimitExceeded()
+
+    monkeypatch.setattr(tasks, "name_one", fake_name_one)
+
+    prepared = [
+        {"index": 0, "raw_input": "CCO", "input_id": None, "smiles": "CCO", "error": None},
+        {
+            "index": 1,
+            "raw_input": "C1CC",
+            "input_id": None,
+            "smiles": None,
+            "error": "Could not parse this SMILES string",
+        },
+    ]
+    redis_store.create_job(job_id, total=2, fmt="smiles_list", client_ip="::1")
+    tasks.run_chunk(job_id, 0, prepared, True)
+    redis_store.assemble_rows(job_id, n_chunks=1)
+
+    rows = redis_store.read_rows(job_id, 0, 100)
+    assert (rows[0]["error"], rows[0]["limit_code"]) == ("Timed out", "timeout")
+    assert rows[1]["error"] == "Could not parse this SMILES string"
+    assert rows[1]["limit_code"] is None
 
 
 def test_one_molecule_raising_does_not_lose_the_rest_of_the_chunk(
@@ -333,6 +387,10 @@ def test_one_molecule_raising_does_not_lose_the_rest_of_the_chunk(
     rows = redis_store.read_rows(job_id, 0, 100)
     assert [r["status"] for r in rows] == ["pin", "error", "pin"]
     assert "engine exploded" in rows[1]["error"]
+    # Marked as the engine's failure, not bad input, and carrying the
+    # structure -- the two things "Report SMILES on GitHub" keys on.
+    assert rows[1]["limit_code"] == "engine_error"
+    assert rows[1]["smiles"] == "CCC"
 
 
 def test_a_redelivered_chunk_does_not_uncomplete_a_finished_job(

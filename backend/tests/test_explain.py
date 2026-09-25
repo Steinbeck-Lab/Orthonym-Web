@@ -250,6 +250,18 @@ def test_structure_in_path_still_works_and_indices_are_in_range():
             )
 
 
+def test_an_unnameable_molecule_is_not_explained_as_if_its_placeholder_were_a_name():
+    """Uranium trioxide: the engine returns "inorganic compound (not
+    supported)", a failure placeholder, not a name. /explain showed it under
+    "Name" with a drawn structure; it must refuse like any abstain."""
+    from app.explain import explain_molecule
+    from app.orthonym_service import get_primary_namer
+
+    result = explain_molecule("O=[U](=O)=O", namer=get_primary_namer())
+    assert result["name"] is None, result["name"]
+    assert "could not confidently name" in result["error"]
+
+
 def test_structure_in_path_never_emits_a_retired_segment_kind():
     # The old implementation emitted kind="rest" and kind="undecomposed".
     # Both were removed from SegmentKind in Task 6; if either survives here

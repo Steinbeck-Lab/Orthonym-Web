@@ -4,7 +4,8 @@ COPY package*.json ./
 RUN npm ci
 COPY . .
 
-# The header's GitHub link, absent by default.
+# The header's GitHub link, and the "Report SMILES on GitHub" link on results
+# Orthonym could not name. Both read src/lib/github.js.
 #
 # It has to arrive as a BUILD arg and not as a runtime environment variable,
 # because vite substitutes `import.meta.env.VITE_*` into the bundle when the
@@ -25,9 +26,9 @@ COPY . .
 # link.
 #
 # Override to point a fork at its own source. The literal value `none` ships
-# no link and no notch separator (Navigation.jsx), which is the only way to
-# turn it off -- an empty string here would just fall through to the
-# component's own default.
+# no link, no notch separator and no report link (src/lib/github.js), which
+# is the only way to turn them off -- an empty string here would just fall
+# through to that file's own default.
 ARG VITE_GITHUB_URL="https://github.com/Steinbeck-Lab/Orthonym-Web"
 RUN npm run build
 

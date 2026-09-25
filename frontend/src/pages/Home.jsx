@@ -20,6 +20,7 @@ import { forgetJob, readJobs, rememberJob } from '../lib/jobStore'
 import { MAX_ROWS, parseSmilesLines } from '../lib/parseSmiles'
 import useKetcher from '../lib/useKetcher'
 import useReducedMotion from '../lib/useReducedMotion'
+import TransportNotice from '../components/TransportNotice'
 import './Home.css'
 
 function emptyRow(smiles) {
@@ -194,8 +195,12 @@ function Home() {
     setIsSubmitting(true)
 
     translateBatch(lines, { bestEffort, verify })
-      .then((results) => {
+      .then((named) => {
         setIsSubmitting(false)
+        // The switches THIS submission used, on the row itself: they may be
+        // flipped before the reader acts on a tile, and "Report SMILES on
+        // GitHub" must state what produced the result, not what is set now.
+        const results = named.map((result) => ({ ...result, settings: { bestEffort, verify } }))
 
         if (reduceMotion) {
           setRows(results.map((result) => ({ ...result, phase: 'done' })))
@@ -254,7 +259,7 @@ function Home() {
           )
           return
         }
-        setFetchError(err?.message || 'unknown network error')
+        setFetchError(err ?? new Error('unknown network error'))
         setRows([])
       })
   }
@@ -523,8 +528,9 @@ function Home() {
       >
         {fetchError && (
           <p className="workbench__alert" role="alert">
-            Could not reach Orthonym&rsquo;s backend ({fetchError}). Is it running on{' '}
-            <code>localhost:8000</code>?
+            {/* The status decides the sentence (lib/transport.js): a 503 or a
+                429 is the backend answering, not the backend missing. */}
+            <TransportNotice error={fetchError} />
           </p>
         )}
 

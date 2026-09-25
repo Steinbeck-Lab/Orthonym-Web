@@ -41,6 +41,7 @@ from rdkit import Chem
 from rdkit.Chem.Draw import rdMolDraw2D
 
 from orthonym import Orthonym
+from orthonym.errors import is_failure_name
 
 from .glossary import describe_locant, describe_part, describe_token
 from .name_tokens import (
@@ -931,7 +932,11 @@ def explain_molecule(smiles: str, namer: Orthonym) -> dict:
     tree_result = namer.name_with_tree(smiles)
     name = tree_result.name
 
-    if not name or "unknown" in name.lower():
+    # The engine's own failure test, not a local copy of it: an unnameable
+    # molecule comes back as a descriptive placeholder, and "inorganic compound
+    # (not supported)" (uranium trioxide) was shown here as if it were a name,
+    # with a partial breakdown under it. The old check saw only "unknown".
+    if is_failure_name(name):
         return {
             "smiles": smiles,
             "name": None,

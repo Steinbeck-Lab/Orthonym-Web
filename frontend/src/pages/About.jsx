@@ -377,7 +377,7 @@ function About() {
             {/* No link: the upstream repository is private and answers 404
                 to an anonymous visitor, and a link to the source would
                 promise a target a reader cannot open. Terms.jsx and
-                Navigation.jsx carry the same fact; the three move together. */}
+                lib/github.js carry the same fact; the three move together. */}
             <dd>
               MIT licence. Vendored as a source snapshot; the upstream repository is not yet public.
             </dd>

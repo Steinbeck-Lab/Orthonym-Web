@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
+import { GITHUB_URL } from '../lib/github'
 
 // The site header: ONE NOTCH ISLAND hanging off the top edge of the window,
 // centred, welded to the edge by a pair of concave fillets, so it reads as
@@ -62,32 +63,8 @@ const NAV_LINKS = [
   { to: '/about', label: 'About' },
 ]
 
-// THIS SITE's source, and only this site's.
-//
-// The distinction matters, because this link used to mean something else and
-// was correctly switched off for it. It pointed at the naming ENGINE,
-// whose repository (now github.com/Beilstein-Institut/Orthonym) is private
-// and answers 404 to an anonymous visitor -- a dead link in the header of
-// every route. It now points at Orthonym-Web, the published split of this web
-// app, which is public.
-//
-// So the label is honest as "GitHub" in the header but must not be read as
-// "the engine is open": Terms.jsx and About.jsx both still state, in prose,
-// that the Orthonym engine's repository is not public, and those statements
-// remain TRUE and must not be "corrected" to match this link. The accessible
-// name below says which source it is, so nobody has to guess from context.
-//
-// Still overridable: a fork or a private deployment sets VITE_GITHUB_URL and
-// gets its own source. The literal `none` ships no link and no separator.
-//
-// `||`, not `??`, and the default is repeated in frontend/Dockerfile on
-// purpose. An unset build arg reaches vite as an EMPTY STRING, not as
-// undefined, so `??` would keep the empty string and silently ship no link --
-// which is exactly the bug this line replaced. `||` treats empty as absent,
-// and `none` is then the explicit way to say "off".
-const GITHUB_URL_DEFAULT = 'https://github.com/Steinbeck-Lab/Orthonym-Web'
-const GITHUB_URL_RAW = import.meta.env.VITE_GITHUB_URL || GITHUB_URL_DEFAULT
-const GITHUB_URL = GITHUB_URL_RAW === 'none' ? null : GITHUB_URL_RAW
+// The header's GitHub link. What it points at, and why, is in lib/github.js,
+// which the report link on unnamed results reads too.
 
 // The pint from the wordmark, standing in for the O on the home page and for
 // the whole name here. Decorative: the link's aria-label already names it.

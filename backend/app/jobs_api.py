@@ -333,7 +333,9 @@ def admit_and_dispatch(
     # only thing standing between "you were shown a results link" and "you can
     # delete this job" (audit item delete-no-ownership).
     owner_token = secrets.token_urlsafe(32)
-    redis_store.create_job(job_id, len(molecules), fmt, ip, owner_token)
+    redis_store.create_job(
+        job_id, len(molecules), fmt, ip, owner_token, best_effort, verify
+    )
     try:
         check_and_register_job(ip, job_id)
     except HTTPException:
@@ -526,6 +528,7 @@ def _status_response(
         counts=redis_store.job_tier_counts(meta),
         created_at=int(meta["created"]),
         expires_at=int(meta["expires"]),
+        **redis_store.job_switches(meta),
     )
 
 

@@ -22,6 +22,7 @@ import { forgetJob, rememberJob } from '../lib/jobStore'
 import { STATE_CLASS, VERIFIED_STATUSES, stateLabelFor } from '../lib/statuses'
 import CopyButton from './CopyButton'
 import Icon from './Icon'
+import ReportLink from './ReportLink'
 import TierLamp from './TierLamp'
 import ChemName, { ChemFormula } from './Typeset'
 
@@ -488,6 +489,9 @@ function BatchResults({ job, onForget }) {
   const percent = progressPercent({ done: status?.done ?? 0, total })
   const expiry = status ? expiryLabel(status.expires_at, now) : null
   const canCancel = Boolean(ownerToken) && status && !finished
+  // The switches this job was named with, for "Report SMILES on GitHub". One
+  // object for the job, not one per row.
+  const jobSettings = status && { bestEffort: status.best_effort, verify: status.verify }
   const canDelete = Boolean(ownerToken) && finished
 
   return (
@@ -631,6 +635,14 @@ function BatchResults({ job, onForget }) {
                         </td>
                         <td>
                           <NameCell row={row} />
+                          {/* In the Name cell, not beside Draw: an unnamed row
+                              has no name to squeeze, while a pill in the last
+                              column widened it for EVERY row on the page. */}
+                          <ReportLink
+                            row={row}
+                            where="Home (batch)"
+                            settings={jobSettings}
+                          />
                         </td>
                         <td>
                           <RoundTripCell row={row} />

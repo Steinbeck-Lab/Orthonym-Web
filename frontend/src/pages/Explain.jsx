@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ConfidenceReport from '../components/ConfidenceReport'
 import { verdictKindFor } from '../lib/explainVerdict'
@@ -11,6 +11,8 @@ import { useAtomHighlight } from '../lib/useAtomHighlight'
 import { useKetcher } from '../lib/useKetcher'
 import './Explain.css'
 import Icon from '../components/Icon'
+import ReportLink from '../components/ReportLink'
+import TransportNotice from '../components/TransportNotice'
 
 // Curated structures spanning what the decomposition really does now that
 // it comes from OPSIN's own parse tree rather than SMARTS rules: a simple
@@ -34,6 +36,11 @@ const EXAMPLES = [
   },
   { label: 'benzene', name: 'benzene', smiles: 'c1ccccc1' },
 ]
+
+// The switches the tier row is fetched with -- Home's defaults, since this
+// page has no switches of its own. Named once so the request and the report
+// link cannot state different settings.
+const TIER_SETTINGS = { bestEffort: true, verify: true }
 
 function SegmentNode({ segment, path, activePath, setHoveredPath, togglePath }) {
   const isActive = activePath === path
@@ -104,6 +111,11 @@ function Explain() {
   // a name appears. The reverse lost the honest disclosure instead. Set by
   // runExplain alongside the request it describes.
   const [resultMode, setResultMode] = useState(null)
+  // Which runExplain is current. The tier fetch below settles on its own
+  // clock, after the explain request has already released the form, so a
+  // reply from an EARLIER molecule could land after the next submit and pin
+  // its tier -- and its "Report SMILES on GitHub" link -- under the new result.
+  const latestRun = useRef(0)
   // enabled only on the Draw tab: the iframe does not exist otherwise, and an
   // armed readiness clock would time out against nothing and report the editor
   // broken before the user ever opened it.
@@ -171,10 +183,11 @@ function Explain() {
     // never blocked by the tier.
     setTierRow(null)
     setResultMode(requestMode)
+    const run = ++latestRun.current
     if (requestMode !== 'name') {
-      translateBatch([value])
-        .then((rows) => setTierRow(rows?.[0] ?? null))
-        .catch(() => setTierRow(null))
+      translateBatch([value], TIER_SETTINGS)
+        .then((rows) => run === latestRun.current && setTierRow(rows?.[0] ?? null))
+        .catch(() => run === latestRun.current && setTierRow(null))
     }
 
     request
@@ -198,7 +211,7 @@ function Explain() {
         }
       })
       .catch((err) => {
-        setFetchError(err?.message || 'unknown network error')
+        setFetchError(err ?? new Error('unknown network error'))
         setPhase('idle')
       })
   }
@@ -416,8 +429,7 @@ function Explain() {
       <section className="explain-results" aria-label="Explanation">
         {fetchError && (
           <p className="notice" role="alert">
-            Could not reach Orthonym&rsquo;s backend ({fetchError}). Is it running on{' '}
-            <code>localhost:8000</code>?
+            <TransportNotice error={fetchError} />
           </p>
         )}
 
@@ -457,6 +469,11 @@ function Explain() {
                 <span className="explain-patch__snip explain-patch__snip--a" />
                 <span className="explain-patch__snip explain-patch__snip--b" />
               </div>
+              {/* From tierRow, the /api/translate row fetched alongside: the
+                  explain error is only a sentence, and the tier row is what
+                  says whether this was an abstain or a crash (reportable) or
+                  a SMILES that would not parse (not). Null in name mode. */}
+              <ReportLink row={tierRow} where="Explain" settings={TIER_SETTINGS} />
             </div>
           )}
 
@@ -559,6 +576,10 @@ function Explain() {
                     {apiError}
                   </p>
                 )}
+                {/* A success phase can still be a molecule Orthonym would not
+                    name: uranium trioxide lands here with a drawn structure and
+                    an abstain tier row, not in the error branch. */}
+                <ReportLink row={tierRow} where="Explain" settings={TIER_SETTINGS} />
 
                 <div className="explain-result__body">
                   <div
