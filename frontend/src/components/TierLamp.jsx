@@ -111,16 +111,17 @@ function LampMark({ tier }) {
 }
 
 /**
- * @param status one of the five API statuses. An unknown one renders nothing
+ * @param row the result row, when there is one. Its status is the lamp's,
+ *   and a demoted row's tooltip says what is true of it (lampTitleFor).
+ * @param status for a lamp with no row (the legend, About): one of the five
+ *   API statuses. An unknown one renders nothing
  *   rather than guessing a tier -- the same refusal Icon.jsx makes for an
  *   unknown name, and far better than lighting a lamp for a confidence this
  *   component cannot vouch for.
- * @param row the result row, when there is one, so a demoted row's tooltip
- *   says what is true of it (lampTitleFor).
  * @param fresh true on a result that has just arrived, which is the only time
  *   a PIN's lamp breathes.
  */
-export default function TierLamp({ status, row, fresh = false }) {
+export default function TierLamp({ row, status = row?.status, fresh = false }) {
   const cls = STATE_CLASS[status]
   if (!cls) return null
   // A native `title`, the tooltip this app uses everywhere else. Hover only,

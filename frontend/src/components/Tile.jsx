@@ -62,7 +62,7 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
               already animates on, so the two read as one arrival rather
               than two effects. */}
           <span className="tile__verify-label">
-            <TierLamp status={status} row={row} fresh={isActive} />
+            <TierLamp row={row} fresh={isActive} />
             {label}
           </span>
           {roundtrip_smiles ? (
@@ -152,7 +152,7 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
             {/* Pending has no tier yet, so TierLamp returns null for it and
                 the label stands alone -- an unlit lamp would claim the engine
                 had already decided something. */}
-            <TierLamp status={isPending ? undefined : status} row={row} />
+            <TierLamp row={isPending ? undefined : row} />
             {label}
           </span>
         )}

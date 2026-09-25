@@ -45,12 +45,18 @@ export function isMismatchHere(row) {
   return row?.status === 'best_effort' && Boolean(row.roundtrip_smiles) && row.roundtrip_match === false
 }
 
+/** The label a demoted best_effort row wears instead of its tier's, or
+ *  undefined. ONE place decides it, for the label and the lamp alike. */
+function demotedLabelFor(row) {
+  if (isUncheckedHere(row)) return UNCHECKED_LABEL
+  if (isMismatchHere(row)) return MISMATCH_LABEL
+  return undefined
+}
+
 /** The long tier label for one row. Every surface that prints one calls this,
  *  so the unchecked and mismatch cases cannot be missed on any of them. */
 export function stateLabelFor(row) {
-  if (isUncheckedHere(row)) return UNCHECKED_LABEL
-  if (isMismatchHere(row)) return MISMATCH_LABEL
-  return STATE_LABEL[row?.status]
+  return demotedLabelFor(row) ?? STATE_LABEL[row?.status]
 }
 
 // API status values use underscores (e.g. "best_effort"); CSS state classes
@@ -102,9 +108,8 @@ export const TIER_HOW = {
 export function lampTitleFor(status, row) {
   const short = STATE_SHORT[status]
   if (!short) return undefined
-  if (isUncheckedHere(row)) return `${short}: ${UNCHECKED_LABEL}.`
-  if (isMismatchHere(row)) return `${short}: ${MISMATCH_LABEL}.`
-  return `${short}: ${TIER_HOW[status]}`
+  const demoted = demotedLabelFor(row)
+  return `${short}: ${demoted ? `${demoted}.` : TIER_HOW[status]}`
 }
 
 // Statuses that ship a real name, whatever its tier.
