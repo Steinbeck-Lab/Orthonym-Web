@@ -157,6 +157,40 @@ def test_an_unverifiable_name_abstains_when_the_caller_refused_best_effort(
     assert item.limit_code == "withheld_unchecked"
 
 
+def test_a_pin_whose_round_trip_differs_is_demoted(monkeypatch):
+    """The other way a verified label goes unbacked: the round trip RAN and
+    OPSIN read the name back as a different molecule. The tile used to print
+    "does not match" under the double rule that means "matches". Propanol
+    stands in for OPSIN's answer, so ethanol's InChIKey cannot agree with it.
+    """
+    monkeypatch.setattr(orthonym_service, "opsin_parse", lambda name: "CCCO")
+
+    item = orthonym_service.translate_one("CCO", best_effort=True)
+
+    assert item.roundtrip_match is False
+    assert item.status == "best_effort", (
+        f"served status={item.status!r} beside a round trip that does not match"
+    )
+    assert item.name is not None, "the name is real and must survive the downgrade"
+    assert item.tier == "pin_verified", "the tier stays the engine's own"
+
+
+def test_a_mismatched_name_abstains_for_a_caller_who_refused_best_effort(
+    monkeypatch,
+):
+    """Same interaction as the unverifiable case, one difference: this check
+    RAN and failed, so the name is an engine defect worth reporting, and the
+    abstain must not carry "withheld_unchecked" (which hides the report link).
+    """
+    monkeypatch.setattr(orthonym_service, "opsin_parse", lambda name: "CCCO")
+
+    item = orthonym_service.translate_one("CCO", best_effort=False)
+
+    assert item.status == "abstain"
+    assert item.name is None
+    assert item.limit_code != "withheld_unchecked"
+
+
 def test_a_genuinely_verified_pin_is_untouched():
     """Vacuity guard: with OPSIN really available, a real pin stays a pin.
     Without this, downgrading everything unconditionally would pass every

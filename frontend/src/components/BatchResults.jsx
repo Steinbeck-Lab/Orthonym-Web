@@ -155,7 +155,7 @@ function NameCell({ row }) {
             the name was the whole visible signal, and 50 rows of rule is a
             lot to read. The lamp is where this table gains most. No `fresh`:
             fifty lamps breathing at once is a light show, not a signal. */}
-        <TierLamp status={row.status} />
+        <TierLamp row={row} />
         <span className="batch__name-text">
           <ChemName name={row.name} />
         </span>
@@ -178,7 +178,7 @@ function NameCell({ row }) {
   // dashes in 13 rows the first time this shipped.
   return (
     <div className={`batch__name batch__name--${stateClass}`}>
-      <TierLamp status={row.status} />
+      <TierLamp row={row} />
       <span className="batch__name-text batch__name-text--muted">
         {row.status === 'error' ? (row.error ?? 'This input could not be named') : label}
         {row.formula ? (

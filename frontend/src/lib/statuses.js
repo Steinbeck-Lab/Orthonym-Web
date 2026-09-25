@@ -34,10 +34,29 @@ export function isUncheckedHere(row) {
   return row?.status === 'best_effort' && !row.roundtrip_smiles
 }
 
+// A best_effort row whose round trip here RAN and read back a different
+// molecule. The backend demotes a pin or fallback to best_effort in that case
+// too, so "from the general engine" would be false of it; "a different
+// structure" is true of every such row, whatever built the name.
+export const MISMATCH_LABEL = 'Round trip here gave a different structure'
+
+/** A best_effort row whose round trip here did not match. */
+export function isMismatchHere(row) {
+  return row?.status === 'best_effort' && Boolean(row.roundtrip_smiles) && row.roundtrip_match === false
+}
+
+/** The label a demoted best_effort row wears instead of its tier's, or
+ *  undefined. ONE place decides it, for the label and the lamp alike. */
+function demotedLabelFor(row) {
+  if (isUncheckedHere(row)) return UNCHECKED_LABEL
+  if (isMismatchHere(row)) return MISMATCH_LABEL
+  return undefined
+}
+
 /** The long tier label for one row. Every surface that prints one calls this,
- *  so the unchecked case cannot be missed on any of them. */
+ *  so the unchecked and mismatch cases cannot be missed on any of them. */
 export function stateLabelFor(row) {
-  return isUncheckedHere(row) ? UNCHECKED_LABEL : STATE_LABEL[row?.status]
+  return demotedLabelFor(row) ?? STATE_LABEL[row?.status]
 }
 
 // API status values use underscores (e.g. "best_effort"); CSS state classes
@@ -67,6 +86,30 @@ export const STATE_SHORT = {
   abstain: 'NO NAME',
   // Not "BAD INPUT": an error row is also a naming crash or a batch timeout.
   error: 'ERROR',
+}
+
+// HOW each tier's name came about, for the lamp's hover tooltip. The label
+// beside a lamp says WHAT the tier is; this says how it got there. Only what
+// the status itself proves: batch rows carry no engine tier, so nothing here
+// may name a producer the status cannot vouch for.
+export const TIER_HOW = {
+  pin: 'built by the strict PIN rules. OPSIN read the name back and got your structure.',
+  // systematic_verified and pin_unverified: neither came through the strict
+  // PIN path's certification, and both round-trip.
+  fallback:
+    'the strict PIN path did not certify it as the preferred name. OPSIN read the name back and got your structure.',
+  best_effort: 'built partly or wholly by the general engine, not the strict PIN rules.',
+  abstain: 'the engine declined rather than guess, so no name was made.',
+  error: 'no name was made. RDKit refused the input, or naming failed part-way.',
+}
+
+/** The lamp's tooltip. `row` is optional (the legend and About have none);
+ *  with one, a demoted best_effort row says what is true of it instead. */
+export function lampTitleFor(status, row) {
+  const short = STATE_SHORT[status]
+  if (!short) return undefined
+  const demoted = demotedLabelFor(row)
+  return `${short}: ${demoted ? `${demoted}.` : TIER_HOW[status]}`
 }
 
 // Statuses that ship a real name, whatever its tier.

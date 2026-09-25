@@ -496,7 +496,7 @@ export default function RoundTripLoop() {
       {settled && result ? (
         <>
           <p className="station__tier">
-            <TierLamp status={status} />
+            <TierLamp row={row} />
             <span>{stateLabelFor(row) || STATE_SHORT[status]}</span>
           </p>
           <p className="station__verdict">{result.verdict}</p>

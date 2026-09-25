@@ -89,7 +89,7 @@ function ResultRow({ row, index }) {
         <td className="results-conf-row__spacer" aria-hidden="true" />
         <td className="results-conf-cell" colSpan={2}>
           <span className="results-conf">
-            <TierLamp status={status} />
+            <TierLamp row={row} />
             <span className="results-conf__tier">{stateLabelFor(row) || 'Error'}</span>
             {named && roundtrip_smiles && (
               <span className="results-conf__rt">

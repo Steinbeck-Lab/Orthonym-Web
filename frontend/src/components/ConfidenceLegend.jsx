@@ -88,7 +88,8 @@ const TIERS = [
     // here (OPSIN verify off): it wears this rule, so the key must say so.
     // Not "Best-effort mode only": the primary pass assigns this tier to some
     // composer names too, so it appears with the mode off.
-    detail: 'With OPSIN verify off, a verified name can land here too.',
+    // A round trip that ran and did not match demotes one here as well.
+    detail: 'A verified name lands here too if no round trip ran, or it failed.',
   },
   {
     key: 'abstain',
