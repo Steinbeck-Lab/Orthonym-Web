@@ -31,7 +31,7 @@ test('an abstain and an engine failure are reportable; a bad SMILES is not', () 
     assert.equal(isReportable({ smiles: 'CCO', status }), false, status)
   }
   // The visitor's own switches withheld a name the engine found.
-  assert.equal(isReportable({ smiles: 'CCO', status: 'abstain', limit_code: 'unverified_withheld' }), false)
+  assert.equal(isReportable({ smiles: 'CCO', status: 'abstain', limit_code: 'withheld_unchecked' }), false)
   // Nothing to put in the issue -- also every never-attempted timeout row.
   assert.equal(isReportable({ smiles: null, status: 'abstain' }), false)
   assert.equal(isReportable({ smiles: null, status: 'error', limit_code: 'timeout' }), false)

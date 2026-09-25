@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 #     demotion keeps the engine's tier instead of rewriting it, so a cached v7
 #     row can carry the old status and tier.
 # v9 (2026-09-25): no engine change. A best_effort=False abstain that withheld
-#     a name the engine had found now carries limit_code "unverified_withheld";
+#     a name the engine had found now carries limit_code "withheld_unchecked";
 #     a cached v8 copy of that row lacks it and would offer "Report SMILES on
 #     GitHub" for a molecule the engine had named.
 _KEY_VERSION = "v9"

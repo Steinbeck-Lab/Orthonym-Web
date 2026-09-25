@@ -371,12 +371,12 @@ def translate_one(
         # keeps out the front. For them the honest answer is abstain.
         #
         # That abstain is the caller's settings speaking, not the engine: a
-        # name existed. `unverified_withheld` says so, and keeps the
+        # name existed. `withheld_unchecked` says so, and keeps the
         # frontend's "Report SMILES on GitHub" (lib/github.js) off a molecule the
         # engine named perfectly well.
         if not best_effort:
             return _abstain_item(smiles, tier, row).model_copy(
-                update={"limit_code": "unverified_withheld"}
+                update={"limit_code": "withheld_unchecked"}
             )
         # STATUS only. `tier` stays the engine's own verdict on how the name
         # was built: this app's check not running does not change it. (This

@@ -52,7 +52,7 @@ const ENGINE_FAILURES = new Set(['engine_error', 'timeout'])
 
 // An abstain the visitor's own switches produced: best-effort off, and no
 // round trip to verify the name the engine DID find (orthonym_service.py).
-const WITHHELD = 'unverified_withheld'
+const WITHHELD = 'withheld_unchecked'
 
 // GitHub refuses a new-issue address much past 8 KB. The backend caps a typed
 // SMILES at 2000 characters, which fits; an SDF record has no cap.
