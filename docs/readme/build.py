@@ -471,13 +471,21 @@ def partners():
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{PARTNER_H}" height="{PARTNER_H}" viewBox="-30 -30 160 160">{paths}</svg>')
     # The About page's line under the pair, set like the header's "WEB". On a
     # transparent ground, so it comes in two inks and README.md swaps them by
-    # prefers-color-scheme: #666 on GitHub's white, #9da5b0 on its #0d1117.
+    # prefers-color-scheme: #666 on GitHub's white, #9da5b0 on its #0d1117,
+    # and at phone width by a two-line pair.
     text = "AN OFFICIAL COLLABORATION FOR OPEN SCIENCE"
     size, spacing, rule = 22, 5, 70
     w = round(len(text) * (size * .6 + spacing) + 2 * (rule + size * .6) + 8)
     css = font_css("mono")
-    for name, fill, hair in (("collab-line.svg", MUTED, "#c5c5c5"), ("collab-line-dark.svg", "#9da5b0", "#30363d")):
-        write(name, w, 44, product_line(w / 2, 32, size, spacing, rule, text, fill, hair), css)
+    # One line is 42 glyphs; at phone width it would shrink to ~8px, so the
+    # narrow pair breaks it in two, the hairlines on the second line only.
+    head, tail = "AN OFFICIAL COLLABORATION", "FOR OPEN SCIENCE"
+    wn = round(len(head) * (size * .6 + spacing) + 8)
+    for suffix, fill, hair in (("", MUTED, "#c5c5c5"), ("-dark", "#9da5b0", "#30363d")):
+        write(f"collab-line{suffix}.svg", w, 44, product_line(w / 2, 32, size, spacing, rule, text, fill, hair), css)
+        write(f"collab-line-narrow{suffix}.svg", wn, 84,
+              f'<text class="mono" x="{wn / 2 + spacing / 2}" y="32" text-anchor="middle" font-size="{size}" letter-spacing="{spacing}" fill="{fill}">{head}</text>'
+              + product_line(wn / 2, 72, size, spacing, 40, tail, fill, hair), css)
 
 
 if __name__ == "__main__":

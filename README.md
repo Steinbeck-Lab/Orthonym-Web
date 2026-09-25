@@ -119,7 +119,9 @@ under copyleft terms; the running site lists all of them on its Terms page, and
 <a href="https://cheminf.uni-jena.de"><img src="docs/readme/steinbeck.svg" alt="Steinbeck Lab, Friedrich Schiller University Jena" height="56"></a>
 <br><br>
 <picture>
+  <source media="(max-width: 700px) and (prefers-color-scheme: dark)" srcset="docs/readme/collab-line-narrow-dark.svg">
+  <source media="(max-width: 700px)" srcset="docs/readme/collab-line-narrow.svg">
   <source media="(prefers-color-scheme: dark)" srcset="docs/readme/collab-line-dark.svg">
-  <img src="docs/readme/collab-line.svg" alt="An official collaboration for open science" height="26">
+  <img src="docs/readme/collab-line.svg" alt="An official collaboration for open science" width="560">
 </picture>
 </div>
