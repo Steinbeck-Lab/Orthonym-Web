@@ -16,6 +16,11 @@
           "type": "json",
           "path": "frontend/package.json",
           "jsonpath": "$.version"
+        },
+        {
+          "type": "yaml",
+          "path": "CITATION.cff",
+          "jsonpath": "$.version"
         }
       ],
       "changelog-sections": [
