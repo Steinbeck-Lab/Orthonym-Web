@@ -28,11 +28,16 @@ export const STATE_LABEL = {
 // no tier -- and "not checked here" is true of every such row.
 export const UNCHECKED_LABEL = 'Name not checked here: no round-trip result'
 
+/** A best_effort row with no round-trip result here. ONE test, read by the
+ *  label below and by Tile's line under it, so the two cannot disagree. */
+export function isUncheckedHere(row) {
+  return row?.status === 'best_effort' && !row.roundtrip_smiles
+}
+
 /** The long tier label for one row. Every surface that prints one calls this,
  *  so the unchecked case cannot be missed on any of them. */
 export function stateLabelFor(row) {
-  if (row?.status === 'best_effort' && !row.roundtrip_smiles) return UNCHECKED_LABEL
-  return STATE_LABEL[row?.status]
+  return isUncheckedHere(row) ? UNCHECKED_LABEL : STATE_LABEL[row?.status]
 }
 
 // API status values use underscores (e.g. "best_effort"); CSS state classes

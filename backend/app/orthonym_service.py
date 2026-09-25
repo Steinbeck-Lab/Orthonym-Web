@@ -143,18 +143,17 @@ def classify(row: dict) -> tuple[str, Optional[str], str]:
         return "abstain", None, tier
     if tier == "pin_verified":
         return "pin", row["name"], tier
-    if tier == "systematic_verified":
-        # A verified systematic name that is not the PIN, or a trivial-retained
-        # name: one of the two "fallback" tiers.
+    if tier in ("systematic_verified", "pin_unverified"):
+        # The two "fallback" tiers: verified, preferred status not certified.
+        # systematic_verified is a verified systematic name that is not the PIN,
+        # or a trivial-retained name. pin_unverified is a name in PIN form that
+        # only a breadth producer built: it round-trips, but the engine does not
+        # certify its preferred status, so it is never a "pin". Assigned today,
+        # on the primary pass too; name_tiered's docstring still calls it
+        # reserved.
         return "fallback", row["name"], tier
     if tier == "best_effort":
         return "best_effort", row["name"], tier
-    if tier == "pin_unverified":
-        # A name in PIN form that only a breadth producer built. It round-trips,
-        # but the engine does not certify its preferred status, so it is a
-        # verified "fallback" -- never a "pin". Assigned today, on the primary
-        # pass too; name_tiered's docstring still calls it reserved.
-        return "fallback", row["name"], tier
 
     # This guard earned its keep: it is what caught the upstream rename from
     # T1/T3/T4/T5 to these names, instead of a wrong tier reaching a user.

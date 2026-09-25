@@ -1,4 +1,4 @@
-import { NAMED_STATUSES, STATE_CLASS, STATE_LABEL, stateLabelFor } from '../lib/statuses'
+import { NAMED_STATUSES, STATE_CLASS, stateLabelFor } from '../lib/statuses'
 import useDepiction from '../lib/useDepiction'
 import CopyButton from './CopyButton'
 import ChemName from './Typeset'
@@ -63,7 +63,7 @@ function ResultRow({ row, index }) {
             </span>
           ) : (
             <span className="results-cell__none">
-              {status === 'error' ? error || 'Could not parse this SMILES string' : STATE_LABEL[status]}
+              {status === 'error' ? error || 'Could not parse this SMILES string' : stateLabelFor(row)}
             </span>
           )}
         </td>

@@ -1,4 +1,4 @@
-import { NAMED_STATUSES, STATE_CLASS, VERIFIED_STATUSES, stateLabelFor } from '../lib/statuses'
+import { NAMED_STATUSES, STATE_CLASS, VERIFIED_STATUSES, isUncheckedHere, stateLabelFor } from '../lib/statuses'
 import useDepiction from '../lib/useDepiction'
 import CopyButton from './CopyButton'
 import ResolvingName from './ResolvingName'
@@ -182,9 +182,9 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
             a retry returns the same answer. */}
         {!isPending && status === 'best_effort' && (
           <span className="tile__origin">
-            {roundtrip_smiles
-              ? 'Built partly or wholly by the general engine, not the strict PIN rules.'
-              : 'No round-trip result here, so none is shown. If OPSIN verify is off, turn it on to run one.'}
+            {isUncheckedHere(row)
+              ? 'No round-trip result here, so none is shown. If OPSIN verify is off, turn it on to run one.'
+              : 'Built partly or wholly by the general engine, not the strict PIN rules.'}
           </span>
         )}
         {!isPending && status === 'abstain' && formula && (
