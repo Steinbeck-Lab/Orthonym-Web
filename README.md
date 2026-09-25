@@ -2,7 +2,7 @@
 
 <picture>
   <source media="(max-width: 700px)" srcset="docs/readme/banner-narrow.svg">
-  <img src="docs/readme/banner.svg" alt="Orthonym. Verified IUPAC names for chemical structures. Deterministic, rule-based, every name read back by OPSIN." width="100%">
+  <img src="docs/readme/banner.svg" alt="Orthonym Web. Verified IUPAC names for chemical structures. Deterministic, rule-based, every name read back by OPSIN." width="100%">
 </picture>
 
 <br>
@@ -112,9 +112,16 @@ under copyleft terms; the running site lists all of them on its Terms page, and
 
 <div align="center">
 <br>
-<a href="https://www.beilstein-institut.de/en/"><img src="docs/readme/beilstein.svg" alt="Beilstein-Institut" height="56"></a>
-<img src="docs/readme/brush-x.svg" alt="and" height="56">
-<a href="https://cheminf.uni-jena.de"><img src="docs/readme/steinbeck.svg" alt="Steinbeck Lab, Friedrich Schiller University Jena" height="56"></a>
-<br>
-<sub>Made with <img src="docs/readme/cup.svg" alt="coffee" height="14"> by <a href="https://kohulanr.com">Kohulan Rajan</a>. An official collaboration for open science.</sub>
+<sub>Made with <img src="docs/readme/cup.svg" alt="coffee" height="14"> by <a href="https://kohulanr.com">Kohulan Rajan</a> at</sub>
+<br><br>
+<a href="https://www.beilstein-institut.de/en/"><img src="docs/readme/beilstein.svg" alt="Beilstein-Institut" height="44"></a>
+<img src="docs/readme/brush-x.svg" alt="and" height="44">
+<a href="https://cheminf.uni-jena.de"><img src="docs/readme/steinbeck.svg" alt="Steinbeck Lab, Friedrich Schiller University Jena" height="44"></a>
+<br><br>
+<picture>
+  <source media="(max-width: 700px) and (prefers-color-scheme: dark)" srcset="docs/readme/collab-line-narrow-dark.svg">
+  <source media="(max-width: 700px)" srcset="docs/readme/collab-line-narrow.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/readme/collab-line-dark.svg">
+  <img src="docs/readme/collab-line.svg" alt="An official collaboration for open science" width="560">
+</picture>
 </div>

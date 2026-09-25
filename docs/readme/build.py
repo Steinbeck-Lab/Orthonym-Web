@@ -237,33 +237,51 @@ def banner_lamps(x0, step, y, size):
     )
 
 
+def product_line(cx, y, size, spacing, rule, text="WEB", fill=INK, hair="#c5c5c5"):
+    """Spaced mono caps between two hairlines. Under the wordmark it says
+    "WEB": this repository is Orthonym Web, the app, not the engine, and the
+    hairlines make it read as part of the product's name rather than as a
+    second tagline. The footer's collaboration line uses the same setting.
+
+    JetBrains Mono advances .6em per glyph, so the width is known without
+    measuring. The text sits half a letter-space right: SVG spacing trails the
+    last letter too, which would pull it off the centre the hairlines share."""
+    half = (len(text) * size * .6 + (len(text) - 1) * spacing) / 2 + size * .6
+    ly = f"{y - size * .36:.1f}"
+    return (f'<text class="mono" x="{cx + spacing / 2}" y="{y}" text-anchor="middle" font-size="{size}" letter-spacing="{spacing}" fill="{fill}">{text}</text>'
+            f'<line x1="{cx - half - rule:.1f}" y1="{ly}" x2="{cx - half:.1f}" y2="{ly}" stroke="{hair}" stroke-width="1.6"/>'
+            f'<line x1="{cx + half:.1f}" y1="{ly}" x2="{cx + half + rule:.1f}" y2="{ly}" stroke="{hair}" stroke-width="1.6"/>')
+
+
 def banner_narrow():
     """The banner for a phone-width README: bigger tagline and lamps, no
     sub-line (it cannot be read at a third of its size)."""
-    w, h = 800, 620
+    w, h = 800, 680
     wordmark = b64(REPO / "frontend/public/logos/ORTHONYM.png")
-    css = font_css("body") + MOTION + BANNER_CSS + REDUCED
+    css = font_css("body", "mono") + MOTION + BANNER_CSS + REDUCED
     write("banner-narrow.svg", w, h, f"""
 {bench('bn', w, h, 36)}
 {reading_light(170, w, h, 300, 200)}
 <image href="data:image/png;base64,{wordmark}" x="60" y="92" width="680" height="150"/>
-<text class="body" x="400" y="352" text-anchor="middle" font-size="46" fill="{BODY}">Verified IUPAC names</text>
-<text class="body" x="400" y="414" text-anchor="middle" font-size="46" fill="{BODY}">for Chemical Structures</text>
-{banner_lamps(240, 80, 524, 40)}
+{product_line(400, 312, 40, 20, 90)}
+<text class="body" x="400" y="412" text-anchor="middle" font-size="46" fill="{BODY}">Verified IUPAC names</text>
+<text class="body" x="400" y="474" text-anchor="middle" font-size="46" fill="{BODY}">for Chemical Structures</text>
+{banner_lamps(240, 80, 584, 40)}
 """, css, pad=40)
 
 
 def banner():
-    w, h = 1600, 540
+    w, h = 1600, 600
     wordmark = b64(REPO / "frontend/public/logos/ORTHONYM.png")
     css = font_css("body", "mono") + MOTION + BANNER_CSS + REDUCED
     write("banner.svg", w, h, f"""
 {bench('b', w, h, 36)}
 {reading_light(196, w, h, 420, 240)}
 <image href="data:image/png;base64,{wordmark}" x="360" y="100" width="880" height="194"/>
-<text class="body" x="800" y="366" text-anchor="middle" font-size="37" fill="{BODY}">Verified IUPAC names for Chemical Structures</text>
-<text class="mono" x="800" y="422" text-anchor="middle" font-size="21" letter-spacing="4" fill="{MUTED}">DETERMINISTIC  ·  RULE-BASED  ·  EVERY NAME READ BACK BY OPSIN</text>
-{banner_lamps(704, 48, 482, 22)}
+{product_line(800, 360, 32, 16, 110)}
+<text class="body" x="800" y="428" text-anchor="middle" font-size="37" fill="{BODY}">Verified IUPAC names for Chemical Structures</text>
+<text class="mono" x="800" y="484" text-anchor="middle" font-size="21" letter-spacing="4" fill="{MUTED}">DETERMINISTIC  ·  RULE-BASED  ·  EVERY NAME READ BACK BY OPSIN</text>
+{banner_lamps(704, 48, 544, 22)}
 """, css, pad=44)
 
 
@@ -429,7 +447,7 @@ def partner(name, logo, mime, logo_w, logo_h, scale=1):
     h, pad = PARTNER_H, 34
     lh = (h - 2 * pad) * scale
     lw = lh * logo_w / logo_h
-    w = round(lw + 2 * pad * 1.4)
+    w = round(lw + 2 * pad * .8)
     data = b64(logo)
     (HERE / name).write_text(
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">'
@@ -451,6 +469,23 @@ def partners():
     )
     (HERE / "brush-x.svg").write_text(
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{PARTNER_H}" height="{PARTNER_H}" viewBox="-30 -30 160 160">{paths}</svg>')
+    # The About page's line under the pair, set like the header's "WEB". On a
+    # transparent ground, so it comes in two inks and README.md swaps them by
+    # prefers-color-scheme: #666 on GitHub's white, #9da5b0 on its #0d1117,
+    # and at phone width by a two-line pair.
+    text = "AN OFFICIAL COLLABORATION FOR OPEN SCIENCE"
+    size, spacing, rule = 22, 5, 70
+    w = round(len(text) * (size * .6 + spacing) + 2 * (rule + size * .6) + 8)
+    css = font_css("mono")
+    # One line is 42 glyphs; at phone width it would shrink to ~8px, so the
+    # narrow pair breaks it in two, the hairlines on the second line only.
+    head, tail = "AN OFFICIAL COLLABORATION", "FOR OPEN SCIENCE"
+    wn = round(len(head) * (size * .6 + spacing) + 48)
+    for suffix, fill, hair in (("", MUTED, "#c5c5c5"), ("-dark", "#9da5b0", "#30363d")):
+        write(f"collab-line{suffix}.svg", w, 44, product_line(w / 2, 32, size, spacing, rule, text, fill, hair), css)
+        write(f"collab-line-narrow{suffix}.svg", wn, 84,
+              f'<text class="mono" x="{wn / 2 + spacing / 2}" y="32" text-anchor="middle" font-size="{size}" letter-spacing="{spacing}" fill="{fill}">{head}</text>'
+              + product_line(wn / 2, 72, size, spacing, 40, tail, fill, hair), css)
 
 
 if __name__ == "__main__":
