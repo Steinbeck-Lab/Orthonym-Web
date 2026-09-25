@@ -284,6 +284,17 @@ def job_tier_counts(meta: dict[str, str]) -> dict[str, int]:
     }
 
 
+def job_switches(meta: dict[str, str]) -> dict[str, bool | None]:
+    """The best_effort/verify switches create_job stored, read back.
+
+    None for a job created before they were recorded -- not a guess.
+    """
+    return {
+        key: (meta[key] == "1" if key in meta else None)
+        for key in ("best_effort", "verify")
+    }
+
+
 def bump_job_done(
     job_id: str, index: int, done: int, failed: int, counts: dict[str, int] | None = None
 ) -> None:

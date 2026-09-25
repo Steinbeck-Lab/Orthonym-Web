@@ -98,7 +98,7 @@ from orthonym.validation.opsin_roundtrip import opsin_parse
 
 from . import cdk_bridge
 from .depiction import structure_svg_data_uri
-from .schemas import VERIFIED_STATUSES, ResultItem
+from .schemas import VERIFIED_STATUSES, WITHHELD_UNCHECKED, ResultItem
 
 # Constructed once per process and reused across all requests. This is
 # REQUIRED for both correctness (general_fallback=True is what enables the
@@ -235,7 +235,9 @@ def _inchikey(mol: Chem.Mol) -> Optional[str]:
     return key or None
 
 
-def _abstain_item(smiles: str, tier: str, row: dict) -> ResultItem:
+def _abstain_item(
+    smiles: str, tier: str, row: dict, limit_code: Optional[str] = None
+) -> ResultItem:
     """The honest "no name" result.
 
     Built in two places -- the primary/escalated pass abstaining, and a
@@ -247,6 +249,9 @@ def _abstain_item(smiles: str, tier: str, row: dict) -> ResultItem:
     `tier` comes from classify(), never a hardcoded constant. Hardcoding "T5"
     here is what made every abstain 500 after the upstream tier rename, even
     though classify() itself had been updated.
+
+    `limit_code` overrides the engine's own reason, for the one abstain the
+    app forces itself (WITHHELD_UNCHECKED).
     """
     return ResultItem(
         smiles=smiles,
@@ -254,7 +259,7 @@ def _abstain_item(smiles: str, tier: str, row: dict) -> ResultItem:
         name=None,
         tier=tier,
         formula=row.get("formula"),
-        limit_code=row.get("limit_code"),
+        limit_code=limit_code or row.get("limit_code"),
         error=None,
         depiction_svg=None,
         roundtrip_smiles=None,
@@ -375,9 +380,7 @@ def translate_one(
         # frontend's "Report SMILES on GitHub" (lib/github.js) off a molecule the
         # engine named perfectly well.
         if not best_effort:
-            return _abstain_item(smiles, tier, row).model_copy(
-                update={"limit_code": "withheld_unchecked"}
-            )
+            return _abstain_item(smiles, tier, row, limit_code=WITHHELD_UNCHECKED)
         # STATUS only. `tier` stays the engine's own verdict on how the name
         # was built: this app's check not running does not change it. (This
         # block used to rewrite the tier to pin_unverified / best_effort, but

@@ -528,9 +528,7 @@ def _status_response(
         counts=redis_store.job_tier_counts(meta),
         created_at=int(meta["created"]),
         expires_at=int(meta["expires"]),
-        # Absent on a job created before the fields existed: None, not a guess.
-        best_effort=meta["best_effort"] == "1" if "best_effort" in meta else None,
-        verify=meta["verify"] == "1" if "verify" in meta else None,
+        **redis_store.job_switches(meta),
     )
 
 

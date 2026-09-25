@@ -489,6 +489,9 @@ function BatchResults({ job, onForget }) {
   const percent = progressPercent({ done: status?.done ?? 0, total })
   const expiry = status ? expiryLabel(status.expires_at, now) : null
   const canCancel = Boolean(ownerToken) && status && !finished
+  // The switches this job was named with, for "Report SMILES on GitHub". One
+  // object for the job, not one per row.
+  const jobSettings = status && { bestEffort: status.best_effort, verify: status.verify }
   const canDelete = Boolean(ownerToken) && finished
 
   return (
@@ -638,9 +641,7 @@ function BatchResults({ job, onForget }) {
                           <ReportLink
                             row={row}
                             where="Home (batch)"
-                            settings={
-                              status && { bestEffort: status.best_effort, verify: status.verify }
-                            }
+                            settings={jobSettings}
                           />
                         </td>
                         <td>

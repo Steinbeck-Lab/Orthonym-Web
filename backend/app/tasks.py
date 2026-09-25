@@ -17,7 +17,7 @@ from celery.exceptions import SoftTimeLimitExceeded
 from app import name_cache, redis_store
 from app.celery_app import celery_app
 from app.orthonym_service import translate_one
-from app.schemas import BatchRow, ResultItem
+from app.schemas import ENGINE_ERROR, TIMEOUT, BatchRow, ResultItem
 
 logger = logging.getLogger(__name__)
 
@@ -93,13 +93,6 @@ def _row(index: int, raw_input: str, input_id: str | None, named: dict) -> dict:
     ).model_dump()
 
 
-# The limit_code on an error row that is the ENGINE's failure rather than
-# unreadable input. "timeout" was already one; "engine_error" joins it so the
-# frontend can offer "Report SMILES on GitHub" for exactly these rows
-# (frontend/src/lib/github.js) without matching on message text.
-ENGINE_ERROR = "engine_error"
-
-
 def _error_row(
     index: int,
     raw_input: str,
@@ -122,6 +115,17 @@ def _error_row(
     ).model_dump()
 
 
+def _unparsed_row(item: dict) -> dict:
+    """The row for an input that already failed to parse, with its own reason.
+
+    ONE builder, because two loops need it -- _name_prepared, and
+    _timed_out_rows for a parse failure that sat after the molecule a timeout
+    interrupted -- and a copy in each is how the timeout path once lost the
+    reason and wrote "Timed out" instead.
+    """
+    return _error_row(item["index"], item["raw_input"], item["input_id"], item["error"])
+
+
 def _name_prepared(
     prepared: list[dict], best_effort: bool, verify: bool = True
 ) -> tuple[list[dict], int]:
@@ -141,9 +145,7 @@ def _name_prepared(
     for offset, item in enumerate(prepared):
         index = item["index"]
         if item["smiles"] is None:
-            rows.append(
-                _error_row(index, item["raw_input"], item["input_id"], item["error"])
-            )
+            rows.append(_unparsed_row(item))
             failed += 1
             continue
         try:
@@ -188,11 +190,7 @@ def _timed_out_rows(timeout: _ChunkTimedOut) -> tuple[list[dict], int]:
             # This one had already failed to PARSE, before any time ran out.
             # Keep that reason: relabelling it "Timed out" told the visitor a
             # retry could help an input that can never be read.
-            rows.append(
-                _error_row(
-                    item["index"], item["raw_input"], item["input_id"], item["error"]
-                )
-            )
+            rows.append(_unparsed_row(item))
             failed += 1
             continue
         rows.append(
@@ -208,7 +206,7 @@ def _timed_out_rows(timeout: _ChunkTimedOut) -> tuple[list[dict], int]:
                 # the engine failed on a molecule it never tried is a report
                 # nobody can reproduce.
                 smiles=item["smiles"] if position == 0 else None,
-                limit_code="timeout",
+                limit_code=TIMEOUT,
             )
         )
         failed += 1

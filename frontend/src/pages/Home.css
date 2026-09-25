@@ -2011,21 +2011,10 @@
 }
 
 .batch__draw {
-  padding: 4px 10px;
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--r-pill);
+  /* The pill itself is shared with "Report SMILES on GitHub" (App.css,
+     `.batch__draw, .report-link`); only what a <button> needs is here. */
   background: transparent;
-  font-family: var(--font-mono);
-  font-size: var(--t-caption);
-  letter-spacing: var(--track-caption);
-  text-transform: uppercase;
-  color: var(--muted);
   cursor: pointer;
-}
-
-.batch__draw:hover {
-  color: var(--ink);
-  border-color: var(--ink);
 }
 
 .batch__drawn-row td {

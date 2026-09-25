@@ -6,6 +6,7 @@ import { STATE_CLASS, STATE_SHORT, VERIFIED_STATUSES, stateLabelFor } from '../l
 import ChemName from './Typeset'
 import TierLamp from './TierLamp'
 import TierRule from './TierRule'
+import { backendAnswered } from '../lib/transport'
 
 /**
  * The About page's centrepiece: the round trip, RUN LIVE and drawn as a loop.
@@ -92,8 +93,7 @@ function outcome(row) {
 
 // What went wrong, in the reader's terms. translateBatch rejects with an
 // Error carrying `status` (lib/transport.js httpError), or a TypeError when
-// nothing answered at all. A 502 is the proxy saying the backend itself is
-// down, so it reads as not answering.
+// nothing answered at all; backendAnswered() decides which is which.
 function failureText(error) {
   if (error instanceof TranslateJobQueuedError) {
     return 'The naming service is busy, so this molecule was queued instead of named. Try again shortly.'
@@ -101,7 +101,7 @@ function failureText(error) {
   const status = error?.status
   if (status === 429) return 'Too many requests from this address. Wait a minute, then try again.'
   if (status === 503) return 'The naming service is up, but no worker can verify names right now.'
-  if (status && status !== 502) return `The naming request failed (HTTP ${status}).`
+  if (backendAnswered(error)) return `The naming request failed (HTTP ${status}).`
   return 'The naming service is not answering right now.'
 }
 

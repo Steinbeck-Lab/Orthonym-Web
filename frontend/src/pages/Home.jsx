@@ -20,7 +20,7 @@ import { forgetJob, readJobs, rememberJob } from '../lib/jobStore'
 import { MAX_ROWS, parseSmilesLines } from '../lib/parseSmiles'
 import useKetcher from '../lib/useKetcher'
 import useReducedMotion from '../lib/useReducedMotion'
-import { transportMessage } from '../lib/transport'
+import TransportNotice from '../components/TransportNotice'
 import './Home.css'
 
 function emptyRow(smiles) {
@@ -530,12 +530,7 @@ function Home() {
           <p className="workbench__alert" role="alert">
             {/* The status decides the sentence (lib/transport.js): a 503 or a
                 429 is the backend answering, not the backend missing. */}
-            {transportMessage(fetchError) ?? (
-              <>
-                Could not reach Orthonym&rsquo;s backend ({fetchError.message}). Is it running on{' '}
-                <code>localhost:8000</code>?
-              </>
-            )}
+            <TransportNotice error={fetchError} />
           </p>
         )}
 

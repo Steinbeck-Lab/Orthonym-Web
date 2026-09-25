@@ -234,14 +234,7 @@ async function jobFailure(res, jobId) {
     const retry = Number.parseInt(res.headers.get('retry-after') ?? '', 10)
     return new RateLimitedError(Number.isFinite(retry) ? retry : null)
   }
-  let detail = null
-  try {
-    const body = await res.json()
-    detail = typeof body?.detail === 'string' ? body.detail : null
-  } catch {
-    // A body that is not JSON tells us nothing extra; the status still does.
-  }
-  return new Error(detail ?? `Request failed with ${res.status}`)
+  return httpError(res, 'Request')
 }
 
 /**

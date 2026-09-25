@@ -24,15 +24,20 @@ export async function httpError(res, what) {
   return err
 }
 
-/** The sentence for an HTTP failure, or null when the backend itself did not
- *  answer (the caller then says it could not reach the backend). That is a
- *  missing status (fetch threw) OR a 502: the page talks to the backend
- *  through a same-origin proxy (Vite in dev, nginx in production), and a
- *  backend that is down comes back as the proxy's 502, never as a fetch
- *  error. The backend itself sends no 502. */
+/** Whether the backend itself answered. Not when fetch threw (no status),
+ *  and not on a 502: the page talks to the backend through a same-origin
+ *  proxy (Vite in dev, nginx in production), and a backend that is down comes
+ *  back as the proxy's 502, never as a fetch error. The backend itself sends
+ *  no 502. */
+export function backendAnswered(error) {
+  return Boolean(error?.status) && error.status !== 502
+}
+
+/** The sentence for an HTTP failure, or null when the backend did not
+ *  answer (the caller then says it could not reach the backend). */
 export function transportMessage(error) {
-  const status = error?.status
-  if (!status || status === 502) return null
+  if (!backendAnswered(error)) return null
+  const status = error.status
   if (status === 429) return 'Orthonym’s request limit was hit. Wait a minute, then try again.'
   if (status === 503) {
     return 'Orthonym’s backend is up, but no worker has a live JVM. Naming endpoints answer 503 until a worker reports one.'

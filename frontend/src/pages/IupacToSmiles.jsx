@@ -7,6 +7,7 @@ import Icon from '../components/Icon'
 import CopyButton from '../components/CopyButton'
 import NameResultsTable from '../components/NameResultsTable'
 import OpsinNote from '../components/OpsinNote'
+import TransportNotice from '../components/TransportNotice'
 
 // Curated names verified live against the real /api/iupac-to-smiles
 // endpoint (OPSIN-backed) before shipping -- simple, well-known IUPAC
@@ -204,7 +205,7 @@ function IupacToSmiles() {
         <section className="from-name-results" aria-label="Structure result">
           {fetchError && (
             <p className="notice" role="alert">
-              <TransportNotice error={fetchError} />
+              <FromNameNotice error={fetchError} />
             </p>
           )}
           <div className="from-name-results__live" aria-live="polite">
@@ -224,15 +225,12 @@ function IupacToSmiles() {
 // shared 60/min fast-path budget, so a THIRD submission inside a minute
 // 429s by design (nameBatch.js) -- that is not the backend being offline,
 // and telling a visitor their local server is down when it is in fact
-// working exactly as designed is the wrong direction to be wrong in. A 503
-// means the backend answered but no worker has a live JVM yet (jvm_guard);
-// its wording below is lifted from the app's own degraded-backend copy
-// (see the 503 branch) rather than invented fresh, so every surface
-// describes the same backend state the same way. A 504 means the fast path
-// itself timed out. Anything
-// else -- including a real network failure, where `status` is null --
-// keeps the original "is it running on localhost:8000?" text unchanged.
-function TransportNotice({ error }) {
+// working exactly as designed is the wrong direction to be wrong in. A 504
+// means the fast path itself timed out. Those two sentences are this page's
+// own; every other state -- the 503 (no worker has a live JVM), any other
+// status, and a backend that did not answer at all -- goes to the shared
+// TransportNotice, so it reads here exactly as it does on Home and /explain.
+function FromNameNotice({ error }) {
   if (error.status === 429) {
     return (
       <>
@@ -241,28 +239,12 @@ function TransportNotice({ error }) {
       </>
     )
   }
-  if (error.status === 503) {
-    // Wording lifted verbatim from the app's own degraded-backend copy
-    // (About.jsx's Service status section: `{raw.opsin}. Naming endpoints
-    // answer 503 until a worker reports one.`, backed by main.py's
-    // `opsin="no worker has a live JVM"`) rather than invented fresh, so
-    // every surface describes the same backend state the same way.
-    return (
-      <>
-        Orthonym&rsquo;s backend is up, but no worker has a live JVM. Naming endpoints answer 503
-        until a worker reports one.
-      </>
-    )
-  }
   if (error.status === 504) {
     return <>This conversion took too long rather than failed. Try again in a moment.</>
   }
-  return (
-    <>
-      Could not reach Orthonym&rsquo;s backend ({error.message}). Is it running on{' '}
-      <code>localhost:8000</code>?
-    </>
-  )
+  // Everything else, the 503 included, reads as it does on Home and
+  // /explain: one definition of each backend state (components/TransportNotice).
+  return <TransportNotice error={error} />
 }
 
 function IdleNote() {
