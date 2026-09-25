@@ -22,6 +22,7 @@ import { forgetJob, rememberJob } from '../lib/jobStore'
 import { STATE_CLASS, VERIFIED_STATUSES, stateLabelFor } from '../lib/statuses'
 import CopyButton from './CopyButton'
 import Icon from './Icon'
+import ReportLink from './ReportLink'
 import TierLamp from './TierLamp'
 import ChemName, { ChemFormula } from './Typeset'
 
@@ -631,6 +632,16 @@ function BatchResults({ job, onForget }) {
                         </td>
                         <td>
                           <NameCell row={row} />
+                          {/* In the Name cell, not beside Draw: an unnamed row
+                              has no name to squeeze, while a pill in the last
+                              column widened it for EVERY row on the page. */}
+                          <ReportLink
+                            row={row}
+                            where="Home (batch)"
+                            settings={
+                              status && { bestEffort: status.best_effort, verify: status.verify }
+                            }
+                          />
                         </td>
                         <td>
                           <RoundTripCell row={row} />

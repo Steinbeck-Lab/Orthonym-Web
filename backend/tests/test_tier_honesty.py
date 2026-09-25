@@ -152,6 +152,9 @@ def test_an_unverifiable_name_abstains_when_the_caller_refused_best_effort(
         "names"
     )
     assert item.name is None
+    # The settings withheld a name the engine HAD; marked so that the
+    # frontend offers no "Report SMILES on GitHub" for it (lib/github.js).
+    assert item.limit_code == "unverified_withheld"
 
 
 def test_a_genuinely_verified_pin_is_untouched():

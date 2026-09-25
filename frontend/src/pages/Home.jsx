@@ -194,8 +194,12 @@ function Home() {
     setIsSubmitting(true)
 
     translateBatch(lines, { bestEffort, verify })
-      .then((results) => {
+      .then((named) => {
         setIsSubmitting(false)
+        // The switches THIS submission used, on the row itself: they may be
+        // flipped before the reader acts on a tile, and "Report SMILES on
+        // GitHub" must state what produced the result, not what is set now.
+        const results = named.map((result) => ({ ...result, settings: { bestEffort, verify } }))
 
         if (reduceMotion) {
           setRows(results.map((result) => ({ ...result, phase: 'done' })))

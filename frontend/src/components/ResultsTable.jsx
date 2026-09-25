@@ -1,6 +1,7 @@
 import { NAMED_STATUSES, STATE_CLASS, stateLabelFor } from '../lib/statuses'
 import useDepiction from '../lib/useDepiction'
 import CopyButton from './CopyButton'
+import ReportLink from './ReportLink'
 import ChemName from './Typeset'
 import TierLamp from './TierLamp'
 
@@ -66,6 +67,7 @@ function ResultRow({ row, index }) {
               {status === 'error' ? error || 'Could not parse this SMILES string' : stateLabelFor(row)}
             </span>
           )}
+          <ReportLink row={row} where="Home" settings={row.settings} />
         </td>
         <td className="results-cell--pic">
           {roundtrip_smiles ? (

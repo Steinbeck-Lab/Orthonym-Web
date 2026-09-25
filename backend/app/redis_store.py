@@ -89,7 +89,13 @@ def remove_ip_job(ip: str, job_id: str) -> None:
 
 
 def create_job(
-    job_id: str, total: int, fmt: str, client_ip: str, owner_token: str = ""
+    job_id: str,
+    total: int,
+    fmt: str,
+    client_ip: str,
+    owner_token: str = "",
+    best_effort: bool = True,
+    verify: bool = True,
 ) -> None:
     settings = get_settings()
     client = get_redis()
@@ -111,6 +117,12 @@ def create_job(
             # GET /api/jobs/{id}, and this field must not travel with it.
             # jobs_api strips it; the check is a constant-time compare there.
             "owner": owner_token,
+            # The two switches the job was named with, echoed by GET
+            # /api/jobs/{id} so a "Report SMILES on GitHub" issue can say
+            # them: an abstain with best-effort off is not one the default
+            # settings would reproduce.
+            "best_effort": int(best_effort),
+            "verify": int(verify),
         },
     )
     pipe.expire(key, settings.JOB_RESULT_TTL_SECONDS)

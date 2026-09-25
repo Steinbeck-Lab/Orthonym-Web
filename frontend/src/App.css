@@ -2608,6 +2608,42 @@ input.field__control {
   color: var(--muted);
 }
 
+/* "Report SMILES on GitHub", on a result Orthonym could not name
+   (ReportLink.jsx). The batch table's Draw pill, as a link: the same quiet
+   mono voice as the no-name text it follows, so it offers a next step without
+   competing with the tier label above it. Its own line where it follows text.
+   It WRAPS rather than holding its width: nowrap made it wider than a 320px
+   tile's content box and set the min-width of whichever table column held it. */
+.report-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6ch;
+  align-self: flex-start;
+  width: fit-content;
+  padding: 4px 10px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-pill);
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  max-width: 100%;
+  text-decoration: none;
+  color: var(--muted);
+}
+
+.report-link:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+/* Its own line under the no-name text in both tables. */
+.results-cell--name .report-link,
+.batch__table .report-link {
+  display: flex;
+  margin-top: var(--s-xs);
+}
+
 .results-cell--name {
   min-width: 12ch;
   vertical-align: middle;

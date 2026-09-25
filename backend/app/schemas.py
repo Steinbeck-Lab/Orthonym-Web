@@ -239,6 +239,10 @@ class JobStatusResponse(BaseModel):
     counts: dict[str, int] = {}
     created_at: int
     expires_at: int
+    # The switches the job was named with (redis_store.create_job). None for
+    # a job created before they were recorded.
+    best_effort: Optional[bool] = None
+    verify: Optional[bool] = None
 
 
 class JobResultsResponse(BaseModel):

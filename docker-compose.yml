@@ -198,7 +198,10 @@ services:
       # build time, so a runtime variable is ignored silently. The ARG in
       # frontend/Dockerfile carries the full reasoning.
       #
-      # Unset now ships THIS SITE's own repository -- Navigation.jsx defaults
+      # It also sets where "Report SMILES on GitHub" opens issues; `none`
+      # removes that link too (frontend/src/lib/github.js, .env.example).
+      #
+      # Unset now ships THIS SITE's own repository -- lib/github.js defaults
       # to github.com/Steinbeck-Lab/Orthonym-Web, which is public. It does NOT link
       # the naming engine: the Orthonym engine's repository is still private,
       # and the prose in Terms.jsx and About.jsx that says so is still true.

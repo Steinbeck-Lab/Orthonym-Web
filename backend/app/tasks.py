@@ -93,12 +93,31 @@ def _row(index: int, raw_input: str, input_id: str | None, named: dict) -> dict:
     ).model_dump()
 
 
-def _error_row(index: int, raw_input: str, input_id: str | None, message: str) -> dict:
+# The limit_code on an error row that is the ENGINE's failure rather than
+# unreadable input. "timeout" was already one; "engine_error" joins it so the
+# frontend can offer "Report SMILES on GitHub" for exactly these rows
+# (frontend/src/lib/github.js) without matching on message text.
+ENGINE_ERROR = "engine_error"
+
+
+def _error_row(
+    index: int,
+    raw_input: str,
+    input_id: str | None,
+    message: str,
+    smiles: str | None = None,
+    limit_code: str | None = None,
+) -> dict:
+    # `smiles` only when the input DID parse (a crash or a timeout): a bug
+    # report needs the structure, and for an SDF record `raw_input` is just
+    # "SDF record N".
     return BatchRow(
         index=index,
         input=raw_input,
         input_id=input_id,
+        smiles=smiles,
         status="error",
+        limit_code=limit_code,
         error=message,
     ).model_dump()
 
@@ -143,6 +162,8 @@ def _name_prepared(
                     item["raw_input"],
                     item["input_id"],
                     f"Naming failed: {exc}",
+                    smiles=item["smiles"],
+                    limit_code=ENGINE_ERROR,
                 )
             )
             failed += 1
@@ -162,12 +183,23 @@ def _timed_out_rows(timeout: _ChunkTimedOut) -> tuple[list[dict], int]:
     """
     rows = list(timeout.rows)
     failed = timeout.failed
-    for item in timeout.remaining:
-        row = _error_row(
-            item["index"], item["raw_input"], item["input_id"], "Timed out"
+    for position, item in enumerate(timeout.remaining):
+        rows.append(
+            _error_row(
+                item["index"],
+                item["raw_input"],
+                item["input_id"],
+                "Timed out",
+                # Only remaining[0] was being named when the limit fired; the
+                # rest never reached the engine. So only it carries the
+                # structure, which is what makes it -- and only it -- a
+                # "Report SMILES on GitHub" row (frontend/src/lib/github.js). Claiming
+                # the engine failed on a molecule it never tried is a report
+                # nobody can reproduce.
+                smiles=item["smiles"] if position == 0 else None,
+                limit_code="timeout",
+            )
         )
-        row["limit_code"] = "timeout"
-        rows.append(row)
         failed += 1
     return rows, failed
 
@@ -378,7 +410,7 @@ def mark_job_failed(request, exc, traceback, job_id: str) -> None:
         redis_store.remove_ip_job(meta.get("ip", "unknown"), job_id)
 
 
-def _fast_error_item(smiles: str, message: str) -> dict:
+def _fast_error_item(smiles: str, message: str, limit_code: str | None = None) -> dict:
     """An error row for the FAST path, shaped as a ResultItem.
 
     NOT _error_row: that builds a BatchRow, whose `smiles` is Optional and
@@ -398,7 +430,7 @@ def _fast_error_item(smiles: str, message: str) -> dict:
         name=None,
         tier=None,
         formula=None,
-        limit_code=None,
+        limit_code=limit_code,
         error=message,
         depiction_svg=None,
         roundtrip_smiles=None,
@@ -476,7 +508,9 @@ def translate_fast(
             # per-row error. The last upstream tier rename made classify()
             # raise on live rows; the next one will too.
             logger.exception("Naming failed for %s", smiles)
-            rows.append(_fast_error_item(smiles, f"Naming failed: {exc}"))
+            rows.append(
+                _fast_error_item(smiles, f"Naming failed: {exc}", limit_code=ENGINE_ERROR)
+            )
             continue
         if result_item.depiction_svg is None and result_item.status in (
             "pin",

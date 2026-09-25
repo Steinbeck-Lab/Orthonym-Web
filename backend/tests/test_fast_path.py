@@ -522,6 +522,8 @@ def test_one_bad_molecule_does_not_lose_the_whole_fast_request(monkeypatch):
     assert rows[0]["name"], "the molecules that named fine must still be returned"
     assert rows[1]["status"] == "error"
     assert "cannot classify" in (rows[1]["error"] or "")
+    # The engine's failure, not bad input: "Report SMILES on GitHub" keys on this.
+    assert rows[1]["limit_code"] == "engine_error"
     assert rows[2]["name"], "the molecules AFTER the failure must still be returned"
 
     # Validate exactly as main.py:274 does. Without this the test passes on an

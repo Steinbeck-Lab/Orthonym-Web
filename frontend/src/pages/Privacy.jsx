@@ -52,17 +52,39 @@ import './Legal.css'
 // Every factual claim below was read out of the code or measured against the
 // running stack. The load-bearing ones and where they come from:
 //   ratelimit.py:86-172   the IP key shapes, the 60 s / 3600 s TTLs, IPv6 /64
-//   redis_store.py:99-117 the `ip` and `owner` fields on the job meta hash
+//   redis_store.py:105-129 the `ip`, `owner`, `best_effort` and `verify`
+//                         fields on the job meta hash
 //   core/config.py:59-60  JOB_RESULT_TTL_SECONDS 86400, NAME_CACHE 604800
-//   name_cache.py:107-157 the cache key is a SMILES hash, tied to no user
+//   name_cache.py:111-161 the cache key is a SMILES hash, tied to no user
 //   jobs_api.py:330-336   uuid4 job id, secrets.token_urlsafe(32) owner token
-//   jobs_api.py:624-660   results endpoints take NO owner token — see § 3
+//   jobs_api.py:629-665   results endpoints take NO owner token — see § 3
 //   lib/jobStore.js STORAGE_KEY, the one localStorage key Orthonym itself writes
 //   docker-compose.yml:1-9 the log rotation cap
 // and, measured live rather than reasoned about: a request through the
 // frontend puts the visitor's address in nginx's access log and the nginx
 // container's own address in the backend's, because uvicorn's
 // forwarded_allow_ips does not trust the bridge network.
+//
+// Version 2 (25 September 2026) adds the "Report SMILES on GitHub" link: its
+// own paragraph in § 5, the operator's side of a filed report in § 1, the
+// two naming switches § 3 now lists among what a batch job keeps, and the
+// one exception to § 6's "nothing here that can be connected to you". The
+// facts come from the code: lib/github.js builds the address and puts the
+// SMILES, the reason code, the formula, the error message and the page name
+// in it, plus the best-effort and OPSIN-verify switches the result was named
+// with (Home stamps them on each fast-path row; a batch job's come back from
+// GET /api/jobs/{id}, stored by redis_store.create_job), and deliberately NOT
+// the batch line's own ID token, the job id or the owner token. It offers
+// the link only for an abstain the engine itself reached (not one the
+// visitor's best-effort switch withheld), a crash, or the one molecule a
+// batch timeout interrupted. components/ReportLink.jsx
+// renders it as a plain link with rel="noopener noreferrer": nothing is
+// fetched until the visitor clicks, and no Referer is sent even then. A
+// signed-in visitor's GitHub session cookie does travel with that top-level
+// navigation, which is why § 5 names the account and not only the IP. The
+// repository is VITE_GITHUB_URL, the same one the header links to, and
+// `none` removes both -- in which case § 1's and § 5's report paragraphs
+// describe a link that does not exist and must be edited by hand.
 
 // The UNIVERSITY leads, the working group follows as the responsible unit.
 // Art. 4 (7) requires the controller to be a natural or legal person, public
@@ -166,6 +188,16 @@ function Privacy() {
             with the Thüringer Datenschutzgesetz. We delete them once they are no longer needed for
             that purpose, unless a statutory retention period applies.
           </p>
+          <h3>If you report a result on GitHub</h3>
+          <p>
+            The repository that a &ldquo;Report SMILES on GitHub&rdquo; link opens belongs to our
+            working group. If you submit an issue there, we read it, together with the GitHub
+            account it is filed under, to find and fix what went wrong in the naming engine, under
+            Art. 6 (1) lit. e GDPR in conjunction with the Thüringer Datenschutzgesetz. The issue
+            stays in the repository&rsquo;s issue history, where it records the fix, until it is no
+            longer needed for that purpose. You can ask us to delete it at any time (§ 6). What
+            reaches GitHub when you follow the link is described in § 5.
+          </p>
         </LegalSection>
 
         <LegalSection
@@ -244,8 +276,8 @@ function Privacy() {
             A larger submission becomes a job you can come back to. For 24 hours we keep the job’s
             rows — for each molecule, what you submitted, the standardised structure, the name
             produced, the round-trip check, the molecular formula and any error — together with the
-            submitting IP address, which is used only to release your concurrent-job slot, and the
-            job’s owner token. All of it is deleted automatically after 24 hours, or immediately if
+            two naming switches you chose, the submitting IP address, which is used only to release
+            your concurrent-job slot, and the job’s owner token. All of it is deleted automatically after 24 hours, or immediately if
             you delete the job yourself.
           </p>
           <p>
@@ -335,7 +367,7 @@ function Privacy() {
           id="third-parties"
           index="§ 5"
           title="Third parties"
-          note="There are none. This section exists to say so precisely."
+          note="There are none, unless you choose to report a result on GitHub. This section exists to say so precisely."
         >
           <p>
             This site uses no web analytics, no tag manager, no error-reporting service and no
@@ -349,16 +381,37 @@ function Privacy() {
             browser and contacts no chemistry server.
           </p>
           <p>
-            The structures and names you submit are not sent to any third party. Naming, verifying,
-            stereo labelling and drawing all happen on our own server, in software installed there.
-            The server makes no outbound request while answering yours.
+            The structures and names you submit are not sent to any third party, unless you follow a
+            report link yourself (see below). Naming, verifying, stereo labelling and drawing all
+            happen on our own server, in software installed there. The server makes no outbound
+            request while answering yours.
           </p>
           <p>
             This site does link to other sites — the institutions behind it, the projects it
             depends on, a handful of references. Following one of those links is a visit to that
             site, under its own privacy policy, and it happens only when you click.
           </p>
-          <p>No data is transferred to a third country or to an international organisation.</p>
+          <p>
+            One kind of link is different. When Orthonym cannot name a molecule, or fails while
+            naming it, the result offers a &ldquo;Report SMILES on GitHub&rdquo; link. That link carries the
+            molecule&rsquo;s SMILES string and what Orthonym said about it (its reason code, formula
+            or error message, the page you were on, and the two naming switches it was produced
+            with), so that GitHub can fill in a new issue for
+            you. It carries nothing else from your submission: not an ID you gave the compound, and
+            not your batch job. GitHub receives all of this as soon as you click, together with
+            your IP address and, if you are signed in to GitHub, your GitHub account, even if you
+            then close the page without submitting anything. If you submit the issue, GitHub stores
+            it under your GitHub account, and everyone who can see the repository can read it,
+            including us (§ 1). GitHub, Inc. is based in the United States, and GitHub&rsquo;s own
+            privacy statement applies to what it receives. Do not use the link for a structure you
+            need to keep confidential.
+          </p>
+          <p>
+            This site itself transfers no data to a third country or to an international
+            organisation. The one route by which anything you submitted reaches one is a report
+            link: following it sends the data described above to GitHub in the United States, and an
+            issue you submit is then kept there, in our repository.
+          </p>
         </LegalSection>
 
         <LegalSection id="rights" index="§ 6" title="Your rights">
@@ -385,7 +438,9 @@ function Privacy() {
             named in § 1. Be aware that most of what this site processes is not linked to you by
             name: outside the 24-hour lifetime of a batch job you submitted, and the short-lived
             rate-limit counters, there is generally nothing here that can be connected to you, which
-            also limits what a request for access can return.
+            also limits what a request for access can return. The exception is an issue you filed
+            through a report link (§ 1): it is tied to your GitHub account, and we can find it,
+            give you a copy or delete it.
           </p>
           <h3>Complaints</h3>
           <p>
@@ -428,7 +483,7 @@ function Privacy() {
             serve the site and honour an objection to it at the same time. That is a reason we would
             have to demonstrate if you objected — not an exception to your right to object.
           </p>
-          <p className="legal-updated">Version 1 — 6 September 2026</p>
+          <p className="legal-updated">Version 2 — 25 September 2026</p>
         </LegalSection>
     </LegalPage>
   )

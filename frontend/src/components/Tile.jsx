@@ -1,6 +1,7 @@
 import { NAMED_STATUSES, STATE_CLASS, VERIFIED_STATUSES, isUncheckedHere, stateLabelFor } from '../lib/statuses'
 import useDepiction from '../lib/useDepiction'
 import CopyButton from './CopyButton'
+import ReportLink from './ReportLink'
 import ResolvingName from './ResolvingName'
 import TierLamp from './TierLamp'
 import { ChemFormula } from './Typeset'
@@ -192,6 +193,7 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
             Formula: <ChemFormula formula={formula} />
           </span>
         )}
+        {!isPending && <ReportLink row={row} where="Home" settings={row.settings} />}
       </div>
       )}
     </li>
