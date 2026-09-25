@@ -20,6 +20,7 @@ import { forgetJob, readJobs, rememberJob } from '../lib/jobStore'
 import { MAX_ROWS, parseSmilesLines } from '../lib/parseSmiles'
 import useKetcher from '../lib/useKetcher'
 import useReducedMotion from '../lib/useReducedMotion'
+import { transportMessage } from '../lib/transport'
 import './Home.css'
 
 function emptyRow(smiles) {
@@ -258,7 +259,7 @@ function Home() {
           )
           return
         }
-        setFetchError(err?.message || 'unknown network error')
+        setFetchError(err ?? new Error('unknown network error'))
         setRows([])
       })
   }
@@ -527,8 +528,14 @@ function Home() {
       >
         {fetchError && (
           <p className="workbench__alert" role="alert">
-            Could not reach Orthonym&rsquo;s backend ({fetchError}). Is it running on{' '}
-            <code>localhost:8000</code>?
+            {/* The status decides the sentence (lib/transport.js): a 503 or a
+                429 is the backend answering, not the backend missing. */}
+            {transportMessage(fetchError) ?? (
+              <>
+                Could not reach Orthonym&rsquo;s backend ({fetchError.message}). Is it running on{' '}
+                <code>localhost:8000</code>?
+              </>
+            )}
           </p>
         )}
 

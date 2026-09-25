@@ -12,6 +12,7 @@ import { useKetcher } from '../lib/useKetcher'
 import './Explain.css'
 import Icon from '../components/Icon'
 import ReportLink from '../components/ReportLink'
+import { transportMessage } from '../lib/transport'
 
 // Curated structures spanning what the decomposition really does now that
 // it comes from OPSIN's own parse tree rather than SMARTS rules: a simple
@@ -210,7 +211,7 @@ function Explain() {
         }
       })
       .catch((err) => {
-        setFetchError(err?.message || 'unknown network error')
+        setFetchError(err ?? new Error('unknown network error'))
         setPhase('idle')
       })
   }
@@ -428,8 +429,12 @@ function Explain() {
       <section className="explain-results" aria-label="Explanation">
         {fetchError && (
           <p className="notice" role="alert">
-            Could not reach Orthonym&rsquo;s backend ({fetchError}). Is it running on{' '}
-            <code>localhost:8000</code>?
+            {transportMessage(fetchError) ?? (
+              <>
+                Could not reach Orthonym&rsquo;s backend ({fetchError.message}). Is it running on{' '}
+                <code>localhost:8000</code>?
+              </>
+            )}
           </p>
         )}
 

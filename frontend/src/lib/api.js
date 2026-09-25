@@ -30,6 +30,8 @@
 // See PRODUCT.md / DIRECTION brief for exact shapes. No fields are invented
 // or hardcoded here — everything the UI shows comes from these responses.
 
+import { httpError } from './transport.js'
+
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
 
 /**
@@ -104,7 +106,7 @@ export async function translateBatch(smilesList, { bestEffort = true, verify = t
     body: JSON.stringify({ smiles: smilesList, best_effort: bestEffort, verify }),
   })
   if (!res.ok) {
-    throw new Error(`POST /api/translate failed with ${res.status}`)
+    throw await httpError(res, 'POST /api/translate')
   }
   const data = await res.json()
   // A job envelope carries `job_id`; a finished TranslateResponse never
@@ -159,7 +161,7 @@ export async function fetchStructureFromName(name) {
 export async function explainMolecule(smiles) {
   const res = await fetch(`/api/explain?smiles=${encodeURIComponent(smiles)}`)
   if (!res.ok) {
-    throw new Error(`GET /api/explain failed with ${res.status}`)
+    throw await httpError(res, 'GET /api/explain')
   }
   return res.json()
 }
@@ -174,7 +176,7 @@ export async function explainMolecule(smiles) {
 export async function explainName(name) {
   const res = await fetch(`/api/explain-name?name=${encodeURIComponent(name)}`)
   if (!res.ok) {
-    throw new Error(`GET /api/explain-name failed with ${res.status}`)
+    throw await httpError(res, 'GET /api/explain-name')
   }
   return res.json()
 }
