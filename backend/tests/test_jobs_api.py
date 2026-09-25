@@ -321,6 +321,42 @@ def test_a_soft_time_limit_keeps_named_rows_and_times_out_the_rest(
     assert [r["smiles"] for r in rows[2:]] == ["CCCC", None]
 
 
+def test_a_timeout_keeps_the_parse_error_of_an_unreadable_row_after_it(
+    redis_client, job_id, monkeypatch
+):
+    """An input that failed to PARSE is not a timeout, even if it sits after
+    the molecule the limit interrupted. It used to be relabelled "Timed out"
+    with limit_code "timeout", which lost the real reason and suggested a
+    retry could help."""
+    from celery.exceptions import SoftTimeLimitExceeded
+
+    from app import redis_store, tasks
+
+    def fake_name_one(smiles, best_effort, verify=True):
+        raise SoftTimeLimitExceeded()
+
+    monkeypatch.setattr(tasks, "name_one", fake_name_one)
+
+    prepared = [
+        {"index": 0, "raw_input": "CCO", "input_id": None, "smiles": "CCO", "error": None},
+        {
+            "index": 1,
+            "raw_input": "C1CC",
+            "input_id": None,
+            "smiles": None,
+            "error": "Could not parse this SMILES string",
+        },
+    ]
+    redis_store.create_job(job_id, total=2, fmt="smiles_list", client_ip="::1")
+    tasks.run_chunk(job_id, 0, prepared, True)
+    redis_store.assemble_rows(job_id, n_chunks=1)
+
+    rows = redis_store.read_rows(job_id, 0, 100)
+    assert (rows[0]["error"], rows[0]["limit_code"]) == ("Timed out", "timeout")
+    assert rows[1]["error"] == "Could not parse this SMILES string"
+    assert rows[1]["limit_code"] is None
+
+
 def test_one_molecule_raising_does_not_lose_the_rest_of_the_chunk(
     redis_client, job_id, monkeypatch
 ):

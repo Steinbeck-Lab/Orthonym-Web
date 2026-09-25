@@ -184,6 +184,17 @@ def _timed_out_rows(timeout: _ChunkTimedOut) -> tuple[list[dict], int]:
     rows = list(timeout.rows)
     failed = timeout.failed
     for position, item in enumerate(timeout.remaining):
+        if item["smiles"] is None:
+            # This one had already failed to PARSE, before any time ran out.
+            # Keep that reason: relabelling it "Timed out" told the visitor a
+            # retry could help an input that can never be read.
+            rows.append(
+                _error_row(
+                    item["index"], item["raw_input"], item["input_id"], item["error"]
+                )
+            )
+            failed += 1
+            continue
         rows.append(
             _error_row(
                 item["index"],
