@@ -237,16 +237,20 @@ def banner_lamps(x0, step, y, size):
     )
 
 
-def product_line(cx, y, size, spacing, rule):
-    """"Web" under the wordmark: this repository is Orthonym Web, the app, not
-    the engine. Set as a spaced mono suffix between two hairlines, so it reads
-    as part of the product's name rather than as a second tagline. The text
-    sits half a letter-space right: SVG spacing trails the last letter too,
-    which would pull "WEB" off the centre the two hairlines share."""
-    half = size * .9 + spacing * 1.2
-    return (f'<text class="mono" x="{cx + spacing / 2}" y="{y}" text-anchor="middle" font-size="{size}" letter-spacing="{spacing}" fill="{INK}">WEB</text>'
-            f'<line x1="{cx - half - rule}" y1="{y - size * .36:.1f}" x2="{cx - half}" y2="{y - size * .36:.1f}" stroke="#c5c5c5" stroke-width="1.6"/>'
-            f'<line x1="{cx + half}" y1="{y - size * .36:.1f}" x2="{cx + half + rule}" y2="{y - size * .36:.1f}" stroke="#c5c5c5" stroke-width="1.6"/>')
+def product_line(cx, y, size, spacing, rule, text="WEB", fill=INK, hair="#c5c5c5"):
+    """Spaced mono caps between two hairlines. Under the wordmark it says
+    "WEB": this repository is Orthonym Web, the app, not the engine, and the
+    hairlines make it read as part of the product's name rather than as a
+    second tagline. The footer's collaboration line uses the same setting.
+
+    JetBrains Mono advances .6em per glyph, so the width is known without
+    measuring. The text sits half a letter-space right: SVG spacing trails the
+    last letter too, which would pull it off the centre the hairlines share."""
+    half = (len(text) * size * .6 + (len(text) - 1) * spacing) / 2 + size * .6
+    ly = f"{y - size * .36:.1f}"
+    return (f'<text class="mono" x="{cx + spacing / 2}" y="{y}" text-anchor="middle" font-size="{size}" letter-spacing="{spacing}" fill="{fill}">{text}</text>'
+            f'<line x1="{cx - half - rule:.1f}" y1="{ly}" x2="{cx - half:.1f}" y2="{ly}" stroke="{hair}" stroke-width="1.6"/>'
+            f'<line x1="{cx + half:.1f}" y1="{ly}" x2="{cx + half + rule:.1f}" y2="{ly}" stroke="{hair}" stroke-width="1.6"/>')
 
 
 def banner_narrow():
@@ -465,6 +469,15 @@ def partners():
     )
     (HERE / "brush-x.svg").write_text(
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{PARTNER_H}" height="{PARTNER_H}" viewBox="-30 -30 160 160">{paths}</svg>')
+    # The About page's line under the pair, set like the header's "WEB". On a
+    # transparent ground, so it comes in two inks and README.md swaps them by
+    # prefers-color-scheme: #666 on GitHub's white, #9da5b0 on its #0d1117.
+    text = "AN OFFICIAL COLLABORATION FOR OPEN SCIENCE"
+    size, spacing, rule = 22, 5, 70
+    w = round(len(text) * (size * .6 + spacing) + 2 * (rule + size * .6) + 8)
+    css = font_css("mono")
+    for name, fill, hair in (("collab-line.svg", MUTED, "#c5c5c5"), ("collab-line-dark.svg", "#9da5b0", "#30363d")):
+        write(name, w, 44, product_line(w / 2, 32, size, spacing, rule, text, fill, hair), css)
 
 
 if __name__ == "__main__":

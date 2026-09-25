@@ -112,9 +112,14 @@ under copyleft terms; the running site lists all of them on its Terms page, and
 
 <div align="center">
 <br>
+<sub>Made with <img src="docs/readme/cup.svg" alt="coffee" height="14"> by <a href="https://kohulanr.com">Kohulan Rajan</a> at</sub>
+<br><br>
 <a href="https://www.beilstein-institut.de/en/"><img src="docs/readme/beilstein.svg" alt="Beilstein-Institut" height="56"></a>
 <img src="docs/readme/brush-x.svg" alt="and" height="56">
 <a href="https://cheminf.uni-jena.de"><img src="docs/readme/steinbeck.svg" alt="Steinbeck Lab, Friedrich Schiller University Jena" height="56"></a>
-<br>
-<sub>Made with <img src="docs/readme/cup.svg" alt="coffee" height="14"> by <a href="https://kohulanr.com">Kohulan Rajan</a>. An official collaboration for open science.</sub>
+<br><br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/readme/collab-line-dark.svg">
+  <img src="docs/readme/collab-line.svg" alt="An official collaboration for open science" height="26">
+</picture>
 </div>
