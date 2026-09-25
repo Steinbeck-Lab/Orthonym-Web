@@ -1,6 +1,9 @@
 <div align="center">
 
-<img src="docs/readme/banner.svg" alt="Orthonym. Verified IUPAC names for chemical structures. Deterministic, rule-based, every name read back by OPSIN." width="100%">
+<picture>
+  <source media="(max-width: 700px)" srcset="docs/readme/banner-narrow.svg">
+  <img src="docs/readme/banner.svg" alt="Orthonym. Verified IUPAC names for chemical structures. Deterministic, rule-based, every name read back by OPSIN." width="100%">
+</picture>
 
 <br>
 
@@ -44,23 +47,16 @@ in greyscale and for every common colour deficiency.
 
 <img src="docs/screenshots/explain.png" alt="The Explain page taking caffeine's name apart, with one part of the name hovered and the atoms it describes lit in the structure" width="100%">
 
-<sub>Explain takes a name apart and lights the atoms each part describes.</sub>
+<sub>Explain takes a name apart and lights the atoms each part describes. A part it cannot place is left unlit, never guessed.</sub>
 
 ## When it cannot name a molecule
 
-<table>
-<tr>
-<td width="48%"><img src="docs/screenshots/report.png" alt="A result card for uranium trioxide: Could not confidently name this, the formula O3U, and a Report SMILES on GitHub button"></td>
-<td>
+<img src="docs/screenshots/report.png" alt="A result card for uranium trioxide: Could not confidently name this, the formula O3U, and a Report SMILES on GitHub button" width="100%">
 
 It says so, and declines rather than guess. The card then offers **Report SMILES on GitHub**,
 which opens a new issue here with the SMILES, the engine's reason and the settings already
 filled in. The label names what leaves the page, and the privacy policy says exactly what the
 link carries.
-
-</td>
-</tr>
-</table>
 
 ## What's inside
 
@@ -68,7 +64,7 @@ link carries.
 |:--|:--|
 | **Translate** | Paste SMILES, upload `.sdf`, `.mol` or `.csv`, or draw in Ketcher. Up to ten molecules answer at once; more run as a job with progress, a tally by tier and a CSV. |
 | **Name → Structure** | The reverse, on OPSIN: a name in, a structure out. |
-| **Explain** | A name taken apart, each part mapped onto the atoms it describes. |
+| **Explain** | A name taken apart; each part it can place is mapped onto its atoms, and the rest are marked, never guessed. |
 | **About** | How a name is built and checked, and a live board of the service's health. |
 
 Built on [the Orthonym engine](#the-engine) · [OPSIN 2.9.0](https://github.com/dan2097/opsin) ·
@@ -116,7 +112,7 @@ under copyleft terms; the running site lists all of them on its Terms page, and
 
 <div align="center">
 <br>
-<sub>Made with ☕ by <a href="https://kohulanr.com">Kohulan Rajan</a> at the
+<sub>Made with <img src="docs/readme/cup.svg" alt="coffee" height="14"> by <a href="https://kohulanr.com">Kohulan Rajan</a> at the
 <a href="https://www.beilstein-institut.de/en/">Beilstein-Institut</a> <img src="docs/screenshots/credit-x.svg" alt="✕" height="10">
 <a href="https://cheminf.uni-jena.de">Steinbeck Lab</a></sub>
 </div>

@@ -64,7 +64,7 @@ SUCCESS = "#2f6b28"
 TIERS = [
     ("pin", "PIN", "Verified, and the|preferred name.", "#2f6b28", "#3dff8f", 1.0),
     ("fallback", "FALLBACK", "Verified; preferred|status not certified.", "#556b2f", "#b6f24a", 0.8),
-    ("best_effort", "BEST EFFORT", "From the general|engine; read back.", "#9c4109", "#ffb02e", 0.62),
+    ("best_effort", "BEST EFFORT", "Named, but not a|verified tier.", "#9c4109", "#ffb02e", 0.62),
     ("abstain", "NO NAME", "The engine declined|rather than guess.", "#666666", "#666666", 0.0),
     ("error", "ERROR", "The input could|not be named.", "#a3231a", "#ff4560", 0.4),
 ]
@@ -156,7 +156,10 @@ def arrow(d, head, cls):
             f'<path class="rise {cls}h" d="{head}" fill="none" stroke="{INK}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>')
 
 
-def write(name, w, h, inner, css):
+def write(name, w, h, inner, css, pad=0):
+    """`pad` adds transparent room under the drawing: GitHub puts a README image
+    flush against whatever follows it, and markdown cannot add a margin."""
+    h += pad
     svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">'
            f'<style>{css}</style>{inner}</svg>')
     (HERE / name).write_text(svg)
@@ -178,23 +181,8 @@ MOTION = """
 
 
 # ------------------------------------------------------------------ banner
-def banner():
-    w, h = 1600, 540
-    wordmark = b64(REPO / "frontend/public/logos/ORTHONYM.png")
-    # The hero's flare, redrawn in SVG: a crimson core that breathes, a slow
-    # fan of rays turning behind it, multiplied onto the bench -- crimson light
-    # has to darken paper or it vanishes (DESIGN.md, Home hero).
-    rays = "".join(
-        f'<path d="M0 0 L{620 * math.cos(a):.1f} {620 * math.sin(a):.1f} '
-        f'L{620 * math.cos(a + .045):.1f} {620 * math.sin(a + .045):.1f} Z"/>'
-        for a in (i * math.tau / 28 for i in range(28))
-    )
-    lamps = "".join(
-        lamp(t[0], 704 + i * 48, 478, 22, uid="b", mark_cls=f"on on{i}", glow_cls="breath" if t[0] == "pin" else "")
-        for i, t in enumerate(TIERS)
-    )
-    css = font_css("body", "mono") + MOTION + """
-.core{transform-origin:800px 196px;animation:core 9s ease-in-out infinite;}
+BANNER_CSS = """
+.core{animation:core 9s ease-in-out infinite;}
 .fan{transform-origin:0 0;animation:turn 80s linear infinite;}
 .on{animation:on .5s cubic-bezier(.16,1,.3,1) both;}
 .on0{animation-delay:.6s}.on1{animation-delay:.8s}.on2{animation-delay:1s}.on3{animation-delay:1.2s}.on4{animation-delay:1.4s}
@@ -202,24 +190,65 @@ def banner():
 @keyframes core{0%,100%{opacity:.55;transform:scale(1)}50%{opacity:.85;transform:scale(1.08)}}
 @keyframes turn{to{transform:rotate(360deg)}}
 @keyframes on{from{opacity:.15;transform:scale(.7)}to{opacity:1;transform:none}}
-""" + REDUCED
-    write("banner.svg", w, h, f"""
-{bench('b', w, h, 36)}
-<defs>
+"""
+
+
+def flare(cx, cy, w, h, reach, rx, ry):
+    """The Home hero's flare, redrawn: a breathing crimson core over a slowly
+    turning fan of rays, multiplied onto the bench (crimson light has to darken
+    paper or it vanishes -- DESIGN.md, Home hero)."""
+    rays = "".join(
+        f'<path d="M0 0 L{reach * math.cos(a):.1f} {reach * math.sin(a):.1f} '
+        f'L{reach * math.cos(a + .045):.1f} {reach * math.sin(a + .045):.1f} Z"/>'
+        for a in (i * math.tau / 28 for i in range(28))
+    )
+    return f"""<defs>
   <radialGradient id="core"><stop offset="0" stop-color="{CRIMSON}" stop-opacity=".30"/><stop offset=".45" stop-color="{CRIMSON}" stop-opacity=".10"/><stop offset="1" stop-color="{CRIMSON}" stop-opacity="0"/></radialGradient>
   <radialGradient id="fanfade"><stop offset=".1" stop-color="#fff" stop-opacity="1"/><stop offset=".8" stop-color="#fff" stop-opacity="0"/></radialGradient>
-  <mask id="fanmask"><rect x="-700" y="-700" width="1400" height="1400" fill="url(#fanfade)"/></mask>
+  <mask id="fanmask"><rect x="-{reach}" y="-{reach}" width="{2 * reach}" height="{2 * reach}" fill="url(#fanfade)"/></mask>
   <clipPath id="card"><rect width="{w}" height="{h}" rx="36"/></clipPath>
 </defs>
 <g clip-path="url(#card)" style="mix-blend-mode:multiply">
-  <g transform="translate(800 196)"><g mask="url(#fanmask)"><g class="fan" fill="{CRIMSON}" fill-opacity=".035">{rays}</g></g></g>
-  <ellipse class="core" cx="800" cy="196" rx="560" ry="230" fill="url(#core)"/>
-</g>
+  <g transform="translate({cx} {cy})"><g mask="url(#fanmask)"><g class="fan" fill="{CRIMSON}" fill-opacity=".035">{rays}</g></g></g>
+  <ellipse class="core" style="transform-origin:{cx}px {cy}px" cx="{cx}" cy="{cy}" rx="{rx}" ry="{ry}" fill="url(#core)"/>
+</g>"""
+
+
+def banner_lamps(x0, step, y, size):
+    return "".join(
+        lamp(t[0], x0 + i * step, y, size, uid="b", mark_cls=f"on on{i}", glow_cls="breath" if t[0] == "pin" else "")
+        for i, t in enumerate(TIERS)
+    )
+
+
+def banner_narrow():
+    """The banner for a phone-width README: bigger tagline and lamps, no
+    sub-line (it cannot be read at a third of its size)."""
+    w, h = 800, 620
+    wordmark = b64(REPO / "frontend/public/logos/ORTHONYM.png")
+    css = font_css("body") + MOTION + BANNER_CSS + REDUCED
+    write("banner-narrow.svg", w, h, f"""
+{bench('bn', w, h, 36)}
+{flare(400, 170, w, h, 420, 360, 190)}
+<image href="data:image/png;base64,{wordmark}" x="60" y="92" width="680" height="150"/>
+<text class="body" x="400" y="352" text-anchor="middle" font-size="46" fill="{BODY}">Verified IUPAC names</text>
+<text class="body" x="400" y="414" text-anchor="middle" font-size="46" fill="{BODY}">for Chemical Structures</text>
+{banner_lamps(240, 80, 524, 40)}
+""", css, pad=40)
+
+
+def banner():
+    w, h = 1600, 540
+    wordmark = b64(REPO / "frontend/public/logos/ORTHONYM.png")
+    css = font_css("body", "mono") + MOTION + BANNER_CSS + REDUCED
+    write("banner.svg", w, h, f"""
+{bench('b', w, h, 36)}
+{flare(800, 196, w, h, 620, 560, 230)}
 <image href="data:image/png;base64,{wordmark}" x="360" y="100" width="880" height="194"/>
 <text class="body" x="800" y="366" text-anchor="middle" font-size="37" fill="{BODY}">Verified IUPAC names for Chemical Structures</text>
-<text class="mono" x="800" y="420" text-anchor="middle" font-size="16" letter-spacing="4" fill="{MUTED}">DETERMINISTIC  ·  RULE-BASED  ·  EVERY NAME READ BACK BY OPSIN</text>
-{lamps}
-""", css)
+<text class="mono" x="800" y="422" text-anchor="middle" font-size="21" letter-spacing="4" fill="{MUTED}">DETERMINISTIC  ·  RULE-BASED  ·  EVERY NAME READ BACK BY OPSIN</text>
+{banner_lamps(704, 48, 482, 22)}
+""", css, pad=44)
 
 
 # ------------------------------------------------------------------ buttons
@@ -300,12 +329,12 @@ def roundtrip():
   <text class="body" x="80" y="900" font-size="24" fill="{MUTED}">Every verdict lands on one of five tiers, and the tier is drawn under the name wherever it appears.</text>
 </g>
 {tier_row(80, 960, 294, 250, 3.8)}
-""", css)
+""", css, pad=48)
 
 
 def roundtrip_narrow():
     """The same loop for a phone-width README: one column, top to bottom."""
-    w, h = 800, 2010
+    w, h = 800, 2240
     css = font_css("body", "bold", "ital", "mono") + MOTION + """
 .a1{animation-delay:.1s}.a2{animation-delay:.7s}.a3{animation-delay:1.3s}.a4{animation-delay:1.9s}
 .d1{animation-delay:.4s}.d1h{animation-delay:.9s}.d2{animation-delay:1s}.d2h{animation-delay:1.5s}
@@ -314,7 +343,7 @@ def roundtrip_narrow():
 """ + REDUCED
     rows = ""
     for i, (key, short, text, *_r) in enumerate(TIERS):
-        y = 1440 + i * 110
+        y = 1672 + i * 110
         lit = key == "pin"
         rows += f"""<g class="rise" style="animation-delay:{2.3 + i * .1:.1f}s">
   {lamp(key, 76, y, 40, lit=lit, uid='n', glow_cls='breath' if lit else '')}
@@ -337,16 +366,32 @@ def roundtrip_narrow():
 {arrow('M400 1150 L400 1210', 'M388 1198 L400 1210 L412 1198', 'd3')}
 <g class="rise a4">
   <text class="bold" x="56" y="1276" font-size="34" fill="{INK}">Verdict</text>
-  <text class="body" x="56" y="1330" font-size="30" fill="{SUCCESS}">Same InChIKey: a verified PIN</text>
-  <line x1="56" y1="1372" x2="{w - 56}" y2="1372" stroke="{HAIR}" stroke-width="1.6"/>
+  <text class="body" x="56" y="1330" font-size="27" fill="{MUTED}">InChIKey of your structure</text>
+  <text class="mono" x="56" y="1374" font-size="30" fill="{INK}">{KEY}</text>
+  <text class="body" x="56" y="1432" font-size="27" fill="{MUTED}">InChIKey of what OPSIN read</text>
+  <text class="mono" x="56" y="1476" font-size="30" fill="{INK}">{KEY}</text>
+  {lamp('pin', 78, 1540, 40, uid='nv', glow_cls='breath')}
+  <text class="bold" x="116" y="1551" font-size="32" fill="{SUCCESS}">Same molecule: a verified PIN</text>
+  <line x1="56" y1="1604" x2="{w - 56}" y2="1604" stroke="{HAIR}" stroke-width="1.6"/>
 </g>
 {rows}
-""", css)
+""", css, pad=40)
+
+
+def cup():
+    """The footer's coffee cup (Footer.jsx CoffeeMark), in the credit's crimson."""
+    (HERE / "cup.svg").write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" '
+        f'stroke="{CRIMSON}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'
+        '<path d="M9 2.5c-.6.8-.6 1.6 0 2.4"/><path d="M12.5 2c-.7.9-.7 1.9 0 2.9"/><path d="M16 2.5c-.6.8-.6 1.6 0 2.4"/>'
+        '<path d="M3.5 8h14v5.5a5 5 0 0 1-5 5h-4a5 5 0 0 1-5-5V8Z"/><path d="M17.5 9.5h1.6a2.4 2.4 0 0 1 0 4.8h-1.6"/></svg>')
 
 
 if __name__ == "__main__":
     banner()
-    pill("try.svg", "TRY ORTHONYM", 440, True)
+    banner_narrow()
+    cup()
+    pill("try.svg", "TRY ORTHONYM", 460, True)
     pill("run.svg", "RUN IT YOURSELF", 460, False)
     roundtrip()
     roundtrip_narrow()
