@@ -2,7 +2,7 @@
 
 The bench (pink wash settling into cool grey under a dot grid), white 22px
 cards, the site's three faces, the ring lamps with their neon glow, and
-crimson only on the primary action and the header's flare -- DESIGN.md's
+crimson only on the primary action and the header's reading light -- DESIGN.md's
 rules, drawn as SVG because a GitHub README carries no CSS of its own.
 
 Every picture is generated, not hand-edited, so a change to the product is a
@@ -11,12 +11,14 @@ name and the InChIKey are the app's own output for it.
 
     cd backend && .venv/bin/python ../docs/readme/build.py
 
-(any interpreter with RDKit works; the backend's venv has it).
+(any interpreter with RDKit works; the backend's venv has it). The About
+page's painted cross is computed by `node`, from BrushCross.jsx itself.
 """
 import base64
-import math
+import json
 import pathlib
 import re
+import subprocess
 
 from rdkit import Chem
 from rdkit.Chem.Draw import rdMolDraw2D
@@ -182,35 +184,49 @@ MOTION = """
 
 # ------------------------------------------------------------------ banner
 BANNER_CSS = """
-.core{animation:core 9s ease-in-out infinite;}
-.fan{transform-origin:0 0;animation:turn 80s linear infinite;}
+.reader{transform:translateX(var(--rest));animation:read 14s linear infinite;}
+@keyframes read{
+  0%{transform:translateX(var(--from));opacity:0}
+  12%{opacity:1}
+  70%{opacity:1}
+  82%{transform:translateX(var(--to));opacity:0}
+  100%{transform:translateX(var(--to));opacity:0}
+}
 .on{animation:on .5s cubic-bezier(.16,1,.3,1) both;}
 .on0{animation-delay:.6s}.on1{animation-delay:.8s}.on2{animation-delay:1s}.on3{animation-delay:1.2s}.on4{animation-delay:1.4s}
 .breath{animation-delay:1.9s}
-@keyframes core{0%,100%{opacity:.55;transform:scale(1)}50%{opacity:.85;transform:scale(1.08)}}
-@keyframes turn{to{transform:rotate(360deg)}}
 @keyframes on{from{opacity:.15;transform:scale(.7)}to{opacity:1;transform:none}}
 """
 
 
-def flare(cx, cy, w, h, reach, rx, ry):
-    """The Home hero's flare, redrawn: a breathing crimson core over a slowly
-    turning fan of rays, multiplied onto the bench (crimson light has to darken
-    paper or it vanishes -- DESIGN.md, Home hero)."""
-    rays = "".join(
-        f'<path d="M0 0 L{reach * math.cos(a):.1f} {reach * math.sin(a):.1f} '
-        f'L{reach * math.cos(a + .045):.1f} {reach * math.sin(a + .045):.1f} Z"/>'
-        for a in (i * math.tau / 28 for i in range(28))
-    )
+def reading_light(cy, w, h, rx, ry):
+    """The header's one authored moment: a reading light. A soft crimson glow
+    travels left to right behind the wordmark, the way the app reads every
+    name back, and the bench's dots light up crimson as it passes over them,
+    then settle. One unhurried pass, a pause, again.
+
+    The glow is multiplied onto the bench (crimson light has to darken paper
+    or it vanishes -- DESIGN.md, Home hero). The lit dots sit on the bench's
+    own 18-unit grid, revealed through a mask that rides with the glow, so
+    they cannot drift off the dots they light.
+
+    Reduced motion removes the animation and leaves the light at rest behind
+    the wordmark's centre: a still glow, not an empty header.
+    """
+    glow = f'<ellipse cx="0" cy="{cy}" rx="{rx}" ry="{ry}"'
+    # Steady, like reading: linear travel, softened only by the fades at
+    # either edge, so the light crosses the wordmark at one even pace.
+    travel = f"--rest:{w / 2:.0f}px;--from:{-rx * .3:.0f}px;--to:{w + rx * .3:.0f}px"
     return f"""<defs>
-  <radialGradient id="core"><stop offset="0" stop-color="{CRIMSON}" stop-opacity=".30"/><stop offset=".45" stop-color="{CRIMSON}" stop-opacity=".10"/><stop offset="1" stop-color="{CRIMSON}" stop-opacity="0"/></radialGradient>
-  <radialGradient id="fanfade"><stop offset=".1" stop-color="#fff" stop-opacity="1"/><stop offset=".8" stop-color="#fff" stop-opacity="0"/></radialGradient>
-  <mask id="fanmask"><rect x="-{reach}" y="-{reach}" width="{2 * reach}" height="{2 * reach}" fill="url(#fanfade)"/></mask>
+  <radialGradient id="light"><stop offset="0" stop-color="{CRIMSON}" stop-opacity=".26"/><stop offset=".5" stop-color="{CRIMSON}" stop-opacity=".08"/><stop offset="1" stop-color="{CRIMSON}" stop-opacity="0"/></radialGradient>
+  <radialGradient id="lightmask"><stop offset="0" stop-color="#fff"/><stop offset=".35" stop-color="#fff" stop-opacity=".7"/><stop offset=".75" stop-color="#fff" stop-opacity="0"/></radialGradient>
+  <pattern id="litdots" width="18" height="18" patternUnits="userSpaceOnUse"><circle cx="9" cy="9" r="1.5" fill="{CRIMSON}" fill-opacity=".6"/></pattern>
+  <mask id="reading" maskUnits="userSpaceOnUse" x="0" y="0" width="{w}" height="{h}"><g class="reader" style="{travel}">{glow} fill="url(#lightmask)"/></g></mask>
   <clipPath id="card"><rect width="{w}" height="{h}" rx="36"/></clipPath>
 </defs>
 <g clip-path="url(#card)" style="mix-blend-mode:multiply">
-  <g transform="translate({cx} {cy})"><g mask="url(#fanmask)"><g class="fan" fill="{CRIMSON}" fill-opacity=".035">{rays}</g></g></g>
-  <ellipse class="core" style="transform-origin:{cx}px {cy}px" cx="{cx}" cy="{cy}" rx="{rx}" ry="{ry}" fill="url(#core)"/>
+  <g class="reader" style="{travel}">{glow} fill="url(#light)"/></g>
+  <rect width="{w}" height="{h}" fill="url(#litdots)" mask="url(#reading)"/>
 </g>"""
 
 
@@ -229,7 +245,7 @@ def banner_narrow():
     css = font_css("body") + MOTION + BANNER_CSS + REDUCED
     write("banner-narrow.svg", w, h, f"""
 {bench('bn', w, h, 36)}
-{flare(400, 170, w, h, 420, 360, 190)}
+{reading_light(170, w, h, 300, 200)}
 <image href="data:image/png;base64,{wordmark}" x="60" y="92" width="680" height="150"/>
 <text class="body" x="400" y="352" text-anchor="middle" font-size="46" fill="{BODY}">Verified IUPAC names</text>
 <text class="body" x="400" y="414" text-anchor="middle" font-size="46" fill="{BODY}">for Chemical Structures</text>
@@ -243,7 +259,7 @@ def banner():
     css = font_css("body", "mono") + MOTION + BANNER_CSS + REDUCED
     write("banner.svg", w, h, f"""
 {bench('b', w, h, 36)}
-{flare(800, 196, w, h, 620, 560, 230)}
+{reading_light(196, w, h, 420, 240)}
 <image href="data:image/png;base64,{wordmark}" x="360" y="100" width="880" height="194"/>
 <text class="body" x="800" y="366" text-anchor="middle" font-size="37" fill="{BODY}">Verified IUPAC names for Chemical Structures</text>
 <text class="mono" x="800" y="422" text-anchor="middle" font-size="21" letter-spacing="4" fill="{MUTED}">DETERMINISTIC  ·  RULE-BASED  ·  EVERY NAME READ BACK BY OPSIN</text>
@@ -387,10 +403,61 @@ def cup():
         '<path d="M3.5 8h14v5.5a5 5 0 0 1-5 5h-4a5 5 0 0 1-5-5V8Z"/><path d="M17.5 9.5h1.6a2.4 2.4 0 0 1 0 4.8h-1.6"/></svg>')
 
 
+# ------------------------------------------------------------------ partners
+# The footer's partners, as the About page shows them ("Made together"): the
+# two logos joined by the painted BrushCross, not a typed cross. Three pictures
+# rather than one, because each logo must stay its own link, and GitHub strips
+# image maps. Each logo sits on its own white card so it stays legible on
+# GitHub's dark theme; the three share one height so they line up inline.
+PARTNER_H = 160
+
+
+def brush_strokes():
+    """BrushCross.jsx's STROKES, computed by the component's own code: the
+    module up to its JSX, run by node. A port to Python would be a second copy
+    of a mark that must be THIS painted mark everywhere."""
+    src = (REPO / "frontend/src/components/BrushCross.jsx").read_text()
+    js = src[: src.index("export default function BrushCross")] + "console.log(JSON.stringify(STROKES))"
+    out = subprocess.run(["node", "--input-type=module", "-e", js], capture_output=True, text=True, check=True)
+    return json.loads(out.stdout)
+
+
+def partner(name, logo, mime, logo_w, logo_h, scale=1):
+    """One partner logo, centred on a white 22px card (About.css .collab__org).
+    `scale` is About.css's own correction: the Steinbeck mark carries its words
+    small, so it is drawn 74/62 as tall as the Beilstein one."""
+    h, pad = PARTNER_H, 34
+    lh = (h - 2 * pad) * scale
+    lw = lh * logo_w / logo_h
+    w = round(lw + 2 * pad * 1.4)
+    data = b64(logo)
+    (HERE / name).write_text(
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">'
+        f'<rect width="{w}" height="{h}" rx="22" fill="#fff"/>'
+        f'<image href="data:{mime};base64,{data}" x="{(w - lw) / 2:.1f}" y="{(h - lh) / 2:.1f}" width="{lw:.1f}" height="{lh:.1f}"/></svg>')
+    print(f"{name}: {(HERE / name).stat().st_size // 1024} KB")
+
+
+def partners():
+    partner("beilstein.svg", REPO / "frontend/public/Logo_Beilstein_schmal_RGB.svg", "image/svg+xml", 876, 202)
+    partner("steinbeck.svg", REPO / "frontend/public/logos/steinbeck.png", "image/png", 1666, 400, scale=74 / 62)
+    # About.css paints every part in --thread (the accent), bristles at .82
+    # and flecks at .62. The cross's viewBox is 0-100; bristles and flecks run
+    # past the ends, so the canvas gives them room.
+    opacity = {"brush-x__body": 1, "brush-x__bristle": .82, "brush-x__fleck": .62}
+    paths = "".join(
+        f'<path d="{p["d"]}" fill="{CRIMSON}" fill-opacity="{opacity[p["cls"]]}"/>'
+        for stroke in brush_strokes() for p in stroke
+    )
+    (HERE / "brush-x.svg").write_text(
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{PARTNER_H}" height="{PARTNER_H}" viewBox="-30 -30 160 160">{paths}</svg>')
+
+
 if __name__ == "__main__":
     banner()
     banner_narrow()
     cup()
+    partners()
     pill("try.svg", "TRY ORTHONYM", 460, True)
     pill("run.svg", "RUN IT YOURSELF", 460, False)
     roundtrip()
