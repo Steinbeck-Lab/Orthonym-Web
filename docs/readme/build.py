@@ -422,23 +422,25 @@ def brush_strokes():
     return json.loads(out.stdout)
 
 
-def partner(name, logo, mime, logo_w, logo_h):
-    """One partner logo, centred on a white 22px card (About.css .collab__org)."""
+def partner(name, logo, mime, logo_w, logo_h, scale=1):
+    """One partner logo, centred on a white 22px card (About.css .collab__org).
+    `scale` is About.css's own correction: the Steinbeck mark carries its words
+    small, so it is drawn 74/62 as tall as the Beilstein one."""
     h, pad = PARTNER_H, 34
-    lh = h - 2 * pad
+    lh = (h - 2 * pad) * scale
     lw = lh * logo_w / logo_h
     w = round(lw + 2 * pad * 1.4)
     data = b64(logo)
     (HERE / name).write_text(
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">'
         f'<rect width="{w}" height="{h}" rx="22" fill="#fff"/>'
-        f'<image href="data:{mime};base64,{data}" x="{(w - lw) / 2:.1f}" y="{pad}" width="{lw:.1f}" height="{lh}"/></svg>')
+        f'<image href="data:{mime};base64,{data}" x="{(w - lw) / 2:.1f}" y="{(h - lh) / 2:.1f}" width="{lw:.1f}" height="{lh:.1f}"/></svg>')
     print(f"{name}: {(HERE / name).stat().st_size // 1024} KB")
 
 
 def partners():
     partner("beilstein.svg", REPO / "frontend/public/Logo_Beilstein_schmal_RGB.svg", "image/svg+xml", 876, 202)
-    partner("steinbeck.svg", REPO / "frontend/public/logos/steinbeck.png", "image/png", 1666, 400)
+    partner("steinbeck.svg", REPO / "frontend/public/logos/steinbeck.png", "image/png", 1666, 400, scale=74 / 62)
     # About.css paints every part in --thread (the accent), bristles at .82
     # and flecks at .62. The cross's viewBox is 0-100; bristles and flecks run
     # past the ends, so the canvas gives them room.
