@@ -237,33 +237,47 @@ def banner_lamps(x0, step, y, size):
     )
 
 
+def product_line(cx, y, size, spacing, rule):
+    """"Web" under the wordmark: this repository is Orthonym Web, the app, not
+    the engine. Set as a spaced mono suffix between two hairlines, so it reads
+    as part of the product's name rather than as a second tagline. The text
+    sits half a letter-space right: SVG spacing trails the last letter too,
+    which would pull "WEB" off the centre the two hairlines share."""
+    half = size * .9 + spacing * 1.2
+    return (f'<text class="mono" x="{cx + spacing / 2}" y="{y}" text-anchor="middle" font-size="{size}" letter-spacing="{spacing}" fill="{INK}">WEB</text>'
+            f'<line x1="{cx - half - rule}" y1="{y - size * .36:.1f}" x2="{cx - half}" y2="{y - size * .36:.1f}" stroke="#c5c5c5" stroke-width="1.6"/>'
+            f'<line x1="{cx + half}" y1="{y - size * .36:.1f}" x2="{cx + half + rule}" y2="{y - size * .36:.1f}" stroke="#c5c5c5" stroke-width="1.6"/>')
+
+
 def banner_narrow():
     """The banner for a phone-width README: bigger tagline and lamps, no
     sub-line (it cannot be read at a third of its size)."""
-    w, h = 800, 620
+    w, h = 800, 680
     wordmark = b64(REPO / "frontend/public/logos/ORTHONYM.png")
-    css = font_css("body") + MOTION + BANNER_CSS + REDUCED
+    css = font_css("body", "mono") + MOTION + BANNER_CSS + REDUCED
     write("banner-narrow.svg", w, h, f"""
 {bench('bn', w, h, 36)}
 {reading_light(170, w, h, 300, 200)}
 <image href="data:image/png;base64,{wordmark}" x="60" y="92" width="680" height="150"/>
-<text class="body" x="400" y="352" text-anchor="middle" font-size="46" fill="{BODY}">Verified IUPAC names</text>
-<text class="body" x="400" y="414" text-anchor="middle" font-size="46" fill="{BODY}">for Chemical Structures</text>
-{banner_lamps(240, 80, 524, 40)}
+{product_line(400, 312, 40, 20, 90)}
+<text class="body" x="400" y="412" text-anchor="middle" font-size="46" fill="{BODY}">Verified IUPAC names</text>
+<text class="body" x="400" y="474" text-anchor="middle" font-size="46" fill="{BODY}">for Chemical Structures</text>
+{banner_lamps(240, 80, 584, 40)}
 """, css, pad=40)
 
 
 def banner():
-    w, h = 1600, 540
+    w, h = 1600, 600
     wordmark = b64(REPO / "frontend/public/logos/ORTHONYM.png")
     css = font_css("body", "mono") + MOTION + BANNER_CSS + REDUCED
     write("banner.svg", w, h, f"""
 {bench('b', w, h, 36)}
 {reading_light(196, w, h, 420, 240)}
 <image href="data:image/png;base64,{wordmark}" x="360" y="100" width="880" height="194"/>
-<text class="body" x="800" y="366" text-anchor="middle" font-size="37" fill="{BODY}">Verified IUPAC names for Chemical Structures</text>
-<text class="mono" x="800" y="422" text-anchor="middle" font-size="21" letter-spacing="4" fill="{MUTED}">DETERMINISTIC  ·  RULE-BASED  ·  EVERY NAME READ BACK BY OPSIN</text>
-{banner_lamps(704, 48, 482, 22)}
+{product_line(800, 360, 32, 16, 110)}
+<text class="body" x="800" y="428" text-anchor="middle" font-size="37" fill="{BODY}">Verified IUPAC names for Chemical Structures</text>
+<text class="mono" x="800" y="484" text-anchor="middle" font-size="21" letter-spacing="4" fill="{MUTED}">DETERMINISTIC  ·  RULE-BASED  ·  EVERY NAME READ BACK BY OPSIN</text>
+{banner_lamps(704, 48, 544, 22)}
 """, css, pad=44)
 
 

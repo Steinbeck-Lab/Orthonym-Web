@@ -2,7 +2,7 @@
 
 <picture>
   <source media="(max-width: 700px)" srcset="docs/readme/banner-narrow.svg">
-  <img src="docs/readme/banner.svg" alt="Orthonym. Verified IUPAC names for chemical structures. Deterministic, rule-based, every name read back by OPSIN." width="100%">
+  <img src="docs/readme/banner.svg" alt="Orthonym Web. Verified IUPAC names for chemical structures. Deterministic, rule-based, every name read back by OPSIN." width="100%">
 </picture>
 
 <br>
