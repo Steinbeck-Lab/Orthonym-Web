@@ -316,7 +316,7 @@ L 157.6 67.7
 </g><g class="rise" style="animation-delay:2.5s">
   <g transform="translate(56.0,1872.0) scale(2.222)"><g class=""><circle fill="none" stroke="#9c4109" cx="9" cy="9" r="7" stroke-width="1.75" stroke-dasharray="1.1 3.3"/></g></g>
   <text class="mono" x="116" y="1902" font-size="30" letter-spacing="3" fill="#666666">BEST EFFORT</text>
-  <text class="body" x="116" y="1944.0" font-size="28" fill="#666666" text-anchor="start">Named, but not a verified tier.</text>
+  <text class="body" x="116" y="1944.0" font-size="28" fill="#666666" text-anchor="start">From the general engine; verdict below.</text>
 </g><g class="rise" style="animation-delay:2.6s">
   <g transform="translate(56.0,1982.0) scale(2.222)"><g class=""><circle fill="none" stroke="#666666" cx="9" cy="9" r="7" stroke-width="1"/></g></g>
   <text class="mono" x="116" y="2012" font-size="30" letter-spacing="3" fill="#666666">NO NAME</text>

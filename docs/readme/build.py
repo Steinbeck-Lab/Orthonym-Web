@@ -64,7 +64,7 @@ SUCCESS = "#2f6b28"
 TIERS = [
     ("pin", "PIN", "Verified, and the|preferred name.", "#2f6b28", "#3dff8f", 1.0),
     ("fallback", "FALLBACK", "Verified; preferred|status not certified.", "#556b2f", "#b6f24a", 0.8),
-    ("best_effort", "BEST EFFORT", "Named, but not a|verified tier.", "#9c4109", "#ffb02e", 0.62),
+    ("best_effort", "BEST EFFORT", "From the general|engine; verdict below.", "#9c4109", "#ffb02e", 0.62),
     ("abstain", "NO NAME", "The engine declined|rather than guess.", "#666666", "#666666", 0.0),
     ("error", "ERROR", "The input could|not be named.", "#a3231a", "#ff4560", 0.4),
 ]
