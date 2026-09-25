@@ -2472,7 +2472,7 @@ input.field__control {
    with the confidence verdict on its own tinted row beneath the name and the
    retranslated structure. Each molecule is one <tbody> of two rows, tinted by
    its tier through --tier-accent -- olive for the verified tiers, amber for the
-   unverified one, the palette's two real accents put to a meaning (the specimen
+   best-effort one, the palette's two real accents put to a meaning (the specimen
    grammar stays for the cards; a table earns colour instead). */
 .results-table-wrap {
   /* Hug the table and centre it, rather than stretch the full page width -- a
@@ -3872,8 +3872,8 @@ input.field__control {
       three surfaces a lamp appears on -- getComputedStyle cannot see a
       composited gradient. Worst case per tier:
 
-        PIN 4.40:1   FALLBACK 4.16:1   UNVERIFIED 3.87:1
-        NO NAME 4.02:1   BAD INPUT 3.41:1
+        PIN 4.40:1   FALLBACK 4.16:1   BEST EFFORT 3.87:1
+        NO NAME 4.02:1   ERROR 3.41:1
 
       against AA's 3:1 for non-text. Re-measure after touching any glow
       opacity or either palette; the error lamp already failed this check
@@ -3941,7 +3941,7 @@ input.field__control {
 }
 
 /* Lit, by three different amounts. A verified PIN is the brightest thing in
-   the ladder; an unverified name barely glows. An abstain and an error stay
+   the ladder; a best-effort name barely glows. An abstain and an error stay
    DARK -- an unlit lamp in a dark socket is the signal there, and the contrast
    between lit and unlit is what makes "lit" mean anything at all. */
 .tier-lamp--pin {
@@ -3978,7 +3978,7 @@ input.field__control {
   --lamp-neon: var(--muted);
 }
 
-/* A broken input DOES light up, in neon red. It is a real failure and the one
+/* An error DOES light up, in neon red. It is a real failure and the one
    place in this system that gets to shout. */
 .tier-lamp--error {
   color: var(--tier-stop);

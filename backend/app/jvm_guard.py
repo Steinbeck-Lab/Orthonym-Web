@@ -29,7 +29,7 @@ def require_a_live_jvm() -> None:
             status_code=503,
             detail=(
                 "No worker currently has a live JVM, so OPSIN cannot verify "
-                "any name. Refusing rather than serving names with an "
-                "unverified confidence tier. See /api/health."
+                "any name. Refusing rather than serving names whose "
+                "confidence tier nothing has checked. See /api/health."
             ),
         )

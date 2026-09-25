@@ -1,7 +1,7 @@
 """The visible round-trip proof compares FULL INCHIKEYS, and it matters which.
 
 This is the check whose verdict sits under every named result ("round-trip
-check: ... matches"), and whose absence downgrades a verified tier. It used to
+check: ... matches"), and whose absence demotes a verified status. It used to
 compare canonical SMILES, which cried wolf on an ordinary molecule:
 zwitterionic glycine is correctly named "glycine", OPSIN reads that name back
 as the neutral form, the two canonical SMILES differ, and a correct PIN was
@@ -100,7 +100,7 @@ def test_an_unparseable_name_reports_unavailable_not_mismatch():
     """(None, None), not (something, False).
 
     The difference is load-bearing: a null round trip means OPSIN could not
-    answer, and orthonym_service downgrades a verified tier on exactly that
+    answer, and orthonym_service demotes a verified status on exactly that
     signal. Reporting it as a mismatch instead would leave the verified label
     in place.
     """

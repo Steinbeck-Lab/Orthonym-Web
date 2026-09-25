@@ -796,14 +796,14 @@ def test_the_fast_job_path_attaches_an_errback_like_the_batch_path_does(
     assert errback.task == "app.tasks.mark_job_failed"
 
 
-def test_an_uploaded_file_can_ask_for_verified_names_only(redis_client, monkeypatch):
+def test_an_uploaded_file_can_turn_best_effort_off(redis_client, monkeypatch):
     """upload-forces-best-effort: the file branch of _read_input returned a
     hardcoded True, while the JSON branch honoured the caller.
 
-    best_effort=False is the caller saying "give me only names OPSIN
-    round-trip verified; abstain rather than guess". A file uploader could
-    not say it at all -- no multipart field existed -- so they silently got
-    OPSIN-unverified names in results.csv with nothing recording that their
+    best_effort=False is the caller saying "no best-effort names from the
+    general engine; abstain instead". A file uploader could not say it at
+    all -- no multipart field existed -- so they silently got best-effort
+    names in results.csv with nothing recording that their
     request had been overridden. PRODUCT.md principle 3 ("PIN-vs-fallback-vs-
     best-effort status must be visible wherever a name appears") failing at
     the request level rather than the display level.
@@ -833,7 +833,7 @@ def test_an_uploaded_file_can_ask_for_verified_names_only(redis_client, monkeypa
 
     assert r.status_code == 200, r.text
     assert seen.get("best_effort") is False, (
-        "an uploaded file cannot ask for verified-only names; the file branch "
+        "an uploaded file cannot turn best-effort off; the file branch "
         "forces best_effort=True regardless of what the caller sent"
     )
 

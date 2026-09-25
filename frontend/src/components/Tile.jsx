@@ -1,4 +1,4 @@
-import { NAMED_STATUSES, STATE_CLASS, STATE_LABEL, VERIFIED_STATUSES } from '../lib/statuses'
+import { NAMED_STATUSES, STATE_CLASS, VERIFIED_STATUSES, isUncheckedHere, stateLabelFor } from '../lib/statuses'
 import useDepiction from '../lib/useDepiction'
 import CopyButton from './CopyButton'
 import ResolvingName from './ResolvingName'
@@ -26,7 +26,7 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
     ? 'Resolving'
     : status === 'error'
       ? error || 'Could not parse this SMILES string'
-      : STATE_LABEL[status]
+      : stateLabelFor(row)
 
   return (
     <li
@@ -164,12 +164,14 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
             TWO switches can produce a best-effort row now, and they need
             different sentences -- naming the wrong one sends the reader to a
             control that will not do what the sentence promises. The row itself
-            says which: a genuine best-effort name (the escalated namer
-            produced it) still HAD its round trip run, so it carries a
-            roundtrip_smiles. A null one means no round trip ran at all, which
-            is the OPSIN-verify switch being off -- or OPSIN being unreachable,
-            which is why the sentence says what did not happen rather than
-            asserting which switch it was.
+            says which: a genuine best-effort name (the general engine built
+            all or part of it, on either pass) still HAD its round trip run,
+            so it carries a
+            roundtrip_smiles. A null one means no round-trip result here, which
+            is usually the OPSIN-verify switch being off -- or an input RDKit
+            cannot read, or a name OPSIN cannot read back -- which is why the
+            sentence says what did not happen and makes the switch advice
+            conditional rather than asserting which cause it was.
 
             Derived from the ROW, deliberately, not from the live switch
             position passed down as a prop: this tile may be from an earlier
@@ -180,9 +182,9 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
             a retry returns the same answer. */}
         {!isPending && status === 'best_effort' && (
           <span className="tile__origin">
-            {roundtrip_smiles
-              ? 'Shown because best-effort mode is on. Turn it off for a verified name or an honest abstain.'
-              : 'No round-trip check ran, so nothing confirmed this name. Turn OPSIN verify on to check it.'}
+            {isUncheckedHere(row)
+              ? 'No round-trip result here, so none is shown. If OPSIN verify is off, turn it on to run one.'
+              : 'Built partly or wholly by the general engine, not the strict PIN rules.'}
           </span>
         )}
         {!isPending && status === 'abstain' && formula && (

@@ -18,8 +18,8 @@ import { NAMED_STATUSES, STATE_SHORT, STATE_CLASS, TIER_ORDER } from './statuses
  *
  * A tier with no rows is omitted rather than shown as 0. The server omits
  * the field entirely until something lands in it, so a 0 here would be this
- * function inventing a measurement -- and on a running job "0 bad input" and
- * "no bad input counted yet" are different claims.
+ * function inventing a measurement -- and on a running job "0 errors" and
+ * "no error counted yet" are different claims.
  *
  * An unknown status is kept, not dropped: if the backend ever grows a sixth
  * tier, a batch of them must not silently vanish from the count. It gets the
@@ -42,7 +42,7 @@ export function tierTally(counts) {
 /** The two headline numbers, plus what they are counted out of.
  *
  * `named` is every tier that ships a name, verified or not. `unnamed` is the
- * rest -- an honest abstain and an unreadable input together, because from
+ * rest -- an honest abstain and an error together, because from
  * the submitter's side both mean "no name came back for this molecule", and
  * the per-tier list directly below says which was which.
  *
@@ -73,25 +73,24 @@ function joinClauses(parts) {
 }
 
 // How each tier that SHIPS A NAME reads in a sentence. The tier's own word
-// carries the claim -- "verified" for the two round-trip-confirmed tiers,
-// "unverified" for best-effort -- so the sentence never has to make a
+// carries the claim -- "verified" for the two verified tiers, plain
+// "best-effort" for the third -- so the sentence never has to make a
 // confidence claim of its own.
 const NAMED_PHRASE = {
   pin: (n) => `${n} verified ${plural(n, 'Preferred IUPAC Name')}`,
   fallback: (n) => `${n} verified fallback ${plural(n, 'name')}`,
-  best_effort: (n) => `${n} unverified best-effort ${plural(n, 'name')}`,
+  best_effort: (n) => `${n} best-effort ${plural(n, 'name')}`,
 }
 
 /** The batch outcome as a sentence or two, or null when nothing is counted.
  *
  * Deliberately says LESS than the reader might expect. It does NOT claim
  * "OPSIN read every name back and got your structure", however tempting that
- * summary is: a pin or fallback row can carry no `roundtrip_smiles` at all,
- * which is why RoundTripCell has an "unavailable" state, so an aggregate
- * round-trip claim built from the tier counts alone would assert a check
- * this function cannot see. The per-row Round-trip column is where that
- * lives. The tier words ("verified", "unverified") are safe because they are
- * the tiers' own.
+ * summary is: a named row can carry no `roundtrip_smiles` at all (OPSIN
+ * verify off, or no round trip could run), so an aggregate round-trip claim
+ * built from the tier counts alone would assert a check this function cannot
+ * see. The per-row Round-trip column is where that lives. The tier words
+ * ("verified", "best-effort") are safe because they are the tiers' own.
  *
  * It counts against `counted`, never the job's declared total. A job stopped
  * at 100 of 400 has 300 molecules nobody looked at, and "95 of 400 were
@@ -123,7 +122,9 @@ export function outcomeMessage(counts, { finished = false } = {}) {
   }
   const bad = counts?.error ?? 0
   if (bad > 0) {
-    sentences.push(`${bad} ${plural(bad, 'input')} could not be read at all.`)
+    // "ended in an error", not "could not be read": an error row is also a
+    // naming crash or a batch timeout on an input that read fine.
+    sentences.push(`${bad} ${plural(bad, 'input')} ended in an error.`)
   }
 
   const message = sentences.join(' ')

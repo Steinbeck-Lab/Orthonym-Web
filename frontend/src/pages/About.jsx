@@ -138,15 +138,17 @@ const EXITS = [
   {
     status: 'fallback',
     name: 'Fallback',
-    body: 'Reads back clean, but is not a verified preferred name.',
-    where: 'The loop closes. The name follows the general rules, or is a retained name.',
+    body: 'Reads back clean, but its preferred status is not certified.',
+    where: 'The loop closes. The strict PIN path did not certify the name.',
     reach: 1,
   },
   {
     status: 'best_effort',
     name: 'Best effort',
-    body: 'The engine named it, but could not verify it.',
-    where: 'The loop does not close.',
+    body: 'The general engine named it; the read-back verdict is shown under it.',
+    // The glyph stays open (reach 0.75): best effort reads back too, but it is
+    // not one of the two verified tiers, and the line says that, not a failure.
+    where: 'The loop stays open: best effort is not a verified tier.',
     reach: 0.75,
   },
   {
@@ -233,7 +235,7 @@ function About() {
           </h1>
           <p className="about-hero__lede">
             The engine writes the name by rule. OPSIN, which never sees the structure, reads it back.
-            If the same structure comes back and the engine's own check agrees, the loop closes.
+            If the same structure comes back and the name holds a verified tier, the loop closes.
           </p>
         </header>
         <RoundTripLoop />

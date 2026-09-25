@@ -38,7 +38,7 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' }
  * non-2xx response or a network-level failure (backend unreachable).
  * `opsin` reports whether at least one Celery worker has a live JVM -- see
  * HealthResponse in backend/app/schemas.py; "DEGRADED" is what makes every
- * naming endpoint 503 rather than serving an unverified tier.
+ * naming endpoint 503 rather than serving a tier SELF-01 never checked.
  * @returns {Promise<{status:string, opsin:string}>}
  */
 export async function checkHealth() {
@@ -99,7 +99,8 @@ export async function translateBatch(smilesList, { bestEffort = true, verify = t
     headers: JSON_HEADERS,
     // best_effort defaults to true server-side too, so an older caller that
     // omits it keeps the shipped behaviour. False stops after the primary
-    // namer, which means no OPSIN-unverified name can come back at all.
+    // namer: no second, escalated pass. (The primary namer can still return
+    // tier best_effort for some names.)
     body: JSON.stringify({ smiles: smilesList, best_effort: bestEffort, verify }),
   })
   if (!res.ok) {

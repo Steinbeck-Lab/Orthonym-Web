@@ -1,4 +1,4 @@
-import { NAMED_STATUSES, STATE_LABEL } from '../lib/statuses'
+import { NAMED_STATUSES, stateLabelFor } from '../lib/statuses'
 import TierLamp from './TierLamp'
 import { roundtripLine } from '../lib/explainVerdict'
 
@@ -42,7 +42,7 @@ export default function ConfidenceReport({ row }) {
           flows with the words whatever the parent's display is. */}
       <span className="tile__state-label">
         <TierLamp status={row.status} />
-        {STATE_LABEL[row.status]}
+        {stateLabelFor(row)}
       </span>
       {line && (
         <p className="tile__roundtrip">

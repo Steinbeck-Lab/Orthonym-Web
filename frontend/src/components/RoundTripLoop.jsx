@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 import { cancelJob, translateBatch, TranslateJobQueuedError } from '../lib/api'
 import useDepiction from '../lib/useDepiction'
 import useReducedMotion from '../lib/useReducedMotion'
-import { STATE_CLASS, STATE_LABEL, STATE_SHORT, VERIFIED_STATUSES } from '../lib/statuses'
+import { STATE_CLASS, STATE_SHORT, VERIFIED_STATUSES, stateLabelFor } from '../lib/statuses'
 import ChemName from './Typeset'
 import TierLamp from './TierLamp'
 import TierRule from './TierRule'
@@ -71,7 +71,7 @@ function outcome(row) {
     return { stop: 1, verdict: 'No name was produced, so there was nothing to read back.' }
   }
   if (!roundtrip_smiles) {
-    return { stop: 2, verdict: 'No structure came back from OPSIN, so the name is not confirmed.' }
+    return { stop: 2, verdict: 'No structure came back from OPSIN, so this name was not checked here.' }
   }
   if (VERIFIED_STATUSES.has(status) && roundtrip_match === true) {
     return {
@@ -79,13 +79,13 @@ function outcome(row) {
       verdict:
         status === 'pin'
           ? 'OPSIN read the name back to the same molecule.'
-          : 'OPSIN read the name back to the same molecule, but it is not a verified PIN.',
+          : 'OPSIN read the name back to the same molecule, but its preferred status is not certified.',
     }
   }
   return {
     stop: 3,
     verdict: roundtrip_match
-      ? 'OPSIN read the name back to the same molecule, but the engine could not certify this name.'
+      ? 'OPSIN read the name back to the same molecule. The general engine built it, so it is best effort.'
       : 'OPSIN read the name back to a different molecule.',
   }
 }
@@ -399,7 +399,7 @@ export default function RoundTripLoop() {
   let summary = ''
   if (announce && phase === 'ready' && result) {
     summary = named
-      ? `${molecule.label}: named ${row.name}. ${result.verdict} ${STATE_LABEL[status] || STATE_SHORT[status] || ''}.`
+      ? `${molecule.label}: named ${row.name}. ${result.verdict} ${stateLabelFor(row) || STATE_SHORT[status] || ''}.`
       : `${molecule.label}: ${result.verdict}`
   } else if (announce && phase === 'failed' && !retrying) {
     summary = `${molecule.label}: ${failureText(entry.error)}`
@@ -496,7 +496,7 @@ export default function RoundTripLoop() {
         <>
           <p className="station__tier">
             <TierLamp status={status} />
-            <span>{STATE_LABEL[status] || STATE_SHORT[status]}</span>
+            <span>{stateLabelFor(row) || STATE_SHORT[status]}</span>
           </p>
           <p className="station__verdict">{result.verdict}</p>
         </>

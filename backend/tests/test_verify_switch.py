@@ -4,7 +4,7 @@ The switch exists so a visitor can turn the proof OFF and watch every claim
 downgrade -- PRODUCT.md principle 1 says determinism must be provable, and
 being able to remove the proof and see it matter demonstrates that better than
 a paragraph. The whole risk is the opposite outcome: a name that ships looking
-verified when nothing verified it. Every test here is aimed at that.
+verified when no round trip backs it. Every test here is aimed at that.
 
 Fail-closed in BOTH directions is the rule this file follows: it is not enough
 that verify=False refuses to claim verification, the verify=True case must also
@@ -56,16 +56,19 @@ def test_verification_off_shows_no_proof_it_does_not_have(smiles):
 
 
 @pytest.mark.parametrize("smiles", VERIFIABLE)
-def test_the_tier_moves_with_the_status(smiles):
-    """Both fields of the payload must tell the same story.
+def test_the_status_is_demoted_and_the_tier_stays_the_engines(smiles):
+    """verify=False demotes the STATUS only; `tier` stays the engine's own.
 
-    `status` is what the UI draws; `tier` is what an API or CSV consumer reads.
-    Shipping status="best_effort" alongside tier="pin_verified" is the
-    conflation PRODUCT.md principle 3 forbids, in the field nobody looks at.
+    The engine's verdict on how the name was built does not change because
+    this app's round trip did not run -- `status` and the null
+    `roundtrip_smiles` say that. The old code rewrote the tier to
+    pin_unverified, which is a real engine tier for a round-tripping name, so
+    the payload claimed a verdict the engine never gave.
     """
-    item = translate_one(smiles, verify=False)
-    assert item.tier != "pin_verified"
-    assert item.tier in ("pin_unverified", "best_effort")
+    on = translate_one(smiles, verify=True)
+    off = translate_one(smiles, verify=False)
+    assert off.status == "best_effort"
+    assert off.tier == on.tier
 
 
 @pytest.mark.parametrize("smiles", VERIFIABLE)
@@ -83,7 +86,7 @@ def test_the_name_itself_is_unchanged(smiles):
 def test_strict_mode_refuses_rather_than_downgrades():
     """best_effort=False + verify=False is a contradiction, resolved honestly.
 
-    That caller refused OPSIN-unverified names outright. Handing them a
+    That caller refused best-effort names outright. Handing them a
     downgraded best_effort row would reintroduce through the back door exactly
     what their flag keeps out the front, so the answer is an abstain.
     """
@@ -93,12 +96,12 @@ def test_strict_mode_refuses_rather_than_downgrades():
 
 
 class TestCacheSeparation:
-    """A verified and an unverified run must never share a cache entry.
+    """A verify-on and a verify-off run must never share a cache entry.
 
-    They are not equivalent: the unverified row is strictly weaker. One
-    unverified request sharing the key would poison the entry for the full
+    They are not equivalent: the verify-off row is strictly weaker. One
+    verify-off request sharing the key would poison the entry for the full
     7-day TTL, and every later caller who ASKED for verification would be told
-    their molecule could not be verified.
+    no round trip ran on their molecule.
     """
 
     def test_the_key_carries_the_flag(self):

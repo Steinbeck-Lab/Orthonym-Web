@@ -12,9 +12,9 @@ verdict. A non-zero exit fails the Docker build, which is the point.
 
 import sys
 
-# A fused polycyclic. The engine can name it, but the name does not
-# round-trip, so a working SELF-01 gate must report "fallback". "pin" here
-# means the gate silently failed open.
+# A fused polycyclic. Its PIN candidate does not round-trip, so a working
+# SELF-01 gate suppresses it and a verified systematic name ships instead:
+# "fallback". "pin" here means the gate silently failed open.
 FUSED_POLYCYCLIC = "C1CC2CCC1(CC2)C3CCC4(CCC5(CCCC5C4C3)C)C"
 
 

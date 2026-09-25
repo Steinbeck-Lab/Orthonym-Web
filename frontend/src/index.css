@@ -182,7 +182,7 @@
      inside it stays one of the deep tokens above and keeps its measured
      contrast. On white these neons run 1.2-1.6:1 and could never be a line.
      Hue meaning matches the deep token each one blooms around -- green
-     verified, lime fallback, amber unverified, red broken. */
+     verified, lime fallback, amber best effort, red error. */
   --lamp-pin: #3dff8f; /* neon green */
   --lamp-fallback: #b6f24a; /* neon lime -- same family as pin, ring separates them */
   --lamp-unverified: #ffb02e; /* neon amber */

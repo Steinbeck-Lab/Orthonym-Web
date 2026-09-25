@@ -148,10 +148,10 @@ async def _read_input(
             )
         # best_effort comes from the multipart form, not a hardcoded True
         # (audit item upload-forces-best-effort). best_effort=False is the
-        # caller saying "only names OPSIN round-trip verified; abstain rather
-        # than guess" -- the JSON branch below has always honoured it, and a
-        # file uploader could not say it at all, so they silently received
-        # OPSIN-unverified names with nothing recording that their request had
+        # caller saying "no second, escalated pass; abstain
+        # instead" -- the JSON branch below has always honoured it, and a file
+        # uploader could not say it at all, so they silently received
+        # best-effort names with nothing recording that their request had
         # been overridden. The default stays True, matching TextPayload's, so
         # nothing changes for a caller who sends no field.
         return data, best_effort, verify

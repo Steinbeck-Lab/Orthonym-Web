@@ -24,7 +24,7 @@ import TierLamp from './TierLamp'
 //      you can also open again, which the always-on version could not offer.
 //
 // The five tiers are ONE ORDERED LADDER, from a verified Preferred IUPAC
-// Name down to an input that could not be read, so they are drawn as five
+// Name down to an input that could not be named, so they are drawn as five
 // rows, strongest first: the vertical order IS the descent, and it no longer
 // needs the staircase offset the five-column version used to fake one.
 //
@@ -64,16 +64,17 @@ const TIERS = [
     status: 'fallback',
     ordinal: '02',
     label: STATE_SHORT.fallback,
-    body: 'Verified, but not the preferred name.',
-    detail: 'Correct by the general rules, not the strict ones.',
+    // Engine tiers systematic_verified and pin_unverified. A pin_unverified
+    // name is in PIN form, so "not the preferred name" would overstate it.
+    body: 'Verified, but its preferred status is not certified.',
+    detail: 'OPSIN read it back; the strict PIN path did not certify it.',
   },
   {
-    // "Could not confirm" and NOT "verification did not run", because it did.
-    // orthonym_service calls _roundtrip_check for every named result: pin,
-    // fallback and best_effort alike, and best-effort mode has no bearing on
-    // whether OPSIN is consulted. What the mode changes is whether a name the
-    // check failed to confirm may be SHOWN at all; with it off, that molecule
-    // comes back as an abstain instead.
+    // WHERE the name came from, not a failed check: the engine round-trips
+    // every name it emits, best_effort included, and with OPSIN verify on the
+    // tile prints this app's own verdict under it. What best-effort mode
+    // changes is whether the general engine gets a second pass at a molecule
+    // the strict namer declined; with it off, that molecule abstains.
     // A previous line here read "Best-effort mode only; unconfirmed.", which
     // was read (reasonably) as "OPSIN verification doesn't run in this mode".
     // The mode link belongs on a result, where Tile.jsx states it, not
@@ -82,10 +83,12 @@ const TIERS = [
     status: 'best_effort',
     ordinal: '03',
     label: STATE_SHORT.best_effort,
-    body: 'A real name OPSIN could not confirm.',
-    // "The check ran" is the load-bearing half of this line, for the reason
-    // in the comment above.
-    detail: 'The check ran and failed. Best-effort mode only.',
+    body: 'A name from the general engine; its round-trip verdict is printed under it.',
+    // The rung also holds a verified name demoted because no round trip ran
+    // here (OPSIN verify off): it wears this rule, so the key must say so.
+    // Not "Best-effort mode only": the primary pass assigns this tier to some
+    // composer names too, so it appears with the mode off.
+    detail: 'With OPSIN verify off, a verified name can land here too.',
   },
   {
     key: 'abstain',
@@ -121,7 +124,7 @@ const TIERS = [
 // system's signature rather than a one-off flourish.
 //
 // The dasharray patterns ARE the grammar: solid pair (verified PIN), dashed
-// (verified fallback), dotted (unverified), one faint line (abstain), and a
+// (verified fallback), dotted (best effort), one faint line (abstain), and a
 // struck pair (error).
 function Specimen({ tier }) {
   const common = {

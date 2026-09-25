@@ -50,7 +50,12 @@ logger = logging.getLogger(__name__)
 # v7 (2026-09-24): vendor refresh to the Orthonym engine at 06b82cc. 265
 #     modules against the previous 263 (sulfate_ester and nested_memo are
 #     new), still stamped "1.0.0" upstream.
-_KEY_VERSION = "v7"
+# v8 (2026-09-25): no engine change (the vendored source is content-identical
+#     to f50e3256 on Beilstein-Institut/Orthonym main). classify() now maps
+#     pin_unverified to "fallback" (was "best_effort"), and the no-round-trip
+#     demotion keeps the engine's tier instead of rewriting it, so a cached v7
+#     row can carry the old status and tier.
+_KEY_VERSION = "v8"
 _ENGINE_VERSION = orthonym.__version__
 
 
@@ -104,12 +109,12 @@ def cache_key(canonical_smiles: str, best_effort: bool, verify: bool = True) -> 
     escalated namer runs at all -- and therefore whether a molecule can come
     back "best_effort". Sharing an entry across the two serves a wrong tier.
 
-    `verify` is part of it for a sharper reason: an unverified run produces a
-    STRICTLY WEAKER row -- no round-trip proof, every verified tier downgraded
-    to best_effort. Sharing one key would let a single unverified request
+    `verify` is part of it for a sharper reason: a verify-off run produces a
+    STRICTLY WEAKER row -- no round-trip proof, every verified status demoted
+    to best_effort. Sharing one key would let a single verify-off request
     poison the entry for seven days, so everyone who asked for verification
-    afterwards would be served a best_effort row and told the engine could not
-    verify their molecule. The reverse direction is wrong too, just less
+    afterwards would be served a best_effort row and told no round trip ran
+    on their molecule. The reverse direction is wrong too, just less
     visibly: serving a verified row to a caller who asked to skip verification
     hands them proof they did not request and cannot distinguish from a
     genuinely skipped check.
@@ -138,18 +143,20 @@ def put_cached(item: ResultItem, best_effort: bool, verify: bool = True) -> None
         # This is the fingerprint of SELF-01 having failed open, not merely
         # a missing nicety. _roundtrip_check (orthonym_service.py) calls
         # the SAME opsin_parse() that the engine's internal SELF-01 gate
-        # uses, so for a tier that CLAIMS verification (pin_verified /
-        # systematic_verified -> "pin"/"fallback" here), "OPSIN is
+        # uses, so for a tier that CLAIMS verification (pin_verified -> "pin";
+        # systematic_verified / pin_unverified -> "fallback" here), "OPSIN is
         # reachable but cannot interpret this name" cannot happen -- if it
         # could interpret the PIN candidate, SELF-01 would have used that
-        # same answer to verify or suppress it. So roundtrip_smiles is
-        # None here if and only if OPSIN itself was unreachable, which
+        # same answer to verify or suppress it. So, barring a name OPSIN
+        # cannot read back and an input only CDK can read (both of
+        # which translate_one demotes before it gets here), roundtrip_smiles
+        # is None here only when OPSIN itself was unreachable, which
         # means SELF-01 could not suppress a bogus PIN either and just
         # shipped it, mislabelled as verified. Caching that row would
         # persist the mislabel for NAME_CACHE_TTL_SECONDS (7 days) and keep
         # serving it long after OPSIN is restored (final review report,
-        # C3). best_effort is exempt: a null round-trip there is exactly
-        # what "OPSIN-unverified" means, not a failure. abstain is exempt
+        # C3). best_effort is exempt: its status claims no round trip, so a
+        # null one there is not a failure. abstain is exempt
         # too: it claims no name at all.
         return
     settings = get_settings()

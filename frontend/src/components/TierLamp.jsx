@@ -17,14 +17,15 @@ import { STATE_CLASS } from '../lib/statuses'
  * So the LADDER is carried by form, and the form is not invented: each lamp
  * wears its own tier's rule pattern, the grammar this app already uses under
  * every name. Double ring = verified PIN. Dashed = verified fallback. Dotted =
- * unverified. Plain thin ring, unlit = the engine declined. Struck ring = the
- * input could not be read. Read in greyscale, at 1px, or by a reader with any
+ * best effort. Plain thin ring, unlit = the engine declined. Struck ring = no
+ * name could be produced (bad input, or naming failed). Read in greyscale, at
+ * 1px, or by a reader with any
  * of the three common colour deficiencies, the five are still five.
  *
  * Hue then rides along as reinforcement, never as the signal: green for the
- * verified pair, amber for unverified, grey for a declined name, red for a
- * broken input. PIN and FALLBACK deliberately share the green FAMILY, because
- * they genuinely share the claim -- both were round-trip confirmed -- and the
+ * verified pair, amber for best effort, grey for a declined name, red for an
+ * error. PIN and FALLBACK deliberately share the green FAMILY, because they
+ * genuinely share the claim -- both are the verified tiers -- and the
  * ring pattern is what tells them apart. Colour separating them would be a
  * distinction hue cannot reliably carry anyway.
  *
@@ -79,8 +80,9 @@ function LampMark({ tier }) {
         </>
       )}
       {tier === 'best_effort' && (
-        /* Dotted, and HOLLOW: an unverified name has no confirmed core to
-           draw. 2:6 dash ratio, again from the legend's own specimen. */
+        /* Dotted, and HOLLOW: the one named tier that is not a verified
+           tier gets no core. 2:6 dash ratio, again from the legend's own
+           specimen. */
         <circle
           {...ring}
           cx="9"

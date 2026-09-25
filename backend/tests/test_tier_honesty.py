@@ -1,16 +1,17 @@
 """The confidence ladder must never label a name better than it was proved.
 
 Orthonym's whole product claim is that a name's tier is honest: verified PIN ->
-verified fallback -> best-effort (a real name, OPSIN-unverified) -> honest
+verified fallback -> best-effort (a real name from the general engine) -> honest
 abstain. PRODUCT.md principle 3 forbids conflating them anywhere.
 
 Two separate guards live in orthonym_service.translate_one and neither had a
 test:
 
-  * `best_effort=False` must mean no OPSIN-unverified name can EVER be
-    produced -- the escalated namer is not consulted at all.
-  * A tier that claims verification must not ship when the verification did
-    not happen. _roundtrip_check returns (None, None) when OPSIN is
+  * `best_effort=False` must mean the escalated namer is not consulted at
+    all. (It does not rule out tier best_effort: the primary pass assigns it
+    to some composer names; see the test at the end of this section.)
+  * A status that claims verification must not ship when the verification
+    did not happen. _roundtrip_check returns (None, None) when OPSIN is
     unreachable, and SELF-01 fails OPEN, so an unverified candidate arrives
     labelled "pin".
 """
@@ -21,7 +22,7 @@ from app import orthonym_service
 from app.main import EXAMPLES
 
 
-# --- best_effort=False: no unverified name may be produced -----------------
+# --- best_effort=False: no best-effort name may be produced ----------------
 
 
 def test_best_effort_false_never_consults_the_escalated_namer(monkeypatch):
@@ -52,7 +53,7 @@ def test_best_effort_false_never_consults_the_escalated_namer(monkeypatch):
     item = orthonym_service.translate_one("CCO", best_effort=False)
 
     assert called == [], (
-        "the escalated namer ran with best_effort=False; an OPSIN-unverified "
+        "the escalated namer ran with best_effort=False; a best-effort "
         "name can now be produced by a caller who explicitly refused them"
     )
     assert item.status == "abstain"
@@ -86,14 +87,32 @@ def test_best_effort_true_still_escalates(monkeypatch):
     assert item.name == "ethanol"
 
 
-# --- a verified tier must not ship without its proof -----------------------
+def test_the_primary_pass_can_ship_tier_best_effort_with_best_effort_off():
+    """A measured fact the UI copy has to respect, pinned so it stays visible.
+
+    The engine gives tier best_effort to a composer name that carries a
+    general-tier ring prefix, on the PRIMARY pass (source "pin_path"). So
+    best-effort mode OFF does not keep status best_effort off the page, and no
+    label, hint or legend line may claim it does (paper reviewer issue 2
+    review). If the engine stops doing this, this test says so -- update the
+    comments in orthonym_service.py and CLAUDE.md with it.
+    """
+    item = orthonym_service.translate_one(
+        "OC(=O)CC12CC3CC(O)(CC(C3)C1)C2", best_effort=False
+    )
+    assert (item.status, item.tier) == ("best_effort", "best_effort"), item
+    assert item.roundtrip_match is True
+
+
+# --- a verified status must not ship without its proof ---------------------
 
 
 def test_a_pin_is_downgraded_when_opsin_could_not_verify_it(monkeypatch):
     """C3-followup, the backend half.
 
     SELF-01 uses the same opsin_parse() as the visible round-trip check, so a
-    null roundtrip_smiles on a "pin" row can only mean OPSIN was unreachable:
+    null roundtrip_smiles on this "pin" row (ethanol: RDKit-readable, verify
+    on) can only mean OPSIN was unreachable:
     SELF-01 failed OPEN and shipped an unverified candidate wearing a
     verified label. The cache already refuses to persist that row for 7 days
     (name_cache.put_cached), but it was still SERVED once, and the frontend
@@ -111,14 +130,17 @@ def test_a_pin_is_downgraded_when_opsin_could_not_verify_it(monkeypatch):
         "verified tier claiming a verification that never happened"
     )
     assert item.name is not None, "the name itself is real and must survive the downgrade"
+    assert item.tier == "pin_verified", (
+        "the demotion moves the status only; the tier stays the engine's own"
+    )
 
 
-def test_an_unverifiable_name_abstains_when_the_caller_refused_unverified_ones(
+def test_an_unverifiable_name_abstains_when_the_caller_refused_best_effort(
     monkeypatch,
 ):
     """The interaction between the two guards, which is the part that is easy
     to get wrong: downgrading an unprovable "pin" to "best_effort" would hand
-    an OPSIN-unverified name to a caller who passed best_effort=False
+    a best_effort row to a caller who passed best_effort=False
     precisely to refuse them. For that caller the honest answer is abstain.
     """
     monkeypatch.setattr(orthonym_service, "opsin_parse", lambda name: None)
@@ -126,8 +148,8 @@ def test_an_unverifiable_name_abstains_when_the_caller_refused_unverified_ones(
     item = orthonym_service.translate_one("CCO", best_effort=False)
 
     assert item.status == "abstain", (
-        f"served status={item.status!r} to a caller who refused OPSIN-"
-        "unverified names"
+        f"served status={item.status!r} to a caller who refused best-effort "
+        "names"
     )
     assert item.name is None
 
@@ -145,10 +167,10 @@ def test_a_genuinely_verified_pin_is_untouched():
 
 
 def test_a_best_effort_name_is_not_downgraded_for_lacking_proof(monkeypatch):
-    """best_effort is ALREADY the honest label for "a real name, OPSIN-
-    unverified" -- it claims no verification, so a null round-trip is not a
-    contradiction and must not push it to abstain. Only tiers that CLAIM
-    verification (pin, fallback) are downgraded.
+    """best_effort is ALREADY the honest label for "a real name from the
+    general engine" -- its status claims no round trip, so a null one is not
+    a contradiction and must not push it to abstain. Only statuses that CLAIM
+    verification (pin, fallback) are demoted.
     """
     monkeypatch.setattr(orthonym_service, "opsin_parse", lambda name: None)
     monkeypatch.setattr(
@@ -161,6 +183,35 @@ def test_a_best_effort_name_is_not_downgraded_for_lacking_proof(monkeypatch):
 
     assert item.status == "best_effort"
     assert item.name == "ethanol"
+
+
+# --- pin_unverified: a verified name, preferred status not certified --------
+
+
+def test_classify_maps_pin_unverified_to_fallback_and_keeps_the_tier():
+    """Paper reviewer issue 2. pin_unverified is a PIN-form name only a
+    breadth producer built: it round-trips, and only its preferred status is
+    uncertified. It used to ship as best_effort, labelled "OPSIN did not
+    confirm it" beside a passing round trip."""
+    row = {"tier": "pin_unverified", "name": "ethanol"}
+    assert orthonym_service.classify(row) == ("fallback", "ethanol", "pin_unverified")
+
+
+def test_a_pin_unverified_name_ships_as_a_verified_fallback(monkeypatch):
+    """End to end, on the PRIMARY pass (where the engine assigns it too):
+    best_effort=False refuses the escalated general engine, and must not turn
+    a pin_unverified name into a best_effort row either."""
+    monkeypatch.setattr(
+        orthonym_service._namer,
+        "name_tiered",
+        lambda smiles: {"tier": "pin_unverified", "name": "ethanol", "formula": None, "limit_code": None},
+    )
+
+    item = orthonym_service.translate_one("CCO", best_effort=False)
+
+    assert item.status == "fallback"
+    assert item.tier == "pin_unverified"
+    assert item.roundtrip_match is True
 
 
 # --- naming health vs /explain health are different questions --------------
