@@ -64,7 +64,7 @@ link carries.
 
 ## What's inside
 
-| | |
+| Page | What it does |
 |:--|:--|
 | **Translate** | Paste SMILES, upload `.sdf`, `.mol` or `.csv`, or draw in Ketcher. Up to ten molecules answer at once; more run as a job with progress, a tally by tier and a CSV. |
 | **Name → Structure** | The reverse, on OPSIN: a name in, a structure out. |
