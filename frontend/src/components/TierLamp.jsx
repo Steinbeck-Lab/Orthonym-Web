@@ -1,4 +1,4 @@
-import { STATE_CLASS } from '../lib/statuses'
+import { STATE_CLASS, lampTitleFor } from '../lib/statuses'
 
 /**
  * The confidence lamp: a small lit indicator beside the tier label, wherever a
@@ -115,16 +115,22 @@ function LampMark({ tier }) {
  *   rather than guessing a tier -- the same refusal Icon.jsx makes for an
  *   unknown name, and far better than lighting a lamp for a confidence this
  *   component cannot vouch for.
+ * @param row the result row, when there is one, so a demoted row's tooltip
+ *   says what is true of it (lampTitleFor).
  * @param fresh true on a result that has just arrived, which is the only time
  *   a PIN's lamp breathes.
  */
-export default function TierLamp({ status, fresh = false }) {
+export default function TierLamp({ status, row, fresh = false }) {
   const cls = STATE_CLASS[status]
   if (!cls) return null
+  // A native `title`, the tooltip this app uses everywhere else. Hover only,
+  // and that is fine: it ADDS how the name was made, and the label beside
+  // the lamp (or the sr-only one in a batch row) still says the tier.
   return (
     <span
       className={`tier-lamp tier-lamp--${cls}${fresh ? ' tier-lamp--fresh' : ''}`}
       aria-hidden="true"
+      title={lampTitleFor(status, row)}
     >
       {/* The glow is its own element so the mark's edges stay crisp: a filter
           or box-shadow on the mark itself would blur the ring patterns the

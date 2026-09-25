@@ -41,7 +41,7 @@ export default function ConfidenceReport({ row }) {
       {/* Inside the label, for the reason Tile.jsx records: nested, the lamp
           flows with the words whatever the parent's display is. */}
       <span className="tile__state-label">
-        <TierLamp status={row.status} />
+        <TierLamp status={row.status} row={row} />
         {stateLabelFor(row)}
       </span>
       {line && (

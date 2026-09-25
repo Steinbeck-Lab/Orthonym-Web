@@ -82,6 +82,31 @@ export const STATE_SHORT = {
   error: 'ERROR',
 }
 
+// HOW each tier's name came about, for the lamp's hover tooltip. The label
+// beside a lamp says WHAT the tier is; this says how it got there. Only what
+// the status itself proves: batch rows carry no engine tier, so nothing here
+// may name a producer the status cannot vouch for.
+export const TIER_HOW = {
+  pin: 'built by the strict PIN rules. OPSIN read the name back and got your structure.',
+  // systematic_verified and pin_unverified: neither came through the strict
+  // PIN path's certification, and both round-trip.
+  fallback:
+    'the strict PIN path did not certify it as the preferred name. OPSIN read the name back and got your structure.',
+  best_effort: 'built partly or wholly by the general engine, not the strict PIN rules.',
+  abstain: 'the engine declined rather than guess, so no name was made.',
+  error: 'no name was made. RDKit refused the input, or naming failed part-way.',
+}
+
+/** The lamp's tooltip. `row` is optional (the legend and About have none);
+ *  with one, a demoted best_effort row says what is true of it instead. */
+export function lampTitleFor(status, row) {
+  const short = STATE_SHORT[status]
+  if (!short) return undefined
+  if (isUncheckedHere(row)) return `${short}: ${UNCHECKED_LABEL}.`
+  if (isMismatchHere(row)) return `${short}: ${MISMATCH_LABEL}.`
+  return `${short}: ${TIER_HOW[status]}`
+}
+
 // Statuses that ship a real name, whatever its tier.
 export const NAMED_STATUSES = new Set(['pin', 'fallback', 'best_effort'])
 
