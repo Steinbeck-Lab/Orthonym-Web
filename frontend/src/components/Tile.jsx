@@ -1,4 +1,4 @@
-import { NAMED_STATUSES, STATE_CLASS, VERIFIED_STATUSES, isUncheckedHere, stateLabelFor } from '../lib/statuses'
+import { NAMED_STATUSES, STATE_CLASS, VERIFIED_STATUSES, isMismatchHere, isUncheckedHere, stateLabelFor } from '../lib/statuses'
 import useDepiction from '../lib/useDepiction'
 import CopyButton from './CopyButton'
 import ReportLink from './ReportLink'
@@ -185,7 +185,9 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
           <span className="tile__origin">
             {isUncheckedHere(row)
               ? 'No round-trip result here, so none is shown. If OPSIN verify is off, turn it on to run one.'
-              : 'Built partly or wholly by the general engine, not the strict PIN rules.'}
+              : isMismatchHere(row)
+                ? 'OPSIN read this name back as the different structure shown above.'
+                : 'Built partly or wholly by the general engine, not the strict PIN rules.'}
           </span>
         )}
         {!isPending && status === 'abstain' && formula && (

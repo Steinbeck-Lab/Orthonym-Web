@@ -59,7 +59,7 @@ pass but gets a `systematic_verified` or `pin_unverified` name on the
 escalated pass is a "fallback", same as if the primary pass had found it
 directly. Status "best_effort" comes from tier `best_effort`, or from
 translate_one demoting a verified status whose visible round trip did not
-run (that row keeps the engine's tier).
+run or did not match (that row keeps the engine's tier).
 
 When the final status is "abstain" (both passes exhausted), formula/
 limit_code come from the LAST row computed (the escalated pass's row) --
@@ -354,7 +354,7 @@ def translate_one(
         _roundtrip_check(name, mol) if (verify and mol is not None) else (None, None)
     )
 
-    if status in VERIFIED_STATUSES and roundtrip_smiles is None:
+    if status in VERIFIED_STATUSES and not roundtrip_match:
         # Final review report, C3, backend half. Several causes reach here, and
         # all mean the same thing about the CLAIM: no round trip of this app's
         # own backs the label. The caller turned `verify` off; or RDKit could
@@ -379,8 +379,14 @@ def translate_one(
         # name existed. `withheld_unchecked` says so, and keeps the
         # frontend's "Report SMILES on GitHub" (lib/github.js) off a molecule the
         # engine named perfectly well.
+        #
+        # A round trip that RAN and read back a different molecule
+        # (roundtrip_match False) lands here too: the label is just as
+        # unbacked. That abstain is not "withheld_unchecked" -- the check ran
+        # and failed, which is an engine defect worth reporting.
         if not best_effort:
-            return _abstain_item(smiles, tier, row, limit_code=WITHHELD_UNCHECKED)
+            withheld = WITHHELD_UNCHECKED if roundtrip_smiles is None else None
+            return _abstain_item(smiles, tier, row, limit_code=withheld)
         # STATUS only. `tier` stays the engine's own verdict on how the name
         # was built: this app's check not running does not change it. (This
         # block used to rewrite the tier to pin_unverified / best_effort, but

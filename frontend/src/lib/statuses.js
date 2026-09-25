@@ -34,10 +34,23 @@ export function isUncheckedHere(row) {
   return row?.status === 'best_effort' && !row.roundtrip_smiles
 }
 
+// A best_effort row whose round trip here RAN and read back a different
+// molecule. The backend demotes a pin or fallback to best_effort in that case
+// too, so "from the general engine" would be false of it; "a different
+// structure" is true of every such row, whatever built the name.
+export const MISMATCH_LABEL = 'Round trip here gave a different structure'
+
+/** A best_effort row whose round trip here did not match. */
+export function isMismatchHere(row) {
+  return row?.status === 'best_effort' && Boolean(row.roundtrip_smiles) && row.roundtrip_match === false
+}
+
 /** The long tier label for one row. Every surface that prints one calls this,
- *  so the unchecked case cannot be missed on any of them. */
+ *  so the unchecked and mismatch cases cannot be missed on any of them. */
 export function stateLabelFor(row) {
-  return isUncheckedHere(row) ? UNCHECKED_LABEL : STATE_LABEL[row?.status]
+  if (isUncheckedHere(row)) return UNCHECKED_LABEL
+  if (isMismatchHere(row)) return MISMATCH_LABEL
+  return STATE_LABEL[row?.status]
 }
 
 // API status values use underscores (e.g. "best_effort"); CSS state classes

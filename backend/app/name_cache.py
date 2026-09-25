@@ -59,7 +59,10 @@ logger = logging.getLogger(__name__)
 #     a name the engine had found now carries limit_code "withheld_unchecked";
 #     a cached v8 copy of that row lacks it and would offer "Report SMILES on
 #     GitHub" for a molecule the engine had named.
-_KEY_VERSION = "v9"
+# v10 (2026-09-25): no engine change. A pin or fallback whose round trip ran
+#     and did NOT match is now demoted to best_effort (abstain when the caller
+#     refused best-effort names); a cached v9 copy keeps the verified status.
+_KEY_VERSION = "v10"
 _ENGINE_VERSION = orthonym.__version__
 
 
