@@ -589,7 +589,7 @@
 
 /* THE SIDE BAR IS FIVE BOXES, divided vertically (owner instruction
    2026-09-03), and dressed with the system's OWN accents used SEMANTICALLY:
-   OLIVE marks the two verified tiers, AMBER the unverified one, and the last two
+   OLIVE marks the two verified tiers, AMBER the best-effort one, and the last two
    stay neutral. The colour rides the ordinal, a hairline accent bar under the
    label, and a whisper of box tint -- never the specimen MARK, which stays
    monochrome because that mark is the exact grammar the result tiles speak, and
@@ -638,7 +638,7 @@
   border-top: 0;
 }
 
-/* Verified tiers wear olive; the unverified one wears amber; the last two stay
+/* Verified tiers wear olive; the best-effort one wears amber; the last two stay
    neutral -- the palette's two real accents, put to a meaning. */
 .input-col .info--side .rung--pin,
 .input-col .info--side .rung--fallback {
@@ -735,9 +735,9 @@
      third of the panel empty on the right while the mark stopped short in
      the middle, and max-content sized each column to its OWN sentence --
      every rung is a separate grid, so the five marks and five sentences
-     ended up on five different axes. 34ch fits the longest line
-     ("Correct by the general rules, not the strict ones.") so all five
-     agree, and the mark takes everything left over. */
+     ended up on five different axes. One fixed sentence column (52ch) so
+     all five agree, and the mark takes everything left over; the longest
+     body wraps to a second line inside it. */
   grid-template-columns: auto minmax(140px, 1fr) 52ch;
   grid-template-areas:
     'ordinal name body'
@@ -1174,12 +1174,12 @@
   border-bottom: 3px double var(--ink);
 }
 
-/* Verified fallback: real, round-trip confirmed, but not a PIN. */
+/* Verified fallback: real, round-trip confirmed, but not a certified PIN. */
 .tile__name-block--fallback::after {
   border-bottom: 1px dashed var(--ink);
 }
 
-/* Best effort: a real name that OPSIN could not confirm. The rule goes
+/* Best effort: a real name from the general engine. The rule goes
    dotted AND drops to --muted, so it reads as weaker at a glance without
    ever becoming a colour code. The dots are DRAWN, not a `dotted` border:
    measured, Chrome renders a 1px dotted border at 1x as one flat grey line
@@ -1941,7 +1941,7 @@
 
 /* THE CONFIDENCE GRAMMAR, in a table. Same marks as the result tiles, at the
    same 30ch measure: double = verified PIN, dashed = verified fallback,
-   dotted + muted = unverified best effort, one faint rule = honest abstain,
+   dotted + muted = best effort, one faint rule = honest abstain,
    two struck rules = error. PRODUCT.md principle 3 -- the tier is visible
    wherever a name appears, and a table is exactly where it would be tempting
    to reduce it to a word in a column. Never colour. */

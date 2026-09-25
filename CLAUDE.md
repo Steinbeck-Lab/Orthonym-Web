@@ -82,7 +82,7 @@ build was an unreleased snapshot (`develop @ d4b3cf0`) nobody could reproduce; t
 the tagged `1.2.1` release, which is fetchable the same way CDK's always was.
 
 Without a live JVM and those jars, the Orthonym engine's SELF-01 self-consistency gate **fails
-open**: a molecule that should report as a lower-confidence `fallback` ships as an unverified `pin`.
+open**: a molecule that should report as a lower-confidence `fallback` ships as a `pin` nothing checked.
 That is why `app/jvm_guard.py` refuses rather than degrades, and why the Dockerfile proves the gate
 at build time.
 
@@ -172,7 +172,17 @@ Things the repo does not tell you, or tells you only after they cost time.
   separates them), `--accent-amber`, `--muted`, and `--tier-stop` for an error. **The crimson
   `--accent` still never touches a tier** -- that is what `--tier-stop` exists for, and fixing
   `.results-group--error`, which had been colouring the error tier crimson, was part of the same
-  change. In a payload, `tier` moves with `status`.
+  change.
+- **`tier` is the engine's, `status` is the app's claim.** Every name the engine emits has passed its
+  own OPSIN round trip, unless OPSIN cannot read it at all; the tier says how it was built.
+  `pin_verified` -> `pin`; `pin_unverified` and `systematic_verified` -> `fallback` (verified,
+  preferred status not certified); `best_effort` -> `best_effort` (the general engine built all or
+  part of it -- mostly the escalated pass, but the primary pass assigns it too, so best-effort mode
+  off does not rule it out). A missing
+  round trip of the app's own demotes `status` to `best_effort` and never rewrites `tier`; the
+  frontend reads that row (no `roundtrip_smiles`) as "Name not checked here", via
+  `stateLabelFor` in `lib/statuses.js`. No label may call a name "unverified" beside a passing
+  round trip (paper reviewer issue 2).
 - The rendered chemical name is never uppercased or bolded; IUPAC case and weight are semantic.
 - The rendered name IS typeset the way IUPAC prints it: italic stereodescriptors, element-symbol
   locants, `tert-`, indicated hydrogen and fusion letters; superscript bridge locants; subscript

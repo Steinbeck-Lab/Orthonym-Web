@@ -12,7 +12,7 @@ test('tierTally reports the ladder in order, strongest first', () => {
   )
   assert.deepEqual(
     rows.map((r) => r.label),
-    ['PIN', 'NO NAME', 'BAD INPUT']
+    ['PIN', 'NO NAME', 'ERROR']
   )
   assert.deepEqual(
     rows.map((r) => r.count),
@@ -26,11 +26,11 @@ test('tierTally carries the CSS class each tier already uses', () => {
   // draw the wrong rule under the count.
   const [row] = tierTally({ best_effort: 3 })
   assert.equal(row.className, 'best-effort')
-  assert.equal(row.label, 'UNVERIFIED')
+  assert.equal(row.label, 'BEST EFFORT')
 })
 
 test('tierTally omits a tier with no rows rather than showing a zero', () => {
-  // On a running job "0 bad input" and "no bad input counted yet" are
+  // On a running job "0 errors" and "no error counted yet" are
   // different claims, and only the second one is true.
   const rows = tierTally({ pin: 5, fallback: 0 })
   assert.deepEqual(
@@ -62,16 +62,16 @@ test('tierTally survives a missing counts object', () => {
 test('tallySummary counts an abstain as unnamed, never as named', () => {
   // The whole point of this module. An abstain ships no name, so the
   // submitter must see it in the "not named" figure -- while the per-tier
-  // list keeps it distinct from an unreadable input.
+  // list keeps it distinct from an error.
   const s = tallySummary({ pin: 6, fallback: 2, best_effort: 1, abstain: 4, error: 3 })
   assert.equal(s.named, 9)
   assert.equal(s.unnamed, 7)
   assert.equal(s.counted, 16)
 })
 
-test('tallySummary counts an unverified best-effort name as named', () => {
-  // It IS a name. Its tier says OPSIN did not confirm it, and the rule under
-  // it says so too; calling it "not named" would be a different lie.
+test('tallySummary counts a best-effort name as named', () => {
+  // It IS a name. Its tier says the general engine built it, and the rule
+  // under it says so too; calling it "not named" would be a different lie.
   assert.deepEqual(tallySummary({ best_effort: 5 }), { named: 5, unnamed: 0, counted: 5 })
 })
 
@@ -106,20 +106,26 @@ test('outcomeMessage says "all" when nothing was missed', () => {
 
 test('outcomeMessage gives an abstain its own sentence, never a failure list', () => {
   // An abstain is the engine working correctly. Listing it beside an
-  // unreadable input would be the conflation PRODUCT.md forbids.
+  // error would be the conflation PRODUCT.md forbids.
   const m = outcomeMessage({ pin: 4, abstain: 3, error: 2 }, { finished: true })
   assert.equal(
     m,
     '4 of 9 molecules were named: 4 verified Preferred IUPAC Names. ' +
       'The engine declined to name 3 rather than guess. ' +
-      '2 inputs could not be read at all.'
+      '2 inputs ended in an error.'
   )
 })
 
+test('outcomeMessage names a best-effort row without calling it unverified', () => {
+  const m = outcomeMessage({ pin: 2, best_effort: 1 }, { finished: true })
+  assert.equal(m, 'All 3 molecules were named: 2 verified Preferred IUPAC Names and 1 best-effort name.')
+  assert.ok(!/unverified|not confirmed|did not confirm/i.test(m), m)
+})
+
 test('outcomeMessage never claims an aggregate round-trip', () => {
-  // A pin row can carry no roundtrip_smiles at all -- RoundTripCell has an
-  // "unavailable" state for exactly that -- so a sentence built from tier
-  // counts must not assert that OPSIN read anything back.
+  // A named row can carry no roundtrip_smiles at all -- OPSIN verify off, or
+  // no round trip could run -- so a sentence built from tier counts must not
+  // assert that OPSIN read anything back.
   const m = outcomeMessage({ pin: 10 }, { finished: true })
   assert.ok(!/OPSIN|read .* back|round-?trip/i.test(m), m)
 })
@@ -152,7 +158,7 @@ test('outcomeMessage keeps its grammar singular where it should', () => {
   )
   assert.equal(
     outcomeMessage({ error: 1 }, { finished: true }),
-    '0 of 1 molecule were named. 1 input could not be read at all.'
+    '0 of 1 molecule were named. 1 input ended in an error.'
   )
 })
 

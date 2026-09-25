@@ -50,7 +50,7 @@ EXAMPLES = [
         "expected_status": "pin",
     },
     {
-        "label": "A fused polycyclic — real name, not a verified PIN",
+        "label": "A fused polycyclic — verified name, preferred status not certified",
         "smiles": "C1CC2CCC1(CC2)C3CCC4(CCC5(CCCC5C4C3)C)C",
         "expected_status": "fallback",
     },

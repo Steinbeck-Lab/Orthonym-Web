@@ -470,11 +470,11 @@ The Orthonym engine ships three modules that each compute an identical `PROJECT_
 
 None of these ship with the pip package. `scripts/vendor-orthonym.sh` vendors all three into `backend/vendor/opsin-resources/`, and `backend/scripts/place_opsin_resources.py` (run once after every `pip install`, and baked into `backend/Dockerfile`) copies them to wherever `orthonym` actually got installed — it locates the target via `sysconfig`, not by guessing a venv layout, so it works the same locally and in a container.
 
-**This is not just packaging hygiene.** Without a live JVM (jpype + a JRE) and these two jars, the Orthonym engine's SELF-01 self-consistency gate — the check that verifies a candidate name actually round-trips back to the right structure — silently **fails open**: confirmed by direct testing, a molecule that should honestly report as a lower-confidence `fallback` instead shipped as an unverified `pin`. `JPype1` is in `requirements.txt` and `backend/Dockerfile` installs `default-jre-headless` for exactly this reason. If you ever strip either out "to slim the image," re-run the regression check below first.
+**This is not just packaging hygiene.** Without a live JVM (jpype + a JRE) and these two jars, the Orthonym engine's SELF-01 self-consistency gate — the check that verifies a candidate name actually round-trips back to the right structure — silently **fails open**: confirmed by direct testing, a molecule that should honestly report as a lower-confidence `fallback` instead shipped as a `pin` nothing had checked. `JPype1` is in `requirements.txt` and `backend/Dockerfile` installs `default-jre-headless` for exactly this reason. If you ever strip either out "to slim the image," re-run the regression check below first.
 
 That failure mode is why `app/jvm_guard.py` refuses rather than degrades: if no worker reports a live
-JVM, every naming endpoint — including `POST /api/jobs` — returns 503 instead of serving names with
-an unverified confidence tier.
+JVM, every naming endpoint — including `POST /api/jobs` — returns 503 instead of serving names whose
+confidence tier nothing has checked.
 
 ### The third jar: CDK draws every picture
 

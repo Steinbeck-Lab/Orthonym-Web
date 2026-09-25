@@ -58,7 +58,7 @@ def test_a_verified_row_with_no_round_trip_proof_is_not_cached(redis_client):
     translate_one.
 
     translate_one can no longer HAND this row to put_cached -- it now
-    downgrades a verified tier whose round-trip is missing before returning
+    downgrades a verified status whose round-trip is missing before returning
     it (see tests/test_tier_honesty.py). This test therefore builds the
     mislabelled row itself, which is the honest way to keep testing a
     defence-in-depth guard: put_cached is module-level and public, the
@@ -114,8 +114,8 @@ def test_a_genuinely_verified_pin_is_still_cached(redis_client):
 
 
 def test_a_best_effort_row_with_no_roundtrip_is_still_cached(redis_client):
-    """best_effort's whole point is "a real name, OPSIN-unverified" -- a
-    null roundtrip there is not evidence SELF-01 failed open, so the C3
+    """best_effort's status claims no round trip of its own -- a null
+    roundtrip there is not evidence SELF-01 failed open, so the C3
     guard (scoped to pin/fallback only) must not evict it too.
     """
     item = ResultItem(

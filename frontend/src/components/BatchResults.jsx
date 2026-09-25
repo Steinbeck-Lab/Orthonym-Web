@@ -19,7 +19,7 @@ import {
 } from '../lib/batchJob'
 import { outcomeMessage, tierTally } from '../lib/batchTally'
 import { forgetJob, rememberJob } from '../lib/jobStore'
-import { STATE_CLASS, STATE_LABEL, VERIFIED_STATUSES } from '../lib/statuses'
+import { STATE_CLASS, VERIFIED_STATUSES, stateLabelFor } from '../lib/statuses'
 import CopyButton from './CopyButton'
 import Icon from './Icon'
 import TierLamp from './TierLamp'
@@ -32,7 +32,7 @@ import ChemName, { ChemFormula } from './Typeset'
 //   1. EVERY row carries its confidence mark. PRODUCT.md principle 3 -- the
 //      tier must be visible wherever a name appears, never a footnote -- so
 //      each name gets the same rule grammar the result tiles use (double =
-//      verified PIN, dashed = verified fallback, dotted = unverified best
+//      verified PIN, dashed = verified fallback, dotted = best
 //      effort, faint = honest abstain, struck = error). A table is the one
 //      place it would be tempting to reduce that to a word in a column.
 //   2. The results link is NEVER presented as permanent. The backend keeps a
@@ -146,7 +146,7 @@ function SortBar({ sort, order, onSort }) {
 /** The confidence mark, in the same grammar the tiles use. */
 function NameCell({ row }) {
   const stateClass = STATE_CLASS[row.status] ?? 'error'
-  const label = STATE_LABEL[row.status]
+  const label = stateLabelFor(row)
   if (row.name) {
     return (
       <div className={`batch__name batch__name--${stateClass}`}>
@@ -168,7 +168,7 @@ function NameCell({ row }) {
     )
   }
   // No name: the abstain and error states still need their own mark, or a
-  // reader cannot tell "the engine refused" from "the input was unreadable".
+  // reader cannot tell "the engine refused" from "the input could not be named".
   //
   // The formula rides along HERE rather than in a column of its own, because
   // the engine only ever fills it for an abstain -- it is the consolation for
@@ -179,7 +179,7 @@ function NameCell({ row }) {
     <div className={`batch__name batch__name--${stateClass}`}>
       <TierLamp status={row.status} />
       <span className="batch__name-text batch__name-text--muted">
-        {row.status === 'error' ? (row.error ?? 'Could not read this input') : label}
+        {row.status === 'error' ? (row.error ?? 'This input could not be named') : label}
         {row.formula ? (
           <>
             {' · '}
@@ -204,7 +204,7 @@ function NameCell({ row }) {
  *
  *   1. `named` and `not named` are separate figures and the per-tier list
  *      sits right under them, because "the engine declined" and "the input
- *      was unreadable" must not merge into one number (PRODUCT.md: a
+ *      could not be named" must not merge into one number (PRODUCT.md: a
  *      best-effort name must never be conflated with a verified one, and an
  *      abstain is the engine working correctly, not a fault).
  *   2. While the job runs these counts are PARTIAL, so the heading says "so

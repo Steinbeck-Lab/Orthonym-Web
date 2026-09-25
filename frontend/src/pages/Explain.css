@@ -455,7 +455,7 @@
 /* Each hoverable part of the name.
 
    At rest it carries NO rule. A dotted underline here would be the exact
-   mark that means "unverified best-effort name" everywhere else on the
+   mark that means "best-effort name" everywhere else on the
    site, and reusing it as a hover affordance would conflate a confidence
    tier with an interaction hint. The pointing signal is instead a solid
    ink underline — a weight no tier uses — plus the glow wash. The

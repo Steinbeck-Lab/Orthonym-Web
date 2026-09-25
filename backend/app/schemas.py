@@ -21,15 +21,16 @@ Status = Literal["pin", "fallback", "best_effort", "abstain", "error"]
 # not the other reproduces exactly the C3 bug the pair exists to close, in
 # whichever half was missed. schemas is the only module both already import.
 #
-# frontend/src/components/Tile.jsx keeps its own copy -- it cannot import
+# frontend/src/lib/statuses.js keeps its own copy -- it cannot import
 # Python -- the same accepted cross-language mirror as NAMED_STATUSES there.
 VERIFIED_STATUSES = frozenset({"pin", "fallback"})
 # The Orthonym engine's own tier labels, from Orthonym.name_tiered's docstring. The
 # earlier T1/T3/T4/T5 codes were replaced upstream by these names; there is
-# no T-code anywhere in the engine any more. `pin_unverified` is documented
-# upstream as reserved (systematic-PIN certification) and is listed here so a
-# row carrying it validates rather than 500s -- classify() maps it to the
-# honest "best_effort" status, never to "pin".
+# no T-code anywhere in the engine any more. `pin_unverified` is a name in PIN
+# form that only a breadth producer built; it round-trips, but its preferred
+# status is not certified. name_tiered's docstring still calls it reserved,
+# but the engine assigns it, and classify() maps it to "fallback" -- never to
+# "pin". Every tier ships as the engine gave it (orthonym_service.py).
 Tier = Literal[
     "pin_verified",
     "systematic_verified",
@@ -44,22 +45,23 @@ class TranslateRequest(BaseModel):
     smiles: list[str]
     # Best-effort mode. True (the default, and the app's shipped behaviour)
     # lets a molecule the primary namer abstained on be retried against the
-    # escalated namer, which may return an OPSIN-UNVERIFIED name (engine
-    # tier `best_effort`, surfaced as status "best_effort"). False stops after
-    # the primary pass,
-    # so an unverified name can never be produced and such a molecule comes
-    # back as an honest abstain instead.
+    # escalated namer, which may return a best-effort name from the general
+    # engine (engine tier `best_effort`, surfaced as status "best_effort").
+    # False stops after the primary pass, so such a molecule comes back as an
+    # honest abstain instead. (The primary pass can still give tier
+    # best_effort to some composer names; see orthonym_service.)
     best_effort: bool = True
     # OPSIN round-trip verification. True (the default, and the app's shipped
     # behaviour) parses every produced name back through OPSIN and compares
     # full InChIKeys, which is what earns a result the "pin" or "fallback"
     # status. False skips that check.
     #
-    # Turning it off does NOT quietly relax the tiers -- it costs every name
+    # Turning it off does NOT quietly relax the statuses -- it costs every name
     # its verified status, automatically, through the machinery that was
     # already there: with no round trip, `roundtrip_smiles` is None, and
-    # orthonym_service's existing downgrade demotes any verified tier to
-    # "best_effort" (or, with best_effort=False, to an honest abstain). So the
+    # orthonym_service's existing downgrade demotes any verified status to
+    # "best_effort", keeping the engine's tier (or, with best_effort=False, to
+    # an honest abstain). So the
     # switch cannot produce a name that CLAIMS more than was checked. That is
     # the point of exposing it at all: PRODUCT.md principle 1 says determinism
     # must be provable, and being able to turn the proof off and watch every
@@ -80,8 +82,9 @@ class ResultItem(BaseModel):
     depiction_svg: Optional[str] = None
     # Visible OPSIN round-trip proof (independent of the engine's own
     # internal SELF-01 gate -- uses the engine's own opsin_parse(), the same
-    # vendored jar/JVM as SELF-01). Populated for status in (pin, fallback,
-    # best_effort); null for abstain/error.
+    # vendored jar/JVM as SELF-01). Populated whenever that check ran on a
+    # named row; null for abstain/error, and on a best_effort row demoted
+    # because no round trip ran.
     roundtrip_smiles: Optional[str] = None
     roundtrip_match: Optional[bool] = None
 
@@ -95,7 +98,7 @@ class HealthResponse(BaseModel):
     # Whether at least one Celery worker has reported a live JVM. See
     # app.redis_store.any_worker_has_opsin -- this is what "OK" versus
     # "DEGRADED" is actually reporting on, and what makes every naming
-    # endpoint 503 rather than serving a name with an unverified tier.
+    # endpoint 503 rather than serving a name whose tier SELF-01 never checked.
     opsin: str
 
 

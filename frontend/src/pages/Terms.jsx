@@ -168,8 +168,8 @@ const CONDITIONS = [
         This site and its content are provided for use “as is”. No representation or warranty is made
         with respect to the site or its contents, including as to quality, completeness, timeliness or
         accuracy. Names, structures, molecular formulae and depictions are generated automatically.
-        Orthonym states, for every name, how far it was able to verify that name — a verified name, a
-        fallback, a best-effort attempt or an abstention — and that statement is made honestly and is
+        Orthonym states, for every name, how far it was able to verify that name — a verified PIN, a
+        verified fallback, a best-effort name or an abstention — and that statement is made honestly and is
         the point of the site. It is not a warranty that the name is correct. In particular, no
         result from this site should be relied upon as the sole basis for a regulatory, safety,
         clinical, purchasing or publication decision without independent checking.
@@ -414,7 +414,7 @@ function Terms() {
               </a>
               , which is worth citing alongside if the verification matters to your argument.
             </p>
-            <p className="legal-updated">Version 1 — 6 September 2026</p>
+            <p className="legal-updated">Version 2 — 25 September 2026</p>
         </LegalSection>
     </LegalPage>
   )

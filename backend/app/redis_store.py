@@ -263,7 +263,7 @@ def job_tier_counts(meta: dict[str, str]) -> dict[str, int]:
 
     A tier with no molecules has no field, so it is absent rather than zero.
     The caller decides whether to print a zero -- and the API does not, since
-    "0 bad input" and "we never counted bad input" must not look alike.
+    "0 errors" and "we never counted errors" must not look alike.
     """
     return {
         field[len(_TIER_FIELD_PREFIX) :]: int(value)

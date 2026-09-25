@@ -12,25 +12,36 @@ Derivation logic (verified against the live orthonym package):
    Orthonym(style="pin", general_fallback=True,
    general_fallback_unverified=True, allow_aromatic_general=True) -- and
    classify ITS result instead. This escalated pass may still land on a
-   verified fallback (`systematic_verified`), a genuinely OPSIN-unverified name (`best_effort` ->
-   "best_effort"), or it may still abstain -- whichever it actually
-   produces is what ships.
+   verified fallback (`systematic_verified` or `pin_unverified`), a
+   best-effort name from the general engine (`best_effort` -> "best_effort"),
+   or it may still abstain -- whichever it actually produces is what ships.
 
 Tier -> status mapping used for BOTH namers (`classify`). The tier names are
-the Orthonym engine's own, from `Orthonym.name_tiered`'s docstring:
-  - "pin_verified"        -> "pin"
-  - "systematic_verified" -> "fallback"     (RT-verified via the general
-    engine, or a trivial-retained name)
-  - "best_effort"         -> "best_effort"  (engine, E1-only, NOT RT-verified
-    -- requires the general_fallback_unverified opt-in, so it only appears on
-    the escalated pass)
+the Orthonym engine's own. Since engine 1.0.0 EVERY name of every tier has
+passed the engine's own OPSIN round trip before it is emitted -- except a
+name OPSIN cannot read at all (exact-match list names such as metal
+tetrapyrrole complexes and retained natural-product parents, and a few
+by-design SELF-01 carve-outs). So the tier says HOW the name was built, not
+whether it round-trips:
+  - "pin_verified"        -> "pin"          (the strict PIN path built and
+    verified it)
+  - "pin_unverified"      -> "fallback"     (a name in PIN form that only a
+    breadth producer built; it round-trips, but the engine does not certify
+    its preferred status. Assigned on EITHER pass -- the primary namer has
+    general_fallback=True -- whatever name_tiered's own docstring says)
+  - "systematic_verified" -> "fallback"     (a verified systematic name that
+    is not the PIN, or a trivial-retained name)
+  - "best_effort"         -> "best_effort"  (the general engine built it, or
+    built part of it; it round-trips too. Mostly from the escalated pass, but
+    NOT only: the primary pass gives it to a composer name that carries a
+    general-tier ring prefix, e.g. OC(=O)CC12CC3CC(O)(CC(C3)C1)C2, so
+    best_effort=False does not rule it out)
   - "abstain"             -> "abstain"      (name is ALWAYS reported as null,
     because an abstain row's own "name" field, when non-null, is a
     recognized failure placeholder like "unknown organic compound" and must
     never be surfaced as a real name)
-  - "pin_unverified"      -> "best_effort"  (reserved upstream for
-    systematic-PIN certification; an UNVERIFIED pin must never be shown as a
-    verified one, so it degrades to the honest unverified status)
+`tier` always ships as the engine gave it. A missing round trip of this
+app's own (translate_one, below) moves `status` alone.
 
 These replaced an earlier T1/T3/T4/T5 scheme. The T-codes are HISTORY: they
 do not exist in the engine, in any response, or in any comparison in this
@@ -44,11 +55,11 @@ caught that rename, and is what will catch the next one.
 
 Note that "best_effort" is NOT what a molecule gets just because it needed
 the escalated/second-pass namer -- a molecule that abstains on the primary
-pass but round-trip-verifies on the escalated pass is a "fallback"
-(`systematic_verified`),
-same as if the primary pass had found it directly. "best_effort" is
-reserved specifically for tier `best_effort` on whichever pass produced the final
-result.
+pass but gets a `systematic_verified` or `pin_unverified` name on the
+escalated pass is a "fallback", same as if the primary pass had found it
+directly. Status "best_effort" comes from tier `best_effort`, or from
+translate_one demoting a verified status whose visible round trip did not
+run (that row keeps the engine's tier).
 
 When the final status is "abstain" (both passes exhausted), formula/
 limit_code come from the LAST row computed (the escalated pass's row) --
@@ -57,7 +68,8 @@ which namer produced them, so either row would give the same values; using
 the last one computed is simplest.
 
 For every non-abstain, non-error result (pin/fallback/best_effort) two
-extra things are computed and attached:
+extra things are computed and attached (the round trip only when `verify` is
+on and RDKit read the input):
   - depiction_svg: a 2D structure rendering of the input SMILES
     (app/depiction.py).
   - roundtrip_smiles / roundtrip_match: a SECOND, visible OPSIN round-trip
@@ -89,9 +101,10 @@ from .depiction import structure_svg_data_uri
 from .schemas import VERIFIED_STATUSES, ResultItem
 
 # Constructed once per process and reused across all requests. This is
-# REQUIRED for both correctness (general_fallback=True is what enables
-# fallback/`systematic_verified`/`best_effort` results at all -- the bare default only ever produces
-# PIN-or-abstain) and performance (namer construction is not free).
+# REQUIRED for both correctness (general_fallback=True is what enables the
+# fallback tiers, `systematic_verified` and `pin_unverified`, at all -- the
+# bare default only ever produces PIN-or-abstain) and performance (namer
+# construction is not free).
 _namer = Orthonym(style="pin", general_fallback=True)
 
 
@@ -105,8 +118,9 @@ def get_primary_namer() -> Orthonym:
 
 # Second, more aggressive namer used ONLY to escalate molecules the primary
 # namer abstained on (tier `abstain`). general_fallback_unverified=True lets the
-# general engine ship a name even when its own round-trip check fails
-# (tier `best_effort`, surfaced as "best_effort"); allow_aromatic_general=True widens
+# general engine ship names the primary namer holds back (tier `best_effort`,
+# surfaced as "best_effort"; they still pass the engine's full round trip
+# before they ship); allow_aromatic_general=True widens
 # what the general engine will attempt on aromatic systems. Built once at
 # import time for the same reasons as `_namer`.
 _escalated_namer = Orthonym(
@@ -130,17 +144,17 @@ def classify(row: dict) -> tuple[str, Optional[str], str]:
     if tier == "pin_verified":
         return "pin", row["name"], tier
     if tier == "systematic_verified":
-        # RT-verified via the general engine or a trivial-retained name --
-        # which is exactly what this app means by "fallback".
+        # A verified systematic name that is not the PIN, or a trivial-retained
+        # name: one of the two "fallback" tiers.
         return "fallback", row["name"], tier
     if tier == "best_effort":
         return "best_effort", row["name"], tier
     if tier == "pin_unverified":
-        # Reserved upstream for systematic-PIN certification. A PIN whose
-        # round trip has NOT been confirmed must never be shown as a
-        # verified PIN, so it ships as the honest "a real name, but
-        # OPSIN-unverified" status instead.
-        return "best_effort", row["name"], tier
+        # A name in PIN form that only a breadth producer built. It round-trips,
+        # but the engine does not certify its preferred status, so it is a
+        # verified "fallback" -- never a "pin". Assigned today, on the primary
+        # pass too; name_tiered's docstring still calls it reserved.
+        return "fallback", row["name"], tier
 
     # This guard earned its keep: it is what caught the upstream rename from
     # T1/T3/T4/T5 to these names, instead of a wrong tier reaching a user.
@@ -179,7 +193,7 @@ def _roundtrip_check(name: str, mol: Chem.Mol) -> tuple[Optional[str], Optional[
     Returns (roundtrip_smiles, roundtrip_match):
       - (None, None) if opsin_parse returned None (OPSIN could not
         interpret the name, or the jar/JVM is unavailable). This is the
-        state that downgrades a verified tier.
+        state that demotes a verified status (the tier stays the engine's).
       - (raw_smiles, False) if OPSIN returned something RDKit cannot parse,
         an InChIKey cannot be computed for either side, or the keys differ.
       - (raw_smiles, True) if the full InChIKeys agree.
@@ -201,7 +215,7 @@ def _roundtrip_check(name: str, mol: Chem.Mol) -> tuple[Optional[str], Optional[
         # RDKit's InChI support can decline a molecule (unusual valences,
         # some organometallics). Falling back to canonical SMILES keeps a
         # verdict available rather than reporting None, which would read as
-        # "OPSIN was unreachable" and wrongly downgrade the tier.
+        # "OPSIN was unreachable" and wrongly demote the status.
         return raw, Chem.MolToSmiles(mol, canonical=True) == Chem.MolToSmiles(
             roundtrip_mol, canonical=True
         )
@@ -226,7 +240,7 @@ def _abstain_item(smiles: str, tier: str, row: dict) -> ResultItem:
     """The honest "no name" result.
 
     Built in two places -- the primary/escalated pass abstaining, and a
-    verified tier being downgraded for a caller who refused unverified names
+    verified status being demoted for a caller who refused best-effort names
     -- and they must not drift: this is the bottom rung of the confidence
     ladder, and the two differing would mean the same molecule reports
     differently depending on which route reached the same conclusion.
@@ -266,19 +280,22 @@ def translate_one(
 
     `verify` runs the OPSIN round-trip check. Turning it off does not make a
     name look better than it is: the check is what produces `roundtrip_smiles`,
-    and the downgrade below already treats a missing round trip as "this tier's
-    claim is not backed", so every verified tier falls to `best_effort`. The
+    and the downgrade below already treats a missing round trip as "this
+    status's claim is not backed", so every verified status falls to
+    `best_effort` (the engine's tier is kept as it came). The
     saving is real but modest -- measured 0.60 ms/molecule, ~6 s on a full
     10,000-molecule job -- and it is exposed mainly so the proof can be turned
     off and SEEN to matter.
 
     `best_effort` gates the escalation described in the module docstring.
-    When False the escalated namer is never consulted, so no OPSIN-
-    unverified name ("best_effort") can ever be produced and a
-    molecule the primary namer abstained on ships as an honest abstain.
-    Note that turning it off also forfeits the `systematic_verified` fallbacks the escalated
-    pass would have round-trip-VERIFIED -- the escalation is one call, and
-    its two possible good outcomes cannot be separated before it runs.
+    When False the escalated namer is never consulted, so a molecule the
+    primary namer abstained on ships as an honest abstain. It does NOT rule
+    out tier "best_effort": the primary pass assigns it too (module
+    docstring), and that row ships as status best_effort. Note that turning
+    it off also forfeits the fallbacks (`systematic_verified`,
+    `pin_unverified`) the escalated pass would have found -- the escalation
+    is one call, and its possible outcomes cannot be separated before it
+    runs.
     """
     mol = Chem.MolFromSmiles(smiles)
     if mol is None and cdk_bridge.parse_smiles(smiles) is None:
@@ -302,7 +319,7 @@ def translate_one(
     # The namer takes the SMILES STRING, not a Mol, so it can still be asked --
     # and CDK can still draw the picture. What we lose is the round-trip check,
     # which needs RDKit to compute an InChIKey for the input; that loss is
-    # handled below and costs the molecule its verified tier, honestly.
+    # handled below and costs the molecule its verified status, honestly.
     #
     # Measured, not hoped for: these almost all end in an abstain, and an
     # abstain carries no depiction by design (_abstain_item), so the gain here
@@ -334,48 +351,34 @@ def translate_one(
     )
 
     if status in VERIFIED_STATUSES and roundtrip_smiles is None:
-        # Final review report, C3, backend half. Two causes reach here, and both
-        # mean the same thing about the CLAIM. Either SELF-01 used the same
-        # opsin_parse() as the round-trip check and OPSIN was unreachable, so
-        # SELF-01 failed OPEN and let an unverified candidate through wearing a
-        # verified label -- or RDKit could not read the input at all (the CDK
-        # branch at the top of this function), so no round trip could be
-        # computed. In both cases the verification behind the label did not
-        # happen. name_cache already refuses to
-        # PERSIST such a row for its 7-day TTL -- but declining to cache a
-        # lie is not the same as declining to tell it, and the frontend
-        # renders "pin" with the double rule that means round-trip
-        # confirmed.
+        # Final review report, C3, backend half. Several causes reach here, and
+        # all mean the same thing about the CLAIM: no round trip of this app's
+        # own backs the label. The caller turned `verify` off; or RDKit could
+        # not read the input (the CDK branch at the top of this function), so
+        # there is no InChIKey to compare against; or OPSIN cannot read the
+        # name back (an exact-match list name or a by-design SELF-01
+        # carve-out); or OPSIN was unreachable,
+        # in which case SELF-01 (the same opsin_parse()) failed OPEN too.
+        # name_cache already refuses to PERSIST a verified status with no
+        # round trip -- but declining to cache a claim is not the same as
+        # declining to make it, and the frontend renders "pin" with the double
+        # rule that means round-trip confirmed.
         #
-        # The name itself is real, so it survives; only the claim about it
-        # is corrected, down to the tier that claims no verification at all.
+        # The name itself is real, so it survives; only the claim about it is
+        # corrected, down to the status that claims no round trip at all.
         # Except for a caller who passed best_effort=False: they refused
-        # OPSIN-unverified names outright, and handing them one here would
-        # reintroduce through the back door exactly what the gate above
+        # best-effort names outright, and handing them a best_effort row here
+        # would reintroduce through the back door exactly what the gate above
         # keeps out the front. For them the honest answer is abstain.
         if not best_effort:
             return _abstain_item(smiles, tier, row)
+        # STATUS only. `tier` stays the engine's own verdict on how the name
+        # was built: this app's check not running does not change it. (This
+        # block used to rewrite the tier to pin_unverified / best_effort, but
+        # pin_unverified is a real engine tier for a round-tripping PIN-form
+        # name, not a spelling of "not checked".) The frontend reads a
+        # best_effort status with no roundtrip_smiles as "not checked here".
         status = "best_effort"
-        # THE TIER HAS TO MOVE TOO. The paragraph above says "only the claim
-        # about it is corrected, down to the tier that claims no verification
-        # at all" -- but until now only `status` moved, so the row went out as
-        # status="best_effort" with tier="pin_verified" still attached: two
-        # fields of the same payload disagreeing about whether OPSIN confirmed
-        # anything. `status` is what the UI draws, which is why nobody saw it;
-        # `tier` is what an API or CSV consumer reads.
-        #
-        # It was rare while this branch only fired on a SELF-01 fail-open. The
-        # verify switch makes it the ordinary case, so it is fixed here rather
-        # than left as a contradiction a user can now produce on purpose.
-        #
-        # `pin_unverified` is the exact tier for a PIN candidate whose round
-        # trip was not confirmed -- classify() has always mapped it to
-        # "best_effort" and it simply had no producer until now. A downgraded
-        # `systematic_verified` has no matching "unverified" spelling, so it
-        # takes `best_effort`, the tier that means "a real name, OPSIN-
-        # unverified". Both are in the Tier literal, so the model still
-        # validates.
-        tier = "pin_unverified" if tier == "pin_verified" else "best_effort"
 
     return ResultItem(
         smiles=smiles,

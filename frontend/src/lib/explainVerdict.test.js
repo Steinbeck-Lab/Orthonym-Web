@@ -75,8 +75,9 @@ test('a tier that claims a round-trip must not fall silent when the proof is mis
 })
 
 test('a tier that claims no round-trip stays silent when there is no proof', () => {
-  // best_effort's own label already says OPSIN did not confirm it. Adding
-  // "unavailable" here would report a check that was never claimed.
+  // best_effort claims no verified tier, and its label already says when no
+  // round trip ran here. Adding "unavailable" would report a check that was
+  // never claimed.
   assert.equal(roundtripLine({ status: 'best_effort', roundtrip_smiles: null }), null)
 })
 

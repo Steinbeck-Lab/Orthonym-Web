@@ -25,8 +25,9 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
 # The regression molecule from README.md. A fused polycyclic: the Orthonym
 # engine can name it, but the PIN candidate does not round-trip, so SELF-01 suppresses
-# it and the general engine's verified fallback (tier T3) ships instead.
-# T3 IS round-trip verified -- T4 ("best_effort") is the unverified tier.
+# it and a verified systematic name (tier systematic_verified, status
+# "fallback") ships instead. That name IS round-trip verified, as is every
+# name the engine emits.
 FUSED_POLYCYCLIC = "C1CC2CCC1(CC2)C3CCC4(CCC5(CCCC5C4C3)C)C"
 
 # os._exit(0) at the end of both probes is deliberate: a started JVM refuses
@@ -152,8 +153,7 @@ def test_forked_child_starts_and_owns_its_own_jvm():
     # the bogus candidate, i.e. OPSIN was unreachable by any route.
     assert payload["status"] == "fallback", payload
     assert payload["roundtrip_smiles"] is not None, payload
-    # T3 "fallback" is RT-VERIFIED via the general engine; T4 is the
-    # unverified tier. True is correct here.
+    # "fallback" (systematic_verified) is RT-VERIFIED. True is correct here.
     assert payload["roundtrip_match"] is True, payload
 
 

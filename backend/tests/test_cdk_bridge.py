@@ -202,7 +202,7 @@ def test_a_cdk_only_structure_gets_a_verdict_not_a_parse_error():
 
 
 def test_a_named_cdk_only_structure_cannot_claim_verification(monkeypatch):
-    """No RDKit Mol means no round trip, so no verified tier may ship.
+    """No RDKit Mol means no round trip, so no verified status may ship.
 
     Forced rather than waited for: no real molecule currently reaches this
     branch, but the branch exists and SELF-01 fails OPEN, so an untested path
@@ -222,12 +222,13 @@ def test_a_named_cdk_only_structure_cannot_claim_verification(monkeypatch):
     assert item.roundtrip_smiles is None
     assert item.roundtrip_match is None
     assert item.status == "best_effort", "a pin badge requires a real round trip"
+    assert item.tier == "pin_verified", "the demotion moves the status only"
     assert item.depiction_svg is not None
     assert _engine_of(item.depiction_svg) == "cdk"
 
 
 def test_a_named_cdk_only_structure_is_refused_when_best_effort_is_off(monkeypatch):
-    """Fail-closed pair: a caller who refused unverified names gets an abstain."""
+    """Fail-closed pair: a caller who refused best-effort names gets an abstain."""
     from app import orthonym_service
 
     class _Namer:

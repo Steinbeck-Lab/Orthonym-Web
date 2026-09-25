@@ -8,16 +8,31 @@
 
 export const STATE_LABEL = {
   pin: 'Preferred IUPAC Name (PIN)',
-  fallback: 'Not a verified PIN',
-  // "did not confirm it" and not "could not round-trip check this": a
-  // best-effort result covers BOTH the case where OPSIN parsed the name and
-  // disagreed (roundtrip_smiles set, match false) and the case where OPSIN
-  // could not parse it at all (roundtrip_smiles null). The old wording was
-  // only true of the second, and claimed the check had not happened when it
-  // usually had. The tile prints the actual verdict underneath either way.
-  best_effort: 'Unverified best-effort name — OPSIN did not confirm it',
+  // Engine tiers systematic_verified AND pin_unverified: both round-trip, and
+  // the engine does not certify either as the PIN.
+  fallback: 'Verified name, preferred status not certified',
+  // WHERE the name came from, never a verdict: the engine round-trips every
+  // name it emits, best_effort included, and the tile prints this app's own
+  // round-trip verdict underneath. A best_effort row with no round trip here
+  // takes UNCHECKED_LABEL instead (stateLabelFor, below).
+  best_effort: 'Best-effort name from the general engine',
   abstain: 'Could not confidently name this',
   error: null, // uses the literal API error message instead
+}
+
+// A best_effort row with no round-trip result from this app: OPSIN verify
+// off, an input RDKit cannot read, or a name OPSIN cannot read back. The
+// backend demotes a pin or fallback to best_effort in exactly that case and
+// keeps the engine's tier, so "from the general engine" would be false of it.
+// Keyed on the missing round trip, not on the tier, because batch rows carry
+// no tier -- and "not checked here" is true of every such row.
+export const UNCHECKED_LABEL = 'Name not checked here: no round-trip result'
+
+/** The long tier label for one row. Every surface that prints one calls this,
+ *  so the unchecked case cannot be missed on any of them. */
+export function stateLabelFor(row) {
+  if (row?.status === 'best_effort' && !row.roundtrip_smiles) return UNCHECKED_LABEL
+  return STATE_LABEL[row?.status]
 }
 
 // API status values use underscores (e.g. "best_effort"); CSS state classes
@@ -43,16 +58,17 @@ export const TIER_ORDER = ['pin', 'fallback', 'best_effort', 'abstain', 'error']
 export const STATE_SHORT = {
   pin: 'PIN',
   fallback: 'FALLBACK',
-  best_effort: 'UNVERIFIED',
+  best_effort: 'BEST EFFORT',
   abstain: 'NO NAME',
-  error: 'BAD INPUT',
+  // Not "BAD INPUT": an error row is also a naming crash or a batch timeout.
+  error: 'ERROR',
 }
 
-// Statuses that ship a real (if not always verified) name.
+// Statuses that ship a real name, whatever its tier.
 export const NAMED_STATUSES = new Set(['pin', 'fallback', 'best_effort'])
 
 // Statuses whose confidence rule (double / dashed) claims an OPSIN round-trip
-// confirmed the name. best_effort makes no such claim -- its own state label
-// already says OPSIN did not confirm it -- so only these two need an
-// explicit call-out when roundtrip_smiles is missing.
+// confirmed the name. best_effort makes no such claim -- its label names the
+// general engine, or says outright that no round trip ran here -- so only
+// these two need an explicit call-out when roundtrip_smiles is missing.
 export const VERIFIED_STATUSES = new Set(['pin', 'fallback'])

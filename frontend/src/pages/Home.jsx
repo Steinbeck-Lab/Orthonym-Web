@@ -110,14 +110,15 @@ function Home() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   // Best-effort mode. Defaults ON, which is the behaviour Orthonym has always
   // shipped: a molecule the strict namer abstains on gets retried against
-  // the escalated one. Turning it off makes the engine strict — it can then
-  // only ever return a verified name or an honest abstain.
+  // the escalated one. Turning it off skips that second pass, so a molecule
+  // the strict namer declines comes back as an honest abstain.
   const [bestEffort, setBestEffort] = useState(true)
   // OPSIN round-trip verification. Default ON, and it is the thing that earns
   // a result its "pin" or "fallback" badge. Turning it off cannot make a name
   // look better than it is -- the backend's existing downgrade demotes every
-  // verified tier to best-effort when there is no round trip to show, so the
-  // switch trades proof for speed and says so on every tile.
+  // verified STATUS to best-effort when there is no round trip to show (the
+  // engine's own tier is kept), so the switch trades proof for speed and says
+  // so on every tile.
   const [verify, setVerify] = useState(true)
   const [validationNote, setValidationNote] = useState(null)
   const [fetchError, setFetchError] = useState(null)
@@ -676,7 +677,7 @@ function Home() {
                 hint={
                   verify
                     ? 'Every name is parsed back by OPSIN and checked against your structure.'
-                    : 'Faster, but nothing is checked \u2014 every name ships as unverified.'
+                    : 'Faster, but no round trip runs here, so no name is marked verified.'
                 }
               />
 
@@ -690,12 +691,12 @@ function Home() {
                 offWord="Off"
                 /* Short form. The three-line version cost 115px of a 631px
                    budget; this keeps the fact that decides whether to flip the
-                   switch. The detail is on About, and an unverified RESULT now
+                   switch. The detail is on About, and a best-effort RESULT now
                    names this switch itself (Tile.jsx). */
                 hint={
                   bestEffort
-                    ? 'Unnameable molecules get a looser pass, always marked unverified.'
-                    : 'Strict: only verified names, otherwise an honest abstain.'
+                    ? 'Unnameable molecules get a second, broader pass.'
+                    : 'Strict: no second pass. A molecule the first pass declines abstains.'
                 }
               />
             </div>
