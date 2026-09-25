@@ -447,7 +447,7 @@ def partner(name, logo, mime, logo_w, logo_h, scale=1):
     h, pad = PARTNER_H, 34
     lh = (h - 2 * pad) * scale
     lw = lh * logo_w / logo_h
-    w = round(lw + 2 * pad * 1.4)
+    w = round(lw + 2 * pad * .8)
     data = b64(logo)
     (HERE / name).write_text(
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">'
@@ -480,7 +480,7 @@ def partners():
     # One line is 42 glyphs; at phone width it would shrink to ~8px, so the
     # narrow pair breaks it in two, the hairlines on the second line only.
     head, tail = "AN OFFICIAL COLLABORATION", "FOR OPEN SCIENCE"
-    wn = round(len(head) * (size * .6 + spacing) + 8)
+    wn = round(len(head) * (size * .6 + spacing) + 48)
     for suffix, fill, hair in (("", MUTED, "#c5c5c5"), ("-dark", "#9da5b0", "#30363d")):
         write(f"collab-line{suffix}.svg", w, 44, product_line(w / 2, 32, size, spacing, rule, text, fill, hair), css)
         write(f"collab-line-narrow{suffix}.svg", wn, 84,

@@ -114,9 +114,9 @@ under copyleft terms; the running site lists all of them on its Terms page, and
 <br>
 <sub>Made with <img src="docs/readme/cup.svg" alt="coffee" height="14"> by <a href="https://kohulanr.com">Kohulan Rajan</a> at</sub>
 <br><br>
-<a href="https://www.beilstein-institut.de/en/"><img src="docs/readme/beilstein.svg" alt="Beilstein-Institut" height="56"></a>
-<img src="docs/readme/brush-x.svg" alt="and" height="56">
-<a href="https://cheminf.uni-jena.de"><img src="docs/readme/steinbeck.svg" alt="Steinbeck Lab, Friedrich Schiller University Jena" height="56"></a>
+<a href="https://www.beilstein-institut.de/en/"><img src="docs/readme/beilstein.svg" alt="Beilstein-Institut" height="44"></a>
+<img src="docs/readme/brush-x.svg" alt="and" height="44">
+<a href="https://cheminf.uni-jena.de"><img src="docs/readme/steinbeck.svg" alt="Steinbeck Lab, Friedrich Schiller University Jena" height="44"></a>
 <br><br>
 <picture>
   <source media="(max-width: 700px) and (prefers-color-scheme: dark)" srcset="docs/readme/collab-line-narrow-dark.svg">
