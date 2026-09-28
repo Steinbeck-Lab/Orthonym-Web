@@ -52,9 +52,9 @@ Two real, load-bearing constraints, both confirmed by direct testing:
    thing fails loudly (logged) and disables itself: `decompose` returns None
    and explain.py turns that into a plain "could not decompose this name"
    error rather than any kind of partial answer. It never half-works.
-   Because of this, the vendored jar version is pinned exactly
-   (``vendor-orthonym.sh`` copies ``opsin-cli-2.9.0-jar-with-dependencies.
-   jar`` by exact filename, not a glob) and ``_Handles.__init__`` additionally
+   Because of this, the jar version is pinned exactly (the engine's
+   ``orthonym/jars.py`` fetches ``opsin-cli-2.9.0-jar-with-dependencies.jar``
+   by exact version and SHA-256) and ``_Handles.__init__`` additionally
    asserts ``NameToStructure.getVersion() == PINNED_OPSIN_VERSION`` as an
    early, loud warning signal distinct from (and cheaper than) the full
    reflection-shape check.

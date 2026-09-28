@@ -23,12 +23,11 @@ from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
-# The regression molecule from README.md. A fused polycyclic: the Orthonym
-# engine can name it, but the PIN candidate does not round-trip, so SELF-01 suppresses
-# it and a verified systematic name (tier systematic_verified, status
-# "fallback") ships instead. That name IS round-trip verified, as is every
-# name the engine emits.
-FUSED_POLYCYCLIC = "C1CC2CCC1(CC2)C3CCC4(CCC5(CCCC5C4C3)C)C"
+# The fused-polycyclic Home example. With a live OPSIN round trip the engine
+# ships a verified systematic name (tier systematic_verified, status
+# "fallback"); without OPSIN it abstains, so the status proves the child's
+# JVM really ran the gate.
+FUSED_POLYCYCLIC = "COC1C2=C(C)C(=O)OC2CC2CCC(O)C(C)C21C"
 
 # os._exit(0) at the end of both probes is deliberate: a started JVM refuses
 # to let the interpreter exit, which would turn a clean assertion failure
@@ -46,7 +45,7 @@ _IMPORT_PROBE = (
 _FORK_PROBE = r'''
 import json, multiprocessing as mp, os, sys
 
-FUSED_POLYCYCLIC = "C1CC2CCC1(CC2)C3CCC4(CCC5(CCCC5C4C3)C)C"
+FUSED_POLYCYCLIC = "COC1C2=C(C)C(=O)OC2CC2CCC(O)C(C)C21C"
 
 
 def _child(queue):

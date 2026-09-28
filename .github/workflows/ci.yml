@@ -1,19 +1,11 @@
 #  CI for Orthonym-Web.
 #
-# WHY THE BACKEND SUITE DOES NOT RUN HERE
-# ---------------------------------------
-# It cannot, on a public runner. `backend/tests/conftest.py` imports
-# `app.celery_app`, and importing anything under `app.` pulls in the naming
-# engine -- measured, `import app.main` loads 136 `orthonym.*` modules. That
-# engine lives in `backend/vendor/orthonym/`, which `.gitignore` excludes on
-# purpose: publishing it would publish the Orthonym engine, which is not
-# public. A fresh clone therefore has no engine and every backend test errors
-# at collection.
-#
-# So this file runs what a public runner can genuinely run, and the `backend`
-# job below stays SKIPPED until you opt in (see its own comment for the two
-# secrets and the one variable it needs). A skipped job is honest; a job that
-# passes without having run the tests is not.
+# THE BACKEND SUITE RUNS AGAINST THE ENGINE'S MAIN BRANCH
+# ----------------------------------------------------------
+# `backend/requirements.txt` installs the Orthonym engine from
+# github.com/Steinbeck-Lab/Orthonym@main, so every run tests the newest engine
+# commit. A red backend job after an engine push with no change here means
+# the engine changed a name or a tier this app advertises.
 #
 # WHY `npm ci`, NOT `npm install`
 # -------------------------------
@@ -82,22 +74,13 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Build the frontend image
-        # Build only -- nothing is pushed. This is the one Docker check that
-        # needs no private engine, and it catches a broken Dockerfile or a
+        # Build only -- nothing is pushed. It catches a broken Dockerfile or a
         # missing build arg before deploy rather than after.
         run: docker build -f frontend/Dockerfile -t orthonym-frontend:ci frontend
 
   backend:
-    name: backend (needs the private engine)
+    name: backend (test against the engine's main)
     runs-on: ubuntu-latest
-    # SKIPPED BY DEFAULT, and deliberately so. `secrets.*` is not usable in a
-    # job-level `if` (GitHub evaluates it too late), so the switch is a repo
-    # VARIABLE instead: set `RUN_BACKEND_CI` to `true` under
-    # Settings -> Secrets and variables -> Actions -> Variables, once
-    # `ORTHONYM_REPO` and `ORTHONYM_TOKEN` secrets exist beside it.
-    # `workflow_dispatch` also forces it on, so you can test the job by hand
-    # before flipping the variable for everyone.
-    if: ${{ github.event_name == 'workflow_dispatch' || vars.RUN_BACKEND_CI == 'true' }}
     services:
       redis:
         # The suite needs a REAL Redis -- conftest.py fails with instructions
@@ -113,15 +96,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Check out the Orthonym engine
-        # The engine is private. Without a token that can read it, this job
-        # cannot run at all -- which is why it is gated above.
-        uses: actions/checkout@v7
-        with:
-          repository: ${{ secrets.ORTHONYM_REPO }}
-          token: ${{ secrets.ORTHONYM_TOKEN }}
-          path: .orthonym
-
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -135,27 +109,20 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Vendor the engine
-        run: ORTHONYM_SRC="$GITHUB_WORKSPACE/.orthonym" ./scripts/vendor-orthonym.sh
-
-      - name: Fetch CDK and centres
-        # Both are FETCHED, not vendored: public URLs, pinned SHA-256. The
-        # checksum is the point -- cdk_bridge's CIP labelling depends on CDK
-        # internals, so a silently different jar is exactly what
-        # cdk_bridge.self_check() exists to catch.
+      - name: Fetch CDK
+        # FETCHED, not vendored: public URL, pinned SHA-256. The checksum is
+        # the point -- cdk_bridge's CIP labelling depends on CDK internals, so
+        # a silently different jar is exactly what cdk_bridge.self_check()
+        # exists to catch.
         working-directory: backend
         run: |
           set -euo pipefail
           CDK_VERSION=2.12
           CDK_SHA256=443d86e549edd659807a444770819a05f9ea626511f433ed99342c7568272e5a
-          CENTRES_VERSION=1.2.1
-          CENTRES_SHA256=6c5d5cafa9393ed7b667a2340222348cd15a9bbdd0d1b92518229f26cc5e87fb
+          mkdir -p vendor/cdk
           curl -fsSL -o "vendor/cdk/cdk-${CDK_VERSION}.jar" \
             "https://github.com/cdk/cdk/releases/download/cdk-${CDK_VERSION}/cdk-${CDK_VERSION}.jar"
           echo "${CDK_SHA256}  vendor/cdk/cdk-${CDK_VERSION}.jar" | sha256sum -c -
-          curl -fsSL -o "vendor/opsin-resources/centres-cli-${CENTRES_VERSION}.jar" \
-            "https://github.com/SiMolecule/centres/releases/download/${CENTRES_VERSION}/centres.jar"
-          echo "${CENTRES_SHA256}  vendor/opsin-resources/centres-cli-${CENTRES_VERSION}.jar" | sha256sum -c -
 
       - name: Install dependencies
         working-directory: backend
@@ -163,13 +130,13 @@ jobs:
           python -m venv .venv
           .venv/bin/pip install --quiet -r requirements.txt -r requirements-dev.txt
 
-      - name: Place the engine's runtime artifacts
-        # The Orthonym engine resolves the OPSIN and centres jars from its OWN
-        # install root, not from vendor/. Skipping this leaves centres
-        # unresolved and cdk_bridge.self_check() fails with "L-alanine did not
-        # label as (S)".
+      - name: Fetch the engine's jars
+        # The engine downloads its pinned OPSIN and centres jars and checks
+        # their SHA-256. The install-time prefetch is best effort; this step
+        # fails the job when either jar is missing. Without them
+        # cdk_bridge.self_check() fails with "L-alanine did not label as (S)".
         working-directory: backend
-        run: PYTHONPATH="$PWD" .venv/bin/python scripts/place_opsin_resources.py
+        run: .venv/bin/orthonym --fetch-jars
 
       - name: Prove the CDK path works
         # available() can return True while CIP labelling is silently dead.

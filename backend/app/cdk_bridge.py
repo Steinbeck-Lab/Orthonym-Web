@@ -5,7 +5,7 @@ WHY A CLASSLOADER AND NOT A CLASSPATH ENTRY
 The Orthonym engine's ``jvm_bridge`` owns the only ``startJVM`` call in the process. It boots with a
 FIXED classpath -- the OPSIN jar and the centres jar, resolved from PROJECT_ROOT -- and it
 records the pid that started the JVM, refusing to use one started by anybody else
-(``vendor/orthonym/src/orthonym/jvm_bridge.py``, "fork-safe"). Three consequences, each
+(``orthonym/jvm_bridge.py``, "fork-safe"). Three consequences, each
 verified rather than assumed:
 
 * We must not call ``startJVM`` ourselves. If we did, ``_start`` would see

@@ -1,6 +1,6 @@
 """Prove OPSIN actually works, at build time.
 
-place_opsin_resources.py places the jars. It does not prove the JVM starts
+`orthonym --fetch-jars` proves the jars are there. It does not prove the JVM starts
 or that the Orthonym engine's SELF-01 gate is running -- and without SELF-01 the gate
 fails OPEN, so a name that should have downgraded to "fallback" ships as a
 verified "pin". A slimmed image that dropped default-jre-headless would
@@ -12,10 +12,11 @@ verdict. A non-zero exit fails the Docker build, which is the point.
 
 import sys
 
-# A fused polycyclic. Its PIN candidate does not round-trip, so a working
-# SELF-01 gate suppresses it and a verified systematic name ships instead:
-# "fallback". "pin" here means the gate silently failed open.
-FUSED_POLYCYCLIC = "C1CC2CCC1(CC2)C3CCC4(CCC5(CCCC5C4C3)C)C"
+# A fused polycyclic. With a working OPSIN round trip the engine ships a
+# verified systematic name: "fallback". Without OPSIN it abstains (measured
+# 2026-09-28, engine 68f50d1), so anything but "fallback" means the gate did
+# not run.
+FUSED_POLYCYCLIC = "COC1C2=C(C)C(=O)OC2CC2CCC(O)C(C)C21C"
 
 
 def main() -> int:
@@ -48,9 +49,9 @@ def main() -> int:
             f"FAIL: expected 'fallback' for the fused polycyclic, got "
             f"{result.status!r}.\n"
             "The Orthonym engine's SELF-01 gate is not working. The usual cause is a "
-            "missing JRE or missing vendored jars -- check that "
+            "missing JRE or missing jars -- check that "
             "default-jre-headless is installed and that "
-            "scripts/place_opsin_resources.py ran.",
+            "`orthonym --fetch-jars` ran.",
             file=sys.stderr,
         )
         return 1

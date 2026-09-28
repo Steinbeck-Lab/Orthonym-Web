@@ -11,10 +11,8 @@ Stack: React 19 + Vite frontend; FastAPI + Celery + Redis + RDKit + the Orthonym
 (JPype on a real JRE) backend. No database, no auth. Naming runs in Celery workers; Redis is the
 broker, the job store, the shared name cache and the rate-limit counters at once.
 
-**This repository does not contain the naming engine.** `backend/vendor/` is populated from a
-checkout of the Orthonym engine, which is not public — see "The engine is not in this repo" below.
-A fresh clone builds the frontend and the API shell; it cannot name a molecule until the engine is
-vendored in.
+**This repository does not contain the naming engine.** The backend installs it from the `main`
+branch of `Steinbeck-Lab/Orthonym` — see "The engine is not in this repo" below.
 
 ## Commands
 
@@ -53,33 +51,30 @@ docker compose up -d --build
 
 ## The engine is not in this repo
 
-`backend/vendor/` holds **three** pieces, not four: `orthonym/` (the engine source) and
-`opsin-resources/` (the OPSIN grammar resources plus the `opsin-cli` jar) are populated by
-`scripts/vendor-orthonym.sh` out of an Orthonym engine checkout and are gitignored wholesale, because
-publishing them would publish the engine; `cdk/` holds only a tracked `NOTICE` — no jar is vendored
-there at all. `centres-cli` is not vendored anywhere any more (`scripts/vendor-orthonym.sh:105-106`);
-see below.
+The engine is installed from `github.com/Steinbeck-Lab/Orthonym@main`, never vendored:
+`backend/requirements.txt` for a local venv, a BuildKit git source (`ADD ...Orthonym.git#${ORTHONYM_REF}`)
+in `backend/Dockerfile`. The git source matters: BuildKit re-resolves `main` on every build and keys
+the layer on the commit, where pip on a git URL would stay cached on the first commit it saw. A local
+venv does not update on its own: `uv pip install --reinstall-package orthonym -r backend/requirements.txt`.
+`--build-arg ORTHONYM_REF=<full 40-char SHA>` builds another commit; a short SHA fails to resolve.
 
-```bash
-ORTHONYM_SRC=/path/to/Orthonym ./scripts/vendor-orthonym.sh
-```
+Tracking `main` means an engine push can change a name or a tier with no commit here. The build's
+SELF-01 check (`scripts/verify_opsin_live.py`, every Home example must keep its advertised tier) and
+the backend CI job are what notice. A red one after an engine push is an engine change, not a bug here.
 
-Then bump `_KEY_VERSION` in `backend/app/name_cache.py` by hand. Upstream develops on a static
-version `1.0.0`, so version-keyed cache invalidation cannot fire on its own and a name computed by
-the old engine would survive the refresh.
+The engine fetches its own **OPSIN 2.9.0** and **centres 1.2.1** jars from their releases and
+SHA-checks them (`orthonym/jars.py`), into `$ORTHONYM_JAR_DIR` (the image sets `/opt/orthonym/jars`)
+or `~/.cache/orthonym/jars`. `orthonym --fetch-jars` is the loud version the Dockerfile and CI run. An
+installed engine carries no OPSIN source tree, so app code reads OPSIN resources out of the jar
+(`app/opsin_tokenizer.py`), never from `PROJECT_ROOT/opsin/...`.
 
-The backend imports package `orthonym` (class `Orthonym`, env `ORTHONYM_*`) from
-`Beilstein-Institut/Orthonym`. The backend image copies all of `backend/vendor/`, so keep nothing
-there but what `scripts/vendor-orthonym.sh` writes.
+**CDK** is the app's own: `backend/Dockerfile` downloads it into `backend/vendor/cdk/` and checks it
+against the SHA-256 in the tracked `backend/vendor/cdk/NOTICE`. `backend/.dockerignore` keeps
+`backend/vendor/` out of the build context, so a build here exercises the same download path a fresh
+clone does.
 
-**CDK**, and since 2026-09-07 **centres** as well, are FETCHED, not vendored: both release
-jars have public URLs, so `backend/Dockerfile` downloads each at build time and checks it against a
-pinned SHA-256 (CDK's is recorded in the tracked `backend/vendor/cdk/NOTICE`; centres' is a
-`CENTRES_SHA256` build arg in the Dockerfile itself, there being no tracked NOTICE for it).
-`backend/.dockerignore` keeps any local copy out of the build context, so a build here exercises the
-same download path a fresh clone does. Centres used to be committed as a jar because the pinned
-build was an unreleased snapshot (`develop @ d4b3cf0`) nobody could reproduce; the engine moved to
-the tagged `1.2.1` release, which is fetchable the same way CDK's always was.
+The name cache clears itself on an engine change: `app/name_cache.py` keys on a hash of the
+installed engine's `.py` files. Bump `_KEY_VERSION` only when this app changes what a cached row means.
 
 Without a live JVM and those jars, the Orthonym engine's SELF-01 self-consistency gate **fails
 open**: a molecule that should report as a lower-confidence `fallback` ships as a `pin` nothing checked.

@@ -50,8 +50,12 @@ EXAMPLES = [
         "expected_status": "pin",
     },
     {
+        # Replaced 2026-09-28: the engine at 68f50d1 names the old example,
+        # C1CC2CCC1(CC2)C3CCC4(CCC5(CCCC5C4C3)C)C, as best_effort. This one is
+        # systematic_verified with OPSIN and abstains without it, so it also
+        # serves verify_opsin_live.py as proof that the round trip ran.
         "label": "A fused polycyclic — verified name, preferred status not certified",
-        "smiles": "C1CC2CCC1(CC2)C3CCC4(CCC5(CCCC5C4C3)C)C",
+        "smiles": "COC1C2=C(C)C(=O)OC2CC2CCC(O)C(C)C21C",
         "expected_status": "fallback",
     },
     {

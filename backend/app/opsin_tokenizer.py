@@ -31,8 +31,8 @@ That tokenizer is exposed as public API
 returning ``ParseTokens`` with parallel ``getTokens()``/``getAnnotations()``
 lists) -- this module calls that API directly via jpype and decodes each
 token's one-letter annotation into a real semantic category, using the
-symbol -> category table OPSIN's own grammar file (``regexes.xml``, vendored
-under backend/vendor/opsin-resources/) defines. This replaces guessing at a
+symbol -> category table OPSIN's own grammar file (``regexes.xml``, read out
+of the pinned OPSIN jar) defines. This replaces guessing at a
 name's suffix from how the rendered string happens to end with asking
 OPSIN's actual grammar what each piece of the name IS.
 
@@ -74,17 +74,17 @@ from __future__ import annotations
 
 import re
 import threading
+import zipfile
 from typing import NamedTuple, Optional
 
-from orthonym.validation.opsin_roundtrip import PROJECT_ROOT
+from orthonym.jars import find_jar
 
 _SUFFIX_CATEGORIES = frozenset({"nonAcidStemSuffix", "suffixesThatCanBeModifiedByAPrefix"})
 _MULTIPLIER_CATEGORY = "diOrTri"
 
-_REGEXES_PATH = (
-    PROJECT_ROOT
-    / "opsin/opsin-core/src/main/resources/uk/ac/cam/ch/wwmm/opsin/resources/regexes.xml"
-)
+# Read out of the pinned OPSIN jar the engine resolves: an installed engine
+# carries no OPSIN source tree, and the jar entry is byte-identical to it.
+_REGEXES_ENTRY = "uk/ac/cam/ch/wwmm/opsin/resources/regexes.xml"
 _REGEX_LINE = re.compile(r'<regex name="%([^%]+)%" value="(.)"/>')
 
 _lock = threading.Lock()
@@ -105,12 +105,17 @@ def _load_symbol_table() -> dict:
     if _symbol_to_category is not None:
         return _symbol_to_category
     table = {}
-    if _REGEXES_PATH.exists():
-        with open(_REGEXES_PATH, encoding="utf-8") as f:
-            for line in f:
-                match = _REGEX_LINE.match(line.strip())
-                if match:
-                    table[match.group(2)] = match.group(1)
+    try:
+        jar = find_jar("opsin")
+    except Exception:  # JarUnavailable: tokenize() then returns None, as documented
+        jar = None
+    if jar:
+        with zipfile.ZipFile(jar) as zf:
+            text = zf.read(_REGEXES_ENTRY).decode("utf-8")
+        for line in text.splitlines():
+            match = _REGEX_LINE.match(line.strip())
+            if match:
+                table[match.group(2)] = match.group(1)
     _symbol_to_category = table
     return table
 

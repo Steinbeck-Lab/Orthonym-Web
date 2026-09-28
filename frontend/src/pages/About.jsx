@@ -187,8 +187,8 @@ const WAYS = [
 // Who does each step. Real marks where the project publishes one.
 const CREDITS = [
   {
-    // No link: the engine's repository is private (see Details).
     name: 'Orthonym rule engine',
+    href: 'https://github.com/Steinbeck-Lab/Orthonym',
     role: 'Writes the name at step 2, from fixed naming rules. No model, no training data.',
     nodes: [2],
   },
@@ -374,12 +374,12 @@ function About() {
           </div>
           <div className="details__row">
             <dt>Source</dt>
-            {/* No link: the upstream repository is private and answers 404
-                to an anonymous visitor, and a link to the source would
-                promise a target a reader cannot open. Terms.jsx and
-                lib/github.js carry the same fact; the three move together. */}
             <dd>
-              MIT licence. Vendored as a source snapshot; the upstream repository is not yet public.
+              MIT licence. Installed from the <code>main</code> branch of{' '}
+              <a href="https://github.com/Steinbeck-Lab/Orthonym" target="_blank" rel="noopener noreferrer">
+                Steinbeck-Lab/Orthonym
+              </a>
+              .
             </dd>
           </div>
           <div className="details__row">

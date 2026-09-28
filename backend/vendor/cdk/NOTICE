@@ -26,8 +26,8 @@ HOW IT IS LOADED, AND WHY THAT MATTERS FOR THE LICENSE
 The jar is shipped unmodified and loaded at runtime as a separate program:
 JPype hands it to a java.net.URLClassLoader inside the JVM the Orthonym engine
 already runs. Orthonym (this web app) does not link against it, embed it, or
-modify it. This is the same arrangement, and the same reasoning, that
-backend/vendor/orthonym/NOTICE records for the OPSIN and centres jars.
+modify it. This is the same arrangement, and the same reasoning, that the
+Orthonym engine's NOTICE records for the OPSIN and centres jars.
 
 The jar is an uber-jar: it bundles CDK's own dependencies. Their licenses travel
 with them inside the archive.

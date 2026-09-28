@@ -25,28 +25,14 @@ dist/
 # rewritten on 2026-09-07 so none of it appears in any commit.
 # ---------------------------------------------------------------------------
 
-# The engine, and everything derived from it. `backend/vendor/` used to be
-# tracked in full; it is not, because scripts/vendor-orthonym.sh copies ALL
-# of it -- engine source, OPSIN grammar resources, the opsin-cli and
-# centres-cli jars -- out of a checkout of the Orthonym engine, which is a
-# private repository. Publishing the vendored snapshot would publish the
-# engine. A fresh clone populates this directory with that script; see README.
-#
-# The whole directory is ignored, not a list of names: anything a vendor run
-# leaves there stays ignored, so no checkout can publish it by accident.
+# backend/vendor/ holds only the downloaded CDK jar now; the engine is
+# installed from GitHub (backend/requirements.txt). Old checkouts may still
+# hold a vendored engine copy there, so the whole directory stays ignored.
 # backend/vendor/cdk/NOTICE is the one tracked file.
 backend/vendor/*
 !backend/vendor/cdk/
 backend/vendor/cdk/*
 !backend/vendor/cdk/NOTICE
-# Nothing in there is tracked any more, centres included. It was, for one
-# commit, because centres-cli-1.5.jar was an unreleased local Maven build with
-# no download. The engine moved to the tagged 1.2.1 release on 2026-09-07, so
-# the backend Dockerfile fetches and SHA-checks it exactly as it does CDK.
-# The CDK jar is the one vendored artifact with a public source, so the
-# backend Dockerfile downloads it (pinned version, checked against the
-# SHA-256 in backend/vendor/cdk/NOTICE, which IS tracked).
-backend/vendor/cdk/*.jar
 
 # Agent and tooling state.
 .claude/
@@ -75,8 +61,7 @@ original-*.webp
 
 # macOS-side venv. The tracked-in-history backend/.venv is a Linux venv
 # (built under /home/kohulan on the Linux host) and cannot run here; .venv-mac
-# is the local equivalent, built from backend/vendor/orthonym so the pinned
-# v1.0.0 snapshot is what tests actually exercise.
+# is the local equivalent.
 .venv-mac/
 
 # Playwright MCP scratch output (browser snapshots/screenshots)

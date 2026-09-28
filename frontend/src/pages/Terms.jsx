@@ -18,18 +18,17 @@ import './Legal.css'
 // both: the tier is honest, and an honest tier is still not a warranty.
 //
 // The licence text below is the repository's own /LICENSE, reproduced
-// verbatim from the file rather than retyped. Owner decision this session:
-// Orthonym (this web app) is MIT, © 2026 Kohulan Rajan, matching the vendored
-// Orthonym engine snapshot exactly (backend/vendor/orthonym/LICENSE) — the
-// repo had no LICENSE file at all before this page needed one, and /LICENSE
-// was created from that same text so the two can never disagree.
+// verbatim from the file rather than retyped: MIT, © 2026 Kohulan Rajan,
+// Steinbeck Lab at Friedrich Schiller University Jena, and Beilstein-Institut
+// zur Förderung der Chemischen Wissenschaften (owner decision, 2026-09-28).
+// Change the two together so they can never disagree.
 //
 // The third-party list is deliberately NOT the full dependency manifest.
 // Every entry below is either copyleft (so a notice is owed), a vendored
 // binary this repository actually redistributes, or the engine the product
 // is a showcase for. Everything else is a link to the manifest, as the
-// reference does. Provenance for the three jars is
-// backend/vendor/orthonym/NOTICE and backend/vendor/cdk/NOTICE, both of
+// reference does. Provenance for the three jars is the Orthonym engine's
+// NOTICE and backend/vendor/cdk/NOTICE, both of
 // which are considerably more careful than this page can be, so this page
 // cites them rather than paraphrasing them.
 
@@ -60,13 +59,10 @@ SOFTWARE.`
 // frameworks that carry them.
 const THIRD_PARTY = [
   {
-    // NO href, deliberately. github.com/Beilstein-Institut/Orthonym is a
-    // PRIVATE repository — checked unauthenticated, it answers 404 — so linking
-    // it would hand every visitor a dead link that looks like a broken site.
-    // Give it an href again the day the repository is published.
     name: 'Orthonym engine 1.0.0',
+    href: 'https://github.com/Steinbeck-Lab/Orthonym',
     spdx: 'MIT',
-    note: 'The rule-based SMILES-to-IUPAC naming engine this site exists to show. Vendored as a source snapshot under backend/vendor/orthonym and installed at image build time. © 2026 Kohulan Rajan. Its repository is not public.',
+    note: 'The rule-based SMILES-to-IUPAC naming engine this site exists to show. Installed from the main branch of its GitHub repository at image build time. © 2026 Kohulan Rajan.',
   },
   {
     name: 'OPSIN 2.9.0',
@@ -327,9 +323,7 @@ function Terms() {
               <li className="legal-party" key={entry.name}>
                 <p className="legal-party__head">
                   {/* An entry with no `href` renders as plain text rather than
-                      as a link to nowhere. The Orthonym engine is the one such entry
-                      today: its repository is private and answers 404 to an
-                      anonymous visitor. */}
+                      as a link to nowhere. */}
                   {entry.href ? (
                     <a
                       className="legal-party__name"
@@ -399,9 +393,12 @@ function Terms() {
             <p>
               The full provenance of every vendored artefact — version, SHA-256, how it is invoked,
               and which of its bundled components carry which terms — is recorded alongside the
-              artefacts themselves, in <code>backend/vendor/cdk/NOTICE</code> and{' '}
-              <code>backend/vendor/orthonym/NOTICE</code>. Ask the operator for a copy of either
-              if you need it; those files, not this page, are the authoritative record.
+              artefacts themselves, in <code>backend/vendor/cdk/NOTICE</code> of Orthonym-Web and
+              in the <code>NOTICE</code> of the{' '}
+              <a href="https://github.com/Steinbeck-Lab/Orthonym" target="_blank" rel="noopener noreferrer">
+                Orthonym engine
+              </a>
+              . Those files, not this page, are the authoritative record.
             </p>
             <h3>Citing Orthonym</h3>
             <p>

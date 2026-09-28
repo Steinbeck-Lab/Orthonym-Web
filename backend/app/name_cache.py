@@ -19,11 +19,13 @@ from app.core.config import get_settings
 from app.redis_store import get_redis
 from app.schemas import VERIFIED_STATUSES, ResultItem
 
-# BUMP THIS whenever the vendored Orthonym engine snapshot is refreshed.
+# BUMP THIS whenever this app changes what a cached row means. An engine
+# update is covered by _engine_fingerprint() below; bump this too if that
+# fingerprint cannot be computed (it logs a warning when it falls back).
 #
 # The key embeds orthonym.__version__ so a release bump invalidates the
 # cache automatically -- but upstream develops on a static "1.0.0" and does
-# not bump per change, so a vendor refresh can change naming behaviour while
+# not bump per change, so an engine update can change naming behaviour while
 # the version string stays identical. That would serve names from the old
 # engine beside tiers computed by the new one, which is exactly the
 # PRODUCT.md principle 2 violation this key exists to prevent. The version
@@ -78,9 +80,8 @@ def _engine_fingerprint() -> str:
     v1 -> v2 bump was made only because the tier rename happened to break
     loudly.
 
-    Hashing the INSTALLED package rather than backend/vendor/orthonym is
-    deliberate: what matters is the code that will actually name molecules in
-    this process, which in a container is the copy pip installed. Measured at
+    Hashing the INSTALLED package is deliberate: what matters is the code
+    that will actually name molecules in this process, the copy pip installed. Measured at
     40 ms over 253 files, paid once at import, never per request.
 
     Falls back to the bare version string if the source cannot be read (a
@@ -96,8 +97,8 @@ def _engine_fingerprint() -> str:
     except Exception:  # noqa: BLE001 - a cache key must never fail to build
         logger.warning(
             "name_cache: could not fingerprint the installed Orthonym engine "
-            "source; falling back to the version string alone. A vendor "
-            "refresh will NOT invalidate the cache automatically -- bump "
+            "source; falling back to the version string alone. An engine "
+            "update will NOT invalidate the cache automatically -- bump "
             "_KEY_VERSION by hand.",
         )
         return "nofingerprint"

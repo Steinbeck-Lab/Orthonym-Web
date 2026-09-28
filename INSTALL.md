@@ -3,10 +3,10 @@
 Everything operational lives here: how to run it, how to deploy it, how to test it, and what the
 engine dependency actually requires. The [README](README.md) is the short version.
 
-> **Before anything else.** This repository does not contain the naming engine. `backend/vendor/`
-> is populated from a checkout of the Orthonym engine, which is not public — see
-> [The Orthonym engine dependency](#the-orthonym-engine-dependency). A fresh clone builds and runs the
-> frontend and the API shell, but cannot name a molecule until the engine is vendored in.
+> **Before anything else.** This repository does not contain the naming engine. The backend
+> installs it from the `main` branch of
+> [Steinbeck-Lab/Orthonym](https://github.com/Steinbeck-Lab/Orthonym) — see
+> [The Orthonym engine dependency](#the-orthonym-engine-dependency).
 >
 > Deploying to a server? [Deploying it publicly](#deploying-it-publicly) is a step-by-step
 > runbook for an Ubuntu VM behind Caddy, and it starts from that same clone.
@@ -50,12 +50,10 @@ A concrete runbook for a **4-core / 16 GB Ubuntu VM with Docker already installe
 Everything below assumes the DNS `A`/`AAAA` record for that hostname already points at the VM —
 Caddy will not be able to get a certificate until it does.
 
-### 1. Get the code and the engine
-
-The engine is private and is not in this repository, so the VM needs credentials for it once.
+### 1. Get the code
 
 ```bash
-sudo apt-get update && sudo apt-get install -y git gh        # gh only if you use the PAT route
+sudo apt-get update && sudo apt-get install -y git
 
 # /opt is root-owned, so take ownership BEFORE cloning rather than cloning with
 # sudo -- a root-owned tree makes every later `git pull` and `docker compose`
@@ -67,26 +65,10 @@ cd /opt/orthonym-web
 # "Docker is installed" does not mean your user may talk to it. If this prints
 # the hint, run it and start a new login shell (`newgrp docker` for this one).
 docker ps >/dev/null 2>&1 || echo "run: sudo usermod -aG docker $USER  -- then log out and back in"
-
-# authenticate however you prefer -- a fine-grained PAT with read access to
-# Beilstein-Institut/Orthonym, or a deploy key in ~/.ssh. Then:
-gh auth login                                                 # or: eval "$(ssh-agent)"; ssh-add ~/.ssh/orthonym_deploy
-sudo mkdir -p /opt/orthonym && sudo chown "$USER:$USER" /opt/orthonym
-gh repo clone Beilstein-Institut/Orthonym /opt/orthonym -- --depth 1
-
-# populate backend/vendor/ from that checkout
-ORTHONYM_SRC=/opt/orthonym ./scripts/vendor-orthonym.sh
 ```
 
-Check it landed before going further — a missing engine fails at image build, not at runtime,
-but the error is long and this is quicker:
-
-```bash
-ls backend/vendor/orthonym/src/orthonym/__init__.py \
-   backend/vendor/opsin-resources/opsin-cli-2.9.0-jar-with-dependencies.jar
-```
-
-CDK and centres are **not** needed here: the backend image downloads and SHA-checks both.
+The engine, CDK, OPSIN and centres are **not** needed here: the backend image build downloads
+all four and SHA-checks the three jars.
 
 ### 2. Configure
 
@@ -259,7 +241,7 @@ curl -s  https://orthonym.example.org/api/health                   # {"status":"
 # the round-trip gate, end to end: ethanol must be `pin`, the fused polycyclic `fallback`
 curl -s -X POST https://orthonym.example.org/api/translate \
   -H 'Content-Type: application/json' \
-  -d '{"smiles":["CCO","C1CC2CCC1(CC2)C3CCC4(CCC5(CCCC5C4C3)C)C"]}' | head -c 400
+  -d '{"smiles":["CCO","COC1C2=C(C)C(=O)OC2CC2CCC(O)C(C)C21C"]}' | head -c 400
 ```
 
 **Confirm the rate limiter sees real client addresses.** If this shows one shared bucket instead
@@ -339,13 +321,25 @@ not suit protecting anything sensitive.
 
 ```bash
 cd /opt/orthonym-web && git pull
-ORTHONYM_SRC=/opt/orthonym ./scripts/vendor-orthonym.sh     # only if the engine moved
 docker compose up -d --build
+```
+
+The build installs the engine from its `main` branch. Docker reuses the engine layer while `main`
+has not moved and reinstalls it when it has, so this one command also picks up engine changes.
+The shared name cache clears itself: `backend/app/name_cache.py` keys every name on a fingerprint
+of the installed engine source.
+
+If a new engine commit breaks the build at the SELF-01 check (`verify_opsin_live.py` names every
+Home example and asserts its tier), build the last good commit until the example is fixed:
+
+```bash
+docker compose build --build-arg ORTHONYM_REF=<full 40-character commit SHA>
+docker compose up -d
 ```
 
 **An install cloned before 2026-09-24** cannot `git pull`: the repository's history was rewritten
 that day. Update it in place instead, which keeps every gitignored file (`.env`,
-`docker-compose.override.yml`, `ops/`, `backend/vendor/`). Stop the stack first:
+`docker-compose.override.yml`, `ops/`). Stop the stack first:
 
 ```bash
 docker compose down
@@ -353,12 +347,9 @@ git status --short          # a local edit to a tracked file (frontend/nginx.con
 git fetch origin && git reset --hard origin/main
 ```
 
-Then compare `.env` with `.env.example` for any setting added since, re-vendor as in step 1, and
-run `docker compose up -d --build`.
-
-If the engine did move, bump `_KEY_VERSION` in `backend/app/name_cache.py` first — upstream
-develops on a static version, so the version-keyed cache cannot invalidate itself and names
-computed by the old engine would survive the update.
+Then compare `.env` with `.env.example` for any setting added since, and run
+`docker compose up -d --build`. An old `backend/vendor/orthonym/` or `backend/vendor/opsin-resources/`
+is no longer used and can be deleted.
 
 ### What runs, and what it costs
 
@@ -429,48 +420,38 @@ caps are **2** concurrent jobs, **20** jobs/hour, **60** naming requests/min, **
 
 ## The Orthonym engine dependency
 
-The Orthonym engine isn't published on PyPI in the form this web app needs (`name_tiered()`,
-`general_fallback`), so `backend/requirements.txt` installs it from `backend/vendor/orthonym` — a
-snapshot, not a live path dependency, so a container build never has to reach outside its own context.
+The Orthonym engine lives in its own repository,
+[Steinbeck-Lab/Orthonym](https://github.com/Steinbeck-Lab/Orthonym). It is not on PyPI, so it is
+installed from GitHub `main`:
 
-**That snapshot is not in this repository, and neither are three of the four vendored artifacts.**
-`scripts/vendor-orthonym.sh` copies all of them out of an Orthonym engine checkout: the engine source, the
-OPSIN grammar resources, and the `opsin-cli` and `centres-cli` jars. Publishing them would publish
-the engine, so all four are gitignored. Run the script before your first build:
+- **Locally**, `backend/requirements.txt` has
+  `orthonym @ git+https://github.com/Steinbeck-Lab/Orthonym.git@main`. Re-run
+  `pip install --force-reinstall --no-deps "orthonym @ git+https://github.com/Steinbeck-Lab/Orthonym.git@main"`
+  to pick up a newer commit; pip does not do that on its own for an unchanged git URL.
+- **In the image**, `backend/Dockerfile` fetches the engine with a BuildKit git source
+  (`ADD https://github.com/Steinbeck-Lab/Orthonym.git#${ORTHONYM_REF}`) and installs that tree.
+  BuildKit resolves the ref to a commit on each build, so a rebuild picks up a new `main` and reuses
+  the cached layer when `main` has not moved. `--build-arg ORTHONYM_REF=<full SHA>` builds another
+  commit.
 
-```bash
-ORTHONYM_SRC=/path/to/Orthonym ./scripts/vendor-orthonym.sh
-```
+Because it tracks `main`, an engine push can change a name or a tier without a commit here. Two
+gates catch that: the SELF-01 check at the end of the image build, and the backend CI job.
 
-The exception is **CDK**, the only vendored artifact with a public release URL: `backend/Dockerfile`
-downloads it during the build and checks it against the SHA-256 recorded in
-`backend/vendor/cdk/NOTICE`, which is tracked. `backend/.dockerignore` keeps any local copy out of
-the build context, so a build here exercises the same download path a fresh clone does. `centres-cli`
-cannot be fetched at all — its notice records it as a local Maven build from an unreleased commit.
+The engine does not ship its jars. It downloads the pinned **OPSIN 2.9.0** and **centres 1.2.1**
+jars from their official releases and checks each against a SHA-256 (`orthonym/jars.py`), into
+`$ORTHONYM_JAR_DIR` (the image sets `/opt/orthonym/jars`) or else `~/.cache/orthonym/jars`. The
+install prefetches them on a best-effort basis; `orthonym --fetch-jars` fetches them and fails when
+it cannot. The Dockerfile runs it, so a missing jar fails the build.
 
-**Refresh the snapshot** after pulling engine changes you want the web app to pick up:
-
-```bash
-ORTHONYM_SRC=/path/to/Orthonym ./scripts/vendor-orthonym.sh
-```
-
-Then **bump `_KEY_VERSION` in `backend/app/name_cache.py` by hand.** Upstream develops on a static
-version `1.0.0`, so the version-keyed cache invalidation cannot fire on its own and a name computed
-by the old engine would survive the refresh.
+**CDK** is fetched by the app, not by the engine: `backend/Dockerfile` downloads it during the build
+and checks it against the SHA-256 recorded in `backend/vendor/cdk/NOTICE`, which is tracked.
+`backend/.dockerignore` keeps `backend/vendor/` out of the build context, so a build here exercises
+the same download path a fresh clone does. Outside Docker, download it into `backend/vendor/cdk/`
+the same way (the commands are in `.github/workflows/ci.yml`).
 
 ### The part that isn't optional: SELF-01 needs a real JVM
 
-The Orthonym engine ships three modules that each compute an identical `PROJECT_ROOT` (4 parents up from their own installed file) and expect real artifacts sitting there as siblings of `src/` in a full dev checkout:
-
-| Module | Expects |
-|---|---|
-| `validation/opsin_grammar.py` | `opsin/opsin-core/src/main/resources/...` |
-| `validation/opsin_roundtrip.py` | `opsin-cli-2.9.0-jar-with-dependencies.jar` |
-| `perception/centres_bridge.py` | `centres-cli-1.2.1.jar` (downloaded by the Dockerfile) |
-
-None of these ship with the pip package. `scripts/vendor-orthonym.sh` vendors all three into `backend/vendor/opsin-resources/`, and `backend/scripts/place_opsin_resources.py` (run once after every `pip install`, and baked into `backend/Dockerfile`) copies them to wherever `orthonym` actually got installed — it locates the target via `sysconfig`, not by guessing a venv layout, so it works the same locally and in a container.
-
-**This is not just packaging hygiene.** Without a live JVM (jpype + a JRE) and these two jars, the Orthonym engine's SELF-01 self-consistency gate — the check that verifies a candidate name actually round-trips back to the right structure — silently **fails open**: confirmed by direct testing, a molecule that should honestly report as a lower-confidence `fallback` instead shipped as a `pin` nothing had checked. `JPype1` is in `requirements.txt` and `backend/Dockerfile` installs `default-jre-headless` for exactly this reason. If you ever strip either out "to slim the image," re-run the regression check below first.
+Without a live JVM (jpype + a JRE) and the OPSIN and centres jars, the Orthonym engine's SELF-01 self-consistency gate — the check that verifies a candidate name actually round-trips back to the right structure — silently **fails open**: confirmed by direct testing, a molecule that should honestly report as a lower-confidence `fallback` instead shipped as a `pin` nothing had checked. `JPype1` is in `requirements.txt` and `backend/Dockerfile` installs `default-jre-headless` for exactly this reason. If you ever strip either out "to slim the image," re-run the regression check below first.
 
 That failure mode is why `app/jvm_guard.py` refuses rather than degrades: if no worker reports a live
 JVM, every naming endpoint — including `POST /api/jobs` — returns 503 instead of serving names whose
@@ -478,7 +459,7 @@ confidence tier nothing has checked.
 
 ### The third jar: CDK draws every picture
 
-`backend/vendor/cdk/cdk-2.12.jar` (42 MB, LGPL — see its `NOTICE`) is the **default depiction
+`backend/vendor/cdk/cdk-2.12.jar` (42 MB, LGPL — see its `NOTICE`), downloaded as above, is the **default depiction
 engine**. It annotates **CIP stereo descriptors** onto the drawing — `(R)`/`(S)`, `(E)`/`(Z)`, and
 `(?)` for a stereocentre the input leaves undefined — which is the reason it replaced RDKit's
 drawing. RDKit remains the fallback for any process where the JVM will not come up. CDK is also a

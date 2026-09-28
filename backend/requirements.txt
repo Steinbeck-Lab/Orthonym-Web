@@ -5,7 +5,7 @@ python-multipart
 requests
 lxml
 JPype1
-./vendor/orthonym
+orthonym @ git+https://github.com/Steinbeck-Lab/Orthonym.git@main
 celery[redis]>=5.4
 redis>=5.0
 pydantic-settings>=2.0

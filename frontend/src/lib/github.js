@@ -9,15 +9,10 @@
 //
 // The distinction matters, because this link used to mean something else and
 // was correctly switched off for it. It pointed at the naming ENGINE,
-// whose repository (now github.com/Beilstein-Institut/Orthonym) is private
-// and answers 404 to an anonymous visitor -- a dead link in the header of
-// every route. It now points at Orthonym-Web, the published split of this web
-// app.
-//
-// So the label is honest as "GitHub" in the header but must not be read as
-// "the engine is open": Terms.jsx and About.jsx both still state, in prose,
-// that the Orthonym engine's repository is not public, and those statements
-// remain TRUE and must not be "corrected" to match this link.
+// whose repository was private then and answered 404 to an anonymous
+// visitor -- a dead link in the header of every route. It points at
+// Orthonym-Web, this web app; About and Terms link the engine
+// (github.com/Steinbeck-Lab/Orthonym) where they credit it.
 //
 // Still overridable: a fork or a private deployment sets VITE_GITHUB_URL and
 // gets its own source. The literal `none` ships no link and no separator.

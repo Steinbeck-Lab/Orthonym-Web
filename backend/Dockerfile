@@ -8,10 +8,9 @@ FROM python:3.12-slim-bookworm
 
 # A JRE is required at runtime, not just build time: the Orthonym engine's SELF-01
 # self-consistency gate needs a live JVM (via jpype) to actually round-trip
-# candidate names through the vendored OPSIN/centres jars. Without it, SELF-01
+# candidate names through the OPSIN/centres jars. Without it, SELF-01
 # silently "fails open" and can ship a name that should have been suppressed
-# and replaced with an honest fallback as if it were a verified PIN -- see
-# backend/scripts/place_opsin_resources.py for the full story.
+# and replaced with an honest fallback as if it were a verified PIN.
 #
 # libxrender1/libx11-6/libxext6/libsm6/libexpat1 are required at runtime by
 # RDKit's rdkit.Chem.Draw module (used to render depiction_svg) even in
@@ -51,11 +50,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /code
 
-# CDK is FETCHED, not vendored, and it is the only one of the four vendored
-# artifacts that can be: its release jar has a public URL. The other three --
-# the Orthonym engine source, the OPSIN grammar resources and the opsin-cli and
-# centres-cli jars -- are copied out of a private Orthonym engine checkout by
-# scripts/vendor-orthonym.sh, so a clone has to run that first (see README).
+# CDK is FETCHED, not vendored: its release jar has a public URL.
 #
 # Pinned to an exact release AND checked against the SHA-256 recorded in
 # vendor/cdk/NOTICE, which is tracked alongside this file. The check is the
@@ -67,47 +62,46 @@ WORKDIR /code
 # --no-install-recommends on curl for the same reason as the block above:
 # nothing else in the image needs it, and it is removed in the same layer so
 # it never reaches the runtime image.
-#
-# centres is fetched the same way, as of 2026-09-07. It used to be vendored
-# because the pinned build was `develop @ d4b3cf0` (pom 1.5-SNAPSHOT), an
-# unreleased snapshot nobody could reproduce. The engine moved to the tagged
-# 1.2.1 release, which scores 281/290 on the Hanson CIP validation suite where
-# that snapshot scored 279 -- the snapshot inverted M/P on two cumulenes.
-#
-# TWO things about this download are load-bearing:
-#   * The release ASSET is called `centres.jar`, but it is renamed to
-#     `centres-cli-1.2.1.jar` here, because orthonym's `_find_centres_jar()`
-#     globs `centres-cli-*.jar`. A differently-named file is invisible to it
-#     and CIP labelling silently falls back to RDKit.
-#   * That glob returns the HIGHEST version present, so a stale
-#     `centres-cli-1.5.jar` left anywhere on this path would WIN and quietly
-#     undo the upgrade. Never let two centres jars coexist.
 ARG CDK_VERSION=2.12
 ARG CDK_SHA256=443d86e549edd659807a444770819a05f9ea626511f433ed99342c7568272e5a
-ARG CENTRES_VERSION=1.2.1
-ARG CENTRES_SHA256=6c5d5cafa9393ed7b667a2340222348cd15a9bbdd0d1b92518229f26cc5e87fb
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
-    && mkdir -p vendor/cdk vendor/opsin-resources \
+    && mkdir -p vendor/cdk \
     && curl -fsSL -o "vendor/cdk/cdk-${CDK_VERSION}.jar" \
        "https://github.com/cdk/cdk/releases/download/cdk-${CDK_VERSION}/cdk-${CDK_VERSION}.jar" \
     && echo "${CDK_SHA256}  vendor/cdk/cdk-${CDK_VERSION}.jar" | sha256sum -c - \
-    && curl -fsSL -o "vendor/opsin-resources/centres-cli-${CENTRES_VERSION}.jar" \
-       "https://github.com/SiMolecule/centres/releases/download/${CENTRES_VERSION}/centres.jar" \
-    && echo "${CENTRES_SHA256}  vendor/opsin-resources/centres-cli-${CENTRES_VERSION}.jar" | sha256sum -c - \
     && apt-get purge -y --auto-remove curl \
     && rm -rf /var/lib/apt/lists/*
 
+# The Orthonym engine is installed from its GitHub main branch, not from a
+# local copy. A BuildKit git source, not the `git+https` line in
+# requirements.txt: BuildKit resolves `#main` to a commit on every build and
+# keys this layer on that commit, so a rebuild picks up a new engine commit
+# and reuses the layer when main has not moved. pip on a git URL would stay
+# cached on the first commit it ever saw.
+#
+# The engine fetches its own OPSIN 2.9.0 and centres 1.2.1 jars from their
+# official releases and checks each against a pinned SHA-256 (orthonym/jars.py).
+# ORTHONYM_JAR_DIR puts them in one place outside any home directory, and
+# `--fetch-jars` fails the build if either is missing -- the install-time
+# prefetch alone is best effort. They are downloaded as root and written
+# 0600, so they are made readable for the runtime user below.
+#
+# ORTHONYM_REF picks another branch, tag or commit, for when main breaks the
+# SELF-01 check below: `--build-arg ORTHONYM_REF=<commit>`.
+ARG ORTHONYM_REF=main
+ADD https://github.com/Steinbeck-Lab/Orthonym.git#${ORTHONYM_REF} /tmp/orthonym
+ENV ORTHONYM_JAR_DIR=/opt/orthonym/jars
 COPY requirements.txt .
-COPY vendor/ ./vendor/
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY scripts/place_opsin_resources.py ./scripts/place_opsin_resources.py
-RUN python scripts/place_opsin_resources.py
+RUN grep -v '^orthonym @' requirements.txt > /tmp/requirements.txt \
+    && pip install --no-cache-dir /tmp/orthonym -r /tmp/requirements.txt \
+    && rm -rf /tmp/orthonym /tmp/requirements.txt \
+    && orthonym --fetch-jars \
+    && chmod -R a+rX /opt/orthonym
 
 COPY config/ ./config/
 COPY app/ ./app/
 
-# place_opsin_resources.py above only PLACES the jars. This proves they
+# `--fetch-jars` above only proves the jars are there. This proves they
 # work: the Orthonym engine's SELF-01 gate fails OPEN without a live JVM, so an image
 # that lost default-jre-headless would build fine and then mislabel every
 # confidence tier. A fused polycyclic must come back "fallback", never
@@ -115,8 +109,7 @@ COPY app/ ./app/
 COPY scripts/verify_opsin_live.py ./scripts/verify_opsin_live.py
 
 # Non-root at runtime. Every step above needs root (apt, pip into system
-# site-packages, and place_opsin_resources.py writing jars next to the
-# installed orthonym package); nothing below writes to disk at all -- the name
+# site-packages); nothing below writes to disk at all -- the name
 # cache, job store and rate-limit counters are all Redis.
 #
 # --create-home is load-bearing, not tidiness: fontconfig builds its cache

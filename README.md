@@ -97,8 +97,8 @@ entry in APA and BibTeX, and lists the Orthonym engine it builds on.
 ## The engine
 
 This repository, Orthonym-Web, is the web app. Its naming engine, **the Orthonym engine**, lives
-in its own repository and is **not public**, so `backend/vendor/` is populated from a local
-checkout and a fresh clone cannot name a molecule until it is. See
+in its own repository, [Steinbeck-Lab/Orthonym](https://github.com/Steinbeck-Lab/Orthonym), and
+the backend installs it from that repository's `main` branch. See
 [the Orthonym engine dependency](INSTALL.md#the-orthonym-engine-dependency).
 
 It is not STOUT-V2 in a browser: that neural model is a separate, unrelated project. Nothing here

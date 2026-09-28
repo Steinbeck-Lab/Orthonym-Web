@@ -77,9 +77,9 @@ on and RDKit read the input):
     inside name_tiered() and only ever surfaces as the tier/is_pin verdict,
     never the re-derived SMILES itself). This calls
     orthonym.validation.opsin_roundtrip.opsin_parse(name) directly --
-    the engine's OWN public wrapper around the SAME vendored jar +
-    in-process JVM bridge already wired up for SELF-01 (backend/vendor/
-    opsin-resources/, see place_opsin_resources.py) -- rather than a
+    the engine's OWN public wrapper around the SAME pinned jar +
+    in-process JVM bridge already wired up for SELF-01 (orthonym/jars.py)
+    -- rather than a
     separate package with its own bundled jar. One jar, one JVM, one source
     of truth for "what does OPSIN say," reused for both the internal gate
     and this visible proof.
@@ -332,7 +332,15 @@ def translate_one(
     # such a molecule reaches the user through GET /api/depict, which draws any
     # SMILES either toolkit can read.
 
-    row = _namer.name_tiered(smiles)
+    try:
+        row = _namer.name_tiered(smiles)
+    except ValueError:
+        if mol is not None:
+            raise
+        # The engine now refuses a SMILES RDKit cannot read ("Invalid SMILES",
+        # engine 68f50d1), so a CDK-only structure never reaches its abstain.
+        # It was read and declined, which is an abstain, not a crash.
+        return _abstain_item(smiles, "abstain", {"limit_code": "UNNAMEABLE"})
     status, name, tier = classify(row)
 
     if status == "abstain" and best_effort:
