@@ -40,8 +40,10 @@ export default function BuddyRoam() {
   const schedule = useCallback((delay) => {
     clearTimeout(timer.current)
     timer.current = setTimeout(() => {
+      // Not now (tab in the background, window too narrow): look again after
+      // an ordinary gap rather than polling.
       if (document.hidden || !window.matchMedia(WIDE).matches) {
-        schedule(4000)
+        schedule(between(9000, 18000))
         return
       }
       const act = nextAct(last.current)
@@ -51,7 +53,8 @@ export default function BuddyRoam() {
         key: Date.now(),
         x: between(14, 78),
         y: between(24, 64),
-        dir: Math.random() < 0.5 ? 'ltr' : 'rtl',
+        // Only the run has a direction.
+        dir: act === 'run' ? (Math.random() < 0.5 ? 'ltr' : 'rtl') : null,
       })
     }, delay)
   }, [])
@@ -64,7 +67,6 @@ export default function BuddyRoam() {
 
   const goAway = useCallback(() => {
     clearTimeout(timer.current)
-    setScene((current) => (current ? { ...current, leaving: true } : null))
     setStopped(true)
   }, [])
 
@@ -77,10 +79,12 @@ export default function BuddyRoam() {
     return () => window.removeEventListener('keydown', onKey)
   }, [stopped, goAway])
 
-  // The act's own animation ends it, or the goodbye when it was sent away.
-  // The parts' own animations (ib-*) bubble up here too and are ignored.
+  // The act's own animation ends it, or the goodbye (on the inner box) when
+  // it was sent away. The drawing's parts animate too; their ends bubble up
+  // here and are ignored.
+  const own = (event) => event.target === event.currentTarget || event.animationName === 'roam-bye'
   const onAnimationEnd = (event) => {
-    if (!event.animationName.startsWith('roam-')) return
+    if (!own(event)) return
     setScene(null)
     if (!stopped) schedule(between(9000, 18000))
   }
@@ -89,7 +93,7 @@ export default function BuddyRoam() {
   return createPortal(
     <div
       key={scene.key}
-      className={`buddy-roam buddy-roam--${scene.act} buddy-roam--${scene.dir}${scene.leaving ? ' buddy-roam--leaving' : ''}`}
+      className={`buddy-roam buddy-roam--${scene.act}${scene.dir ? ` buddy-roam--${scene.dir}` : ''}${stopped ? ' buddy-roam--leaving' : ''}`}
       style={{ '--x': `${scene.x}vw`, '--y': `${scene.y}vh` }}
       onAnimationEnd={onAnimationEnd}
       onClick={goAway}

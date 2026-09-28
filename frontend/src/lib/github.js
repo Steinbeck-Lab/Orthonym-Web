@@ -133,7 +133,7 @@ export function reportIssueUrl(repo, row, where, settings) {
     '<!-- Anything else that helps: the name you expected, where the structure comes from. -->',
   ].join('\n')
   const query = new URLSearchParams({ title: `Could not name: ${short}`, body, labels: 'bug' })
-  const url = `${repo.replace(/\/+$/, '')}/issues/new?${query}`
+  const url = `${newIssueUrl(repo)}?${query}`
   // ponytail: a structure too big for the address gets no link rather than a
   // truncated SMILES nobody can reproduce. A paste-it-yourself body is the
   // upgrade if giant SDF records ever need reporting.

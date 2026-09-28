@@ -4253,6 +4253,12 @@ input.field__control {
 
 .ib-eyes { transform-box: fill-box; transform-origin: center; }
 
+/* Each part's pivot is a fact about the drawing, so it is set once here and
+   the rules below only choose the animation. */
+.ib-body { transform-origin: 50px 92px; }
+.ib-wave { transform-origin: 79px 50px; }
+.ib-hold { transform-origin: 21px 54px; }
+
 /* The face: open eyes and a small smile at rest; happy arcs and an open
    smile a second after the buddy comes out. */
 .ib-face-open,
@@ -4287,17 +4293,14 @@ input.field__control {
 }
 
 .issue-buddy:is(:hover, :focus-visible) .ib-body {
-  transform-origin: 50px 92px;
   animation: ib-hop 1800ms cubic-bezier(0.37, 0, 0.63, 1) infinite;
 }
 
 .issue-buddy:is(:hover, :focus-visible) .ib-wave {
-  transform-origin: 79px 50px;
   animation: ib-wave 1400ms cubic-bezier(0.37, 0, 0.63, 1) infinite alternate;
 }
 
 .issue-buddy:is(:hover, :focus-visible) .ib-hold {
-  transform-origin: 21px 54px;
   animation: ib-rock 1800ms cubic-bezier(0.37, 0, 0.63, 1) infinite alternate;
 }
 
@@ -4413,12 +4416,10 @@ input.field__control {
 }
 
 .buddy-roam .ib-body {
-  transform-origin: 50px 92px;
   animation: ib-hop 2400ms cubic-bezier(0.37, 0, 0.63, 1) infinite;
 }
 
 .buddy-roam .ib-wave {
-  transform-origin: 79px 50px;
   animation: ib-wave 2000ms cubic-bezier(0.37, 0, 0.63, 1) infinite alternate;
 }
 
@@ -4444,12 +4445,13 @@ input.field__control {
   left: 0;
 }
 
-.buddy-roam--run.buddy-roam--ltr {
-  animation: roam-run-ltr 12000ms cubic-bezier(0.45, 0.05, 0.55, 0.95) forwards;
+.buddy-roam--run {
+  animation: roam-run 12000ms cubic-bezier(0.45, 0.05, 0.55, 0.95) forwards;
 }
 
+/* The same run backwards; the curve is symmetric, so it reads the same. */
 .buddy-roam--run.buddy-roam--rtl {
-  animation: roam-run-rtl 12000ms cubic-bezier(0.45, 0.05, 0.55, 0.95) forwards;
+  animation-direction: reverse;
 }
 
 .buddy-roam--run.buddy-roam--ltr .buddy-roam__inner { transform: rotate(7deg); }
@@ -4463,16 +4465,9 @@ input.field__control {
   animation: ib-rock 700ms cubic-bezier(0.37, 0, 0.63, 1) infinite alternate;
 }
 
-.buddy-roam--run .ib-hold { transform-origin: 21px 54px; }
-
-@keyframes roam-run-ltr {
+@keyframes roam-run {
   from { transform: translateX(-120px); }
   to { transform: translateX(calc(100vw + 24px)); }
-}
-
-@keyframes roam-run-rtl {
-  from { transform: translateX(calc(100vw + 24px)); }
-  to { transform: translateX(-120px); }
 }
 
 /* Pop: rises from below the window's bottom edge, waves, sinks back. */
