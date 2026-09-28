@@ -463,12 +463,29 @@ def partners():
     # and flecks at .62. The cross's viewBox is 0-100; bristles and flecks run
     # past the ends, so the canvas gives them room.
     opacity = {"brush-x__body": 1, "brush-x__bristle": .82, "brush-x__fleck": .62}
-    paths = "".join(
-        f'<path d="{p["d"]}" fill="{CRIMSON}" fill-opacity="{opacity[p["cls"]]}"/>'
-        for stroke in brush_strokes() for p in stroke
+    strokes = "".join(
+        f'<g class="s{n}">' + "".join(
+            f'<path d="{p["d"]}" fill="{CRIMSON}" fill-opacity="{opacity[p["cls"]]}"/>' for p in stroke
+        ) + "</g>"
+        for n, stroke in enumerate(brush_strokes(), 1)
+    )
+    # The About page repaints the cross on hover (About.css .collab:hover).
+    # An <img> on GitHub gets no hover, so the same repaint plays on its own:
+    # the two strokes wipe in (400 ms, the second 150 ms later) under the
+    # 620 ms press, then the cross rests whole for the rest of an 8 s cycle.
+    # Percentages are of that cycle: 400 ms = 5%, 620 ms = 7.75%.
+    css = (
+        ".x{transform-box:fill-box;transform-origin:center;animation:press 8s cubic-bezier(.16,1,.3,1) infinite}"
+        ".s1{animation:right 8s cubic-bezier(.22,1,.36,1) infinite both}"
+        ".s2{animation:left 8s cubic-bezier(.22,1,.36,1) .15s infinite both}"
+        "@keyframes right{0%{clip-path:inset(0 100% 0 0)}5%,100%{clip-path:inset(0 -10% 0 0)}}"
+        "@keyframes left{0%{clip-path:inset(0 0 0 100%)}5%,100%{clip-path:inset(0 0 0 -10%)}}"
+        "@keyframes press{0%,7.75%,100%{transform:none}2.95%{transform:rotate(-3.5deg) scale(1.07)}}"
+        "@media (prefers-reduced-motion:reduce){*{animation:none!important}}"
     )
     (HERE / "brush-x.svg").write_text(
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{PARTNER_H}" height="{PARTNER_H}" viewBox="-30 -30 160 160">{paths}</svg>')
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{PARTNER_H}" height="{PARTNER_H}" viewBox="-30 -30 160 160">'
+        f'<style>{css}</style><g class="x">{strokes}</g></svg>')
     # The About page's line under the pair, set like the header's "WEB". On a
     # transparent ground, so it comes in two inks and README.md swaps them by
     # prefers-color-scheme: #666 on GitHub's white, #9da5b0 on its #0d1117,
