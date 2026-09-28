@@ -85,6 +85,13 @@ import './Legal.css'
 // repository is VITE_GITHUB_URL, the same one the header links to, and
 // `none` removes both -- in which case § 1's and § 5's report paragraphs
 // describe a link that does not exist and must be edited by hand.
+//
+// Version 3 (28 September 2026) adds the issue tab: the crimson "Issues" tab
+// on the left edge of every page on a wide screen, and "Report an issue" in
+// the menu on a narrow one (components/IssueBuddy.jsx, Navigation.jsx). Both
+// open lib/github.js newIssueUrl(), the repository's BLANK /issues/new form:
+// no query string, so nothing from the page goes with it. Same
+// rel="noopener noreferrer", same repository, same `none` switch as above.
 
 // The UNIVERSITY leads, the working group follows as the responsible unit.
 // Art. 4 (7) requires the controller to be a natural or legal person, public
@@ -188,10 +195,10 @@ function Privacy() {
             with the Thüringer Datenschutzgesetz. We delete them once they are no longer needed for
             that purpose, unless a statutory retention period applies.
           </p>
-          <h3>If you report a result on GitHub</h3>
+          <h3>If you report a result or an issue on GitHub</h3>
           <p>
-            The repository that a &ldquo;Report SMILES on GitHub&rdquo; link opens belongs to our
-            working group. If you submit an issue there, we read it, together with the GitHub
+            The repository that a &ldquo;Report SMILES on GitHub&rdquo; link or the
+            &ldquo;Issues&rdquo; tab opens belongs to our working group. If you submit an issue there, we read it, together with the GitHub
             account it is filed under, to find and fix what went wrong in the naming engine, under
             Art. 6 (1) lit. e GDPR in conjunction with the Thüringer Datenschutzgesetz. The issue
             stays in the repository&rsquo;s issue history, where it records the fix, until it is no
@@ -367,7 +374,7 @@ function Privacy() {
           id="third-parties"
           index="§ 5"
           title="Third parties"
-          note="There are none, unless you choose to report a result on GitHub. This section exists to say so precisely."
+          note="There are none, unless you choose to report a result or an issue on GitHub. This section exists to say so precisely."
         >
           <p>
             This site uses no web analytics, no tag manager, no error-reporting service and no
@@ -407,10 +414,19 @@ function Privacy() {
             need to keep confidential.
           </p>
           <p>
+            The &ldquo;Issues&rdquo; tab at the left edge of the page (in the menu on a small
+            screen, &ldquo;Report an issue&rdquo;) opens GitHub&rsquo;s empty form for a new issue in
+            the same repository. It carries nothing from this site: no structure, no name and no
+            result. Following it is a visit to GitHub like the links above, so GitHub receives your
+            IP address and, if you are signed in, your GitHub account. What you then write and
+            submit is stored and shown exactly as described for a report.
+          </p>
+          <p>
             This site itself transfers no data to a third country or to an international
             organisation. The one route by which anything you submitted reaches one is a report
             link: following it sends the data described above to GitHub in the United States, and an
-            issue you submit is then kept there, in our repository.
+            issue you submit, from a report link or the Issues tab, is then kept there, in our
+            repository.
           </p>
         </LegalSection>
 
@@ -483,7 +499,7 @@ function Privacy() {
             serve the site and honour an objection to it at the same time. That is a reason we would
             have to demonstrate if you objected — not an exception to your right to object.
           </p>
-          <p className="legal-updated">Version 2 — 25 September 2026</p>
+          <p className="legal-updated">Version 3 — 28 September 2026</p>
         </LegalSection>
     </LegalPage>
   )

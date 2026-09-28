@@ -7,6 +7,7 @@ import LoopGlyph from '../components/LoopGlyph'
 import RoundTripLoop from '../components/RoundTripLoop'
 import TierLamp from '../components/TierLamp'
 import TierRule from '../components/TierRule'
+import BuddyRoam from '../components/BuddyRoam'
 import './About.css'
 
 // Four phases, not three. `degraded` is the one that was missing when this
@@ -219,6 +220,7 @@ const CREDITS = [
 function About() {
   return (
     <main className="about">
+      <BuddyRoam />
       {/* The masthead and the loop share one card: the page opens on the
           engine at work, not on a paragraph about it. */}
       <section className="about-hero card" aria-labelledby="about-title">

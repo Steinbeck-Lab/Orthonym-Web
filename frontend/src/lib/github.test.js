@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 
-import { GITHUB_URL, isReportable, reportIssueUrl, resolveGithubUrl } from './github.js'
+import { GITHUB_URL, isReportable, newIssueUrl, reportIssueUrl, resolveGithubUrl } from './github.js'
 
 const REPO = 'https://github.com/Steinbeck-Lab/Orthonym-Web'
 
@@ -119,4 +119,11 @@ test('an SDF structure too big for a github.com address gets no link, not a brok
   // 200-residue peptide measured 3965 characters.
   const smiles = '[C@@H]=('.repeat(500)
   assert.equal(reportIssueUrl(REPO, { smiles, status: 'abstain' }, 'Home (batch)'), null)
+})
+
+test('the issue tab opens a blank new-issue form, and nothing when there is no repository', () => {
+  assert.equal(newIssueUrl('https://github.com/Steinbeck-Lab/Orthonym-Web'), 'https://github.com/Steinbeck-Lab/Orthonym-Web/issues/new')
+  assert.equal(newIssueUrl('https://github.com/fork/x/'), 'https://github.com/fork/x/issues/new')
+  assert.equal(newIssueUrl(null), null)
+  assert.equal(newIssueUrl(resolveGithubUrl('none')), null)
 })

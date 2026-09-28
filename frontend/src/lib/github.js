@@ -35,6 +35,15 @@ export function resolveGithubUrl(raw) {
 // still replaces the whole expression at build time.
 export const GITHUB_URL = resolveGithubUrl(import.meta.env?.VITE_GITHUB_URL)
 
+/** GitHub's blank new-issue form for `repo`, or null when there is no repo.
+ *  The issue tab (IssueBuddy.jsx) and the phone menu open it; unlike
+ *  reportIssueUrl it carries nothing from the page. */
+export function newIssueUrl(repo) {
+  return repo ? `${repo.replace(/\/+$/, '')}/issues/new` : null
+}
+
+export const NEW_ISSUE_URL = newIssueUrl(GITHUB_URL)
+
 // The error rows that are the ENGINE's failure, not the visitor's input. The
 // backend marks them (tasks.py): `engine_error` when naming raised,
 // `timeout` when a batch chunk ran out of time. Every other error row is a

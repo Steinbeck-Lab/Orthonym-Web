@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { GITHUB_URL } from '../lib/github'
+import { GITHUB_URL, NEW_ISSUE_URL } from '../lib/github'
 
 // The site header: ONE NOTCH ISLAND hanging off the top edge of the window,
 // centred, welded to the edge by a pair of concave fillets, so it reads as
@@ -313,6 +313,20 @@ function Navigation() {
                   GitHub
                 </a>
               </>
+            )}
+            {/* The issue tab's link, for the widths where the tab itself is
+                hidden (IssueBuddy.jsx): below 960px, which is exactly when
+                this menu exists. */}
+            {NEW_ISSUE_URL && (
+              <a
+                className="site-nav__mlink"
+                href={NEW_ISSUE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Report an issue on GitHub (opens in a new tab)"
+              >
+                Report an issue
+              </a>
             )}
           </nav>
         )}
