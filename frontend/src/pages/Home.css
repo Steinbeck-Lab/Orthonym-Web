@@ -2069,3 +2069,183 @@
   white-space: nowrap;
 }
 
+
+
+/* -------------------- first load -------------------- */
+
+/* The page assembles itself once, on a fresh arrival (index.html sets
+   .first-load). ONE authored move carries it: the reading light. A crimson
+   beam crosses the wordmark left to right and each letter switches on as it
+   passes, from a dim trace to full ink with its halo blooming -- the README
+   banner's light, played once. Everything after it is deliberately quiet: the
+   tagline, the card and the chips settle in under the light's wake, and the
+   key's lamp lights last. About 1.6 s, and the page is the real page from the
+   first frame: the field takes typing at once, and a failed script means no
+   animation at all. `backwards`, never `both`, so nothing holds a transform
+   afterwards and the card's own slide transition is untouched. */
+
+.home-hero__lockup {
+  position: relative;
+  z-index: 1;
+}
+
+
+/* One number drives both the beam's position and where the letters are lit,
+   so the light and what it lights cannot drift apart. Registered so it
+   interpolates; an engine without @property just flips the word on halfway. */
+@property --sweep {
+  syntax: '<percentage>';
+  inherits: true;
+  initial-value: 108%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .first-load .home-hero__lockup {
+    animation: first-sweep 900ms cubic-bezier(0.45, 0, 0.25, 1) 80ms backwards;
+  }
+
+  .first-load .home-hero__lockup::before {
+    content: '';
+    position: absolute;
+    top: -40%;
+    bottom: -40%;
+    left: calc(var(--sweep) - 44px);
+    width: 88px;
+    pointer-events: none;
+    /* A veil multiplied onto the ground, the way the flare's own light is
+       (see .home-hero__flare): crimson where it is thick, nothing at its
+       edges. */
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--accent) 16%, transparent) 30%,
+      color-mix(in srgb, var(--accent) 72%, transparent) 50%,
+      color-mix(in srgb, var(--accent) 16%, transparent) 70%,
+      transparent
+    );
+    /* Its ends fade out, so it reads as light and not as a bar. */
+    -webkit-mask-image: linear-gradient(transparent, #000 32%, #000 68%, transparent);
+    mask-image: linear-gradient(transparent, #000 32%, #000 68%, transparent);
+    mix-blend-mode: multiply;
+    opacity: 0;
+    animation: first-beam 980ms linear 80ms;
+  }
+
+  /* The halo blooms while the light is on the word, then settles to its
+     resting glow. The sweep mask below limits it to the letters already lit. */
+  .first-load .home-hero__word {
+    animation: first-bloom 1300ms cubic-bezier(0.16, 1, 0.3, 1) 80ms backwards;
+  }
+
+  /* Letters ahead of the light are a dim trace. The sweep is a THIRD mask
+     layer, intersected over the wordmark's own two (the breaks and the mark
+     column, above), so the breaks survive the reveal. */
+  @supports (mask-composite: intersect) {
+    .first-load .home-hero__word {
+      --sweep-mask: linear-gradient(
+        90deg,
+        #000 calc(var(--sweep) - 5%),
+        rgb(0 0 0 / 0.14) calc(var(--sweep) + 5%)
+      );
+      -webkit-mask-image: var(--sweep-mask), var(--break-bands), var(--mark-column);
+      mask-image: var(--sweep-mask), var(--break-bands), var(--mark-column);
+      -webkit-mask-size: auto, auto, 0.78em 100%;
+      mask-size: auto, auto, 0.78em 100%;
+      -webkit-mask-position: 0 0, 0 0, calc(50% + 0.14em) center;
+      mask-position: 0 0, 0 0, calc(50% + 0.14em) center;
+      -webkit-mask-repeat: no-repeat, repeat, no-repeat;
+      mask-repeat: no-repeat, repeat, no-repeat;
+      mask-composite: intersect, add;
+    }
+  }
+}
+
+@keyframes first-sweep {
+  from {
+    --sweep: -8%;
+  }
+
+  to {
+    --sweep: 108%;
+  }
+}
+
+@keyframes first-beam {
+  0% {
+    opacity: 0;
+  }
+
+  12%,
+  82% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes first-bloom {
+  45% {
+    text-shadow:
+      0 0 14px color-mix(in srgb, var(--accent) 55%, transparent),
+      0 0 64px color-mix(in srgb, var(--accent) 60%, transparent);
+  }
+}
+
+.first-load .home-hero__flare {
+  animation: first-fade 900ms cubic-bezier(0.16, 1, 0.3, 1) 300ms backwards;
+}
+
+.first-load .home-hero__tagline {
+  animation: first-fade 500ms cubic-bezier(0.16, 1, 0.3, 1) 450ms backwards;
+}
+
+.first-load .input-col {
+  animation: first-rise-far 620ms cubic-bezier(0.16, 1, 0.3, 1) 620ms backwards;
+}
+
+.first-load .examples__list > li {
+  animation: tile-in 400ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  animation-delay: calc(860ms + var(--i, 0) * 60ms);
+}
+
+/* The notch hangs from the card's bottom edge, so it comes down out of it. */
+.first-load .info__notch {
+  animation: rung-in 380ms cubic-bezier(0.16, 1, 0.3, 1) 1160ms backwards;
+}
+
+.first-load .info__bulb-dot {
+  animation: first-lamp 320ms cubic-bezier(0.16, 1, 0.3, 1) 1280ms backwards;
+}
+
+@keyframes first-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes first-rise-far {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 24px, 0);
+  }
+}
+
+@keyframes first-lamp {
+  from {
+    opacity: 0;
+    transform: scale(0);
+  }
+}
+
+/* Reduced motion: no light crosses anything. The same order survives,
+   carried by opacity alone. */
+@media (prefers-reduced-motion: reduce) {
+  .first-load .input-col,
+  .first-load .examples__list > li,
+  .first-load .info__notch,
+  .first-load .info__bulb-dot {
+    animation-name: first-fade;
+  }
+}

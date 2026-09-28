@@ -31,6 +31,21 @@
       content="Orthonym — a deterministic, rule-based SMILES-to-IUPAC name translator. Try your own molecules and see its honest confidence: verified PIN, fallback, or abstain."
     />
     <title>Orthonym — SMILES to IUPAC, honestly</title>
+    <script>
+      // The first-load assembly (pages/Home.css, "first load"). Set here, before
+      // the first paint, so the page never flashes whole and then hides. Only on
+      // a fresh arrival at Home: a reload, back/forward or an in-app link does
+      // not replay it. The browser's own navigation type decides that, so
+      // nothing is stored (Privacy.jsx: no session storage). Home removes the
+      // class once the sequence has played.
+      try {
+        var nav = performance.getEntriesByType('navigation')[0]
+        // '/' is Home's route in App.jsx; change the two together.
+        if (location.pathname === '/' && (!nav || nav.type === 'navigate')) {
+          document.documentElement.classList.add('first-load')
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <!--

@@ -19,8 +19,8 @@ export default function ExampleChips({ examples, error, disabled, onPick }) {
     <div className="examples" role="group" aria-label="Try a curated example">
       <span className="examples__label">Try one:</span>
       <ul className="examples__list">
-        {examples.map((example) => (
-          <li key={example.smiles}>
+        {examples.map((example, i) => (
+          <li key={example.smiles} style={{ '--i': i }}>
             {/* The molecule, not the lesson. The API labels read "Ethanol --
                 a confirmed PIN", which stacked four chips into 87px of a
                 page that has to fit one screen; the tier each one

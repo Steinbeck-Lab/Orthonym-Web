@@ -126,6 +126,19 @@ function Home() {
   const reduceMotion = useReducedMotion()
   const { flare, flareCanvasRef, wordmarkRef } = useWordmarkFlare(reduceMotion)
 
+  // index.html sets `first-load` on a fresh arrival; take it off when the
+  // last step of the assembly (the key's lamp) has played, so coming back to
+  // Home later does not replay it. CSS owns the timing; this only listens.
+  useEffect(() => {
+    const root = document.documentElement
+    if (!root.classList.contains('first-load')) return undefined
+    const done = (event) => {
+      if (event.target.classList?.contains('info__bulb-dot')) root.classList.remove('first-load')
+    }
+    root.addEventListener('animationend', done)
+    return () => root.removeEventListener('animationend', done)
+  }, [])
+
   // --- batch input ----------------------------------------------------
   // Two ways in, one card: paste for a handful, a file for the rest. The
   // paste box no longer refuses the eleventh line -- above the server's
@@ -493,6 +506,10 @@ function Home() {
             heading stays in the DOM at the same size -- it is what the flare
             is measured against, and what a screen reader and a crawler read
             -- but its ink goes transparent so the two do not double up. */}
+        {/* The lockup exists for the first-load reading light (Home.css): its
+            ::before is the beam, which has to ride the heading's box without
+            sitting inside the heading's masks. */}
+        <div className="home-hero__lockup">
         <h1
           className={
             flare === 'live' ? 'home-hero__word home-hero__word--lit' : 'home-hero__word'
@@ -510,6 +527,7 @@ function Home() {
           <img className="home-hero__mark" src="/logos/Orthonym.svg" alt="O" />
           nym
         </h1>
+        </div>
 
         <p className="home-hero__tagline">Verified IUPAC names for Chemical Structures</p>
       </section>
