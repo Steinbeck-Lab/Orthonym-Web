@@ -31,11 +31,14 @@ whether it round-trips:
     general_fallback=True -- whatever name_tiered's own docstring says)
   - "systematic_verified" -> "fallback"     (a verified systematic name that
     is not the PIN, or a trivial-retained name)
-  - "best_effort"         -> "best_effort"  (the general engine built it, or
-    built part of it; it round-trips too. Mostly from the escalated pass, but
-    NOT only: the primary pass gives it to a composer name that carries a
-    general-tier ring prefix, e.g. OC(=O)CC12CC3CC(O)(CC(C3)C1)C2, so
-    best_effort=False does not rule it out)
+  - "best_effort"         -> "best_effort"  (the engine's last-resort floor,
+    or a name no round trip of the shipped string verified. In practice the
+    escalated pass: since engine eb25c33 a verified primary-pass name is never
+    best_effort -- OC(=O)CC12CC3CC(O)(CC(C3)C1)C2, which carries a general-tier
+    ring prefix, went from best_effort to pin_unverified -- and the primary
+    namer gave it to none of the first 1,500 molecules of RDKit's NCI set.
+    The engine can still assign it to an unverified primary-pass name, so
+    best_effort=False does not strictly rule it out)
   - "abstain"             -> "abstain"      (name is ALWAYS reported as null,
     because an abstain row's own "name" field, when non-null, is a
     recognized failure placeholder like "unknown organic compound" and must
@@ -294,8 +297,9 @@ def translate_one(
     `best_effort` gates the escalation described in the module docstring.
     When False the escalated namer is never consulted, so a molecule the
     primary namer abstained on ships as an honest abstain. It does NOT rule
-    out tier "best_effort": the primary pass assigns it too (module
-    docstring), and that row ships as status best_effort. Note that turning
+    out tier "best_effort": the primary pass can still assign it to a name no
+    round trip verified (module docstring), and that row ships as status
+    best_effort. Note that turning
     it off also forfeits the fallbacks (`systematic_verified`,
     `pin_unverified`) the escalated pass would have found -- the escalation
     is one call, and its possible outcomes cannot be separated before it

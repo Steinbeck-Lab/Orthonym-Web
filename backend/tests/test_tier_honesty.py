@@ -8,8 +8,8 @@ Two separate guards live in orthonym_service.translate_one and neither had a
 test:
 
   * `best_effort=False` must mean the escalated namer is not consulted at
-    all. (It does not rule out tier best_effort: the primary pass assigns it
-    to some composer names; see the test at the end of this section.)
+    all. (The primary pass no longer gives a verified name tier best_effort;
+    see the test at the end of this section.)
   * A status that claims verification must not ship when the verification
     did not happen. _roundtrip_check returns (None, None) when OPSIN is
     unreachable, and SELF-01 fails OPEN, so an unverified candidate arrives
@@ -87,20 +87,24 @@ def test_best_effort_true_still_escalates(monkeypatch):
     assert item.name == "ethanol"
 
 
-def test_the_primary_pass_can_ship_tier_best_effort_with_best_effort_off():
+def test_a_verified_primary_pass_name_with_a_general_tier_prefix_is_a_fallback():
     """A measured fact the UI copy has to respect, pinned so it stays visible.
 
-    The engine gives tier best_effort to a composer name that carries a
-    general-tier ring prefix, on the PRIMARY pass (source "pin_path"). So
-    best-effort mode OFF does not keep status best_effort off the page, and no
-    label, hint or legend line may claim it does (paper reviewer issue 2
-    review). If the engine stops doing this, this test says so -- update the
-    comments in orthonym_service.py and CLAUDE.md with it.
+    A composer name that carries a general-tier ring prefix (source
+    "pin_path") used to ship tier best_effort on the PRIMARY pass. Since engine
+    eb25c33 ("honest tier labels", 2026-09-28) a verified one is
+    pin_unverified, so status fallback; best_effort is kept for the
+    last-resort floor and for a name no round trip verified. Over the first
+    1,500 molecules of RDKit's NCI set the primary namer gave best_effort to
+    none. Status best_effort with best-effort mode OFF now comes from this
+    app's own demotion (no round trip here, or a failed one). If the engine
+    moves this again, this test says so -- update the comments in
+    orthonym_service.py and CLAUDE.md with it.
     """
     item = orthonym_service.translate_one(
         "OC(=O)CC12CC3CC(O)(CC(C3)C1)C2", best_effort=False
     )
-    assert (item.status, item.tier) == ("best_effort", "best_effort"), item
+    assert (item.status, item.tier) == ("fallback", "pin_unverified"), item
     assert item.roundtrip_match is True
 
 

@@ -59,7 +59,7 @@ class TranslateRequest(BaseModel):
     # engine (engine tier `best_effort`, surfaced as status "best_effort").
     # False stops after the primary pass, so such a molecule comes back as an
     # honest abstain instead. (The primary pass can still give tier
-    # best_effort to some composer names; see orthonym_service.)
+    # best_effort to a name no round trip verified; see orthonym_service.)
     best_effort: bool = True
     # OPSIN round-trip verification. True (the default, and the app's shipped
     # behaviour) parses every produced name back through OPSIN and compares

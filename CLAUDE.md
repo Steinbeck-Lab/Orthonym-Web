@@ -171,9 +171,10 @@ Things the repo does not tell you, or tells you only after they cost time.
 - **`tier` is the engine's, `status` is the app's claim.** Every name the engine emits has passed its
   own OPSIN round trip, unless OPSIN cannot read it at all; the tier says how it was built.
   `pin_verified` -> `pin`; `pin_unverified` and `systematic_verified` -> `fallback` (verified,
-  preferred status not certified); `best_effort` -> `best_effort` (the general engine built all or
-  part of it -- mostly the escalated pass, but the primary pass assigns it too, so best-effort mode
-  off does not rule it out). A missing
+  preferred status not certified); `best_effort` -> `best_effort` (the engine's last-resort floor, or
+  a name no round trip verified; since engine `eb25c33` a verified primary-pass name never gets it,
+  so in practice it comes from the escalated pass, but best-effort mode off does not strictly rule
+  it out). A missing
   round trip of the app's own demotes `status` to `best_effort` and never rewrites `tier`; the
   frontend reads that row (no `roundtrip_smiles`) as "Name not checked here", via
   `stateLabelFor` in `lib/statuses.js`. No label may call a name "unverified" beside a passing
