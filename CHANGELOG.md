@@ -1,5 +1,55 @@
 # Changelog
 
+## [0.3.0](https://github.com/Steinbeck-Lab/Orthonym-Web/compare/v0.2.0...v0.3.0) (2026-09-29)
+
+
+### Features
+
+* an issue tab with a buddy, Kekunyo, who also roams the About page ([a6a2a74](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/a6a2a7479f0daebdebf3273140456653291df8ae))
+* Home assembles itself on a fresh arrival, led by a reading light ([1c8f7e9](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/1c8f7e915a80dbe85bad1e25659c2c508cec9c7d))
+* report SMILES on GitHub for results Orthonym could not name ([0c7e8b7](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/0c7e8b7182b49f27eb46e2d80231fcf046cfd216))
+* report SMILES on GitHub, and four old bug fixes ([00ae11c](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/00ae11c91166a58f9d7c8016f3897336c0d1cec6))
+* the tier lamp says on hover how its name was made ([5bd854b](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/5bd854b5ed2cda92e55b04968c4f7641afefad9e))
+
+
+### Bug Fixes
+
+* a mismatched round trip demotes a verified status; lamps explain on hover ([3ef4518](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/3ef451878d429d7b5953d37727abdedf2659c08c))
+* a round trip that does not match demotes a verified status ([6def5f2](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/6def5f24e7d6826312a82b8a7bd70dbae309ac60))
+* **batch:** a timeout keeps the parse error of an unreadable row ([5f4e1ca](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/5f4e1ca61c1478c987d68a2b95c969788fa7e3f8))
+* **explain:** an unnameable molecule's placeholder is not shown as a name ([d9e4b38](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/d9e4b38e5016f0515b42a35ad32e605f7b2f7a2b))
+* Home and /explain say what a failed request means ([717311a](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/717311a4a377a734e980295bdbd0eb8fb61d57e1))
+* tier labels match what the engine actually verified ([e034f87](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/e034f879dab747fc7dc91563cd93b01892c7e962))
+* tier labels match what the engine actually verified ([bd7402d](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/bd7402dcf66582bc1fae4f769af7ebcee3ad7223))
+
+
+### Refactoring
+
+* define each shared rule once ([0cae84b](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/0cae84b16cc2e0724eeb95c256e8dce053a95df7))
+* name the withheld abstain code withheld_unchecked ([3f082fe](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/3f082febc33c22984e1635000e67da4dbfcc01c2))
+* one demoted-label decision; TierLamp takes the row ([97ecfaf](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/97ecfafa7ea00f061f485db661d84c6da06902b5))
+* one test for the unchecked case, one branch for fallback ([dedeb2a](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/dedeb2a4da7771a59fc9fd421c6e1db69827db4d))
+* tidy the Kekunyo code after review ([63a27f0](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/63a27f0686c3948e50b3d41f17e75d09a04aafcd))
+
+
+### Documentation
+
+* a reading light in the README header; partner logos in its footer ([2b867ac](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/2b867acc6d14292ce452f1d1818b321311e66097))
+* a two-line collaboration line at phone width ([6b26a74](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/6b26a743587b9e0858c2cd8deb0c1f96b105d226))
+* draw the README credit's cross in the site's crimson ([197afb0](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/197afb04d9967d390d1759122e3d4e1a7dbddbfb))
+* draw the Steinbeck logo 74/62 as tall, as the About page does ([e046942](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/e0469422e0f0e1e9cf8a201c45ee7df8d6721f84))
+* footer credit, then the partners, then the collaboration line ([8bea168](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/8bea1682bfface367247a551ad3737828aa46888))
+* give the README's page table real column headers ([fe48a54](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/fe48a546c4d3bdd78eceba18ee14f731c1bf73ad))
+* partner logos fit one row at phone width ([e422a2d](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/e422a2d527140bad9c1b403c40a66a6b8a470324))
+* README finish-review fixes ([fdefa2a](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/fdefa2a77416aa4d6c9d84b68415ce72c7300309))
+* README header reading light; partner logos in the footer ([b5db27f](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/b5db27faf462bbe059330f08ea3422969e2a977b))
+* README says Orthonym Web; footer credit, partners, collaboration line ([5ea9d22](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/5ea9d22238f146954e398cb07e57cbc9452e8766))
+* redesign the README ([45ea874](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/45ea8741ad3abd36c94e98d0198b04de1a97e05b))
+* the best-effort tier says how the name was built ([785a8de](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/785a8deb2e340706ab621f860bcaeb932850e97f))
+* the README header says Orthonym Web ([e6fdd2a](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/e6fdd2aa04a5e660d380a762211024c8f2214d2e))
+* the README leads with a graphical abstract and a live link ([0a68a79](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/0a68a79ee3d9cd4757cff065026028fa8f0fde99))
+* the README's painted cross repaints itself every 8 seconds ([7098624](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/7098624ebec7aac1a5f9940e3b5571ec48e2c30f))
+
 ## [0.2.0](https://github.com/Steinbeck-Lab/Orthonym-Web/compare/v0.1.0...v0.2.0) (2026-09-24)
 
 
