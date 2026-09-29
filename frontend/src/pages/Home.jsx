@@ -77,7 +77,18 @@ function useWordmarkFlare(reduceMotion) {
     import('../lib/flare/renderer')
       .then(({ createRenderer }) => {
         if (cancelled) return undefined
-        renderer = createRenderer({ canvas, wordmark })
+        renderer = createRenderer({
+          canvas,
+          wordmark,
+          // A failure after start-up (a lost GPU device, a draw that throws)
+          // lands in the same 'off' state as one during it.
+          onFail: () => {
+            if (!cancelled) {
+              setFailed(true)
+              setLive(false)
+            }
+          },
+        })
         return renderer.ready
       })
       .then(() => {

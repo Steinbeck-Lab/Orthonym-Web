@@ -29,13 +29,13 @@ import {
 
 type RenderSize = Readonly<{ width: number; height: number; dpr: number }>;
 
-// VENDORED CHANGE: 33 -> 0. Upstream throttles to ~30fps to keep the ray
-// march cheap; the owner asked for the animation to be "super smooth", so the
-// loop now draws on every animation frame and lets the browser's vsync pace
-// it (60Hz, 120Hz, whatever the display is). The cost is real -- a 48-step
-// march plus a blur chain per frame instead of every other frame -- and this
-// is the one number to turn back up if a weak GPU starts stuttering.
-const FRAME_INTERVAL_MS = 0;
+// VENDORED CHANGE: 33 -> 10. Upstream throttles to ~30fps to keep the ray
+// march cheap; the owner asked for the animation to be "super smooth", so a
+// 60Hz or 90Hz display gets every frame. 0 (no cap) drew at the display rate,
+// and a 144Hz tablet (Xiaomi Pad 7 Pro) paid for a 48-step march plus a blur
+// chain 144 times a second. 10ms keeps every frame up to ~100Hz and draws
+// every other frame above it: 60fps at 120Hz, 72fps at 144Hz.
+const FRAME_INTERVAL_MS = 10;
 const PULSE_HOLD_SECONDS = 0.35;
 
 /**
@@ -61,10 +61,18 @@ function wordmarkOrbit(timeSeconds: number, placement: FlarePlacement): Point {
 export function createRenderer({
   canvas,
   wordmark,
+  onFail,
 }: {
   readonly canvas: HTMLCanvasElement;
   /** The live <h1>. Its text, face, tracking and rectangle drive the flare. */
   readonly wordmark: HTMLElement;
+  /**
+   * Called once when the renderer dies AFTER `ready` -- a lost GPU device
+   * (Android drops it when the app goes to the background), a draw or a resize
+   * that throws. `ready` only covers start-up, so without this the page kept a
+   * dead canvas mounted and the error went uncaught.
+   */
+  readonly onFail?: (error: unknown) => void;
 }) {
   let disposed = false;
   let failed = false;
@@ -193,10 +201,12 @@ export function createRenderer({
   const measure = () =>
     guard(() => {
       const rect = canvas.getBoundingClientRect();
-      void resize({
+      resize({
         width: rect.width,
         height: rect.height,
         dpr: window.devicePixelRatio || 1,
+      }).catch(() => {
+        // fail() has already reported it through onFail.
       });
     });
 
@@ -293,20 +303,30 @@ export function createRenderer({
   };
 
   function fail(error: unknown): never {
-    failed = true;
-    try {
-      dispose();
-    } catch {
-      // Teardown must not replace the live or initialization failure.
+    if (!failed) {
+      failed = true;
+      try {
+        dispose();
+      } catch {
+        // Teardown must not replace the live or initialization failure.
+      }
+      onFail?.(error);
     }
     throw error;
   }
 
-  function guard<T>(work: () => T): T {
+  // For event callbacks (frames, resizes, the pointer): the failure is
+  // reported through onFail, and rethrowing into the browser would only leave
+  // an uncaught error behind.
+  function guard(work: () => void): void {
     try {
-      return work();
+      work();
     } catch (error) {
-      return fail(error);
+      try {
+        fail(error);
+      } catch {
+        // Reported above.
+      }
     }
   }
 
@@ -330,11 +350,16 @@ export function createRenderer({
     gpu = nextGpu;
     const output = surface(gpu, canvas, {
       autoResize: false,
-      // Upstream's "opaque" is right after all: composite.wgsl now emits an
-      // inverted crimson VEIL rather than light, and the canvas is
-      // composited with mix-blend-mode: multiply, so a white (unlit) pixel
-      // leaves the grey ground exactly as it was. Alpha plays no part.
-      alphaMode: "opaque",
+      // composite.wgsl emits an inverted crimson VEIL rather than light, and
+      // the canvas is composited with mix-blend-mode: multiply, so a white
+      // (unlit) pixel leaves the grey ground exactly as it was. The shader
+      // writes alpha 1 everywhere, so a drawn frame looks the same in either
+      // mode -- but "opaque" shows BLACK for a canvas with no frame yet
+      // (before the first draw, and after every resize clears it), and black
+      // multiplied is a black box over the wordmark. A tablet GPU that takes
+      // longer to compile the shaders showed that box on load and flickered it
+      // on resizes. "premultiplied" leaves an undrawn canvas transparent.
+      alphaMode: "premultiplied",
       format: "bgra8unorm",
     });
     pipeline = new FlarePipeline(gpu, output);
