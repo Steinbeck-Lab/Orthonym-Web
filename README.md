@@ -16,6 +16,7 @@
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-c41e3a?style=flat-square)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/Steinbeck-Lab/Orthonym-Web?style=flat-square&color=1a1a1a&label=release)](https://github.com/Steinbeck-Lab/Orthonym-Web/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/Steinbeck-Lab/Orthonym-Web/ci.yml?branch=main&style=flat-square&label=ci&color=2f6b28)](https://github.com/Steinbeck-Lab/Orthonym-Web/actions/workflows/ci.yml)
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.23036568-1a1a1a?style=flat-square)](https://doi.org/10.5281/zenodo.23036568)
 
 </div>
 
@@ -90,9 +91,26 @@ Deployment, sizing profiles and the batch-job API are in **[INSTALL.md](INSTALL.
 
 ## How to cite
 
-A paper describing Orthonym is in preparation. Until it is published, please cite the software:
+A paper describing Orthonym is in preparation. Until it is published, please cite the software
+through its Zenodo DOI, [10.5281/zenodo.23036568](https://doi.org/10.5281/zenodo.23036568). That
+DOI covers every release and resolves to the latest; each release also has its own DOI, listed on
+the [Zenodo record](https://doi.org/10.5281/zenodo.23036568).
+
+> Rajan, K., Zielesny, A., & Steinbeck, C. *Orthonym-Web* [Computer software]. Zenodo.
+> https://doi.org/10.5281/zenodo.23036568
+
+```bibtex
+@software{orthonym_web,
+  author    = {Rajan, Kohulan and Zielesny, Achim and Steinbeck, Christoph},
+  title     = {Orthonym-Web},
+  publisher = {Zenodo},
+  doi       = {10.5281/zenodo.23036568},
+  url       = {https://doi.org/10.5281/zenodo.23036568}
+}
+```
+
 GitHub's **Cite this repository** button, built from [`CITATION.cff`](CITATION.cff), gives the
-entry in APA and BibTeX, and lists the Orthonym engine it builds on.
+same entry in APA and BibTeX, and lists the Orthonym engine it builds on.
 
 ## The engine
 

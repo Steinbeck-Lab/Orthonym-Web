@@ -17,6 +17,7 @@ authors:
     given-names: Christoph
     orcid: https://orcid.org/0000-0001-6966-0814
 version: 0.3.0
+doi: 10.5281/zenodo.23036568
 license: MIT
 url: https://orthonym.decimer.ai
 repository-code: https://github.com/Steinbeck-Lab/Orthonym-Web
@@ -47,5 +48,5 @@ references:
         orcid: https://orcid.org/0000-0001-6966-0814
     version: 1.0.0
     license: MIT
-    url: https://github.com/Beilstein-Institut/Orthonym
-    repository-code: https://github.com/Beilstein-Institut/Orthonym
+    url: https://github.com/Steinbeck-Lab/Orthonym
+    repository-code: https://github.com/Steinbeck-Lab/Orthonym
