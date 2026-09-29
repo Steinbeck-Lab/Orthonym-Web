@@ -1,26 +1,25 @@
 cff-version: 1.2.0
-message: "If you use this software, please cite it as below."
-title: "Orthonym-Web"
+message: If you use this software, please cite it as below.
+title: Orthonym-Web
 abstract: >-
-  Orthonym-Web is the web application for Orthonym, a deterministic,
-  rule-based engine that converts a molecular structure (SMILES) into its
-  IUPAC name. Every name it shows is parsed back by OPSIN and compared with
-  the input structure by InChIKey, and is labelled with the confidence tier
-  that check earned.
+  Orthonym-Web is the web application for Orthonym, a deterministic, rule-based
+  engine that converts a molecular structure (SMILES) into its IUPAC name. Every
+  name it shows is parsed back by OPSIN and compared with the input structure by
+  InChIKey, and is labelled with the confidence tier that check earned.
 authors:
-  - family-names: "Rajan"
-    given-names: "Kohulan"
-    orcid: "https://orcid.org/0000-0003-1066-7792"
-  - family-names: "Zielesny"
-    given-names: "Achim"
-    orcid: "https://orcid.org/0000-0003-0722-4229"
-  - family-names: "Steinbeck"
-    given-names: "Christoph"
-    orcid: "https://orcid.org/0000-0001-6966-0814"
-version: 0.2.0
+  - family-names: Rajan
+    given-names: Kohulan
+    orcid: https://orcid.org/0000-0003-1066-7792
+  - family-names: Zielesny
+    given-names: Achim
+    orcid: https://orcid.org/0000-0003-0722-4229
+  - family-names: Steinbeck
+    given-names: Christoph
+    orcid: https://orcid.org/0000-0001-6966-0814
+version: 0.3.0
 license: MIT
-url: "https://orthonym.decimer.ai"
-repository-code: "https://github.com/Steinbeck-Lab/Orthonym-Web"
+url: https://orthonym.decimer.ai
+repository-code: https://github.com/Steinbeck-Lab/Orthonym-Web
 keywords:
   - cheminformatics
   - IUPAC nomenclature
@@ -30,23 +29,23 @@ keywords:
   - OPSIN
 references:
   - type: software
-    title: "Orthonym"
+    title: Orthonym
     abstract: >-
       Orthonym is a deterministic, rule-based engine that converts a molecular
       structure (SMILES) into its Preferred IUPAC Name, following the IUPAC 2013
       recommendations. In its default tier, every name is validated by an OPSIN
       round-trip before it is returned.
     authors:
-      - family-names: "Rajan"
-        given-names: "Kohulan"
-        orcid: "https://orcid.org/0000-0003-1066-7792"
-      - family-names: "Zielesny"
-        given-names: "Achim"
-        orcid: "https://orcid.org/0000-0003-0722-4229"
-      - family-names: "Steinbeck"
-        given-names: "Christoph"
-        orcid: "https://orcid.org/0000-0001-6966-0814"
+      - family-names: Rajan
+        given-names: Kohulan
+        orcid: https://orcid.org/0000-0003-1066-7792
+      - family-names: Zielesny
+        given-names: Achim
+        orcid: https://orcid.org/0000-0003-0722-4229
+      - family-names: Steinbeck
+        given-names: Christoph
+        orcid: https://orcid.org/0000-0001-6966-0814
     version: 1.0.0
     license: MIT
-    url: "https://github.com/Beilstein-Institut/Orthonym"
-    repository-code: "https://github.com/Beilstein-Institut/Orthonym"
+    url: https://github.com/Beilstein-Institut/Orthonym
+    repository-code: https://github.com/Beilstein-Institut/Orthonym
