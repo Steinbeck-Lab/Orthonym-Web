@@ -71,24 +71,17 @@ function useWordmarkFlare(reduceMotion) {
 
     let cancelled = false
     let renderer
+    // One way off for every failure: the import, start-up, or later.
+    const turnOff = () => {
+      if (!cancelled) setFailed(true)
+    }
     // Imported here, not at module scope: vgpu is the single heaviest thing
     // this app can load (a 180 kB chunk), and a visitor without WebGPU must
     // never pay for it.
     import('../lib/flare/renderer')
       .then(({ createRenderer }) => {
         if (cancelled) return undefined
-        renderer = createRenderer({
-          canvas,
-          wordmark,
-          // A failure after start-up (a lost GPU device, a draw that throws)
-          // lands in the same 'off' state as one during it.
-          onFail: () => {
-            if (!cancelled) {
-              setFailed(true)
-              setLive(false)
-            }
-          },
-        })
+        renderer = createRenderer({ canvas, wordmark, onFail: turnOff })
         return renderer.ready
       })
       .then(() => {
@@ -98,10 +91,7 @@ function useWordmarkFlare(reduceMotion) {
         // An adapter that refuses, a driver that dies, a shader that will not
         // compile: all of it ends here, and the page keeps working.
         if (import.meta.env.DEV) console.warn('flare unavailable:', error)
-        if (!cancelled) {
-          setFailed(true)
-          setLive(false)
-        }
+        turnOff()
       })
 
     return () => {

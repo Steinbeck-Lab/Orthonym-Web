@@ -19,9 +19,9 @@ import {
 //      stroked into a canvas, instead of the Next.js "N" SVG.
 //   2. The placement is that <h1>'s own rectangle, so the lit letters land on
 //      the real ones rather than in the middle of a square.
-//   3. The surface is premultiplied, and composite.wgsl emits alpha, so the
-//      canvas floats over the grey page ground instead of painting a black
-//      frame.
+//   3. composite.wgsl emits a crimson veil that the canvas multiplies onto
+//      the grey page ground, and the surface is premultiplied so an undrawn
+//      canvas is clear instead of a black frame.
 //   4. The flare colour is --accent crimson, not Next's blue-white.
 // Everything else -- the 48-step ray walk, the blue-noise jitter, the
 // separable blur chain, the pointer light, the resize choreography -- is
@@ -29,12 +29,9 @@ import {
 
 type RenderSize = Readonly<{ width: number; height: number; dpr: number }>;
 
-// VENDORED CHANGE: 33 -> 10. Upstream throttles to ~30fps to keep the ray
-// march cheap; the owner asked for the animation to be "super smooth", so a
-// 60Hz or 90Hz display gets every frame. 0 (no cap) drew at the display rate,
-// and a 144Hz tablet (Xiaomi Pad 7 Pro) paid for a 48-step march plus a blur
-// chain 144 times a second. 10ms keeps every frame up to ~100Hz and draws
-// every other frame above it: 60fps at 120Hz, 72fps at 144Hz.
+// VENDORED CHANGE: 33 -> 10. Upstream throttles to ~30fps; the owner asked
+// for "super smooth", so 10ms keeps every frame up to ~100Hz and every other
+// frame above it (72fps at 144Hz) rather than a full march per refresh.
 const FRAME_INTERVAL_MS = 10;
 const PULSE_HOLD_SECONDS = 0.35;
 
@@ -67,10 +64,9 @@ export function createRenderer({
   /** The live <h1>. Its text, face, tracking and rectangle drive the flare. */
   readonly wordmark: HTMLElement;
   /**
-   * Called once when the renderer dies AFTER `ready` -- a lost GPU device
-   * (Android drops it when the app goes to the background), a draw or a resize
-   * that throws. `ready` only covers start-up, so without this the page kept a
-   * dead canvas mounted and the error went uncaught.
+   * Called once when the renderer fails, at start-up or later -- a lost GPU
+   * device (Android drops it when the app goes to the background), a draw or a
+   * resize that throws. `ready` settles once, so it cannot report the later ones.
    */
   readonly onFail?: (error: unknown) => void;
 }) {
@@ -302,31 +298,30 @@ export function createRenderer({
     ]);
   };
 
-  function fail(error: unknown): never {
-    if (!failed) {
-      failed = true;
-      try {
-        dispose();
-      } catch {
-        // Teardown must not replace the live or initialization failure.
-      }
-      onFail?.(error);
+  function report(error: unknown): void {
+    if (failed) return;
+    failed = true;
+    try {
+      dispose();
+    } catch {
+      // Teardown must not replace the live or initialization failure.
     }
+    onFail?.(error);
+  }
+
+  // For the promise chains that must still reject (`ready`, a resize).
+  function fail(error: unknown): never {
+    report(error);
     throw error;
   }
 
-  // For event callbacks (frames, resizes, the pointer): the failure is
-  // reported through onFail, and rethrowing into the browser would only leave
-  // an uncaught error behind.
+  // For event callbacks (frames, resizes, the pointer): rethrowing into the
+  // browser would only leave an uncaught error behind.
   function guard(work: () => void): void {
     try {
       work();
     } catch (error) {
-      try {
-        fail(error);
-      } catch {
-        // Reported above.
-      }
+      report(error);
     }
   }
 
@@ -350,15 +345,10 @@ export function createRenderer({
     gpu = nextGpu;
     const output = surface(gpu, canvas, {
       autoResize: false,
-      // composite.wgsl emits an inverted crimson VEIL rather than light, and
-      // the canvas is composited with mix-blend-mode: multiply, so a white
-      // (unlit) pixel leaves the grey ground exactly as it was. The shader
-      // writes alpha 1 everywhere, so a drawn frame looks the same in either
-      // mode -- but "opaque" shows BLACK for a canvas with no frame yet
-      // (before the first draw, and after every resize clears it), and black
-      // multiplied is a black box over the wordmark. A tablet GPU that takes
-      // longer to compile the shaders showed that box on load and flickered it
-      // on resizes. "premultiplied" leaves an undrawn canvas transparent.
+      // The shader writes alpha 1, so a drawn frame is the same in either mode,
+      // but "opaque" shows an undrawn canvas (before the first frame, after a
+      // resize clears it) as black, and multiplied that is a black box over the
+      // wordmark -- visible on a tablet GPU slow to compile the shaders.
       alphaMode: "premultiplied",
       format: "bgra8unorm",
     });
