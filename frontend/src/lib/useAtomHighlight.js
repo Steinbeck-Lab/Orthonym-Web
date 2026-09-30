@@ -1,31 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { atomRefsOf, sanitizeSvg, segmentAtPath } from './svgHighlight.js'
+import { atomRefsOf, sanitizeSvg } from './svgHighlight.js'
+import { nodeById } from './nameTargets.js'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 const GLOW_RADIUS = '13'
 const GLOW_OPACITY = '0.85'
 
 /**
- * Which atoms should light up for the segment at `activePath`?
- *
- * Pure, and separated from the DOM work so it can be tested without a browser
- * -- this is where the two rules that have visible consequences live, and
- * neither had any coverage while they sat inside a 113-line effect duplicated
- * across two pages.
- *
- * Returns a Set, or null for "highlight nothing".
+ * Which atoms should light up for the node `activeId`? Pure, so it is
+ * tested without a browser. Returns a Set, or null for "highlight nothing".
  */
-export function highlightTargets(data, activePath) {
-  const segment = segmentAtPath(data?.segments, activePath)
-  // Referential segments (a hydro prefix) own no atoms, so atom_indices is
-  // empty and highlight_atoms is the only thing to light up. Owning
-  // segments usually have both; fall back so neither case goes dark.
-  const highlight =
-    segment && segment.highlight_atoms?.length
-      ? segment.highlight_atoms
-      : segment?.atom_indices
-  return highlight?.length ? new Set(highlight) : null
+export function highlightTargets(data, activeId) {
+  const node = nodeById(data?.nodes, activeId)
+  return node?.lights?.length ? new Set(node.lights) : null
 }
 
 /**
@@ -44,7 +32,7 @@ export function shouldHighlight(classAttr, targetSet) {
 }
 
 /**
- * Render a decomposition's SVG and highlight the atoms of the active segment.
+ * Render a decomposition's SVG and highlight the atoms of the active node.
  *
  * Extracted from Explain.jsx and Teach.jsx, which carried 113 byte-identical
  * lines of this each -- including all three of the browser workarounds below,
@@ -55,10 +43,10 @@ export function shouldHighlight(classAttr, targetSet) {
  *
  * Returns the ref to attach to the (childless) wrapper div.
  *
- * @param {{svg?: string, segments?: Array, atom_points?: Array}|null} data
- * @param {string|null} activePath  dotted path of the hovered/pinned segment
+ * @param {{svg?: string, nodes?: Array, atom_points?: Array}|null} data
+ * @param {string|null} activeId  id of the hovered/pinned node
  */
-export function useAtomHighlight(data, activePath) {
+export function useAtomHighlight(data, activeId) {
   // A CALLBACK ref kept in state, not a plain `useRef`, and the difference is
   // a bug that shipped: explaining the SAME input twice left an empty frame
   // where the structure had been.
@@ -99,7 +87,7 @@ export function useAtomHighlight(data, activePath) {
   // Applies (or clears) the accent highlight for the active segment.
   useEffect(() => {
     if (!root) return
-    const targetSet = highlightTargets(data, activePath)
+    const targetSet = highlightTargets(data, activeId)
 
     const svgEl = root.querySelector('svg')
     if (svgEl) {
@@ -115,7 +103,7 @@ export function useAtomHighlight(data, activePath) {
         el.style.fill = original.fill
       }
     })
-  }, [root, activePath, data])
+  }, [root, activeId, data])
 
   // Stable identity, so attaching it does not detach-and-reattach the node on
   // every render -- an inline arrow would, and each detach would blank the

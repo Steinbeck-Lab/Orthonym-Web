@@ -3,35 +3,27 @@ import { test } from 'node:test'
 
 import { highlightTargets, shouldHighlight } from './useAtomHighlight.js'
 
-// A segment tree shaped like the /explain response: an owning parent with a
-// referential child that carries highlight_atoms but no atoms of its own.
 const DATA = {
-  segments: [
-    {
-      label: 'cyclohexan',
-      atom_indices: [0, 1, 2, 3, 4, 5],
-      highlight_atoms: [],
-      children: [
-        { label: 'hydro', atom_indices: [], highlight_atoms: [2, 3], children: [] },
-      ],
-    },
+  nodes: [
+    { id: 'n0', parent: null, kind: 'parent', owns: [0, 1, 2, 3, 4, 5], lights: [0, 1, 2, 3, 4, 5] },
+    { id: 'n1', parent: 'n0', kind: 'hydro', owns: [], lights: [2, 3] },
+    { id: 'n2', parent: 'n0', kind: 'stereo', owns: [], lights: [] },
   ],
 }
 
-test('an owning segment highlights the atoms it owns', () => {
-  assert.deepEqual([...highlightTargets(DATA, '0')].sort((a, b) => a - b), [0, 1, 2, 3, 4, 5])
+test('a node lights its lights', () => {
+  assert.deepEqual([...highlightTargets(DATA, 'n0')].sort((a, b) => a - b), [0, 1, 2, 3, 4, 5])
+  assert.deepEqual([...highlightTargets(DATA, 'n1')], [2, 3])
 })
 
-test('a referential segment falls back to highlight_atoms', () => {
-  // A hydro prefix owns no atoms. Without the fallback its atom_indices is
-  // empty, highlightTargets returns null, and pointing at it goes dark --
-  // silently, since nothing errors.
-  assert.deepEqual([...highlightTargets(DATA, '0.0')], [2, 3])
+test('a node with nothing to light highlights nothing', () => {
+  assert.equal(highlightTargets(DATA, 'n2'), null)
 })
 
-test('no active path highlights nothing', () => {
+test('no active id highlights nothing', () => {
   assert.equal(highlightTargets(DATA, null), null)
-  assert.equal(highlightTargets(null, '0'), null)
+  assert.equal(highlightTargets(null, 'n0'), null)
+  assert.equal(highlightTargets(DATA, 'n99'), null)
 })
 
 test('an element lights up only when every atom it references is in the set', () => {
@@ -56,11 +48,11 @@ test('a null target set highlights nothing', () => {
   assert.equal(shouldHighlight('bond-10 atom-7 atom-11', null), false)
 })
 
-test('when a segment has both, highlight_atoms wins over atom_indices', () => {
-  // A part can own atoms and still point at a narrower set to light; preferring
+test('a node lights its lights, not everything it owns', () => {
+  // A part can own atoms and still point at a narrower set to light; lighting
   // the owned set would light the whole ring for a locant inside it.
   const both = {
-    segments: [{ label: 'x', atom_indices: [0, 1, 2, 3], highlight_atoms: [1, 2], children: [] }],
+    nodes: [{ id: 'n0', parent: null, kind: 'suffix', owns: [0, 1, 2, 3], lights: [1, 2] }],
   }
-  assert.deepEqual([...highlightTargets(both, '0')].sort((a, b) => a - b), [1, 2])
+  assert.deepEqual([...highlightTargets(both, 'n0')].sort((a, b) => a - b), [1, 2])
 })
