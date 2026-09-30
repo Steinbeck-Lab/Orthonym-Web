@@ -41,3 +41,34 @@ test('nodeById returns null for a stale id', () => {
 test('unplaced nodes are listed', () => {
   assert.deepEqual(unplacedNodes(NODES).map((n) => n.id), ['n4'])
 })
+
+// Edge cases of the cutting rule. The backend gates spans, but the page must
+// not break or mislabel text if one ever arrives odd.
+test('on equal widths the later node wins (children are emitted after their part)', () => {
+  const nodes = [
+    { id: 'part', parent: null, kind: 'substituent', span: [0, 4] },
+    { id: 'child', parent: 'part', kind: 'locant', span: [0, 4] },
+  ]
+  assert.deepEqual(sliceName('abcdef', nodes).map((p) => [p.text, p.nodeId]), [['abcd', 'child'], ['ef', null]])
+})
+
+test('a zero-length span owns nothing and cuts nothing', () => {
+  const nodes = [{ id: 'z', parent: null, kind: 'token', span: [3, 3] }]
+  assert.deepEqual(sliceName('abcdef', nodes).map((p) => [p.text, p.nodeId]), [['abcdef', null]])
+})
+
+test('spans outside the name are clamped to it and the pieces still rejoin', () => {
+  const nodes = [
+    { id: 'a', parent: null, kind: 'token', span: [-2, 2] },
+    { id: 'b', parent: null, kind: 'token', span: [4, 99] },
+    { id: 'c', parent: null, kind: 'token', span: [50, 60] },
+  ]
+  const pieces = sliceName('abcdef', nodes)
+  assert.equal(pieces.map((p) => p.text).join(''), 'abcdef')
+  assert.deepEqual(pieces.map((p) => p.nodeId), ['a', null, 'b'])
+})
+
+test('an empty name and an empty list are harmless', () => {
+  assert.deepEqual(sliceName('', []), [])
+  assert.deepEqual(sliceName('ab', undefined).map((p) => p.nodeId), [null])
+})

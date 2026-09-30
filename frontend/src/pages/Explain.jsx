@@ -4,8 +4,9 @@ import ConfidenceReport from '../components/ConfidenceReport'
 import { verdictKindFor } from '../lib/explainVerdict'
 import { explainMolecule, explainName, translateBatch } from '../lib/api'
 import { isPart, nodeById, partOf, sliceName, unplacedNodes } from '../lib/nameTargets'
+import { detailNotes, explainPhase, pieceMark, tabStops } from '../lib/explainView'
 import { nameRuns, applyRuns } from '../lib/nameTypography'
-import { Pieces } from '../components/Typeset'
+import ChemName, { Pieces } from '../components/Typeset'
 import { useAtomHighlight } from '../lib/useAtomHighlight'
 import { useKetcher } from '../lib/useKetcher'
 import './Explain.css'
@@ -162,9 +163,11 @@ function Explain() {
         // `svg` alongside `error`. Throwing it away would hide a structure
         // we successfully drew, so keep the data and show the error beside
         // it. Only a result with nothing to show is a bare error.
-        const hasSomethingToShow = Boolean(result.svg || result.name)
+        // Only a result with no drawing is a bare error (spec 7: one message,
+        // no partial result). A typed name OPSIN cannot read comes back with
+        // `name` (the user's text) and `error`, and nothing to hover.
         setApiError(result.error || null)
-        if (result.error && !hasSomethingToShow) {
+        if (explainPhase(result) === 'error') {
           setData(null)
           setPhase('error')
         } else {
@@ -220,6 +223,9 @@ function Explain() {
   const nameStyle = name ? nameRuns(name) : []
   const activeNode = nodeById(nodes, activeId)
   const activePart = partOf(nodes, activeId)
+  const notes = detailNotes(nodes, activeId)
+  const pieces = name ? sliceName(name, nodes) : []
+  const stops = tabStops(pieces)
 
   return (
     <>
@@ -430,10 +436,9 @@ function Explain() {
                   <span className="explain-result__name-label">Name</span>
                   {name && (
                     <p className="explain-result__name explain-name" aria-live="polite">
-                      {sliceName(name, nodes).map((piece, index) => {
+                      {pieces.map((piece, index) => {
                         const node = nodeById(nodes, piece.nodeId)
-                        const inActivePart =
-                          activePart && node && partOf(nodes, node.id)?.id === activePart.id
+                        const mark = pieceMark(piece, activeId, activePart)
                         return (
                           <Fragment key={index}>
                             {index > 0 && /[)\]},]/.test(name[piece.start - 1] || '') &&
@@ -443,8 +448,8 @@ function Explain() {
                             ) : (
                               <span
                                 className={`explain-name__part${isPart(node) ? '' : ' explain-name__part--ref'}${
-                                  activeId === node.id ? ' explain-name__part--active' : ''
-                                }${inActivePart && activeId !== node.id ? ' explain-name__part--context' : ''}`}
+                                  mark ? ` explain-name__part--${mark}` : ''
+                                }`}
                                 onMouseEnter={() => setHoveredId(node.id)}
                                 onMouseLeave={() => setHoveredId(null)}
                                 onFocus={() => setHoveredId(node.id)}
@@ -456,8 +461,9 @@ function Explain() {
                                     toggleId(node.id)
                                   }
                                 }}
-                                tabIndex={0}
+                                tabIndex={stops.has(index) ? 0 : -1}
                                 role="button"
+                                aria-label={node.label}
                                 aria-pressed={pinnedId === node.id}
                               >
                                 <Pieces pieces={applyRuns(name, nameStyle, piece.start, piece.end)} breaks={false} />
@@ -533,42 +539,55 @@ function Explain() {
                     an abstain tier row, not in the error branch. */}
                 <ReportLink row={tierRow} where="Explain" settings={TIER_SETTINGS} />
 
-                <div className="explain-result__body">
-                  <div
-                    className="explain-result__diagram"
-                    role="img"
-                    aria-label={`2D structure diagram of ${name}`}
-                    ref={svgWrapperRef}
-                  />
+                {(data?.svg || nodes.length > 0) && (
+                  <div className="explain-result__body">
+                    {data?.svg && (
+                      <div
+                        className="explain-result__diagram"
+                        role="img"
+                        aria-label={`2D structure diagram of ${name}`}
+                        ref={svgWrapperRef}
+                      />
+                    )}
 
-                  <div className="explain-detail">
-                    {activeNode ? (
-                      <>
-                        <h3 className="explain-detail__label">{activeNode.label}</h3>
-                        <p className="explain-detail__explanation">{activeNode.line}</p>
-                        {!isPart(activeNode) && activePart && (
-                          <p className="explain-detail__note">
-                            Part of <em>{activePart.label}</em>.
+                    {nodes.length > 0 && (
+                      <div className="explain-detail">
+                        {activeNode ? (
+                          <>
+                            <h3 className="explain-detail__label">
+                              <ChemName name={activeNode.label} />
+                            </h3>
+                            <p className="explain-detail__explanation">{activeNode.line}</p>
+                            {notes.partLabel && (
+                              <p className="explain-detail__note">
+                                Part of <ChemName name={notes.partLabel} />.
+                              </p>
+                            )}
+                            {notes.notation && (
+                              <p className="explain-detail__note">
+                                Notation — it points at atoms, and names none of its own.
+                              </p>
+                            )}
+                            {notes.nothingLights && (
+                              <p className="explain-detail__note">
+                                It names no single atom, so nothing lights up.
+                              </p>
+                            )}
+                            {notes.unmapped && (
+                              <p className="explain-detail__note">
+                                Orthonym could not pin this part to exact atoms in this structure, so nothing lights up. The rest of the name is unaffected.
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <p className="explain-detail__hint">
+                            Move your pointer across the name above to see what each part means.
                           </p>
                         )}
-                        {!isPart(activeNode) && activeNode.owns.length === 0 && (
-                          <p className="explain-detail__note">
-                            Notation — it points at atoms, and names none of its own.
-                          </p>
-                        )}
-                        {activeNode.atoms_unmapped && (
-                          <p className="explain-detail__note">
-                            Orthonym could not pin this part to exact atoms in your drawing, so nothing lights up. The rest of the name is unaffected.
-                          </p>
-                        )}
-                      </>
-                    ) : (
-                      <p className="explain-detail__hint">
-                        Move your pointer across the name above to see what each part means.
-                      </p>
+                      </div>
                     )}
                   </div>
-                </div>
+                )}
               </div>
             </div>
           )}

@@ -461,7 +461,9 @@
    ink underline — a weight no tier uses — plus the glow wash. The
    transparent rule at rest reserves the space so nothing shifts. */
 .explain-name__part {
-  padding: 0 0.06em;
+  /* No horizontal padding: v2 cuts words in two (tri|methyl, di|one), and
+     padding would print a gap inside the word. */
+  padding: 0;
   border-bottom: 1px solid transparent;
   cursor: pointer;
   transition:
@@ -484,10 +486,18 @@
    A DOTTED rest-state underline says so before the pointer arrives, and it is
    FORM not hue on purpose (CLAUDE.md's TierLamp rule): the mark survives
    greyscale and colour blindness where a tint would not. Hover/active still
-   paint the border --ink at higher specificity, but leave the dotted STYLE
-   in place, so a notation part reads as notation even while lit. */
+   paint the border INK, but the dotted STYLE stays, so a notation part
+   reads as notation even while lit. */
 .explain-name__part--ref {
   border-bottom: 1px dotted var(--muted);
+}
+
+/* After --ref at higher specificity: the ref shorthand above would otherwise
+   reset the ink colour that --active and :hover set, and a pinned notation
+   piece would look like its context. */
+.explain-name__part--ref:hover,
+.explain-name__part--ref.explain-name__part--active {
+  border-bottom-color: var(--ink);
 }
 
 .explain-name__part--context {
@@ -585,7 +595,8 @@
   font-weight: 400;
   line-height: 1.3;
   letter-spacing: 0.0625rem;
-  text-transform: uppercase;
+  /* IUPAC case is semantic (4aR, tert-butyl, a pseudo-asymmetric r/s): never uppercased. */
+  text-transform: none;
   color: var(--ink);
 }
 
