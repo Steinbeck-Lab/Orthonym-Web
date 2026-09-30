@@ -7,6 +7,7 @@ import {
   UNKNOWN_EXPIRY_MAX_AGE_SECONDS,
   pruneExpired,
   readJobs,
+  forgetJob,
   rememberJob,
   sweepOldJobKeys,
   withJob,
@@ -145,4 +146,80 @@ test('sweepOldJobKeys drops job lists under any other key and keeps the rest', (
     removeItem: (k) => map.delete(k),
   })
   assert.deepEqual(keys(), [JOB_STORAGE_KEY, 'theme'])
+})
+
+test('an entry that expires this very second is already gone', () => {
+  const now = 1_000_000
+  assert.deepEqual(pruneExpired([{ jobId: 'edge', expiresAt: now }], now), [])
+})
+
+test('rememberJob keeps every earlier job and stores what it was given', () => {
+  // Remembering a second job must not erase the first: each one's owner token
+  // is the only way to stop it.
+  stubStorage()
+  const before = Math.floor(Date.now() / 1000)
+  rememberJob({ jobId: 'a', ownerToken: 'ta', moleculeCount: 12, expiresAt: before + 500, status: 'running' })
+  rememberJob({ jobId: 'b', ownerToken: 'tb', moleculeCount: 30, status: 'queued' })
+  const [b, a] = readJobs()
+  assert.equal(b.jobId, 'b')
+  assert.equal(a.jobId, 'a')
+  assert.equal(a.moleculeCount, 12)
+  assert.equal(a.expiresAt, before + 500)
+  assert.equal(a.status, 'running')
+  assert.equal(b.expiresAt, null)
+  // rememberedAt is what ages out an entry whose expiry never arrives.
+  assert.ok(a.rememberedAt >= before && a.rememberedAt <= before + 5, String(a.rememberedAt))
+})
+
+test('rememberJob without a job id writes nothing', () => {
+  const map = stubStorage()
+  rememberJob({ jobId: '', ownerToken: 't' })
+  rememberJob({ ownerToken: 't' })
+  assert.equal(map.has(JOB_STORAGE_KEY), false)
+})
+
+test('reading the jobs writes the pruned list back', () => {
+  // A token whose job the server deleted must not outlive it in the browser.
+  const map = stubStorage()
+  map.set(JOB_STORAGE_KEY, JSON.stringify([{ jobId: 'old', expiresAt: 5 }, { jobId: 'live', expiresAt: 99 }]))
+  assert.deepEqual(readJobs(50).map((j) => j.jobId), ['live'])
+  assert.deepEqual(JSON.parse(map.get(JOB_STORAGE_KEY)).map((j) => j.jobId), ['live'])
+})
+
+test('forgetJob removes only the job it is told to', () => {
+  stubStorage()
+  rememberJob({ jobId: 'a', ownerToken: 'ta', status: 'running' })
+  rememberJob({ jobId: 'b', ownerToken: 'tb', status: 'running' })
+  assert.deepEqual(forgetJob('a').map((j) => j.jobId), ['b'])
+  assert.deepEqual(readJobs().map((j) => j.jobId), ['b'])
+})
+
+test('storage that is corrupt, blocked or full never throws out of the store', () => {
+  // localStorage THROWS in a private window; a crash here takes the page down
+  // for a convenience feature.
+  const map = stubStorage()
+  map.set(JOB_STORAGE_KEY, '{not json')
+  assert.deepEqual(readJobs(), [])
+
+  Object.defineProperty(globalThis.window, 'localStorage', {
+    get() {
+      throw new Error('SecurityError')
+    },
+  })
+  assert.deepEqual(readJobs(), [])
+  assert.deepEqual(rememberJob({ jobId: 'x', ownerToken: 't', status: 'running' }), [])
+  assert.deepEqual(forgetJob('x'), [])
+
+  // Full: reads work, writes throw.
+  globalThis.window = {
+    localStorage: {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error('QuotaExceededError')
+      },
+      removeItem: () => {},
+    },
+  }
+  assert.doesNotThrow(() => rememberJob({ jobId: 'y', ownerToken: 't', status: 'running' }))
+  assert.doesNotThrow(() => forgetJob('y'))
 })

@@ -74,3 +74,35 @@ test('rowsToSdf on nothing writable returns empty text and writes nothing', () =
   assert.equal(skipped, 1)
   assert.equal(text, '')
 })
+
+test('rowsToCsv writes the exact file: numbering, column order, quoting, CRLF', () => {
+  // A spreadsheet reads by position. A swapped pair of columns, a 0-based
+  // number or a bare LF each corrupt the file while every row still "looks" right.
+  const csv = rowsToCsv([ok(0, 'aspirin', ASPIRIN), bad(1, 'zzz', 'Could not parse')])
+  assert.equal(
+    csv,
+    '"#","name","smiles","canonical_smiles","inchi","inchikey","error"\r\n' +
+      `"1","aspirin","${ASPIRIN.smiles}","${ASPIRIN.canonical_smiles}","${ASPIRIN.inchi}","${ASPIRIN.inchikey}",""\r\n` +
+      '"2","zzz","","","","","Could not parse"\r\n',
+  )
+})
+
+test('rowsToSdf writes the exact record: tags, blank lines and terminator', () => {
+  // The record is machine-read. A dropped tag, a missing blank line or a
+  // "$$$$" without its newline glues the next molblock onto the terminator.
+  const first = { ...ASPIRIN, molblock: 'A\nM  END\n\n\n' }
+  const second = { ...ASPIRIN, molblock: 'B\nM  END', inchi: null }
+  const { text } = rowsToSdf([ok(0, 'aspirin', first), ok(1, 'other', second)])
+  const tags = (inchi) =>
+    '>  <NAME>\n' + '{n}\n\n' +
+    `>  <SMILES>\n${ASPIRIN.smiles}\n\n` +
+    `>  <CANONICAL_SMILES>\n${ASPIRIN.canonical_smiles}\n\n` +
+    (inchi ? `>  <INCHI>\n${ASPIRIN.inchi}\n\n` : '') +
+    `>  <INCHIKEY>\n${ASPIRIN.inchikey}\n\n` +
+    '$$$$\n'
+  assert.equal(
+    text,
+    `A\nM  END\n${tags(true).replace('{n}', 'aspirin')}` +
+      `B\nM  END\n${tags(false).replace('{n}', 'other')}`,
+  )
+})

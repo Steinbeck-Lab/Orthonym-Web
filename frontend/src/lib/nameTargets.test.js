@@ -29,3 +29,17 @@ test('a child with no name_range is simply not a target', () => {
   assert.equal(targets.length, 1)
   assert.equal(targets[0].path, '0')
 })
+
+test('every piece carries the offsets of its own text in the whole name', () => {
+  // Explain.jsx asks for typography over [start, end) and reads name[start - 1]
+  // for its wrap rule. Offsets that do not point at the piece's own text put
+  // the styling on the wrong characters.
+  const pieces = sliceName(NAME, nameTargets(SEGMENTS))
+  let cursor = 0
+  for (const piece of pieces) {
+    assert.equal(piece.start, cursor, 'pieces are contiguous')
+    assert.equal(NAME.slice(piece.start, piece.end), piece.text)
+    cursor = piece.end
+  }
+  assert.equal(cursor, NAME.length)
+})

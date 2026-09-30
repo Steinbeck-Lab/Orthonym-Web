@@ -122,3 +122,51 @@ test('a throwing onProgress cannot take the batch down with it', async () => {
   assert.deepEqual(rows.map((r) => r.ok), [true, false, true])
   assert.equal(rows[1].error, 'boom')
 })
+
+test('the batch is capped at 25 names, the number the rate limit was sized for', () => {
+  // Compared to the exported constant, a raised cap would still agree with
+  // itself while overrunning the per-minute naming budget.
+  assert.equal(MAX_NAMES, 25)
+})
+
+test('a failed API row carries no data', () => {
+  // molExport and the table read `row.data` for every row; a failed row that
+  // still holds the response body would export its empty fields as a result.
+  const fetchOne = () => Promise.resolve({ smiles: null, error: 'Could not parse this name via OPSIN' })
+  return convertNames(['zzz'], { fetchOne }).then((rows) => assert.equal(rows[0].data, null))
+})
+
+test('a throw with no message still becomes a failed row', async () => {
+  // Without the fallback text the row's error is empty and it is read as a
+  // success with no data.
+  for (const thrown of [new Error(''), undefined, null]) {
+    const rows = await convertNames(['x'], { fetchOne: () => Promise.reject(thrown) })
+    assert.equal(rows[0].ok, false)
+    assert.equal(rows[0].error, 'Could not convert this name')
+  }
+})
+
+test('onProgress reports each step against the true total', async () => {
+  const seen = []
+  await convertNames(['a', 'b', 'c'], {
+    fetchOne: () => Promise.resolve({ smiles: 'X' }),
+    concurrency: 1,
+    onProgress: (done, total) => seen.push([done, total]),
+  })
+  assert.deepEqual(seen, [[1, 3], [2, 3], [3, 3]])
+})
+
+test('with no concurrency given, four fetches run at once', async () => {
+  // The default is what every caller gets; it is sized to the two workers.
+  let inFlight = 0
+  let peak = 0
+  const fetchOne = async () => {
+    inFlight += 1
+    peak = Math.max(peak, inFlight)
+    await new Promise((r) => setTimeout(r, 1))
+    inFlight -= 1
+    return { smiles: 'X' }
+  }
+  await convertNames(Array.from({ length: 12 }, (_, i) => `n${i}`), { fetchOne })
+  assert.equal(peak, 4)
+})

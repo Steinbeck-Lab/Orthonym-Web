@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { nameRuns, formulaRuns, applyRuns } from './nameTypography.js'
+import { nameRuns, formulaRuns, applyRuns, breakSegments } from './nameTypography.js'
 
 // Every name in this file is a REAL string the vendored engine produced, or a
 // real string a chemist would type into /from-name. None of them are invented
@@ -376,4 +376,105 @@ test('breakSegments cuts only after closing brackets and commas', async () => {
   // Round trip: the segments always rebuild the exact string.
   const name = '(7R,10S)-4,16-dihydroxy-13-methyl-6-oxa-13-azahexacyclo[12.6.1.0^5,20]henicosa-1(20),2-diene'
   assert.equal(breakSegments(name).join(''), name)
+})
+
+// ------------------------------------------------------ rule tables and edges
+
+test('every element symbol the engine uses as a locant is italic', () => {
+  // The rule is a table; a symbol missing from it is only visible on the one
+  // compound that needs it.
+  for (const sym of ['Si', 'Se', 'Te', 'As', 'Sb', 'Bi', 'Al', 'N', 'O', 'S', 'P', 'C', 'B']) {
+    assert.equal(marked(`${sym}-methylbenzene`), `{${sym}}-methylbenzene`, sym)
+  }
+  // ...and after an opening bracket, where a substituent's own locant sits.
+  assert.equal(marked('2-(N-methylamino)ethanol'), '2-({N}-methylamino)ethanol')
+})
+
+test('every italic word prefix is italic before a hyphen', () => {
+  for (const p of ['tert', 'sec', 'cis', 'trans', 'rel', 'rac', 'syn', 'anti', 'endo', 'exo', 'abeo', 'ortho', 'meta', 'para', 'n', 'o', 'm', 'p']) {
+    assert.equal(marked(`${p}-butane`), `{${p}}-butane`, p)
+  }
+})
+
+test('a multi-digit lambda number is raised whole', () => {
+  assert.equal(marked('1λ10-thiane'), '1λ^{10}-thiane')
+})
+
+test('the rarer stereodescriptor shapes are italic where they are descriptors', () => {
+  assert.equal(marked('(RS)-butan-2-ol'), '({RS})-butan-2-ol')
+  assert.equal(marked('(Z)-but-2-ene'), '({Z})-but-2-ene')
+  assert.equal(marked('(2Z)-but-2-ene'), '(2{Z})-but-2-ene')
+  assert.equal(marked('(2r)-butan-2-ol'), '(2{r})-butan-2-ol')
+  assert.equal(marked('(2e)-but-2-ene'), '(2{e})-but-2-ene')
+  assert.equal(marked('(2r*)-butan-2-ol'), '(2{r}*)-butan-2-ol')
+  assert.equal(marked('(1R*,2S*)-cyclohexane-1,2-diol'), '(1{R}*,2{S}*)-cyclohexane-1,2-diol')
+})
+
+test('DL is italic whole', () => {
+  assert.equal(marked('DL-alanine'), '{DL}-alanine')
+})
+
+test('a word that merely starts with beta is not a stereo prefix', () => {
+  // "betaine" has no hyphen after "beta": italicising it would set part of an
+  // ordinary word as a descriptor.
+  assert.equal(marked('betaine'), 'betaine')
+})
+
+test('a letter-only fusion bracket is italic after either separator', () => {
+  assert.equal(marked('benzo[b;c]furan'), 'benzo[{b};{c}]furan')
+  assert.equal(marked('benzo[b:c]furan'), 'benzo[{b}:{c}]furan')
+})
+
+test('indicated hydrogen at the very end of a name is italic', () => {
+  assert.equal(marked('quinolizin-4(1H)-one'), 'quinolizin-4(1{H})-one')
+  assert.equal(marked('naphthalene-1H'), 'naphthalene-1{H}')
+})
+
+test('applyRuns cuts a range from the middle of a name, keeping runs on both sides out', () => {
+  // Explain asks for the typography inside one hover piece at a time. A run
+  // that lies wholly before or after the piece must not leak into it, and one
+  // straddling its left edge is clipped there.
+  const name = 'N-methyl-3,4-dihydro-1H-purine'
+  const runs = nameRuns(name)
+  const from = name.indexOf('dihydro')
+  const to = name.indexOf('purine')
+  const pieces = applyRuns(name, runs, from, to)
+  assert.deepEqual(pieces.map((p) => p.text).join(''), name.slice(from, to))
+  assert.deepEqual(pieces, [
+    { text: 'dihydro-1', style: null },
+    { text: 'H', style: 'italic' },
+    { text: '-', style: null },
+  ])
+  // A range that starts inside the italic "tert" clips the run at its left edge.
+  const t = 'tert-butylbenzene'
+  assert.deepEqual(applyRuns(t, nameRuns(t), 2, 6), [
+    { text: 'rt', style: 'italic' },
+    { text: '-b', style: null },
+  ])
+})
+
+test('applyRuns makes no empty piece where a range only touches a run', () => {
+  // A range that begins where an italic run ends must start on plain text; an
+  // empty italic piece in front of it would render as a stray empty element.
+  const name = 'N-methyl'
+  assert.deepEqual(applyRuns(name, nameRuns(name), 1, 8), [{ text: '-methyl', style: null }])
+  const n2 = 'methyl-N'
+  assert.deepEqual(applyRuns(n2, nameRuns(n2), 0, 7), [{ text: 'methyl-', style: null }])
+})
+
+test('a two-letter element in a formula is not cut in half', () => {
+  assert.deepEqual(formulaRuns('C6H4Cl2'), [
+    { start: 1, end: 2, style: 'sub' },
+    { start: 3, end: 4, style: 'sub' },
+    { start: 6, end: 7, style: 'sub' },
+  ])
+})
+
+test('a break is never offered before another closer, and is offered after a brace', () => {
+  // "))" and ")]" are one closing mark; a line that starts with the second
+  // half reads as a stray bracket.
+  assert.deepEqual(breakSegments('a(b(c))e'), ['a(b(c))', 'e'])
+  assert.deepEqual(breakSegments('x[y(z)]w'), ['x[y(z)]', 'w'])
+  assert.deepEqual(breakSegments('x{y}w'), ['x{y}', 'w'])
+  assert.deepEqual(breakSegments('a(b)}c'), ['a(b)}', 'c'])
 })

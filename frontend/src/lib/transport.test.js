@@ -32,3 +32,25 @@ test('a backend that did not answer is left to the unreachable text', () => {
   // The proxy's answer for a backend that is down (Vite and nginx both).
   assert.equal(transportMessage({ status: 502, message: 'x' }), null)
 })
+
+test('a timeout and an oversize input each say their own thing', () => {
+  // Both used to fall through to the generic "answered with an error" line,
+  // which names neither the wait nor the size.
+  assert.equal(
+    transportMessage({ status: 504, message: 'x' }),
+    'This took too long rather than failed. Try again in a moment.',
+  )
+  assert.equal(
+    transportMessage({ status: 413, message: 'Input exceeds the 10-molecule limit' }),
+    'Orthonym refused this input as too large (Input exceeds the 10-molecule limit).',
+  )
+  assert.match(transportMessage({ status: 500, message: 'x' }), /answered with an error \(500\)/)
+})
+
+test('httpError ignores a detail that is not a string', async () => {
+  // FastAPI's 422 carries `detail` as a list of objects; as a message it
+  // would print "[object Object]".
+  const res = new Response(JSON.stringify({ detail: [{ msg: 'field required' }] }), { status: 422 })
+  const err = await httpError(res, 'POST /api/translate')
+  assert.equal(err.message, 'POST /api/translate failed with 422')
+})

@@ -143,3 +143,32 @@ test('Explain.jsx decides the claim from the result, never from the live tab', (
     'runExplain must record the mode it actually requested'
   )
 })
+
+test('an abstain or error row has no round-trip line even when it carries a SMILES', () => {
+  // No name was shipped, so there is nothing a round trip could confirm.
+  for (const status of ['abstain', 'error']) {
+    assert.equal(roundtripLine({ status, roundtrip_smiles: 'CCO', roundtrip_match: true }), null, status)
+  }
+})
+
+test('a best_effort row that did round-trip shows its proof', () => {
+  // The silent-when-absent rule is for a missing proof; a present one is
+  // always shown, whatever the tier.
+  const line = roundtripLine({ status: 'best_effort', roundtrip_smiles: 'CCO', roundtrip_match: true })
+  assert.equal(line.available, true)
+  assert.equal(line.smiles, 'CCO')
+})
+
+test('a missing proof on a verified tier is worded, not just flagged', () => {
+  const line = roundtripLine({ status: 'pin', roundtrip_smiles: null })
+  assert.equal(line.lead, 'Round-trip check:')
+  assert.equal(line.result, 'unavailable')
+  assert.match(line.tail, /not confirmed/)
+})
+
+test('Explain.jsx shows the user-supplied disclosure when the verdict is user-supplied', () => {
+  // The call is asserted above; inverting the comparison would swap the two
+  // disclosures while still calling the right function.
+  const src = readFileSync(fileURLToPath(new URL('../pages/Explain.jsx', import.meta.url)), 'utf8')
+  assert.match(src, /verdictKindFor\(\s*resultMode\s*\)\s*===\s*'user-supplied'\s*\?/)
+})
