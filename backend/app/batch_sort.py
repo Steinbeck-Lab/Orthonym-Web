@@ -94,4 +94,11 @@ def sort_rows(rows: list[dict], field: str, order: str = "asc") -> list[dict]:
         raise ValueError(f"unknown sort field: {field!r}")
     ordered = sorted(rows, key=_KEYS["index"])
     ordered.sort(key=key, reverse=(order == "desc"))
+    if field == "name" and order == "desc":
+        # The flag that files nameless rows last in A-Z sorts them FIRST once
+        # reversed. They have no name at all, so they are not "the last name
+        # alphabetically": move them back to the end, still in index order.
+        ordered = [r for r in ordered if r.get("name")] + [
+            r for r in ordered if not r.get("name")
+        ]
     return ordered

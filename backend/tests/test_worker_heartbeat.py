@@ -16,6 +16,8 @@ exercised on a test-sized clock.
 import threading
 import time
 
+import pytest
+
 from fastapi.testclient import TestClient
 
 from app import redis_store
@@ -225,6 +227,86 @@ def test_the_heartbeat_probes_opsin_rather_than_replaying_the_boot_verdict(monke
     )
 
 
+def test_a_worker_stamped_unhealthy_at_boot_cannot_probe_its_way_to_healthy(
+    monkeypatch,
+):
+    """The boot verdict is a ceiling on every beat. The inherited-JVM child is
+    stamped False on purpose and can never own a JVM; if the heartbeat believed
+    the probe alone it would flip that child to healthy on its first beat.
+    """
+    import app.celery_app as celery_app
+
+    monkeypatch.setattr(redis_store, "_WORKER_STATUS_TTL", 3)
+    monkeypatch.setattr(celery_app, "_opsin_liveness_probe", lambda: True)
+    stamps: list[bool] = []
+    monkeypatch.setattr(
+        redis_store, "record_worker_opsin_status", lambda pid, ok: stamps.append(ok)
+    )
+
+    stop = threading.Event()
+    celery_app._start_status_heartbeat(999902, ok=False, stop_event=stop)
+    try:
+        deadline = time.time() + 6
+        while len(stamps) < 2 and time.time() < deadline:
+            time.sleep(0.05)
+    finally:
+        stop.set()
+
+    assert len(stamps) >= 2, "the heartbeat never beat"
+    assert not any(stamps), "a child stamped unhealthy at boot was stamped healthy"
+
+
+@pytest.mark.parametrize("naming_ok", [True, False])
+def test_the_boot_stamp_and_heartbeat_carry_the_naming_verdict(monkeypatch, naming_ok):
+    """What the child stamps at boot, and hands the heartbeat as its ceiling,
+    is what OPSIN name verification said -- not a constant either way.
+    """
+    import app.celery_app as celery_app
+
+    stamps: list[bool] = []
+    ceilings: list[bool] = []
+
+    def _fake_heartbeat(pid, ok, stop_event=None):
+        ceilings.append(ok)
+        return threading.Thread(target=lambda: None)
+
+    monkeypatch.setattr(celery_app, "_jvm_is_started", lambda: False)
+    monkeypatch.setattr(celery_app, "_opsin_can_verify", lambda: naming_ok)
+    monkeypatch.setattr(
+        redis_store, "record_worker_opsin_status", lambda pid, ok: stamps.append(ok)
+    )
+    monkeypatch.setattr(celery_app, "_start_status_heartbeat", _fake_heartbeat)
+
+    celery_app._start_child_jvm()
+
+    assert stamps == [naming_ok]
+    assert ceilings == [naming_ok]
+
+
+def test_a_child_that_inherited_a_jvm_is_stamped_unhealthy(monkeypatch):
+    # It can never own that JVM, so it must not be counted as having a usable
+    # OPSIN -- neither at boot nor as the ceiling for its heartbeat.
+    import app.celery_app as celery_app
+
+    stamps: list[bool] = []
+    ceilings: list[bool] = []
+
+    def _fake_heartbeat(pid, ok, stop_event=None):
+        ceilings.append(ok)
+        return threading.Thread(target=lambda: None)
+
+    monkeypatch.setattr(celery_app, "_jvm_is_started", lambda: True)
+    monkeypatch.setattr(
+        redis_store, "record_worker_opsin_status", lambda pid, ok: stamps.append(ok)
+    )
+    monkeypatch.setattr(celery_app, "_start_status_heartbeat", _fake_heartbeat)
+
+    celery_app._start_child_jvm()
+
+    assert stamps == [False]
+    assert ceilings == [False]
+
+
 def test_the_liveness_probe_rejects_a_jvm_that_answers_wrongly(monkeypatch):
     """A JVM that responds but returns nonsense is dead for our purposes: the
     round-trip check it backs would compare against garbage. The probe must
@@ -237,6 +319,11 @@ def test_the_liveness_probe_rejects_a_jvm_that_answers_wrongly(monkeypatch):
     assert celery_app._opsin_liveness_probe() is False
 
     monkeypatch.setattr(orthonym_service, "opsin_parse", lambda name: None)
+    assert celery_app._opsin_liveness_probe() is False
+
+    # A well-formed but WRONG molecule: parsing it proves nothing about the
+    # JVM being right, so the answer itself has to be compared.
+    monkeypatch.setattr(orthonym_service, "opsin_parse", lambda name: "CC")
     assert celery_app._opsin_liveness_probe() is False
 
     def _boom(name):

@@ -12,6 +12,9 @@ def test_segment_nests_children():
         highlight_atoms=[0, 11, 12], children=[child],
     )
     assert parent.children[0].locant == "7"
+    # The owned atoms must survive construction, at both levels.
+    assert parent.atom_indices == [0, 11, 12]
+    assert parent.children[0].atom_indices == [11]
 
 
 def test_referential_segment_owns_nothing():

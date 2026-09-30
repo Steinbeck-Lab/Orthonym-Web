@@ -12,6 +12,11 @@ def test_explain_name_endpoint_decomposes_caffeine():
     body = response.json()
     assert body["error"] is None
     assert {s["kind"] for s in body["segments"]} >= {"substituent", "parent"}
+    # Caffeine's name carries a referential "3,7-dihydro-1H-" part: it must
+    # keep owns_atoms false and own no atoms, and the structure must render.
+    referential = [s for s in body["segments"] if not s["owns_atoms"]]
+    assert referential and all(s["atom_indices"] == [] for s in referential)
+    assert body["total_atoms"] == 14 and body["svg"]
 
 
 def test_explain_name_endpoint_reports_parse_failure():
@@ -30,3 +35,12 @@ def test_existing_smiles_endpoint_still_works():
     assert body["error"] is None, body["error"]
     assert body["segments"], "SMILES path returned no segments"
     assert all("owns_atoms" in s and "children" in s for s in body["segments"])
+    # The key check above is satisfied by the response model's defaults, so
+    # assert values: owning segments hold atoms, referential ones hold none.
+    for s in body["segments"]:
+        if s["owns_atoms"]:
+            assert s["atom_indices"], s["label"]
+        else:
+            assert s["atom_indices"] == [], s["label"]
+    assert any(s["owns_atoms"] for s in body["segments"])
+    assert body["total_atoms"] == 3 and body["svg"]

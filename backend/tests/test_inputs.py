@@ -126,6 +126,9 @@ def test_parse_smiles_list_with_ids():
 def test_parse_smiles_list_skips_blank_lines():
     rows = parse(b"CCO\n\n   \nc1ccccc1\n", InputFormat.SMILES_LIST, 100)
     assert [r.smiles for r in rows] == ["CCO", "c1ccccc1"]
+    # Indices count records, not lines: a constant or line-number index
+    # would leave a gap here.
+    assert [r.index for r in rows] == [0, 1]
 
 
 def test_parse_smiles_list_records_unparseable_entry():
@@ -207,10 +210,13 @@ def test_count_molecules_matches_parse_for_a_csv():
 
 
 def test_count_molecules_matches_parse_for_a_smiles_list():
-    data = "\n".join(["CCO"] * 13).encode("utf-8")
+    # Blank and whitespace-only lines are not molecules; a counter that
+    # counts lines would answer 16 here.
+    data = ("\n".join(["CCO"] * 13) + "\n\n   \n\n").encode("utf-8")
     assert count_molecules(data, InputFormat.SMILES_LIST) == len(
         parse(data, InputFormat.SMILES_LIST, 100)
     )
+    assert count_molecules(data, InputFormat.SMILES_LIST) == 13
 
 
 def test_count_molecules_matches_parse_for_an_sdf_with_dollars_mid_line_in_a_data_field():
@@ -247,3 +253,62 @@ def test_count_molecules_matches_parse_for_a_multi_record_sdf_with_dollars_mid_l
         parse(data, InputFormat.SDF, 100)
     )
     assert count_molecules(data, InputFormat.SDF) == 2
+
+
+def test_sniff_a_first_line_naming_smiles_without_a_delimiter_is_not_csv():
+    # "smiles" alone is the one-column header; a longer line that merely
+    # contains the word, with no delimiter, is a SMILES list entry.
+    assert sniff(b"smiles list\nCCO\n") is InputFormat.SMILES_LIST
+
+
+def test_parse_csv_falls_back_to_the_name_column_for_input_id():
+    rows = parse(b"smiles,name\nCCO,ethanol\n", InputFormat.CSV, 100)
+    assert [r.input_id for r in rows] == ["ethanol"]
+
+
+def test_parse_csv_skips_rows_with_a_blank_smiles():
+    # A blank cell is not a molecule; without the skip it becomes an error
+    # row and shifts every later index.
+    rows = parse(b"smiles,id\nCCO,a\n,b\nc1ccccc1,c\n", InputFormat.CSV, 100)
+    assert [r.smiles for r in rows] == ["CCO", "c1ccccc1"]
+    assert [r.index for r in rows] == [0, 1]
+
+
+def test_parse_csv_allows_exactly_the_limit_and_refuses_one_more():
+    at_limit = b"smiles\nCCO\nCCC\n"
+    assert len(parse(at_limit, InputFormat.CSV, 2)) == 2
+    with pytest.raises(TooManyMolecules) as excinfo:
+        parse(at_limit, InputFormat.CSV, 1)
+    assert len(excinfo.value.partial) == 1
+
+
+def test_parse_molfile_refuses_a_limit_below_one():
+    with pytest.raises(TooManyMolecules):
+        parse(ETHANOL_MOLBLOCK.encode(), InputFormat.MOLFILE, 0)
+
+
+def test_parse_molfile_that_rdkit_cannot_read_becomes_an_error_row():
+    rows = parse(b"not a molfile\n", InputFormat.MOLFILE, 100)
+    assert len(rows) == 1
+    assert rows[0].smiles is None and rows[0].error
+
+
+def test_count_molecules_for_a_molfile_is_one():
+    assert count_molecules(ETHANOL_MOLBLOCK.encode(), InputFormat.MOLFILE) == 1
+
+
+def test_count_molecules_for_a_csv_skips_blank_smiles_and_missing_column():
+    blank = b"smiles,id\nCCO,a\n,b\nCCC,c\n"
+    assert count_molecules(blank, InputFormat.CSV) == 2
+    # No smiles column: nothing to count, and no exception.
+    assert count_molecules(b"structure,id\nCCO,a\n", InputFormat.CSV) == 0
+
+
+def test_count_sdf_does_not_treat_an_indented_terminator_as_one():
+    # "$$$$" only terminates when it opens the line. An indented one is
+    # part of a data field, so this file is one record, not two.
+    data = (ETHANOL_MOLBLOCK + "> <Note>\n  $$$$\n\n$$$$\n").encode("utf-8")
+    assert count_molecules(data, InputFormat.SDF) == len(
+        parse(data, InputFormat.SDF, 100)
+    )
+    assert count_molecules(data, InputFormat.SDF) == 1

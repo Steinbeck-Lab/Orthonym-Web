@@ -34,3 +34,11 @@ test('splitLines handles CRLF line endings', () => {
   // into the SMILES or the name and break the lookup with no visible cause.
   assert.deepEqual(splitLines('CCO\r\nCCC\r\n', 10).lines, ['CCO', 'CCC'])
 })
+
+test('splitLines treats a missing value as no text', () => {
+  // A cleared field can hand over null or undefined; String(undefined) would
+  // turn it into the one line "undefined".
+  for (const missing of [null, undefined]) {
+    assert.deepEqual(splitLines(missing, 10), { lines: [], total: 0, truncated: false })
+  }
+})

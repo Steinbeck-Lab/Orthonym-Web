@@ -92,3 +92,35 @@ test('needsJob draws the line where the server draws it', () => {
   assert.equal(needsJob(1, 10), false)
   assert.equal(needsJob(Number.NaN, 10), false)
 })
+
+test('clampPage survives a non-number, a fraction and a custom page size', () => {
+  // NaN would reach the request as "page=NaN"; a fraction as page=1.7; and a
+  // caller with its own page size must be clamped against that size.
+  assert.equal(clampPage(Number.NaN, 120), 0)
+  assert.equal(clampPage(1.7, 120), 1)
+  assert.equal(clampPage(5, 120, 10), 5, '120 rows at 10 a page has a page 5')
+  assert.equal(clampPage(99, 120, 10), 11)
+})
+
+test('progressPercent stays inside 0..100 and rounds to the nearest whole number', () => {
+  // A poll racing a status write can report done past total; the bar must not
+  // overflow its track or go negative.
+  assert.equal(progressPercent({ done: 150, total: 100 }), 100)
+  assert.equal(progressPercent({ done: -5, total: 100 }), 0)
+  assert.equal(progressPercent({ done: 1, total: 3 }), 33)
+  assert.equal(progressPercent({ done: 2, total: 3 }), 67)
+  assert.equal(progressPercent({ done: 5, total: Number.NaN }), 0)
+})
+
+test('stateLabel words every state on its own', () => {
+  assert.equal(stateLabel('cancelled'), 'Stopped')
+  assert.equal(stateLabel('a-state-the-server-never-sends'), 'Unknown')
+})
+
+test('expiryLabel rounds the way a reader expects at its edges', () => {
+  const now = 1_000_000
+  assert.equal(expiryLabel(now, now), 'expired', 'no time left is expired, not "0 minutes"')
+  assert.equal(expiryLabel(now + 23.5 * 3600, now), 'expires in 23 hours', 'hours round down')
+  assert.equal(expiryLabel(now + 70, now), 'expires in 1 minute', 'minutes round to nearest')
+  assert.equal(expiryLabel(now + 20, now), 'expires in 1 minute', 'never "0 minutes"')
+})

@@ -55,3 +55,12 @@ test('an element referencing no atoms never lights up', () => {
 test('a null target set highlights nothing', () => {
   assert.equal(shouldHighlight('bond-10 atom-7 atom-11', null), false)
 })
+
+test('when a segment has both, highlight_atoms wins over atom_indices', () => {
+  // A part can own atoms and still point at a narrower set to light; preferring
+  // the owned set would light the whole ring for a locant inside it.
+  const both = {
+    segments: [{ label: 'x', atom_indices: [0, 1, 2, 3], highlight_atoms: [1, 2], children: [] }],
+  }
+  assert.deepEqual([...highlightTargets(both, '0')].sort((a, b) => a - b), [1, 2])
+})

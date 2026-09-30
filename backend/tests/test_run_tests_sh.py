@@ -84,6 +84,24 @@ def test_a_skip_only_run_is_not_a_hang(tmp_path, extra):
     assert run(tmp_path, SKIPPED, extra) == 0
 
 
+ERRORING = "import no_such_module_for_the_probe\n\n\ndef test_e():\n    pass\n"
+# Dies at collection without ever printing a summary.
+NO_SUMMARY = "import os\nos._exit(0)\n"
+
+
+@FORMS
+def test_a_run_that_only_errors_exits_1(tmp_path, extra):
+    """"1 error in 0.02s" is a red run with no "failed" in it; a check that
+    only looks for "failed" reports a collection error as green.
+    """
+    assert run(tmp_path, ERRORING, extra) == 1
+
+
+def test_a_run_with_no_summary_exits_2(tmp_path):
+    """A pytest that dies without a summary is a hang or a crash, never a pass."""
+    assert run(tmp_path, NO_SUMMARY, ["-q"]) == 2
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="bash script")
 def test_the_script_is_executable():
     assert SCRIPT.is_file() and SCRIPT.stat().st_mode & 0o111

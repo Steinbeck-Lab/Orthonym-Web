@@ -65,3 +65,14 @@ test('a demoted row\'s lamp does not claim the general engine built it', () => {
   const genuine = { status: 'best_effort', roundtrip_smiles: 'CCO', roundtrip_match: true }
   assert.match(lampTitleFor('best_effort', genuine), /general engine/)
 })
+
+test('the tier words are the literal strings the interface prints', () => {
+  // Read from the code under test, a changed label would still equal itself.
+  assert.equal(STATE_LABEL.pin, 'Preferred IUPAC Name (PIN)')
+  assert.equal(STATE_LABEL.abstain, 'Could not confidently name this')
+  assert.equal(STATE_LABEL.error, null, 'an error row prints the API message, not a label')
+  assert.equal(stateLabelFor({ status: 'error' }), null)
+  assert.equal(STATE_SHORT.fallback, 'FALLBACK')
+  assert.equal(STATE_SHORT.abstain, 'NO NAME')
+  assert.equal(STATE_SHORT.pin, 'PIN')
+})

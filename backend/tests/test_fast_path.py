@@ -73,6 +73,8 @@ def test_an_oversized_smiles_on_the_fast_path_never_reaches_rdkit(
     assert response.status_code == 200, response.text
     results = response.json()["results"]
     assert [r["status"] for r in results] == ["pin", "error", "pin"]
+    # In submission order: the client pairs rows to inputs by position.
+    assert [r["smiles"] for r in results] == ["CCO", oversized, "CCC"]
     assert results[1]["error"] == "SMILES string exceeds 2000 characters"
     # The response still echoes the caller's original text for the
     # rejected row, same convention translate_one itself uses for an
@@ -95,7 +97,9 @@ def test_translate_above_the_fast_limit_returns_a_job_envelope(
     assert body["molecule_count"] == 2
 
 
-def test_translate_returns_empty_results_for_an_empty_list(redis_client):
+def test_translate_returns_empty_results_for_an_empty_list(
+    redis_client, no_worker_opsin
+):
     # Round 1 review, Important: this used to 400. frontend/src/lib/api.js
     # throws on a non-2xx response and nobody decided this should change --
     # restored to the original 200-with-empty-results behaviour. An empty
@@ -105,7 +109,11 @@ def test_translate_returns_empty_results_for_an_empty_list(redis_client):
     assert response.json() == {"results": []}
 
 
-def test_translate_returns_empty_results_for_an_all_blank_list(redis_client):
+def test_translate_returns_empty_results_for_an_all_blank_list(
+    redis_client, no_worker_opsin
+):
+    # With no live JVM: a blank submission names nothing, so it must not be
+    # refused for lacking one.
     response = client.post("/api/translate", json={"smiles": ["   ", ""]})
     assert response.status_code == 200
     assert response.json() == {"results": []}
@@ -353,6 +361,28 @@ def test_translate_returns_a_job_envelope_on_timeout(redis_client, monkeypatch):
     assert status["status"] == "done"
 
 
+def test_the_timeout_fallback_job_is_charged_to_the_hourly_job_cap(
+    redis_client, monkeypatch
+):
+    """The timeout branch turns a fast request into a job, so it spends the
+    caller's job quota like any other job. Skipping check_job_allowed there
+    would let a caller run unlimited jobs by making every request time out.
+    """
+    from app import main as main_module
+
+    monkeypatch.setattr(
+        main_module.translate_fast,
+        "apply_async",
+        lambda *a, **k: _FakeTimedOutResult(),
+    )
+    response = client.post("/api/translate", json={"smiles": ["CCO"]})
+    assert response.status_code == 200
+    hour_keys = list(
+        redis_client.scan_iter(match="orthonym:ip:testclient:hour:*")
+    )
+    assert hour_keys, "the fallback job never touched the hourly counter"
+
+
 def test_iupac_to_smiles_returns_504_on_timeout(redis_client, monkeypatch):
     """/api/iupac-to-smiles has no job store behind it, so a JobEnvelope
     here would be a lie -- a deliberate departure from a literal "return a
@@ -519,6 +549,7 @@ def test_one_bad_molecule_does_not_lose_the_whole_fast_request(monkeypatch):
     rows = tasks.translate_fast.run(prepared, True)
 
     assert len(rows) == 3, "a single raising molecule lost the whole request"
+    assert [r["smiles"] for r in rows] == ["CCO", "CCC", "CCCC"], "rows left submission order"
     assert rows[0]["name"], "the molecules that named fine must still be returned"
     assert rows[1]["status"] == "error"
     assert "cannot classify" in (rows[1]["error"] or "")

@@ -47,3 +47,15 @@ def test_unknown_profile_fails_loudly(monkeypatch):
     with pytest.raises(ValueError, match="enormous"):
         get_settings()
     get_settings.cache_clear()
+
+
+def test_no_profile_means_code_defaults(monkeypatch, tmp_path):
+    # An unset DEPLOYMENT_PROFILE must not quietly select a profile: small.yml
+    # would halve the batch limit for every deployment that never asked for it.
+    # chdir so no local .env can move the answer.
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("DEPLOYMENT_PROFILE", raising=False)
+    monkeypatch.delenv("MAX_BATCH_SIZE", raising=False)
+    get_settings.cache_clear()
+    assert get_settings().MAX_BATCH_SIZE == 10000
+    get_settings.cache_clear()

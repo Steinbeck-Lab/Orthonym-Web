@@ -42,7 +42,11 @@ def test_bump_job_done_tallies_tiers_separately_from_failed(redis_client, job_id
     # counted, and counted somewhere other than `failed`.
     redis_store.create_job(job_id, total=6, fmt="smiles_list", client_ip="::1")
     redis_store.bump_job_done(
-        job_id, index=0, done=3, failed=0, counts={"pin": 2, "abstain": 1}
+        job_id,
+        index=0,
+        done=3,
+        failed=0,
+        counts={"pin": 2, "abstain": 1, "fallback": 0},
     )
     redis_store.bump_job_done(
         job_id, index=1, done=3, failed=1, counts={"abstain": 2, "error": 1}
@@ -55,7 +59,8 @@ def test_bump_job_done_tallies_tiers_separately_from_failed(redis_client, job_id
     # The whole point: three abstains did NOT become three failures.
     assert meta["failed"] == "1"
     # A tier with no rows is absent, not 0 -- "none yet" must not read as
-    # "counted, none found".
+    # "counted, none found". The zero is handed in on purpose: a writer that
+    # stored it would make this field appear.
     assert "fallback" not in counts
 
 
@@ -96,8 +101,24 @@ def test_assemble_rows_orders_chunks_and_cleans_them_up(redis_client, job_id):
     assert redis_client.exists(redis_store.job_chunk_key(job_id, 1)) == 0
 
 
+def test_assembling_twice_does_not_duplicate_rows(redis_client, job_id):
+    # A redelivered close runs assemble_rows again on a job that already has
+    # rows; appending to the old list would double every row.
+    redis_store.create_job(job_id, total=2, fmt="smiles_list", client_ip="::1")
+    redis_store.write_chunk(job_id, 0, [{"index": 0}, {"index": 1}])
+    redis_store.assemble_rows(job_id, n_chunks=1)
+    redis_store.write_chunk(job_id, 0, [{"index": 0}, {"index": 1}])
+    redis_store.assemble_rows(job_id, n_chunks=1)
+
+    rows = redis_store.read_rows(job_id, offset=0, limit=10)
+    assert [r["index"] for r in rows] == [0, 1]
+
+
 def test_assembled_rows_and_meta_both_carry_a_ttl(redis_client, job_id):
     redis_store.create_job(job_id, total=1, fmt="smiles_list", client_ip="::1")
+    # Checked before assembling: assemble_rows also arms the meta key, so a
+    # create_job that forgot its own expiry would otherwise be hidden by it.
+    assert redis_client.ttl(redis_store.job_meta_key(job_id)) > 0
     redis_store.write_chunk(job_id, 0, [{"index": 0}])
     redis_store.assemble_rows(job_id, n_chunks=1)
 
@@ -105,6 +126,28 @@ def test_assembled_rows_and_meta_both_carry_a_ttl(redis_client, job_id):
     # no-database rule depends on results being transient.
     assert redis_client.ttl(redis_store.job_rows_key(job_id)) > 0
     assert redis_client.ttl(redis_store.job_meta_key(job_id)) > 0
+
+
+def test_assemble_rows_retags_a_meta_key_that_lost_its_ttl(redis_client, job_id):
+    # The other half of the pair above: create_job's expiry would satisfy a
+    # bare "has a TTL" check, so strip it first and let assemble_rows be the
+    # only thing that can put it back.
+    redis_store.create_job(job_id, total=1, fmt="smiles_list", client_ip="::1")
+    redis_store.write_chunk(job_id, 0, [{"index": 0}])
+    key = redis_store.job_meta_key(job_id)
+    redis_client.persist(key)
+    assert redis_client.ttl(key) == -1
+
+    redis_store.assemble_rows(job_id, n_chunks=1)
+
+    assert redis_client.ttl(key) > 0, "assemble_rows left the meta key untagged"
+
+
+def test_write_chunk_carries_a_ttl(redis_client, job_id):
+    # A chunk of a job that never closes is otherwise never deleted, and
+    # nothing else would ever expire it.
+    redis_store.write_chunk(job_id, 0, [{"index": 0}])
+    assert redis_client.ttl(redis_store.job_chunk_key(job_id, 0)) > 0
 
 
 def test_read_rows_paginates(redis_client, job_id):
@@ -210,6 +253,29 @@ def test_begin_chunk_admits_a_non_terminal_job_and_marks_it_running(
     assert redis_store.read_job_meta(job_id)["status"] == "running"
 
 
+def test_begin_chunk_retags_a_meta_key_that_lost_its_ttl(redis_client, job_id):
+    redis_store.create_job(job_id, total=1, fmt="smiles_list", client_ip="::1")
+    key = redis_store.job_meta_key(job_id)
+    redis_client.persist(key)
+    assert redis_client.ttl(key) == -1
+
+    assert redis_store.begin_chunk(job_id) is True
+
+    assert redis_client.ttl(key) > 0, "begin_chunk left the key untagged"
+
+
+def test_begin_chunk_does_not_extend_a_live_ttl(redis_client, job_id):
+    # Same NX rule as the progress writes: re-arming the full window on every
+    # chunk would push the real expiry past the advertised expires_at.
+    redis_store.create_job(job_id, total=1, fmt="smiles_list", client_ip="::1")
+    key = redis_store.job_meta_key(job_id)
+    redis_client.expire(key, 50)
+
+    redis_store.begin_chunk(job_id)
+
+    assert 0 < redis_client.ttl(key) <= 50
+
+
 def test_bump_job_done_is_idempotent_per_chunk(redis_client, job_id):
     # I1: a redelivered chunk (task_acks_late=True makes this real) must
     # not double-count molecules the first delivery already counted.
@@ -288,11 +354,17 @@ def test_record_worker_opsin_status_prunes_stale_entries_on_write(
         "orthonym:workers:opsin", "999003", f"ok:{int(time.time()) - 10}"
     )
     try:
+        # A live sibling written by another worker must survive this write;
+        # only aged-out entries go.
+        redis_client.hset("orthonym:workers:opsin", "999006", f"ok:{int(time.time())}")
         redis_store.record_worker_opsin_status(999004, ok=True)
         assert redis_client.hget("orthonym:workers:opsin", "999003") is None
         assert redis_client.hget("orthonym:workers:opsin", "999004") is not None
+        assert redis_client.hget("orthonym:workers:opsin", "999006") is not None
     finally:
-        redis_client.hdel("orthonym:workers:opsin", "999003", "999004")
+        redis_client.hdel(
+            "orthonym:workers:opsin", "999003", "999004", "999006"
+        )
 
 
 def test_any_worker_has_opsin_ignores_an_aged_out_entry(
@@ -312,6 +384,20 @@ def test_any_worker_has_opsin_ignores_an_aged_out_entry(
         assert redis_store.any_worker_has_opsin() is False
     finally:
         redis_client.hdel("orthonym:workers:opsin", "999005")
+
+
+def test_a_malformed_worker_entry_is_not_health_and_is_pruned(redis_client):
+    # A value that is not "<status>:<unix ts>" must never count as a healthy
+    # worker, must not make the health check raise, and must not sit in the
+    # hash for good.
+    redis_client.delete("orthonym:workers:opsin")
+    redis_client.hset("orthonym:workers:opsin", "999007", "garbage")
+    try:
+        assert redis_store.any_worker_has_opsin() is False
+        redis_store.record_worker_opsin_status(999008, ok=True)
+        assert redis_client.hget("orthonym:workers:opsin", "999007") is None
+    finally:
+        redis_client.hdel("orthonym:workers:opsin", "999007", "999008")
 
 
 def test_closing_a_job_does_not_push_its_expiry_past_what_it_promised(redis_client):

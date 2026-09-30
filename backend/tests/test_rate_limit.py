@@ -54,8 +54,18 @@ def test_client_ip_ignores_forwarded_header_by_default(monkeypatch):
     # X-Forwarded-For is attacker-controlled. Trusting it unconditionally
     # makes every per-IP cap bypassable with one header.
     monkeypatch.setattr(get_settings(), "TRUST_PROXY_HEADERS", False)
-    request = _request({"x-forwarded-for": "1.1.1.1"}, host="10.0.0.1")
+    # X-Real-IP is just as forgeable when no proxy is known to set it.
+    request = _request(
+        {"x-forwarded-for": "1.1.1.1", "x-real-ip": "9.9.9.9"}, host="10.0.0.1"
+    )
     assert ratelimit.client_ip(request) == "10.0.0.1"
+
+
+def test_client_ip_without_a_peer_is_unknown():
+    # No TCP peer and no trusted header: one shared bucket, never an empty
+    # key that could collide with something else.
+    request = Request({"type": "http", "headers": [], "client": None})
+    assert ratelimit.client_ip(request) == "unknown"
 
 
 def test_client_ip_prefers_x_real_ip_when_trusted(monkeypatch):
@@ -219,13 +229,15 @@ def test_releasing_a_job_frees_the_slot(monkeypatch):
     _admit(IP, "job-b")  # must not raise
 
 
+@pytest.mark.parametrize("how", ["done", "failed", "no_meta"])
 def test_a_finished_jobs_meta_self_heals_the_slot_without_an_explicit_release(
-    redis_client, monkeypatch
+    redis_client, monkeypatch, how
 ):
     # The leak classes an explicit release cannot reach: translate_job_inline
     # has no errback, _close_job's meta-missing branch has no ip to release
     # from, and a hard-time-limit SIGKILL runs neither. Self-healing at the
-    # next admission is the safety net for exactly these.
+    # next admission is the safety net for exactly these. Each way a member
+    # can be dead gets its own case: finished, failed, and meta aged out.
     from app import redis_store
 
     monkeypatch.setattr(
@@ -233,7 +245,10 @@ def test_a_finished_jobs_meta_self_heals_the_slot_without_an_explicit_release(
     )
     redis_store.create_job("stale-job", total=1, fmt="smiles_list", client_ip=IP)
     redis_client.sadd(f"orthonym:ip:{IP}:jobs", "stale-job")
-    redis_store.set_job_status("stale-job", "done")
+    if how == "no_meta":
+        redis_client.delete(redis_store.job_meta_key("stale-job"))
+    else:
+        redis_store.set_job_status("stale-job", how)
 
     # Without self-healing this would 429: the set already has one member
     # and the cap is 1.
@@ -256,6 +271,19 @@ def test_hourly_job_cap(monkeypatch):
         ratelimit.check_job_allowed(IP)
     assert excinfo.value.status_code == 429
     assert "hour" in excinfo.value.detail.lower()
+
+
+def test_the_admission_gate_also_refuses_on_the_concurrent_cap(monkeypatch):
+    # check_job_allowed is the EARLY gate, run before any parsing. It must
+    # refuse a caller already at the concurrent cap itself, not leave that to
+    # the registration step that only runs after the expensive work.
+    monkeypatch.setattr(get_settings(), "RATE_LIMIT_MAX_CONCURRENT_JOBS", 1)
+    monkeypatch.setattr(get_settings(), "RATE_LIMIT_JOBS_PER_HOUR", 100)
+    _admit(IP, "job-a")
+    with pytest.raises(HTTPException) as excinfo:
+        ratelimit.check_job_allowed(IP)
+    assert excinfo.value.status_code == 429
+    assert "already have" in excinfo.value.detail
 
 
 def test_translate_envelope_path_enforces_the_hourly_job_cap(
@@ -388,6 +416,9 @@ def test_counter_keys_carry_a_ttl(redis_client, monkeypatch):
     assert keys, "hourly counter was never written"
     # A counter without a TTL would ban an IP forever.
     assert all(redis_client.ttl(k) > 0 for k in keys)
+    # ...and one that lasts the window: a counter that expires after a second
+    # is a cap that resets almost at once.
+    assert all(redis_client.ttl(k) >= 3600 - 5 for k in keys)
 
 
 def test_the_jobs_set_ttl_is_armed_once_not_refreshed_on_every_admission(
@@ -578,6 +609,10 @@ def test_results_csv_is_not_charged_against_the_naming_budget(
         assert c.get(f"/api/jobs/{job_id}/results.csv").status_code == 200, (
             "results.csv is still charged against the 60/minute naming budget"
         )
+    # The downloads above must not have used up the naming budget of 1.
+    assert (
+        c.post("/api/parse-preview", json={"text": "CCO\n"}).status_code == 200
+    ), "results.csv downloads were counted on the naming counter"
 
 
 def test_results_csv_has_its_own_budget_not_the_naming_one(redis_client, monkeypatch, job_id):
@@ -598,6 +633,10 @@ def test_results_csv_has_its_own_budget_not_the_naming_one(redis_client, monkeyp
     from app.main import app
 
     monkeypatch.setattr(get_settings(), "RATE_LIMIT_DOWNLOAD_PER_MINUTE", 1)
+    # Tight enough that two downloads counted on either of these would trip
+    # it; the next request on each must still get through.
+    monkeypatch.setattr(get_settings(), "RATE_LIMIT_POLL_PER_MINUTE", 2)
+    monkeypatch.setattr(get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 1)
     redis_store.create_job(job_id, total=1, fmt="smiles_list", client_ip="::1")
     redis_store.write_chunk(job_id, 0, [{"index": 0, "input": "CCO", "status": "pin"}])
     redis_store.assemble_rows(job_id, n_chunks=1)
@@ -609,10 +648,13 @@ def test_results_csv_has_its_own_budget_not_the_naming_one(redis_client, monkeyp
         "results.csv is not bound by its own download budget"
     )
 
-    # The naming budget is untouched: separate keys, separate counters.
-    assert c.get(f"/api/jobs/{job_id}").status_code != 429, (
+    # The other budgets are untouched: separate keys, separate counters.
+    assert c.get(f"/api/jobs/{job_id}").status_code == 200, (
         "downloading results burned the caller's polling budget too"
     )
+    assert (
+        c.post("/api/parse-preview", json={"text": "CCO\n"}).status_code == 200
+    ), "downloading results burned the caller's naming budget too"
 
 
 @pytest.mark.parametrize(
@@ -643,7 +685,9 @@ def test_a_counter_that_lost_its_expiry_gets_it_back(redis_client, check, key_bu
 
     ttl = redis_client.ttl(key)
     assert ttl > 0, f"counter still has no expiry (ttl={ttl}); this IP is locked out forever"
-    assert ttl <= ratelimit._MINUTE
+    # Literal window, not the module constant: a repaired expiry of one second
+    # would pass a bound taken from the code and reset the cap at once.
+    assert 55 <= ttl <= 60
 
 
 def test_the_hourly_job_counter_that_lost_its_expiry_gets_it_back(redis_client):
@@ -661,7 +705,7 @@ def test_the_hourly_job_counter_that_lost_its_expiry_gets_it_back(redis_client):
 
     ttl = redis_client.ttl(key)
     assert ttl > 0, f"hourly counter still has no expiry (ttl={ttl})"
-    assert ttl <= ratelimit._HOUR
+    assert 3595 <= ttl <= 3600
 
 
 def test_repairing_the_expiry_does_not_slide_the_window(redis_client):
@@ -681,3 +725,43 @@ def test_repairing_the_expiry_does_not_slide_the_window(redis_client):
     ratelimit.check_fast_allowed(IP)
 
     assert redis_client.ttl(key) <= 5, "the window slid forward; it must not"
+
+
+def test_repairing_the_hourly_expiry_does_not_slide_the_window(redis_client):
+    # The hourly counter has its own EXPIRE call, separate from the minute
+    # ones; a plain EXPIRE there would restart the hour on every request.
+    ratelimit.check_job_allowed(IP)
+    key = ratelimit._hour_key(IP)
+    assert redis_client.ttl(key) > 5
+
+    redis_client.expire(key, 5)  # pretend the hour is nearly over
+    ratelimit.check_job_allowed(IP)
+
+    assert redis_client.ttl(key) <= 5, "the hourly window slid forward; it must not"
+
+
+def test_each_minute_budget_counts_on_its_own_key(monkeypatch):
+    """With every limit at 1, one call to each of the four checks must pass and
+    a second call to each must be refused. If two budgets shared a counter,
+    the later one's first call would already be over its limit.
+    """
+    settings = get_settings()
+    for name in (
+        "RATE_LIMIT_FAST_PER_MINUTE",
+        "RATE_LIMIT_DEPICT_PER_MINUTE",
+        "RATE_LIMIT_POLL_PER_MINUTE",
+        "RATE_LIMIT_DOWNLOAD_PER_MINUTE",
+    ):
+        monkeypatch.setattr(settings, name, 1)
+    checks = [
+        ratelimit.check_fast_allowed,
+        ratelimit.check_depict_allowed,
+        ratelimit.check_poll_allowed,
+        ratelimit.check_download_allowed,
+    ]
+    for check in checks:
+        check(IP)
+    for check in checks:
+        with pytest.raises(HTTPException) as excinfo:
+            check(IP)
+        assert excinfo.value.status_code == 429

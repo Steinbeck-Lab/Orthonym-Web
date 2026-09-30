@@ -127,3 +127,13 @@ test('the issue tab opens a blank new-issue form, and nothing when there is no r
   assert.equal(newIssueUrl(null), null)
   assert.equal(newIssueUrl(resolveGithubUrl('none')), null)
 })
+
+test('an abstain report says so, and prints no message line when there is none', () => {
+  // The outcome is the first thing a maintainer reads; and a null error must
+  // not print "- Message: null".
+  const body = query(reportIssueUrl(REPO, {
+    smiles: 'CCO', status: 'abstain', limit_code: 'UNNAMEABLE', error: null,
+  }, 'Home')).get('body')
+  assert.ok(body.includes('- Result: no name (abstain)'))
+  assert.ok(!body.includes('Message'), 'a null error must not print a line')
+})

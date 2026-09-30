@@ -166,3 +166,28 @@ test('outcomeMessage returns null before anything is counted', () => {
   assert.equal(outcomeMessage(undefined, { finished: false }), null)
   assert.equal(outcomeMessage({}, { finished: true }), null)
 })
+
+test('tierTally gives an unknown tier the neutral class and its raw key, in a stable order', () => {
+  const rows = tierTally({ zeta: 1, alpha: 2 })
+  assert.deepEqual(
+    rows.map((r) => [r.status, r.className, r.label, r.count]),
+    [
+      ['alpha', 'abstain', 'alpha', 2],
+      ['zeta', 'abstain', 'zeta', 1],
+    ],
+  )
+})
+
+test('outcomeMessage keeps "all" and the singular in a running sentence', () => {
+  // Lower-casing only matters for a sentence that opens with a word; and one
+  // named molecule out of several is singular.
+  assert.equal(
+    outcomeMessage({ pin: 3 }, { finished: false }),
+    'So far, all 3 molecules were named: 3 verified Preferred IUPAC Names.',
+  )
+  assert.equal(
+    outcomeMessage({ pin: 1, abstain: 2 }, { finished: true }),
+    '1 of 3 molecules was named: 1 verified Preferred IUPAC Name. The engine declined to name 2 rather than guess.',
+  )
+  assert.ok(outcomeMessage({ pin: 1 }).startsWith('So far, '), 'unfinished is the default')
+})
