@@ -28,7 +28,7 @@ import { backendAnswered } from '../lib/transport'
  *   ibuprofen         pin       round-trips clean
  *   caffeine          pin       round-trips clean
  *   galantamine       fallback  names it, round-trips, NOT a verified PIN
- *   uranium trioxide  abstain   the engine declines to name it at all
+ *   cisplatin         abstain   the engine declines to name it at all
  *
  * It rotates on its own only while it is on screen, not hovered or focused,
  * and not paused -- and a molecule the reader picks stays picked. Only what
@@ -53,7 +53,7 @@ const MOLECULES = [
     smiles: 'CN1CC[C@@]23C=C[C@@H](C[C@@H]2OC4=C(C=CC(=C34)C1)OC)O',
     expect: 'fallback',
   },
-  { key: 'uranium-trioxide', label: 'Uranium trioxide', smiles: 'O=[U](=O)=O', expect: 'abstain' },
+  { key: 'cisplatin', label: 'Cisplatin', smiles: 'N.N.Cl[Pt]Cl', expect: 'abstain' },
 ]
 
 const DWELL_MS = 11000
@@ -394,8 +394,8 @@ export default function RoundTripLoop() {
       ? { strokeDasharray: `${7 / geo.total} ${5 / geo.total}`, strokeDashoffset: 0 }
       : undefined
 
-  const uraniumRow = results['uranium-trioxide']?.row
-  const refusalHolds = !uraniumRow || uraniumRow.status === 'abstain'
+  const refusalRow = results.cisplatin?.row
+  const refusalHolds = !refusalRow || refusalRow.status === 'abstain'
 
   let summary = ''
   if (announce && phase === 'ready' && result) {
