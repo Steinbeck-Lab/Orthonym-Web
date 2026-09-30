@@ -7,6 +7,7 @@ test_celery_jvm_fork.py -- that is the one thing eager mode cannot test.
 """
 
 import pytest
+from fastapi import Request
 from fastapi.testclient import TestClient
 
 from app import jobs_api, redis_store, tasks
@@ -78,16 +79,26 @@ def test_submit_then_poll_then_read_results(redis_client):
     assert "depiction_svg" not in results["rows"][0]
 
 
-def test_a_job_echoes_the_switches_it_was_named_with(redis_client):
+@pytest.mark.parametrize(
+    "best_effort, verify", [(False, False), (False, True), (True, False)]
+)
+def test_a_job_echoes_the_switches_it_was_named_with(
+    redis_client, best_effort, verify
+):
     """An abstain under best-effort OFF is not one the default settings
     reproduce, so "Report SMILES on GitHub" must be able to say which
-    settings produced it -- and a batch row does not carry them."""
+    settings produced it -- and a batch row does not carry them.
+
+    The mixed pairs are the point: with both switches equal, a job that
+    stored one switch under the other's name echoes the right answer anyway.
+    """
     response = client.post(
-        "/api/jobs", json={"text": "CCO\n", "best_effort": False, "verify": False}
+        "/api/jobs",
+        json={"text": "CCO\n", "best_effort": best_effort, "verify": verify},
     )
     assert response.status_code == 200, response.text
     status = client.get(f"/api/jobs/{response.json()['job_id']}").json()
-    assert (status["best_effort"], status["verify"]) == (False, False)
+    assert (status["best_effort"], status["verify"]) == (best_effort, verify)
 
 
 def test_results_are_paginated(redis_client):
@@ -169,7 +180,18 @@ def test_results_sort_descending_reverses_only_the_sort_key(redis_client):
 def test_the_default_results_order_is_untouched(redis_client):
     # The fast path. `sort=index&order=asc` must stay a single slice of the
     # stored list -- no full decode -- so the common case cannot regress.
-    job_id = _submit("\n".join(["CCO", "CCC", "CCCC", "c1ccccc1"]))["job_id"]
+    # Mixed tiers, so a default that sorted by tier would come back in a
+    # different order (1, 3, 0, 2) instead of looking the same by accident.
+    job_id = _submit("\n".join(["CCO"] * 4))["job_id"]
+    _rows_with_tiers(
+        job_id,
+        [
+            {"index": 0, "input": "a", "status": "abstain"},
+            {"index": 1, "input": "b", "status": "pin", "name": "b"},
+            {"index": 2, "input": "c", "status": "error"},
+            {"index": 3, "input": "d", "status": "pin", "name": "d"},
+        ],
+    )
     plain = client.get(f"/api/jobs/{job_id}/results", params={"limit": 10}).json()
     explicit = client.get(
         f"/api/jobs/{job_id}/results",
@@ -658,7 +680,7 @@ def test_depict_is_cacheable():
     # The results table calls this once per row, so a 1,000-row table is
     # 1,000 renders without a cache header.
     response = client.get("/api/depict", params={"smiles": "CCO"})
-    assert "max-age" in response.headers.get("cache-control", "")
+    assert "max-age=86400" in response.headers.get("cache-control", "")
 
 
 def test_a_json_body_without_text_is_400():
@@ -687,23 +709,23 @@ def test_unparseable_molecule_becomes_an_error_row_not_a_failed_job(redis_client
     assert rows[1]["error"]
 
 
-def test_a_job_missing_a_chunk_is_failed_not_done(redis_client, monkeypatch):
+def test_a_job_missing_a_chunk_is_failed_not_done(redis_client, job_id):
     # spec section 10 again, at the job level: an incomplete result list must
     # never be presented as a completed job.
-    from app import redis_store
+    from app.tasks import finalize_job
 
-    job_id = _submit("CCO\nc1ccccc1\n")["job_id"]
+    redis_store.create_job(job_id, total=2, fmt="smiles_list", client_ip="::1")
     # A chunk key that is genuinely ABSENT, not present-and-empty: the
     # failure being modelled is a key that expired or was evicted between
     # the chunk task and assembly, and assemble_rows distinguishes the two.
-    client_r = redis_store.get_redis()
-    client_r.delete(redis_store.job_rows_key(job_id))
-    client_r.delete(redis_store.job_chunk_key(job_id, 0))
-    assert client_r.exists(redis_store.job_chunk_key(job_id, 0)) == 0
-    from app.tasks import finalize_job
+    assert redis_client.exists(redis_store.job_chunk_key(job_id, 0)) == 0
 
     finalize_job(None, job_id, 1)
 
+    # The close is answerable for the stored status. The status endpoint
+    # re-derives "failed" from the row count at read time, so the GET alone
+    # would pass even if the close had written "done".
+    assert redis_store.read_job_meta(job_id)["status"] == "failed"
     assert client.get(f"/api/jobs/{job_id}").json()["status"] == "failed"
 
 
@@ -743,11 +765,22 @@ def test_oversize_input_is_413(monkeypatch):
 def test_delete_removes_the_job(redis_client):
     envelope = _submit("CCO\n")
     job_id = envelope["job_id"]
+    # Assembly already removed the chunk key; put one back so the delete has
+    # a chunk key to miss.
+    redis_client.set(redis_store.job_chunk_key(job_id, 0), "[]")
     r = client.delete(
         f"/api/jobs/{job_id}", params={"owner_token": envelope["owner_token"]}
     )
     assert r.status_code == 200, r.text
     assert client.get(f"/api/jobs/{job_id}").status_code in (404, 410)
+    # A 410 is also what a job with only its rows left answers, so the status
+    # code cannot tell "deleted" from "half deleted": look at the keys.
+    for key in (
+        redis_store.job_meta_key(job_id),
+        redis_store.job_rows_key(job_id),
+        redis_store.job_chunk_key(job_id, 0),
+    ):
+        assert not redis_client.exists(key), f"delete left {key} behind"
 
 
 def test_delete_without_the_owner_token_is_refused(redis_client):
@@ -774,9 +807,19 @@ def test_delete_without_the_owner_token_is_refused(redis_client):
 
 
 def test_depict_returns_an_svg_for_one_molecule():
-    body = client.get("/api/depict", params={"smiles": "CCO"}).json()
-    assert body["depiction_svg"]
-    assert body["error"] is None
+    import base64
+
+    prefix = "data:image/svg+xml;base64,"
+    pictures = []
+    for smiles in ("CCO", "c1ccccc1"):
+        body = client.get("/api/depict", params={"smiles": smiles}).json()
+        assert body["error"] is None
+        assert body["depiction_svg"].startswith(prefix)
+        pictures.append(base64.b64decode(body["depiction_svg"][len(prefix):]).decode())
+    # A real drawing, and a drawing of THIS molecule: a constant string or one
+    # fixed picture would satisfy a bare truthiness check.
+    assert all("<svg" in svg for svg in pictures)
+    assert pictures[0] != pictures[1]
 
 
 def test_depict_reports_a_bad_smiles():
@@ -844,7 +887,9 @@ def test_the_fast_job_path_attaches_an_errback_like_the_batch_path_does(
     molecules = [
         ParsedMolecule(index=0, raw_input="CCO", input_id=None, smiles="CCO", error=None)
     ]
-    jobs_api.admit_and_dispatch("203.0.113.56", molecules, "smiles_list", True)
+    jobs_api.admit_and_dispatch(
+        "203.0.113.56", molecules, "smiles_list", True, False
+    )
 
     errback = captured.get("link_error")
     assert errback is not None, (
@@ -852,6 +897,13 @@ def test_the_fast_job_path_attaches_an_errback_like_the_batch_path_does(
         "translate_job_inline leaves the job 'running' and its slot held"
     )
     assert errback.task == "app.tasks.mark_job_failed"
+    # The errback must name THIS job, or it marks some other job failed and
+    # leaves this one at "running".
+    job_id, _prepared, best_effort, verify = captured["args"]
+    assert errback.args == (job_id,)
+    # And the task goes to the fast queue with both switches intact.
+    assert captured["queue"] == "fast"
+    assert (best_effort, verify) == (True, False)
 
 
 def test_an_uploaded_file_can_turn_best_effort_off(redis_client, monkeypatch):
@@ -886,13 +938,17 @@ def test_an_uploaded_file_can_turn_best_effort_off(redis_client, monkeypatch):
     r = c.post(
         "/api/jobs",
         files={"file": ("in.smi", b"CCO\nCCC\n", "chemical/x-daylight-smiles")},
-        data={"best_effort": "false"},
+        data={"best_effort": "false", "verify": "false"},
     )
 
     assert r.status_code == 200, r.text
     assert seen.get("best_effort") is False, (
         "an uploaded file cannot turn best-effort off; the file branch "
         "forces best_effort=True regardless of what the caller sent"
+    )
+    assert seen.get("verify") is False, (
+        "an uploaded file cannot turn the round trip off; the file branch "
+        "forces verify=True regardless of what the caller sent"
     )
 
 
@@ -921,6 +977,7 @@ def test_an_uploaded_file_still_defaults_to_best_effort(redis_client, monkeypatc
 
     assert r.status_code == 200, r.text
     assert seen.get("best_effort") is True, "the default changed for existing callers"
+    assert seen.get("verify") is True, "the default changed for existing callers"
 
 
 # Hardcoded, NOT parametrized over jobs_api._FORMULA_LEADERS. Deriving the
@@ -1007,25 +1064,44 @@ def test_an_uploaded_file_over_the_size_limit_is_rejected(redis_client, monkeypa
     assert r.status_code == 413, f"got {r.status_code}; the size cap did not bind"
 
 
-def test_the_declared_size_and_the_actual_size_are_both_checked():
-    """Both halves of _read_input's size guard exist, and the test above
-    exercises only the first.
+def _bare_request(body: bytes = b"") -> Request:
+    """A request with no Content-Length header, which TestClient cannot send."""
 
-    TestClient always sends a Content-Length, so the pre-read check fires and
-    the post-read one is never reached -- confirmed by mutation: deleting the
-    post-read check leaves that test passing. The post-read check exists for
-    the case Content-Length is absent (chunked transfer) or a lie, which
-    TestClient cannot produce, so this asserts the guard is present rather
-    than driving it. Honest coverage of a real gap beats a test that pretends
-    to close it.
+    async def receive():
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    return Request({"type": "http", "method": "POST", "headers": []}, receive)
+
+
+def test_a_body_over_the_limit_is_rejected_even_with_no_content_length(monkeypatch):
+    """The post-read size checks in _read_input.
+
+    TestClient always sends a Content-Length, so the pre-read check fires
+    first and the two checks after the read never run. A chunked upload, or a
+    client that lies about its length, reaches them: with no header, a file
+    part and a JSON body both have to be refused on their real size.
     """
-    import inspect
+    import asyncio
+    import io
+    import json
 
-    source = inspect.getsource(jobs_api._read_input)
-    assert source.count("max_file_size_bytes") >= 3, (
-        "one of _read_input's size checks is gone; a body with no "
-        "Content-Length, or a lying one, is now unbounded"
-    )
+    from fastapi import HTTPException, UploadFile
+
+    monkeypatch.setattr(get_settings(), "MAX_FILE_SIZE_MB", 1)
+    oversized = b"C" * 1_300_000
+
+    with pytest.raises(HTTPException) as file_err:
+        asyncio.run(
+            jobs_api._read_input(
+                _bare_request(), UploadFile(io.BytesIO(oversized), filename="big.smi")
+            )
+        )
+    assert file_err.value.status_code == 413
+
+    body = json.dumps({"text": oversized.decode()}).encode()
+    with pytest.raises(HTTPException) as text_err:
+        asyncio.run(jobs_api._read_input(_bare_request(body), None))
+    assert text_err.value.status_code == 413
 
 
 def test_an_oversized_json_body_is_rejected_on_translate(monkeypatch):
@@ -1127,6 +1203,9 @@ def test_cancelling_frees_the_concurrent_slot(redis_client, job_id):
 
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "cancelled"
+    # The response hard-codes the word; the stored status is what stops the
+    # job's remaining chunks.
+    assert redis_store.read_job_meta(jid)["status"] == "cancelled"
     assert not redis_client.sismember(redis_store.ip_jobs_key(ip), jid), (
         "the cancelled job still holds one of this IP's concurrent slots"
     )
@@ -1197,10 +1276,23 @@ def test_the_upload_parse_is_dispatched_to_a_worker(monkeypatch, redis_client):
         return real(*args, **kwargs)
 
     monkeypatch.setattr(tasks.parse_input, "apply_async", _spy)
+    in_process: list = []
+    real_run = tasks.parse_input.run
+
+    def _run_spy(*args, **kwargs):
+        in_process.append(True)
+        return real_run(*args, **kwargs)
+
+    monkeypatch.setattr(tasks.parse_input, "run", _run_spy)
 
     r = client.post("/api/jobs", json={"text": "CCO\nCCC\n"})
 
     assert r.status_code == 200, r.text
+    # Eager mode runs the worker's copy in this process, so exactly one call
+    # is the worker's; a second is the web process parsing it again.
+    assert len(in_process) == 1, (
+        "a worker answered, yet the upload was parsed again in the web process"
+    )
     assert dispatched.get("queue") == "batch", (
         "the upload was parsed in the web process, holding the GIL against "
         "every other request"
@@ -1318,3 +1410,157 @@ def test_a_live_job_can_still_change_status(redis_client):
     # ...and now it is terminal, so it stops moving.
     assert redis_store.set_job_status(jid, "running") is False
     assert redis_store.read_job_meta(jid)["status"] == "done"
+
+
+@pytest.mark.parametrize("terminal", ["done", "failed", "cancelled"])
+def test_a_terminal_job_neither_moves_nor_starts_another_chunk(redis_client, terminal):
+    """Every terminal state, not just the two the other tests reach.
+
+    A guard that forgot "failed" would let a late chunk or a late close move
+    a job that mark_job_failed had already ended back to "running" or "done".
+    """
+    jid = f"job-terminal-{terminal}"
+    redis_store.create_job(jid, total=1, fmt="smiles_list", client_ip="::1")
+    assert redis_store.set_job_status(jid, terminal) is True
+
+    assert redis_store.set_job_status(jid, "running") is False
+    assert redis_store.begin_chunk(jid) is False
+    assert redis_store.read_job_meta(jid)["status"] == terminal
+    redis_client.delete(redis_store.job_meta_key(jid))
+
+
+def test_a_job_that_is_still_running_cannot_be_deleted(redis_client, job_id):
+    """Deleting the meta under running chunks neither stops them nor keeps the
+    submitter under their concurrent cap, so the delete is refused."""
+    token = "owner-token-for-delete"
+    redis_store.create_job(
+        job_id, total=5, fmt="smiles_list", client_ip="::1", owner_token=token
+    )
+    redis_store.set_job_status(job_id, "running")
+
+    r = client.delete(f"/api/jobs/{job_id}", params={"owner_token": token})
+
+    assert r.status_code == 409, r.text
+    assert redis_store.read_job_meta(job_id) is not None
+
+
+def test_polling_a_finished_job_frees_the_concurrent_slot(redis_client):
+    """A submitter who polls to completion must not stay charged against their
+    concurrent-job cap for a job that is already over."""
+    job_id = _submit("CCO\n")["job_id"]
+    ip = redis_store.read_job_meta(job_id)["ip"]
+    redis_client.sadd(redis_store.ip_jobs_key(ip), job_id)
+
+    assert client.get(f"/api/jobs/{job_id}").json()["status"] == "done"
+
+    assert not redis_client.sismember(redis_store.ip_jobs_key(ip), job_id)
+
+
+@pytest.mark.parametrize("complete", [True, False])
+def test_closing_a_job_frees_its_concurrent_slot(redis_client, job_id, complete):
+    """A caller who submits and never polls is otherwise charged against the
+    cap until the job's TTL, whether the close ended done or failed."""
+    ip = "203.0.113.90"
+    redis_store.create_job(job_id, total=2, fmt="smiles_list", client_ip=ip)
+    redis_client.sadd(redis_store.ip_jobs_key(ip), job_id)
+    rows = [{"index": 0, "input": "CCO", "status": "pin"}]
+    if complete:
+        rows.append({"index": 1, "input": "CCC", "status": "pin"})
+    redis_store.write_chunk(job_id, 0, rows)
+
+    tasks._close_job(job_id, n_chunks=1)
+
+    expected = "done" if complete else "failed"
+    assert redis_store.read_job_meta(job_id)["status"] == expected
+    assert not redis_client.sismember(redis_store.ip_jobs_key(ip), job_id)
+
+
+def test_the_status_reports_rows_so_far_by_tier(redis_client):
+    """counts is the per-tier tally, kept apart from `failed`: a parse failure
+    is an error row, and an empty tally would hide both."""
+    job_id = _submit("CCO\nnot_a_smiles(((\n")["job_id"]
+
+    status = client.get(f"/api/jobs/{job_id}").json()
+
+    assert status["counts"] == {"pin": 1, "error": 1}
+
+
+def test_a_redelivered_chunk_is_counted_once(redis_client, job_id):
+    """bump_job_done is the guard for a chunk redelivered BEFORE the job
+    closes, where begin_chunk cannot help: the same chunk reporting twice must
+    not push `done` past what was named."""
+    redis_store.create_job(job_id, total=4, fmt="smiles_list", client_ip="::1")
+
+    redis_store.bump_job_done(job_id, index=0, done=2, failed=1, counts={"pin": 1})
+    redis_store.bump_job_done(job_id, index=0, done=2, failed=1, counts={"pin": 1})
+
+    meta = redis_store.read_job_meta(job_id)
+    assert (meta["done"], meta["failed"], meta["tier:pin"]) == ("2", "1", "1")
+
+    redis_store.bump_job_done(job_id, index=1, done=2, failed=0)
+    assert redis_store.read_job_meta(job_id)["done"] == "4"
+
+
+def test_a_batch_job_wires_an_errback_on_every_chunk_and_the_close(
+    redis_client, job_id, monkeypatch
+):
+    """The chord path's half of the errback contract. A chunk that raises
+    skips the chord body, so without mark_job_failed on the header tasks AND
+    on the body the job sits at "running" until its TTL."""
+    seen: dict = {}
+
+    def _fake_chord(header):
+        seen["header"] = list(header)
+
+        def _attach(body):
+            seen["body"] = body
+
+        return _attach
+
+    monkeypatch.setattr(tasks, "chord", _fake_chord)
+    prepared = [
+        {"index": i, "raw_input": s, "input_id": None, "smiles": s, "error": None}
+        for i, s in enumerate(["CCO", "CCC", "CCCC"])
+    ]
+
+    assert tasks.dispatch_batch(job_id, prepared, True, 2, False) == 2
+
+    assert len(seen["header"]) == 2
+    for signature in [*seen["header"], seen["body"]]:
+        errbacks = signature.options.get("link_error")
+        assert errbacks, f"{signature.task} has no errback"
+        assert [e["task"] for e in errbacks] == ["app.tasks.mark_job_failed"]
+        assert errbacks[0]["args"] == (job_id,)
+    # verify is carried to every chunk, not just defaulted there.
+    assert [s.args[4] for s in seen["header"]] == [False, False]
+
+
+def test_an_oversized_molecule_is_not_depicted():
+    """MAX_DEPICT_ATOMS bounds the per-call drawing cost the rate limit does
+    not: a chain well under the SMILES length cap is still refused."""
+    body = client.get("/api/depict", params={"smiles": "C" * 301}).json()
+    assert body["depiction_svg"] is None
+    assert "Too many atoms" in body["error"]
+
+
+def test_a_partial_meta_hash_is_gone_not_a_500(redis_client, job_id):
+    """A writer that HSETs one field into an evicted key recreates a hash
+    with only that field; reading `total` from it must answer 410."""
+    redis_store.create_job(job_id, total=1, fmt="smiles_list", client_ip="::1")
+    redis_client.hdel(redis_store.job_meta_key(job_id), "total")
+
+    assert client.get(f"/api/jobs/{job_id}").status_code == 410
+
+
+def test_iter_all_rows_pages_through_every_row(redis_client, job_id):
+    """CSV streaming reads in pages; stopping after the first would ship a
+    short file that looks complete."""
+    redis_store.create_job(job_id, total=5, fmt="smiles_list", client_ip="::1")
+    redis_store.write_chunk(
+        job_id, 0, [{"index": i, "input": "C", "status": "pin"} for i in range(5)]
+    )
+    redis_store.assemble_rows(job_id, n_chunks=1)
+
+    rows = list(redis_store.iter_all_rows(job_id, page=2))
+
+    assert [r["index"] for r in rows] == [0, 1, 2, 3, 4]
