@@ -345,20 +345,30 @@ def _stamp_tokens(h, parse_el, text: str) -> list[WrittenToken]:
     lowered = text.lower()
     cursor = 0
     written: list[WrittenToken] = []
+    valued = 0
+    first_unfound: Optional[str] = None
     for el in _tokens(h, parse_el):
         value = _value(h, el)
         if not value:
             continue
+        valued += 1
         start = lowered.find(value.lower(), cursor)
         if start < 0:
             logger.debug("opsin_trace: token %r not found in %r after %d", value, text, cursor)
+            if first_unfound is None:
+                first_unfound = value
             continue
         span = (start, start + len(value))
         _write_span(h, el, TOKEN_TAG, span)
         written.append(WrittenToken(len(written), _name(h, el), value, span))
         cursor = span[1]
-    if not written:
-        raise _Unplaceable(f"no token of {text!r} could be located in it")
+    if not written or len(written) < valued:
+        # Any token that cannot be located means the written order and OPSIN's
+        # parse order disagree (a reordered name): no partial trace.
+        raise _Unplaceable(
+            f"{valued - len(written)} of {valued} tokens of {text!r} could not be "
+            f"located in it (first: {first_unfound!r})"
+        )
     return written
 
 

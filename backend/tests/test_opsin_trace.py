@@ -130,3 +130,15 @@ def test_the_corpus_is_not_vacuously_refused():
     # change that refuses everything from passing it.
     traced = sum(isinstance(trace(n), Trace) for _, n in CURATED + FULL)
     assert traced >= 550
+
+
+def test_one_unlocatable_token_makes_the_trace_unplaced(monkeypatch):
+    # Independent of the part-key clause: "eth"/"an" are still found, only the
+    # suffix token cannot be located in the text, and that alone must refuse.
+    real = opsin_trace._value
+
+    def value(h, el):
+        return "zzz" if opsin_trace._name(h, el) == "suffix" else real(h, el)
+
+    monkeypatch.setattr(opsin_trace, "_value", value)
+    assert trace("ethanol") == TraceFailure("unplaced")
