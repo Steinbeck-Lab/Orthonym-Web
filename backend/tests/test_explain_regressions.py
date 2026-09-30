@@ -470,3 +470,82 @@ def test_a_linkers_own_number_is_not_a_position_the_bracketed_chain_hangs_on():
     (atom,) = leading["lights"]
     assert _owner_label(nodes, atom) == "ethyl" and "1" in t.atoms[atom].locants
     assert foreign_lights(t, nodes) == []
+
+
+# -- Task 9 (ChEMBL census): a leading locant before a chain of substituents ---------------
+def _leading(nodes, part):
+    (p,) = [n for n in nodes if n["kind"] == "substituent" and n["label"] == part]
+    return p, min((n for n in nodes if n["parent"] == p["id"] and n["kind"] == "locant"),
+                  key=lambda n: n["span"][0])
+
+
+# "cyclo" / "tert-" are part of the substituent's own name, so the number written before
+# them still leads a BRACKETED chain: it names the position on the chain member it hangs on
+@pytest.mark.parametrize("name,part,root,element", [
+    ("3-(4-cyclopropylmethoxybenzamido)benzoic acid", "cyclopropyl", "benzamido", "C"),
+    ("4-(2-cyclopropylmethylaminopyridin-4-yl)pyridine", "cyclopropyl", "pyridin-4-yl", "C"),
+])
+def test_a_locant_before_a_cyclo_substituent_in_a_bracket_names_the_position_it_hangs_on(
+        name, part, root, element):
+    t, nodes = _nodes(name)
+    p, leading = _leading(nodes, part)
+    (atom,) = leading["lights"]
+    assert atom not in p["owns"] and leading["label"] in t.atoms[atom].locants
+    assert t.atoms[atom].element == element and _owner_label(nodes, atom) == root
+    assert foreign_lights(t, nodes) == []
+    leading["lights"] = [next(a for a in p["owns"] if t.atoms[a].element == "C")]       # the ring's own carbon
+    assert foreign_lights(t, nodes) == [(leading["label"], leading["lights"])]
+
+
+# an element-symbol number ("N-ethylcarbamoyl") names the atom of the chain member it hangs on,
+# never the same-lettered atom of the first member nor the linker
+@pytest.mark.parametrize("name,part,owner", [
+    ("N-ethylcarbamoyl-2-methoxy-4-[(methylamino)methyl]-1-(methylsulfanyl)benzene", "ethyl", "carbamoyl"),
+    ("4-(N-diaminomethylidenecarbamimidoyl)piperazine", "amino", "carbamimidoyl"),
+])
+def test_an_element_symbol_locant_before_a_chain_names_that_atom_of_a_later_member(name, part, owner):
+    t, nodes = _nodes(name)
+    p, leading = _leading(nodes, part)
+    assert leading["label"] == "N"
+    (atom,) = leading["lights"]
+    assert t.atoms[atom].element == "N" and "N" in t.atoms[atom].locants
+    assert atom not in p["owns"] and _owner_label(nodes, atom) == owner
+    assert foreign_lights(t, nodes) == []
+    leading["lights"] = [next(a for a in p["owns"] if "N" in t.atoms[a].locants or t.atoms[a].element == "C")]
+    assert foreign_lights(t, nodes) == [(leading["label"], leading["lights"])]
+
+
+# a locant before a heteroatom token is a replacement locant only when a heteroatom sits there
+def test_a_locant_before_oxiranyl_is_the_position_the_chain_hangs_on_not_a_replacement_locant():
+    t, nodes = _nodes("3-oxiranylmethoxybenzoic acid")
+    p, leading = _leading(nodes, "oxiranyl")              # the label no longer swallows the "3-"
+    (atom,) = leading["lights"]
+    assert atom not in p["owns"] and _owner_label(nodes, atom).startswith("benz")
+    assert "3" in t.atoms[atom].locants and foreign_lights(t, nodes) == []
+    # a real replacement locant keeps being part of the name
+    t, nodes = _nodes("5-(1,3-dioxolan-2-yl)pentan-2-one")
+    (ring,) = [n for n in nodes if n["kind"] == "substituent"]
+    assert ring["label"].startswith("1,3-dioxolan")
+    assert [t.atoms[a].element for n in nodes if n["kind"] == "locant" and n["label"] in ("1", "3")
+            and n["parent"] == ring["id"] for a in n["lights"]] == ["O", "O"]
+
+
+# N-5a: the gate called correct builder output foreign on unbracketed ester alcohol chains, where
+# the number names a position INSIDE the chain (the builder falls back to the chain edge)
+@pytest.mark.parametrize("name,part,locant,owner", [
+    ("2-acetyloxyethyl acetate", "acetyl", "2", "ethyl"),
+    ("2-benzoyloxyethyl benzoate", "benzoyl", "2", "ethyl"),
+    ("3-acetyloxypropyl acetate", "acetyl", "3", "propyl"),
+])
+def test_the_gate_accepts_a_number_naming_a_later_member_of_an_unbracketed_chain(name, part, locant, owner):
+    t, nodes = _nodes(name)
+    p, leading = _leading(nodes, part)
+    assert leading["label"] == locant
+    (atom,) = leading["lights"]
+    assert _owner_label(nodes, atom) == owner and locant in t.atoms[atom].locants
+    assert foreign_lights(t, nodes) == []
+    assert classify(t, nodes, assign_owners(t.tokens)) == ["CLEAN"]
+    # ...and is still strict: the chain's own carbon for that number is foreign
+    own = next(a for a in p["owns"] if t.atoms[a].element == "C")
+    leading["lights"] = [own]
+    assert foreign_lights(t, nodes) == [(locant, [own])]

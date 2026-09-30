@@ -80,6 +80,15 @@ CURATED: list[tuple[str, str]] = [
     # Task 9: a glycosyl substituent's anomer mark
     ("real-drug-names", "3-(α-D-mannopyranosyloxy)benzoic acid"),
     ("real-drug-names", "4-(β-L-glucopyranosyloxy)-1,3,7-trihydroxy-9H-xanthen-9-one"),
+    # Task 9: a leading locant before a chain of substituents
+    ("real-drug-names", "3-(4-cyclopropylmethoxybenzamido)benzoic acid"),
+    ("real-drug-names", "4-(2-cyclopropylmethylaminopyridin-4-yl)pyridine"),
+    ("real-drug-names", "N-ethylcarbamoyl-2-methoxy-4-[(methylamino)methyl]-1-(methylsulfanyl)benzene"),
+    ("real-drug-names", "4-(N-diaminomethylidenecarbamimidoyl)piperazine"),
+    ("real-drug-names", "3-oxiranylmethoxybenzoic acid"),
+    ("esters-salts-amides", "2-acetyloxyethyl acetate"),
+    ("esters-salts-amides", "2-benzoyloxyethyl benzoate"),
+    ("esters-salts-amides", "3-acetyloxypropyl acetate"),
 ]
 
 # Names OPSIN 2.9.0 itself genuinely cannot parse. Verified against

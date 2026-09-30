@@ -68,6 +68,7 @@ _STEREO_MARK = re.compile(r"^(\d+[a-z]?'*)([RSrs]\*?|[EZ]|alpha|beta)$")
 _BARE_DESCRIPTOR = re.compile(r"^([RSrs]\*?|[EZ])$")
 _ADDED_H = re.compile(r"^(\d+[a-z]?'*)H$")
 _BARE_LOCANT = re.compile(r"^\d+[a-z]?'*$")
+_ELEMENT_LOCANT = re.compile(r"^[A-Z][a-z]?'*$")
 # Fischer D/L always prefix the part written right after them ("L-alanyl").
 _FISCHER = frozenset({"D", "L", "DL"})
 
@@ -143,8 +144,10 @@ def _chain_is_bracketed(trace: Trace, key: Optional[Span]) -> bool:
         return False
     # The locant run written directly in front of the group ("2-" in "2-pyridyl"):
     # its tokens belong to no part (owner None), so walk back from the group.
+    # "cyclo" / "tert-" are the substituent's own name ("4-cyclopropylmethoxy"):
+    # the locant is written before them.
     lead, j = None, core.index - 1
-    while j >= 0 and trace.tokens[j].kind in LOCANT_KINDS | {"hyphen"}:
+    while j >= 0 and trace.tokens[j].kind in LOCANT_KINDS | {"hyphen", "cyclo", "alkaneStemModifier", "heteroatom"}:
         if trace.tokens[j].kind in LOCANT_KINDS:
             lead = trace.tokens[j]
         j -= 1
@@ -236,8 +239,26 @@ class _Builder:
         self.add(kind, w.kind, None, owns=owns, lights=owns, copies=len(w.copies),
                  line=describe_part(kind, w.kind, None, len(set(owns)), copies=len(w.copies)))
 
+    def foreign_replacement_locants(self, w: _WrittenPart, roles: list[str]) -> list[str]:
+        """A locant written right before a heteroatom token reads as part of the
+        name ("1,3-|dioxolanyl", "4-|oxa-1-aza..."): the heteroatoms sit at those
+        numbers. "3-oxiranylmethoxy" is not that: oxirane's oxygen is O1, so the 3
+        is the position the whole chain hangs on, in front of the substituent."""
+        own_hetero = [self.by_index[a] for a in self.atoms_of(w) if self.by_index[a].element != "C"]
+        out = list(roles)
+        for i, tok in enumerate(w.tokens):
+            if tok.kind not in LOCANT_KINDS or roles[i] != "core":
+                continue
+            after = next((t for t in w.tokens[i + 1:] if t.kind not in CONTEXTUAL and t.kind not in GLUE), None)
+            if after is None or after.kind != "heteroatom":
+                continue
+            items = [loc for loc, _ in locant_items(self.t.text, tok.span)]
+            if not any(loc in atom.locants for loc in items for atom in own_hetero):
+                out[i] = "prefix"
+        return out
+
     def substituent(self, w: _WrittenPart) -> None:
-        roles = resolve_roles(w.tokens, "substituent", len(w.copies))
+        roles = self.foreign_replacement_locants(w, resolve_roles(w.tokens, "substituent", len(w.copies)))
         span = label_span(self.t.text, w.tokens, roles, self.covered, w.key)
         label = self.text(span)
         owns = self.atoms_of(w)
@@ -464,6 +485,13 @@ class _Builder:
                 attach = [a for a in attach if self.in_ring(a) and not self.implicit_attachment(own, a, loc)]
             if attach:
                 return attach
+        if _ELEMENT_LOCANT.match(loc) and _joined_to_next_substituent(self.t, w.key):
+            # "N-|diaminomethylidenecarbamimidoyl": an element-symbol number in
+            # front of a chain names the atom of a LATER chain member, never this
+            # substituent's own same-lettered atom (amino's N).
+            hit = self.chain_edge(w, loc)
+            if hit:
+                return hit
         hetero = [a for a in self.carrying(own, loc) if self.by_index[a].element != "C"]
         if hetero:
             return hetero
@@ -481,7 +509,9 @@ class _Builder:
             edge = self.edge(atoms)
             # A linker carbon (methyl, methoxy's CH2) carries its number beside
             # an element symbol ("1/C"): that is not a position the chain hangs on.
-            hit = [a for a in self.carrying(edge, loc) if not self.linker_atom(a)]
+            # (unless the number IS an element symbol: "N-ethylcarbamoyl" names that N)
+            element = bool(_ELEMENT_LOCANT.match(loc))
+            hit = [a for a in self.carrying(edge, loc) if element or not self.linker_atom(a)]
             if hit:
                 return hit
             last = max(t.index for t in part.tokens) if part.tokens else -1
@@ -807,7 +837,18 @@ def foreign_lights(trace: Trace, nodes: list[dict]) -> list[tuple[str, list[int]
             unbracketed = (parent["kind"] == "substituent" and _joined_to_next_substituent(trace, key)
                            and not _chain_is_bracketed(trace, key))
             if unbracketed and at_front:
-                ok = ok and not ((lit - placed) & comp)
+                # ...so the only atoms it may light are ones a prefix of the
+                # written chain is bonded to: the parent position, or the atom
+                # of a later chain member that carries the number ("2-acetyloxy|ethyl
+                # acetate": ethyl C2). Never the chain's own atoms or a linker.
+                reach = set()
+                for prefix in _chain_prefixes(trace, key):
+                    reach |= {x for a in prefix for x in nbrs(a) if x not in prefix
+                              and label in by_atom[x].locants
+                              and (_ELEMENT_LOCANT.match(label) or not (
+                                  part_of.get(x) is not None and part_of[x].kind == "substituent"
+                                  and any(_ELEMENT_LOCANT.match(loc) for loc in by_atom[x].locants)))}
+                ok = ok and (lit - placed) <= reach
             elif chained and not _attachment_written_inside(trace, key) and mol is not None:
                 ring_attach = {a for a in seed if label in by_atom[a].locants
                                and mol.GetAtomWithIdx(a).IsInRing() and any(x not in seed for x in nbrs(a))
