@@ -1,0 +1,432 @@
+"""Trace -> the flat node list ExplainResponse v2 carries (spec §5).
+
+Each written part (its copies share one key) becomes part nodes: a
+substituent node, or a parent node plus a suffix node for a root. Token
+ownership comes from app/token_owner.py (OPSIN's own placement, then written
+neighbours). Every owned token that teaches something becomes a child: each
+individual locant, each counting word, each hydro / indicated-hydrogen /
+fusion / bridge / spiro token. Core tokens (group, suffix, unsaturator, ...)
+ARE the part and get no child. A bracket's own locants and counting words
+("2-[", "bis(") become top-level nodes that light the parts inside that
+bracket -- or, for a multiplicative bracket ("4,4'-(...)di|phenol"), the
+positions on the multiplied parents.
+
+What a node lights is never a guess:
+
+* a position locant lights the copy OPSIN put at that locant; if no copy
+  carries it (a multiplicative bridge: "4,4'-methylene|bis(...)"), the atoms
+  that carry exactly that locant in the rest of the word; else its own part;
+* a counting word lights what the locants it counts light ("3,7-di|hydro"
+  -> N3, N7; "2,6-di|one" -> both C=O);
+* a stereo mark with a locant ("2S", "9Z", "17beta") lights the ONE atom
+  that carries that locant AND is a stereocentre (R/S, alpha/beta) or sits
+  on a stereo double bond (E/Z) in the traced molecule, searching the mark's
+  scope's main part first and then the rest of its scope; if no single atom
+  qualifies it lights nothing. Scope is IUPAC's: a set written in a bracket
+  belongs to that bracket's main part (the part of the last token written
+  directly in the bracket), a set outside every bracket to its word's root.
+  A bare mark ("trans", "E") that does not start its word, and a Fischer
+  D/L anywhere, belongs to the part written right after it
+  ("L-alanyl-L-valyl-..."). OPSIN's own
+  placement of stereo tokens is not used: it can leave a leading set parked
+  in the first substituent, and the engine hoists a substituent's
+  descriptor to the front of its names.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+from typing import Optional
+
+from rdkit import Chem
+
+from .glossary import GENERIC_TOKEN_LINE, describe_locant, describe_part, describe_token
+from .label_rules import (
+    CONTEXTUAL, GLUE, LOCANT_KINDS, covered_positions, indicated_h_items,
+    label_span, locant_items, resolve_roles, root_spans, stereo_items,
+)
+from .opsin_trace import STEREO_KIND, Span, Trace, TracePart, WrittenToken
+from .root_split import split_root
+from .token_owner import CLOSE_KINDS, assign_owners, innermost_bracket, written_brackets
+
+PART_NODE_KINDS = frozenset({"substituent", "parent", "suffix"})
+_NODE_KIND = {
+    "locant": "locant", "colonOrSemiColonDelimitedLocant": "locant", "spiroLocant": "locant",
+    "multiplier": "multiplier", "ringAssemblyMultiplier": "multiplier",
+    "hydro": "hydro", "indicatedHydrogen": "indicated_h", STEREO_KIND: "stereo",
+}
+_LINE_KINDS = frozenset({"multiplier", "ringAssemblyMultiplier", "hydro", "fusion", "vonBaeyer", "spiro"})
+# "2S", "4aR", "9Z", relative "1S*", steroid "3beta" -> (locant, descriptor).
+_STEREO_MARK = re.compile(r"^(\d+[a-z]?'*)([RSrs]\*?|[EZ]|alpha|beta)$")
+# A descriptor with no locant ("(S)-oxolan-3-yl", "(E)-...").
+_BARE_DESCRIPTOR = re.compile(r"^([RSrs]\*?|[EZ])$")
+_ADDED_H = re.compile(r"^(\d+[a-z]?'*)H$")
+_BARE_LOCANT = re.compile(r"^\d+[a-z]?'*$")
+# Fischer D/L always prefix the part written right after them ("L-alanyl").
+_FISCHER = frozenset({"D", "L", "DL"})
+
+
+@dataclass
+class _WrittenPart:
+    kind: str
+    key: Optional[Span]
+    copies: list[TracePart]
+    tokens: list[WrittenToken] = field(default_factory=list)
+
+
+def _written_parts(trace: Trace) -> list[_WrittenPart]:
+    grouped: dict = {}
+    for part in trace.parts:
+        key = (part.kind, part.span) if part.span is not None else (part.kind, None, part.index)
+        grouped.setdefault(key, []).append(part)
+    return [_WrittenPart(kind=k[0], key=k[1], copies=v) for k, v in grouped.items()]
+
+
+def _stereo_atoms(smiles: str) -> tuple[set, set]:
+    """(stereocentres, atoms on a stereo double bond) of the traced molecule."""
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return set(), set()
+    centres = {i for i, _ in Chem.FindMolChiralCenters(
+        mol, includeUnassigned=True, useLegacyImplementation=False)}
+    bonds = set()
+    for bond in mol.GetBonds():
+        if bond.GetStereo() != Chem.BondStereo.STEREONONE:
+            bonds.update((bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()))
+    return centres, bonds
+
+
+class _Builder:
+    def __init__(self, trace: Trace, parts: list[_WrittenPart]):
+        self.t = trace
+        self.parts = parts
+        self.nodes: list[dict] = []
+        self.covered = covered_positions(trace.tokens)
+        self.by_index = {a.index: a for a in trace.atoms}
+        self.part_node: dict[Span, tuple[str, list[int]]] = {}   # key -> (node id, atoms)
+        self.suffix_node: dict[Span, tuple[str, list[int], dict]] = {}  # root key -> (id, atoms, locants)
+        self.centres, self.double = _stereo_atoms(trace.smiles)
+
+    def add(self, kind, label, span, *, line, parent=None, owns=(), lights=(), copies=1) -> str:
+        node_id = f"n{len(self.nodes)}"
+        self.nodes.append({
+            "id": node_id, "parent": parent, "kind": kind, "label": label,
+            "span": [span[0], span[1]] if span else None, "copies": copies,
+            "owns": sorted(set(owns)), "lights": sorted(set(lights)),
+            "atoms_unmapped": False, "line": line,
+        })
+        return node_id
+
+    def text(self, span: Span) -> str:
+        return self.t.text[span[0]:span[1]]
+
+    def trim(self, span: Span) -> Span:
+        a, b = span
+        while b > a and self.t.text[b - 1] in "-,":
+            b -= 1
+        return (a, b)
+
+    def with_locant(self, atoms, locant) -> list[int]:
+        return [i for i in atoms if locant in self.by_index[i].locants]
+
+    def word(self, pos: int) -> int:
+        return self.t.text.count(" ", 0, pos)
+
+    def atoms_of(self, w: _WrittenPart) -> list[int]:
+        return [a for c in w.copies for a in c.atoms]
+
+    # -- parts ------------------------------------------------------------
+    def unplaced_part(self, w: _WrittenPart) -> None:
+        """A part OPSIN gave no key: still owns its atoms, listed as not
+        placed in the name. Never raises."""
+        owns = self.atoms_of(w)
+        kind = "substituent" if w.kind == "substituent" else "parent"
+        self.add(kind, w.kind, None, owns=owns, lights=owns, copies=len(w.copies),
+                 line=describe_part(kind, w.kind, None, len(set(owns)), copies=len(w.copies)))
+
+    def substituent(self, w: _WrittenPart) -> None:
+        roles = resolve_roles(w.tokens, "substituent", len(w.copies))
+        span = label_span(self.t.text, w.tokens, roles, self.covered, w.key)
+        label = self.text(span)
+        owns = self.atoms_of(w)
+        node = self.add("substituent", label, span, owns=owns, lights=owns, copies=len(w.copies),
+                        line=describe_part("substituent", label, None, len(set(owns)), copies=len(w.copies)))
+        self.part_node[w.key] = (node, owns)
+        self.children(node, w, w.tokens, roles, owns, owns, mode="substituent")
+
+    def root(self, w: _WrittenPart) -> None:
+        roles = resolve_roles(w.tokens, "root", len(w.copies))
+        spans = root_spans(self.t.text, w.tokens, roles, self.covered, w.key)
+        parent_atoms: list[int] = []
+        suffix_atoms: list[int] = []
+        suffix_locants: dict[int, str] = {}
+        for c in w.copies:
+            split = split_root(self.t, c.atoms)
+            parent_atoms += split.parent_atoms
+            suffix_atoms += split.suffix_atoms
+            suffix_locants.update(split.suffix_locants)
+        # A pyranose/furanose names ring and every O together, and OPSIN's
+        # locants do not tell the ring O from the OH groups ("O'", "O''"...),
+        # so a carbohydrate root is never split into parent + suffix.
+        carbohydrate = any(t.kind == "carbohydrateRingSize" for t in w.tokens)
+        has_suffix = spans.suffix is not None and bool(suffix_atoms) and not carbohydrate
+        if not has_suffix:
+            # Retained names (phenol) name ring and OH in one token: the atoms
+            # stay with the parent that actually names them.
+            parent_atoms += suffix_atoms
+            suffix_atoms = []
+        parent_span = spans.parent if has_suffix or spans.suffix is None else (spans.parent[0], spans.suffix[1])
+        label = self.text(parent_span)
+        parent = self.add("parent", label, parent_span, owns=parent_atoms, lights=parent_atoms,
+                          copies=len(w.copies),
+                          line=describe_part("parent", label, None, len(set(parent_atoms)), copies=len(w.copies)))
+        self.part_node[w.key] = (parent, parent_atoms + suffix_atoms)
+        run = spans.suffix_tokens if has_suffix else frozenset()
+        head = [(t, r) for t, r in zip(w.tokens, roles) if t.index not in run]
+        self.children(parent, w, [t for t, _ in head], [r for _, r in head], parent_atoms, parent_atoms,
+                      mode="parent")
+        if has_suffix:
+            s_label = self.text(spans.suffix_label)
+            carrying = set(suffix_locants.values())
+            lights = suffix_atoms + [i for i in parent_atoms if carrying & set(self.by_index[i].locants)]
+            suffix = self.add("suffix", s_label, spans.suffix, owns=suffix_atoms, lights=lights,
+                              line=describe_part("suffix", s_label, None, len(set(suffix_atoms))))
+            self.suffix_node[w.key] = (suffix, suffix_atoms, suffix_locants)
+            tail = [(t, r) for t, r in zip(w.tokens, roles) if t.index in run]
+            self.children(suffix, w, [t for t, _ in tail], [r for _, r in tail], parent_atoms, lights,
+                          mode="suffix", suffix_atoms=suffix_atoms, suffix_locants=suffix_locants)
+
+    # -- children ---------------------------------------------------------
+    def children(self, owner, w, tokens, roles, atoms, token_lights, *, mode,
+                 suffix_atoms=(), suffix_locants=None) -> None:
+        """`atoms` are where locants are looked up (the parent skeleton for a
+        root's suffix); `token_lights` is what a token child lights when no
+        locant it counts says better."""
+        first_core = next((i for i, r in enumerate(roles) if r == "core"), len(roles))
+        used_copies: set[int] = set()
+        counted: set[int] = set()        # what the latest locant run lights
+        for i, tok in enumerate(tokens):
+            if roles[i] == "glue":
+                continue
+            if tok.kind in LOCANT_KINDS:
+                target = next((tokens[j] for j in range(i + 1, len(tokens))
+                               if roles[j] != "glue" and tokens[j].kind not in CONTEXTUAL), None)
+                items = locant_items(self.t.text, tok.span)
+                written = {loc: sum(1 for x, _ in items if x == loc) for loc, _ in items}
+                counted = set()
+                for loc, sub in items:
+                    added = _ADDED_H.match(loc)
+                    if added:
+                        # "2(1H)": hydrogen added at position 1 of the parent.
+                        hit = self.with_locant(atoms, added.group(1))
+                        element = self.by_index[hit[0]].element if len(hit) == 1 else None
+                        self.add("indicated_h", loc, sub, parent=owner, lights=hit,
+                                 line=describe_locant("modifier", added.group(1), element))
+                        continue
+                    lights, line = self.locant(loc, i < first_core, target, mode, atoms, w.copies,
+                                               used_copies, suffix_atoms, suffix_locants or {},
+                                               written[loc], w)
+                    counted.update(lights)
+                    self.add("locant", loc, sub, parent=owner, lights=lights, line=line)
+            elif tok.kind == "indicatedHydrogen":
+                for loc, sub in indicated_h_items(self.t.text, tok.span):
+                    hit = self.with_locant(atoms, loc)
+                    element = self.by_index[hit[0]].element if len(hit) == 1 else None
+                    self.add("indicated_h", self.text(sub), sub, parent=owner, lights=hit,
+                             line=describe_locant("modifier", loc, element))
+            elif tok.kind in _LINE_KINDS:
+                span = self.trim(tok.span)
+                self.add(_NODE_KIND.get(tok.kind, "token"), self.text(span), span, parent=owner,
+                         lights=counted or token_lights, line=describe_token(tok.kind, self.text(span)))
+            elif roles[i] == "prefix":
+                span = self.trim(tok.span)
+                line = describe_token(tok.kind, self.text(span)) or GENERIC_TOKEN_LINE.format(text=self.text(span))
+                self.add(_NODE_KIND.get(tok.kind, "token"), self.text(span), span, parent=owner,
+                         lights=token_lights, line=line)
+            elif roles[i] == "core":
+                counted = set()
+
+    def elsewhere(self, loc, own, word_of) -> list[int]:
+        """Atoms carrying exactly `loc` in the other parts of the same word."""
+        own = set(own)
+        return [a for w in self.parts if w.tokens and self.word(w.tokens[0].span[0]) == word_of
+                for a in self.atoms_of(w) if a not in own and loc in self.by_index[a].locants]
+
+    def locant(self, loc, leading, target, mode, atoms, copies, used, suffix_atoms, suffix_locants,
+               written, w):
+        if target is not None and target.kind == "hydro":
+            hit = self.with_locant(atoms, loc)
+            element = self.by_index[hit[0]].element if len(hit) == 1 else None
+            return hit, describe_locant("modifier", loc, element)
+        if mode == "substituent" and leading:
+            at_loc = [c for c in copies if c.locant == loc]
+            if len(at_loc) > written:
+                # Written once for several copies ("bis(4-chlorophenyl)"): the
+                # locant names all of them.
+                return [a for c in at_loc for a in c.atoms], describe_locant("substituent", loc)
+            for c in at_loc:
+                if c.index not in used:
+                    used.add(c.index)
+                    return list(c.atoms), describe_locant("substituent", loc)
+            # No copy sits at this locant: a multiplicative bridge
+            # ("4,4'-methylene|bis(2-chlorophenol)") -- the locant names the
+            # positions on the parents it joins.
+            there = self.elsewhere(loc, atoms, self.word(w.tokens[0].span[0]))
+            return (there or list(atoms)), describe_locant("substituent", loc)
+        if mode == "suffix":
+            own = [i for i in suffix_atoms if suffix_locants.get(i) == loc]
+            return own + self.with_locant(atoms, loc), describe_locant("suffix", loc)
+        hit = self.with_locant(atoms, loc)
+        return (hit or list(atoms)), describe_locant("position", loc)
+
+    # -- brackets, orphans, stereo ----------------------------------------
+    def bracket_token(self, tok: WrittenToken, bracket: Span, multiplicative: bool) -> None:
+        """A bracket's own locant / counting word lights every part whose
+        first written token sits inside that bracket -- or, when the bracket
+        is multiplied into the parent ("4,4'-(propane-2,2-diyl)di|phenol"),
+        the positions it names on the parents outside it."""
+        inside = [w for w in self.parts if w.tokens and bracket[0] < w.tokens[0].span[0] < bracket[1]]
+        atoms = [a for w in inside for a in self.atoms_of(w)]
+        if tok.kind in LOCANT_KINDS:
+            for loc, sub in locant_items(self.t.text, tok.span):
+                lights = atoms
+                if multiplicative:
+                    lights = self.elsewhere(loc, atoms, self.word(bracket[0])) or atoms
+                self.add("locant", loc, sub, lights=lights, line=describe_locant("substituent", loc))
+            return
+        span = self.trim(tok.span)
+        label = self.text(span)
+        line = describe_token(tok.kind, label) or GENERIC_TOKEN_LINE.format(text=label)
+        self.add(_NODE_KIND.get(tok.kind, "token"), label, span, lights=atoms, line=line)
+
+    def orphan(self, tok: WrittenToken) -> None:
+        span = self.trim(tok.span)
+        label = self.text(span)
+        self.add(_NODE_KIND.get(tok.kind, "token"), label, span,
+                 line=describe_token(tok.kind, label) or GENERIC_TOKEN_LINE.format(text=label))
+
+    def stereo_atom(self, locant: str, descriptor: str, scope_parts: list[_WrittenPart],
+                    head: Optional[_WrittenPart]):
+        """(part key, atom) of the ONE atom a mark names, or (None, None)."""
+        pool = self.double if descriptor in ("E", "Z") else self.centres
+        order = ([head] if head else []) + [w for w in scope_parts if w is not head]
+        for group in ([order[0]] if order else [], order):
+            hits = [(w.key, a) for w in group for a in self.atoms_of(w)
+                    if a in pool and locant in self.by_index[a].locants]
+            atoms = {a for _, a in hits}
+            if len(atoms) == 1:
+                return hits[0]
+            if len(atoms) > 1 and descriptor in ("E", "Z"):
+                keys = {k for k, _ in hits}
+                if len(keys) == 1:                 # both ends of one double bond
+                    return hits[0][0], sorted(atoms)[0]
+        return None, None
+
+    def stereo(self, owners: dict) -> None:
+        tokens = self.t.tokens
+        brackets = written_brackets(tokens)
+        by_key = {w.key: w for w in self.parts if w.key is not None}
+        for idx, tok in enumerate(tokens):
+            if tok.kind != STEREO_KIND:
+                continue
+            scope = innermost_bracket(brackets, tok.span[0])
+            if scope is not None:
+                scope_parts = [w for w in self.parts if w.tokens and
+                               scope[0] < w.tokens[0].span[0] < scope[1]]
+                direct = [t for t in tokens if t.owner is not None and
+                          innermost_bracket(brackets, t.span[0]) == scope]
+                head = by_key.get(direct[-1].owner) if direct else None
+            else:
+                word = self.word(tok.span[0])
+                scope_parts = [w for w in self.parts if w.tokens and self.word(w.tokens[0].span[0]) == word]
+                roots = [w for w in scope_parts if w.kind == "root"]
+                head = roots[0] if roots else (scope_parts[-1] if scope_parts else None)
+            leading = not any(p.kind not in GLUE and p.kind != STEREO_KIND
+                              and self.word(p.span[0]) == self.word(tok.span[0]) for p in tokens[:idx])
+            for label, span in stereo_items(self.t.text, tok.span):
+                m = _STEREO_MARK.match(label)
+                if m:
+                    key, atom = self.stereo_atom(m.group(1), m.group(2).rstrip("*"), scope_parts, head)
+                    owner_key = key if key is not None else (head.key if head else None)
+                    parent = self.part_node.get(owner_key, (None, []))[0]
+                    self.add("stereo", label, span, parent=parent,
+                             lights=[atom] if atom is not None else [],
+                             line=describe_token(STEREO_KIND, label))
+                elif _BARE_DESCRIPTOR.match(label) and head is not None:
+                    # No locant: light the stereocentre (or stereo double
+                    # bond) of the scope's main part only if it has exactly one.
+                    pool = self.double if label in ("E", "Z") else self.centres
+                    hits = sorted(a for a in self.atoms_of(head) if a in pool)
+                    single = hits[:1] if (len(hits) == 1 or (label in ("E", "Z") and len(hits) == 2)) else []
+                    self.add("stereo", label, span, parent=self.part_node.get(head.key, (None, []))[0],
+                             lights=single, line=describe_token(STEREO_KIND, label))
+                elif _BARE_LOCANT.match(label):
+                    # A locant listed with a mark ("3,17beta-diol"): it is the
+                    # suffix's own locant.
+                    self.token_locant(label, span, head)
+                else:
+                    # A bare mark (L, D, trans, E) names no atom. D/L, and any
+                    # mark that does not start its word, describe the part
+                    # written right after it ("L-alanyl-L-valyl-..."); a
+                    # word-leading "trans" / "(+-)" describes the word's root.
+                    target = head
+                    if not leading or label.upper() in _FISCHER:
+                        owner = owners.get(next((t.index for t in tokens[idx + 1:]
+                                                 if owners.get(t.index) is not None), -1))
+                        if owner is not None and owner.kind == "part":
+                            target = by_key.get(owner.span, head)
+                    parent = self.part_node.get(target.key, (None, []))[0] if target else None
+                    self.add("stereo", label, span, parent=parent, lights=[],
+                             line=describe_token(STEREO_KIND, label))
+
+    def token_locant(self, loc: str, span: Span, head: Optional[_WrittenPart]) -> None:
+        suffix = self.suffix_node.get(head.key) if head else None
+        if suffix is not None:
+            node, atoms, locants = suffix
+            parent_atoms = [a for a in self.part_node[head.key][1] if a not in atoms]
+            lights = [a for a in atoms if locants.get(a) == loc] + self.with_locant(parent_atoms, loc)
+            self.add("locant", loc, span, parent=node, lights=lights, line=describe_locant("suffix", loc))
+            return
+        node, atoms = self.part_node.get(head.key, (None, [])) if head else (None, [])
+        self.add("locant", loc, span, parent=node, lights=self.with_locant(atoms, loc),
+                 line=describe_locant("position", loc))
+
+
+def _multiplicative(tokens, bracket: Span) -> bool:
+    """A bracket directly followed (after its close and any glue) by a
+    counting word is multiplied into the parent: "(propane-2,2-diyl)di|phenol"."""
+    after = [t for t in tokens if t.span[0] >= bracket[1] and t.kind not in GLUE]
+    return bool(after) and after[0].kind == "multiplier"
+
+
+def build_nodes(trace: Trace) -> list[dict]:
+    parts = _written_parts(trace)
+    b = _Builder(trace, parts)
+    by_key = {w.key: w for w in parts if w.key is not None}
+    owners = assign_owners(trace.tokens)
+    loose: list[tuple[WrittenToken, Optional[Span]]] = []
+    for tok in trace.tokens:
+        if tok.index not in owners or tok.kind == STEREO_KIND:
+            continue                                   # glue; stereo is handled by b.stereo
+        owner = owners[tok.index]
+        if owner is not None and owner.kind == "part" and owner.span in by_key:
+            by_key[owner.span].tokens.append(tok)
+        else:
+            loose.append((tok, owner.span if owner is not None and owner.kind == "bracket" else None))
+    for w in parts:
+        w.tokens.sort(key=lambda t: t.span[0])
+    for w in sorted(parts, key=lambda w: (w.tokens[0].span[0] if w.tokens else 10**9)):
+        if w.key is None or not w.tokens:
+            b.unplaced_part(w)
+        elif w.kind == "substituent":
+            b.substituent(w)
+        else:
+            b.root(w)
+    for tok, bracket in loose:
+        if bracket is not None:
+            b.bracket_token(tok, bracket, _multiplicative(trace.tokens, bracket))
+        else:
+            b.orphan(tok)
+    b.stereo(owners)
+    return b.nodes
