@@ -220,7 +220,9 @@ def test_a_best_effort_name_is_not_downgraded_for_lacking_proof(monkeypatch):
         lambda smiles: {"tier": "best_effort", "name": "ethanol", "formula": None, "limit_code": None},
     )
 
-    item = orthonym_service.translate_one("CCO", best_effort=True)
+    # best_effort=False on purpose: with True a wrongly demoted row lands on
+    # the same status, so demoting every unproven row would go unnoticed.
+    item = orthonym_service.translate_one("CCO", best_effort=False)
 
     assert item.status == "best_effort"
     assert item.name == "ethanol"
@@ -253,6 +255,14 @@ def test_a_pin_unverified_name_ships_as_a_verified_fallback(monkeypatch):
     assert item.status == "fallback"
     assert item.tier == "pin_unverified"
     assert item.roundtrip_match is True
+
+
+def test_classify_reports_an_abstain_without_a_name():
+    """An abstain row's own name, when set, is a failure placeholder such as
+    "unknown organic compound". classify must drop it, or it surfaces as a
+    real name."""
+    row = {"tier": "abstain", "name": "unknown organic compound"}
+    assert orthonym_service.classify(row) == ("abstain", None, "abstain")
 
 
 # --- naming health vs /explain health are different questions --------------

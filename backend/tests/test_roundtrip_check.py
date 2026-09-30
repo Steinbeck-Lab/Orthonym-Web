@@ -20,7 +20,8 @@ so they need the environment backend/scripts/run-tests.sh sets up.
 import pytest
 from rdkit import Chem
 
-from app.orthonym_service import _roundtrip_check
+from app import orthonym_service
+from app.orthonym_service import _inchikey, _roundtrip_check
 
 
 def _check(name: str, smiles: str):
@@ -107,3 +108,34 @@ def test_an_unparseable_name_reports_unavailable_not_mismatch():
     roundtrip_smiles, match = _check("not-a-chemical-name-at-all", "CCO")
     assert roundtrip_smiles is None
     assert match is None
+
+
+def test_an_unreadable_opsin_answer_is_a_mismatch_not_a_pass(monkeypatch):
+    """OPSIN answered, but with a string RDKit cannot parse. That is
+    (raw, False): the check ran and could not confirm the name. True would
+    pass a name nothing verified."""
+    monkeypatch.setattr(orthonym_service, "opsin_parse", lambda name: "C(((")
+    assert _check("ethanol", "CCO") == ("C(((", False)
+
+
+def test_a_declined_inchikey_is_none_not_an_empty_string(monkeypatch):
+    """RDKit returns "" for a molecule it declines. Two empty strings compare
+    equal and would read as a passing round trip, so _inchikey reports None."""
+    mol = Chem.MolFromSmiles("CCO")
+    monkeypatch.setattr(orthonym_service, "MolToInchiKey", lambda m: "")
+    assert _inchikey(mol) is None
+
+    def boom(m):
+        raise ValueError("declined")
+
+    monkeypatch.setattr(orthonym_service, "MolToInchiKey", boom)
+    assert _inchikey(mol) is None
+
+
+def test_declined_keys_fall_back_to_canonical_smiles(monkeypatch):
+    """With no InChIKey for either side the verdict comes from canonical
+    SMILES: still a real True/False, never None (which would demote as if
+    OPSIN were unreachable), and a different molecule is still a mismatch."""
+    monkeypatch.setattr(orthonym_service, "MolToInchiKey", lambda m: "")
+    assert _check("ethanol", "CCO")[1] is True
+    assert _check("ethanol", "CCC")[1] is False

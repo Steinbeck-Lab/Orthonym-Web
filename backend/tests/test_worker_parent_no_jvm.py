@@ -12,6 +12,7 @@ calling the handler, so it fails if the exception type is ever softened back
 to something Celery swallows.
 """
 
+import jpype
 import pytest
 from celery.signals import celeryd_init
 
@@ -19,13 +20,14 @@ from app import celery_app as celery_module
 
 
 def test_parent_guard_exits_when_a_jvm_is_already_started(monkeypatch):
-    monkeypatch.setattr(celery_module, "_jvm_is_started", lambda: True)
+    # Patched at jpype, not at _jvm_is_started, so the real probe is exercised.
+    monkeypatch.setattr(jpype, "isJVMStarted", lambda: True)
     with pytest.raises(SystemExit):
         celery_module._assert_parent_has_no_jvm()
 
 
 def test_parent_guard_is_silent_when_no_jvm_is_started(monkeypatch):
-    monkeypatch.setattr(celery_module, "_jvm_is_started", lambda: False)
+    monkeypatch.setattr(jpype, "isJVMStarted", lambda: False)
     celery_module._assert_parent_has_no_jvm()  # must not raise
 
 
