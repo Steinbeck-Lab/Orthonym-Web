@@ -46,13 +46,43 @@ def _has_element_locant(locants) -> bool:
     return any(_ELEMENT_LOCANT.match(locant or "") for locant in locants)
 
 
-def _acid_like_suffix(trace: Trace, indices) -> bool:
+_DIGITS = re.compile(r"\d+(?:[a-z](?![a-z]))?'*")
+_LOCANT_LIKE = ("locant", "colonOrSemiColonDelimitedLocant", "stereoChemistry")
+_SKIPPED = ("multiplier", "hyphen", "ine", "e")
+
+
+def _group_locants(trace: Trace, indices) -> set[str]:
+    """The numeric locants the principal characteristic group sits on: the
+    locant list written right before each suffix ("2,6-dione", "3,17beta-diol"),
+    else position 1 (an unlocanted acid, amide, ester or alcohol ending)."""
     root = next((p for p in trace.parts if p.kind == "root" and set(indices) == set(p.atoms)), None)
-    if root is None or root.span is None:
-        return False
-    texts = [trace.text[t.span[0]:t.span[1]].lower() for t in trace.tokens
-             if t.kind == "suffix" and t.owner == root.span]
-    return bool(texts) and all(x.endswith(("ate", "acid")) for x in texts)
+    found: set[str] = set()
+    counted = False
+    if root is not None and root.span is not None:
+        for tok in trace.tokens:
+            if tok.kind != "suffix" or tok.owner != root.span:
+                continue
+            j = tok.index - 1
+            while j >= 0 and trace.tokens[j].kind in _SKIPPED:
+                counted = counted or trace.tokens[j].kind == "multiplier"
+                j -= 1
+            if j >= 0 and trace.tokens[j].kind in _LOCANT_LIKE:
+                text = trace.text[trace.tokens[j].span[0]:trace.tokens[j].span[1]]
+                for item in re.sub(r"\([^)]*\)", "", text).split(","):
+                    m = _DIGITS.match(item.strip("-() "))
+                    if m:
+                        found.add(m.group(0).rstrip("'"))
+    if found:
+        return found
+    # No locant written. "hexanedioic acid", "pentanedial": the counted group
+    # sits on both ends of the chain.
+    ends = {"1"}
+    if counted:
+        numeric = [int(m.group(0)) for a in indices for loc in trace.atoms[a].locants
+                   if (m := re.match(r"\d+$", loc))]
+        if numeric:
+            ends.add(str(max(numeric)))
+    return ends
 
 
 def split_root(trace: Trace, atoms: Sequence[int]) -> RootSplit:
@@ -61,27 +91,58 @@ def split_root(trace: Trace, atoms: Sequence[int]) -> RootSplit:
     mol = Chem.MolFromSmiles(trace.smiles)
     if mol is None:
         return RootSplit(tuple(indices), (), {})
-    # An acid or ester ending ("ate", "oic acid") holds only oxygens. A
-    # nitrogen OPSIN locates as "N" there belongs to an amino-acid stem's own
-    # ending ("alan|in|ate"), so it is skeleton.
-    acidic = _acid_like_suffix(trace, indices)
-    hetero = {i for i in indices if _has_element_locant(by_index[i].locants)
-              and not _has_numeric_locant(by_index[i].locants)
-              and not (acidic and by_index[i].element == "N")}
-    # A heteroatom with no locant at all is the group's own only when it sits
-    # on the same carbon as one that has an element locant (an anhydride's
-    # bridging O); glycine's alpha nitrogen and lactic acid's 2-hydroxyl do not.
-    hetero |= {i for i in indices if i not in hetero and not by_index[i].locants
-               and by_index[i].element != "C"
-               and any(any(m.GetIdx() in hetero for m in n.GetNeighbors())
-                       for n in mol.GetAtomWithIdx(i).GetNeighbors() if n.GetSymbol() == "C")}
-    # The group's own carbon (benzoic acid's carboxyl C, benzonitrile's C) has
-    # no numeric locant and sits on the group's heteroatoms. A skeleton atom
-    # with only a Greek locant (phenylalanine's alpha and beta carbons) does
-    # not sit on one, so it stays parent.
-    carbons = {i for i in indices if i not in hetero and not _has_numeric_locant(by_index[i].locants)
-               and by_index[i].element == "C"
-               and any(n.GetIdx() in hetero for n in mol.GetAtomWithIdx(i).GetNeighbors())}
+    pool = set(indices)
+
+    def neighbours(i):
+        return [n.GetIdx() for n in mol.GetAtomWithIdx(i).GetNeighbors() if n.GetIdx() in pool]
+
+    def hetero_of(i):
+        return [n for n in neighbours(i) if by_index[n].element != "C"]
+
+    # Candidate group heteroatoms: an element-symbol locant and no numeric one
+    # ("O", "O'", "N"), or no locant at all. Whether one IS the group's is
+    # decided by where it sits, never by its locant alone: OPSIN gives a
+    # serine side-chain O, a cysteine S or an amino-acid alpha N the same kind
+    # of locant as an amide's.
+    candidates = {i for i in indices if by_index[i].element != "C"
+                  and not _has_numeric_locant(by_index[i].locants)
+                  and (_has_element_locant(by_index[i].locants) or not by_index[i].locants)}
+    numbered = _group_locants(trace, indices)
+
+    def on_group_carbon(carbon):
+        """A carboxyl/amide/ester carbon (two heteroatoms), the carbon of a
+        locanted one-heteroatom group ("2,6-dione", "propan-2-ol"), or a
+        carbon with no numeric locant joined to the skeleton that carries a
+        candidate (benzoic acid's and benzonitrile's carbon)."""
+        near = [n for n in hetero_of(carbon) if n in candidates or not _has_numeric_locant(by_index[n].locants)]
+        if len(near) >= 2:
+            return True
+        locants = by_index[carbon].locants
+        if any(loc.rstrip("'") in numbered for loc in locants) and near:
+            return True
+        return (not _has_numeric_locant(locants) and any(_has_element_locant(by_index[n].locants) for n in near)
+                and any(by_index[n].element == "C" for n in neighbours(carbon)))
+
+    hetero = {i for i in candidates
+              if any(by_index[n].element == "C" and on_group_carbon(n) for n in neighbours(i))}
+    # A sulfonyl or phosphoryl centre (sulfonic acid, sulfonamide, phosphonate)
+    # is the group itself wherever it is bonded: S or P with two or more
+    # heteroatoms on it.
+    hetero |= {i for i in candidates if by_index[i].element in ("S", "P")
+               and len([n for n in hetero_of(i) if n in candidates]) >= 2}
+    # Heteroatoms bonded to an accepted one belong to the same group
+    # (the oxygens of S(=O)(=O)O, the second N of a diazonium).
+    grown = True
+    while grown:
+        more = {i for i in candidates if i not in hetero and any(n in hetero for n in neighbours(i))}
+        hetero |= more
+        grown = bool(more)
+    # The group's own carbon has no numeric locant (benzoic acid's carboxyl C,
+    # benzonitrile's C). A skeleton carbon with only a Greek locant
+    # (phenylalanine's alpha and beta) is not joined to two group atoms.
+    carbons = {i for i in indices if by_index[i].element == "C"
+               and not _has_numeric_locant(by_index[i].locants)
+               and any(n in hetero for n in neighbours(i)) and on_group_carbon(i)}
     suffix = sorted(hetero | carbons)
     suffix_set = set(suffix)
     parent = [i for i in indices if i not in suffix_set]
