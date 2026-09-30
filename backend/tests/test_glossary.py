@@ -1,4 +1,4 @@
-from app.glossary import describe_locant, describe_part
+from app.glossary import GENERIC_TOKEN_LINE, describe_locant, describe_part, describe_token
 
 
 def test_known_substituent_gets_its_own_words():
@@ -73,7 +73,7 @@ def test_carbonyl_suffix_does_not_claim_it_is_a_ketone():
 def test_a_fusion_bracket_explains_what_it_does():
     from app.glossary import describe_token
 
-    line = describe_token("fusionBracket", "[a]")
+    line = describe_token("fusion", "[a]")
     assert line is not None
     assert "fuse" in line.lower()
 
@@ -102,14 +102,13 @@ def test_every_listed_token_category_gets_its_own_line():
     from app.glossary import describe_token
 
     expect = {
-        "fusionBracket": "fused",
-        "diOrTri": "how many",
+        "fusion": "fused",
         "multiplier": "how many",
         "hydro": "hydrogens were added",
-        "bigCapitalH": "carries a hydrogen",
-        "stereochemistryBracket": "three-dimensional",
+        "indicatedHydrogen": "carries a hydrogen",
+        "stereoChemistry": "three-dimensional",
         "vonBaeyer": "bridge",
-        "spiroDescriptor": "shared between two rings",
+        "spiro": "shared between two rings",
     }
     for category, phrase in expect.items():
         line = describe_token(category, "x")
@@ -135,3 +134,38 @@ def test_an_unknown_category_gets_no_line_rather_than_a_wrong_one():
     from app.glossary import describe_token
 
     assert describe_token("someCategoryOpsinAddedLater", "zzz") is None
+
+
+def test_parse_tree_kinds_have_lines():
+    for kind, text in [("multiplier", "tri"), ("hydro", "hydro"), ("indicatedHydrogen", "1H-"),
+                       ("stereoChemistry", "(2S)-"), ("vonBaeyer", "cyclo[2.2.1]"),
+                       ("spiro", "spiro[4.5]"), ("fusion", "[a]")]:
+        assert describe_token(kind, text), kind
+
+
+def test_old_tokenizer_category_names_are_gone():
+    for old in ("fusionBracket", "diOrTri", "bigCapitalH", "stereochemistryBracket", "spiroDescriptor"):
+        assert describe_token(old, "x") is None, old
+
+
+def test_copies_are_counted_in_the_line():
+    assert "3 copies" in describe_part("substituent", "methyl", None, 3, copies=3)
+    assert "copies" not in describe_part("substituent", "methyl", None, 1)
+
+
+def test_a_written_parent_label_finds_its_stem():
+    assert "two fused rings" in describe_part("parent", "purine", None, 9)
+    assert "two-carbon" in describe_part("parent", "ethan", None, 2)
+
+
+def test_a_ring_is_never_described_as_a_chain():
+    assert "chain" not in describe_part("substituent", "cyclopropyl", None, 3)
+    assert "chain" in describe_part("substituent", "2-methylpropyl", None, 4)
+
+
+def test_an_anomeric_locant_has_its_own_line():
+    assert "anomer" in describe_locant("position", "alpha")
+
+
+def test_generic_token_line_names_the_text():
+    assert "zzz" in GENERIC_TOKEN_LINE.format(text="zzz")

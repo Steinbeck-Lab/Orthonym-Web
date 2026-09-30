@@ -9,6 +9,8 @@ Two rules, both load-bearing:
 
 from __future__ import annotations
 
+import re
+
 # Morpheme -> what it is, in plain words. Keys are OPSIN's own token values
 # (the raw stem, e.g. "meth" + "yl" -> looked up as "methyl").
 _SUBSTITUENTS = {
@@ -75,47 +77,55 @@ def _lookup(table: dict, text: str) -> str | None:
     if key in table:
         return table[key]
     for name, description in table.items():
-        if key.endswith(name):
+        # The ending fallback ("2-methylpropyl" -> "propyl") must not turn a
+        # RING into a chain: "cyclopropyl" is not "a three-carbon chain".
+        if key.endswith(name) and not (key.startswith("cyclo") and not name.startswith("cyclo")):
             return description
     return None
 
 
-def describe_part(kind: str, text: str, locant: str | None, atom_count: int) -> str:
+def _parent_known(label: str) -> str | None:
+    """Written parent labels ("purine", "ethan") against the stem table."""
+    key = label.lower().rstrip("e")
+    for candidate in (key, re.sub(r"(an|en|yn)$", "", key)):
+        if candidate in _PARENTS:
+            return _PARENTS[candidate]
+    return None
+
+
+def describe_part(kind: str, text: str, locant: str | None, atom_count: int,
+                  copies: int = 1) -> str:
     label = text.strip("-")
     where = f" It sits at position {locant}." if locant else ""
+    many = f" The name writes it once for {copies} copies." if copies > 1 else ""
 
     if kind == "substituent":
         known = _lookup(_SUBSTITUENTS, label)
         if known:
-            return f'"{label}" is {known}.{where}'
+            return f'"{label}" is {known}.{where}{many}'
     elif kind == "suffix":
         known = _lookup(_SUFFIXES, label)
         if known:
             return f'The "{label}" ending means {known}.{where}'
     elif kind == "parent":
-        known = _PARENTS.get(label.lower())
+        known = _parent_known(label)
         if known:
             return (
                 f'"{label}" is {known}. It is the core the rest of the name '
-                f"is built around, and it holds {atom_count} atoms."
+                f"is built around, and it holds {atom_count} atoms.{many}"
             )
         return (
             f'"{label}" is the core skeleton the rest of the name is built '
-            f"around. It has {atom_count} atoms."
+            f"around. It has {atom_count} atoms.{many}"
         )
     elif kind == "modifier":
         return (
             f'"{label}" does not add atoms. It records where hydrogens sit, '
             f"which fixes where the double bonds go."
         )
-    elif kind == "unmapped":
-        return (
-            f'"{label}" is part of this name, but Orthonym could not work out '
-            f"which atoms it refers to. The other parts are unaffected."
-        )
 
     plural = "atom" if atom_count == 1 else "atoms"
-    return f'"{label}" covers {atom_count} {plural} of this structure.{where}'
+    return f'"{label}" covers {atom_count} {plural} of this structure.{where}{many}'
 
 
 def describe_locant(kind: str, locant: str, element: str | None = None) -> str:
@@ -154,6 +164,11 @@ def describe_locant(kind: str, locant: str, element: str | None = None) -> str:
     which atoms are meant. Saying less is allowed; saying something false is
     not.
     """
+    if locant.lower() in ("alpha", "beta"):
+        return (
+            f'"{locant}" names the anomer: which way the OH on the ring carbon '
+            f"next to the ring oxygen points."
+        )
     if kind == "modifier":
         if element:
             return f"Position {locant} — the {element}{locant} atom carries a hydrogen here."
@@ -174,50 +189,15 @@ def describe_locant(kind: str, locant: str, element: str | None = None) -> str:
     return f"Position {locant}."
 
 
-# One line per raw OPSIN token category (`Tok.category` from
-# `app.opsin_tokenizer.tokenize`, decoded through the vendored grammar's own
-# symbol table -- NOT `Modifier.kind` from `opsin_decompose.py`, a
-# differently-scoped namespace that happens to share some spellings
-# ("hydro") but not others). A category absent from this table gets NO
-# line, never a generic one: a token child with a wrong explanation is
-# worse than a token child with none, and OPSIN may add categories in a
-# future release.
-#
-# Two keys here were corrected against the REAL tokenizer output (run
-# live against the vendored jar, not assumed from the grammar file alone):
-#   - the indicated-hydrogen token ("1H-", "3aH-") tokenizes as category
-#     "bigCapitalH". "indicatedHydrogen" is never emitted by this
-#     tokenizer -- that spelling belongs to the OTHER namespace
-#     (`opsin_decompose.Modifier.kind`, the parsed-tree element name) --
-#     so a table keyed on it would silently explain no indicated hydrogen
-#     at all.
-#   - the spiro descriptor ("spiro[4.5]") tokenizes as category
-#     "spiroDescriptor", never "spiro" (a real category in the same
-#     grammar file, just for a different, unreachable-here production).
-#
-# "locant" is DELIBERATELY ABSENT, not merely unlisted: `_build_segments`
-# already emits a precise per-locant CHILD for each individual position a
-# `locant`-category token spells ("1", "3", "7", each with its own exact
-# span). A `locant` token child would be a SIBLING at the same depth,
-# spanning the WHOLE decorator ("1,3,7-", covering all three) -- and
-# `frontend/src/lib/nameTargets.js`'s ownership resolution (depth desc,
-# then range[0] asc, first-claim-wins) does not prefer the narrower span:
-# ties and earlier starts win regardless of width. Verified live: this
-# coarse child's range [0,6) starts before "3"'s own [2,3) and "7"'s own
-# [4,5), so hovering the digit "3" or "7" showed "numbers the positions
-# the next part attaches to" and highlighted all three methyl carbons,
-# instead of Task 5's own precise "Position 3" line highlighting one atom
-# -- silently undoing the very precision Task 5 built. The fine children
-# already ARE the locant explanation; a coarse sibling adds nothing they
-# do not already cover, so it must not exist.
+# One line per OPSIN parse-tree token kind (the element names app/opsin_trace
+# records -- NOT the public tokenizer's categories this table used before
+# Explain v2). A kind absent here gets no line from describe_token;
+# explain_tree then uses GENERIC_TOKEN_LINE, which states only that the text
+# is part of how the name is written.
 _TOKEN_LINES = {
-    "fusionBracket": (
+    "fusion": (
         'The letters in "{text}" say WHERE the two ring systems are fused '
         "together."
-    ),
-    "diOrTri": (
-        '"{text}" is a counting word — it says how many of the next group '
-        "there are."
     ),
     "multiplier": (
         '"{text}" is a counting word — it says how many of the next group '
@@ -227,17 +207,19 @@ _TOKEN_LINES = {
         '"{text}" records that hydrogens were added here, which fixes '
         "where the double bonds go."
     ),
-    "bigCapitalH": (
+    "indicatedHydrogen": (
         '"{text}" pins which ring atom carries a hydrogen. Without it the '
         "ring could be drawn more than one way."
     ),
-    "stereochemistryBracket": (
+    "stereoChemistry": (
         '"{text}" fixes the three-dimensional arrangement at the '
         "positions it names."
     ),
     "vonBaeyer": '"{text}" counts the atoms in each bridge of the ring cage.',
-    "spiroDescriptor": '"{text}" marks one atom shared between two rings.',
+    "spiro": '"{text}" marks one atom shared between two rings.',
 }
+
+GENERIC_TOKEN_LINE = '"{text}" is part of how this name is written.'
 
 # Ring-assembly multiplier words, OPSIN's own token table
 # (`multipliers.xml`, tagname="ringAssemblyMultiplier") -- "bi" for two
