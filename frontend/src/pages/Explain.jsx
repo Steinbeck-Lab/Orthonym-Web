@@ -3,10 +3,9 @@ import { Link } from 'react-router-dom'
 import ConfidenceReport from '../components/ConfidenceReport'
 import { verdictKindFor } from '../lib/explainVerdict'
 import { explainMolecule, explainName, translateBatch } from '../lib/api'
-import { nameTargets, sliceName } from '../lib/nameTargets'
+import { isPart, nodeById, partOf, sliceName, unplacedNodes } from '../lib/nameTargets'
 import { nameRuns, applyRuns } from '../lib/nameTypography'
 import { Pieces } from '../components/Typeset'
-import { segmentAtPath } from '../lib/svgHighlight'
 import { useAtomHighlight } from '../lib/useAtomHighlight'
 import { useKetcher } from '../lib/useKetcher'
 import './Explain.css'
@@ -17,8 +16,8 @@ import TransportNotice from '../components/TransportNotice'
 // Curated structures spanning what the decomposition really does now that
 // it comes from OPSIN's own parse tree rather than SMARTS rules: a simple
 // parent + suffix (ethanol), a molecule whose internal symmetry makes some
-// parts genuinely unmappable so they report as `unmapped` while their
-// siblings survive (ibuprofen), and a bare ring parent with no principal
+// parts genuinely unmappable so those parts keep their text but light no
+// atoms (ibuprofen), and a bare ring parent with no principal
 // characteristic group at all (benzene) -- which decomposes perfectly and
 // simply has no suffix.
 //
@@ -42,43 +41,6 @@ const EXAMPLES = [
 // link cannot state different settings.
 const TIER_SETTINGS = { bestEffort: true, verify: true }
 
-function SegmentNode({ segment, path, activePath, setHoveredPath, togglePath }) {
-  const isActive = activePath === path
-  return (
-    <li className="explain-segment__item">
-      <button
-        type="button"
-        className={`explain-segment explain-segment--${segment.kind}${
-          segment.owns_atoms === false ? ' explain-segment--ref' : ''
-        }${isActive ? ' explain-segment--active' : ''}`}
-        onMouseEnter={() => setHoveredPath(path)}
-        onMouseLeave={() => setHoveredPath(null)}
-        onFocus={() => setHoveredPath(path)}
-        onBlur={() => setHoveredPath(null)}
-        onClick={() => togglePath(path)}
-        aria-pressed={isActive}
-      >
-        <span className="explain-segment__label">{segment.label}</span>
-        <span className="explain-segment__explanation">{segment.explanation}</span>
-      </button>
-      {segment.children?.length > 0 && (
-        <ul className="explain-segment__children" role="list">
-          {segment.children.map((child, index) => (
-            <SegmentNode
-              key={`${path}.${index}`}
-              segment={child}
-              path={`${path}.${index}`}
-              activePath={activePath}
-              setHoveredPath={setHoveredPath}
-              togglePath={togglePath}
-            />
-          ))}
-        </ul>
-      )}
-    </li>
-  )
-}
-
 // phase: 'idle' | 'loading' | 'success' | 'error' (mirrors IupacToSmiles.jsx)
 function Explain() {
   const [smilesInput, setSmilesInput] = useState('')
@@ -94,8 +56,8 @@ function Explain() {
   const [apiError, setApiError] = useState(null)
   const [fetchError, setFetchError] = useState(null)
   const [validationNote, setValidationNote] = useState(null)
-  const [hoveredPath, setHoveredPath] = useState(null)
-  const [pinnedPath, setPinnedPath] = useState(null)
+  const [hoveredId, setHoveredId] = useState(null)
+  const [pinnedId, setPinnedId] = useState(null)
   // The confidence tier for a molecule Orthonym itself named. /api/explain does
   // not return one, so it comes from /api/translate alongside -- see
   // runExplain. Null in 'name' mode on purpose: the user supplied the name,
@@ -121,7 +83,7 @@ function Explain() {
   // broken before the user ever opened it.
   const { iframeRef, editorState, handleFrameLoad, handleFrameError, getKetcher } =
     useKetcher({ enabled: mode === 'draw' })
-  const activePath = pinnedPath ?? hoveredPath
+  const activeId = pinnedId ?? hoveredId
 
   // Reads the drawing and hands the SMILES to the SAME runExplain the typed
   // paths use, so a drawn molecule and a pasted one cannot diverge -- that
@@ -152,8 +114,8 @@ function Explain() {
     runExplain(structure, 'smiles')
   }
 
-  function togglePath(path) {
-    setPinnedPath((current) => (current === path ? null : path))
+  function toggleId(id) {
+    setPinnedId((current) => (current === id ? null : id))
   }
 
   // requestMode defaults to the current tab, but a caller whose tab does not
@@ -166,8 +128,8 @@ function Explain() {
   function runExplain(value, requestMode = mode) {
     setFetchError(null)
     setPhase('loading')
-    setPinnedPath(null)
-    setHoveredPath(null)
+    setPinnedId(null)
+    setHoveredId(null)
 
     const request = requestMode === 'name' ? explainName(value) : explainMolecule(value)
 
@@ -246,34 +208,18 @@ function Explain() {
     runExplain(value)
   }
 
-  const svgWrapperRef = useAtomHighlight(data, activePath)
+  const svgWrapperRef = useAtomHighlight(data, activeId)
 
   const isLoading = phase === 'loading'
   const name = data?.name
-  const segments = data?.segments || []
-  // NOTE: there used to be a `hasMappedParts` flag here, feeding
-  // `explain-patch--success` / `--unmapped` onto the outer patch. Both class
-  // names were removed from Explain.css and nothing styled them, so the flag
-  // scanned every segment on every render to choose between two inert strings.
-  // What a reader actually sees is the struck label on each unmapped part and
-  // the ConfidenceReport rule -- neither of which needs this. If the
-  // distinction is ever wanted again, it comes back together with the rule
-  // that renders it.
-  // All-or-nothing is a SEGMENT-level property only: a top-level part with no
-  // name_range means spans could not be proven for this name at all, so the
-  // whole hoverable name falls back to the plain part list. A CHILD with no
-  // name_range is ordinary and expected (ethanol's suffix locant is never
-  // written, caffeine's modifier locant lives inside "1H-", DDT's `chloro`
-  // groups five atoms behind a span that has no room for its own `4`) -- it
-  // simply renders as inert text, never as a reason to blank the page.
-  const spansAvailable = segments.length > 0 && segments.every((segment) => segment.name_range)
-  // IUPAC typography, read off the WHOLE name string. It has to be computed
-  // here and not inside a piece, because a hover span can cut a token in half
-  // -- caffeine's "1H-" is one segment's span and the italic H is inside it --
-  // and half a token matches no rule. Each piece below then asks for the runs
-  // that fall in its own [start, end).
+  const nodes = data?.nodes || []
+  // Every part node has a span (the corpus gate proves it), so the name is
+  // always the hover surface. Nodes OPSIN gave no position are listed under
+  // it instead of blanking anything (per-node honesty).
+  const unplaced = unplacedNodes(nodes)
   const nameStyle = name ? nameRuns(name) : []
-  const activeSegment = segmentAtPath(segments, activePath)
+  const activeNode = nodeById(nodes, activeId)
+  const activePart = partOf(nodes, activeId)
 
   return (
     <>
@@ -482,59 +428,65 @@ function Explain() {
               <div className="explain-result">
                 <div className="explain-result__name-row">
                   <span className="explain-result__name-label">Name</span>
-                  {name && spansAvailable ? (
+                  {name && (
                     <p className="explain-result__name explain-name" aria-live="polite">
-                      {sliceName(name, nameTargets(segments)).map((piece, index) => (
-                        <Fragment key={index}>
-                        {/* A part is one hover target, so it never wraps
-                            inside; the line may break BETWEEN parts where
-                            the name has a chemical boundary. */}
-                        {index > 0 && /[)\]},]/.test(name[piece.start - 1] || '') &&
-                          !'-,)]}'.includes(name[piece.start] || 'x') && <wbr />}
-                        {piece.path === null ? (
-                          <span><Pieces pieces={applyRuns(name, nameStyle, piece.start, piece.end)} /></span>
-                        ) : (
-                          <span
-                            className={`explain-name__part${
-                              segmentAtPath(segments, piece.path)?.owns_atoms === false
-                                ? ' explain-name__part--ref'
-                                : ''
-                            }${activePath === piece.path ? ' explain-name__part--active' : ''}`}
-                            onMouseEnter={() => setHoveredPath(piece.path)}
-                            onMouseLeave={() => setHoveredPath(null)}
-                            onFocus={() => setHoveredPath(piece.path)}
-                            onBlur={() => setHoveredPath(null)}
-                            onClick={() => togglePath(piece.path)}
-                            // role="button" promises keyboard operation that a
-                            // <span> does not implement on its own: without
-                            // this, Enter and Space did nothing and a keyboard
-                            // user could glow a part by focusing it but never
-                            // PIN one, where the fallback list's real <button>
-                            // elements can (WCAG 2.1.1). preventDefault stops
-                            // Space from scrolling the page.
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault()
-                                togglePath(piece.path)
-                              }
-                            }}
-                            tabIndex={0}
-                            role="button"
-                            // Mirrors the PINNED state, not activePath: focus
-                            // alone sets hoveredPath, and announcing a merely
-                            // focused part as "pressed" would be false.
-                            aria-pressed={pinnedPath === piece.path}
+                      {sliceName(name, nodes).map((piece, index) => {
+                        const node = nodeById(nodes, piece.nodeId)
+                        const inActivePart =
+                          activePart && node && partOf(nodes, node.id)?.id === activePart.id
+                        return (
+                          <Fragment key={index}>
+                            {index > 0 && /[)\]},]/.test(name[piece.start - 1] || '') &&
+                              !'-,)]}'.includes(name[piece.start] || 'x') && <wbr />}
+                            {node === null ? (
+                              <span><Pieces pieces={applyRuns(name, nameStyle, piece.start, piece.end)} /></span>
+                            ) : (
+                              <span
+                                className={`explain-name__part${isPart(node) ? '' : ' explain-name__part--ref'}${
+                                  activeId === node.id ? ' explain-name__part--active' : ''
+                                }${inActivePart && activeId !== node.id ? ' explain-name__part--context' : ''}`}
+                                onMouseEnter={() => setHoveredId(node.id)}
+                                onMouseLeave={() => setHoveredId(null)}
+                                onFocus={() => setHoveredId(node.id)}
+                                onBlur={() => setHoveredId(null)}
+                                onClick={() => toggleId(node.id)}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault()
+                                    toggleId(node.id)
+                                  }
+                                }}
+                                tabIndex={0}
+                                role="button"
+                                aria-pressed={pinnedId === node.id}
+                              >
+                                <Pieces pieces={applyRuns(name, nameStyle, piece.start, piece.end)} breaks={false} />
+                              </span>
+                            )}
+                          </Fragment>
+                        )
+                      })}
+                    </p>
+                  )}
+                  {unplaced.length > 0 && (
+                    <ul className="explain-unplaced" role="list" aria-label="Parts not placed in the name">
+                      {unplaced.map((node) => (
+                        <li key={node.id}>
+                          <button
+                            type="button"
+                            className={`explain-unplaced__item${activeId === node.id ? ' explain-unplaced__item--active' : ''}`}
+                            onMouseEnter={() => setHoveredId(node.id)}
+                            onMouseLeave={() => setHoveredId(null)}
+                            onFocus={() => setHoveredId(node.id)}
+                            onBlur={() => setHoveredId(null)}
+                            onClick={() => toggleId(node.id)}
+                            aria-pressed={pinnedId === node.id}
                           >
-                            <Pieces pieces={applyRuns(name, nameStyle, piece.start, piece.end)} breaks={false} />
-                          </span>
-                        )}
-                        </Fragment>
+                            {node.label} <span className="explain-unplaced__note">— not placed in the name</span>
+                          </button>
+                        </li>
                       ))}
-                    </p>
-                  ) : (
-                    <p className="explain-result__name" aria-live="polite">
-                      {name && renderAnnotatedName(name, segments, activePath, nameStyle)}
-                    </p>
+                    </ul>
                   )}
                   {/* /api/explain returns the name and its decomposition but
                       no confidence tier. For a STRUCTURE the tier is a real
@@ -589,47 +541,33 @@ function Explain() {
                     ref={svgWrapperRef}
                   />
 
-                  {spansAvailable ? (
-                    <div className="explain-detail">
-                      {activeSegment ? (
-                        <>
-                          <h3 className="explain-detail__label">{activeSegment.label}</h3>
-                          <p className="explain-detail__explanation">
-                            {activeSegment.explanation}
+                  <div className="explain-detail">
+                    {activeNode ? (
+                      <>
+                        <h3 className="explain-detail__label">{activeNode.label}</h3>
+                        <p className="explain-detail__explanation">{activeNode.line}</p>
+                        {!isPart(activeNode) && activePart && (
+                          <p className="explain-detail__note">
+                            Part of <em>{activePart.label}</em>.
                           </p>
-                          {/* Referential parts (counting words, fusion
-                              brackets, indicated H, stereo) own no atoms of
-                              their own -- they point at the parent's. The
-                              dotted underline in the name says so at a glance;
-                              this line says it in words. Keyed on owns_atoms,
-                              the same field TierLamp-style form-not-hue marks
-                              read from, never on kind. */}
-                          {activeSegment.owns_atoms === false && (
-                            <p className="explain-detail__note">
-                              Notation — it points at the parent&rsquo;s atoms, and names none of its own.
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        <p className="explain-detail__hint">
-                          Move your pointer across the name above to see what each part means.
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <ul className="explain-segments" role="list" aria-label="Named parts">
-                      {segments.map((segment, index) => (
-                        <SegmentNode
-                          key={`${segment.kind}-${index}`}
-                          segment={segment}
-                          path={String(index)}
-                          activePath={activePath}
-                          setHoveredPath={setHoveredPath}
-                          togglePath={togglePath}
-                        />
-                      ))}
-                    </ul>
-                  )}
+                        )}
+                        {!isPart(activeNode) && activeNode.owns.length === 0 && (
+                          <p className="explain-detail__note">
+                            Notation — it points at atoms, and names none of its own.
+                          </p>
+                        )}
+                        {activeNode.atoms_unmapped && (
+                          <p className="explain-detail__note">
+                            Orthonym could not pin this part to exact atoms in your drawing, so nothing lights up. The rest of the name is unaffected.
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="explain-detail__hint">
+                        Move your pointer across the name above to see what each part means.
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -637,46 +575,6 @@ function Explain() {
         </div>
       </section>
       </main>
-    </>
-  )
-}
-
-// Renders `name` as plain text, except the active segment's own name_range
-// (when it has one) is wrapped in a bracket-highlighted span -- e.g.
-// hovering "carboxylic acid" on "2-[4-...]propanoic acid" shows
-// prop[anoic acid] with the bracketed part in the accent color.
-//
-// NOTE: not covered by the task-9 brief, which only updated the segment
-// buttons/highlight effect to use path-based lookup. This helper still took
-// the old numeric activeIndex and did segments[activeIndex] -- a bare array
-// index. That silently breaks for any nested child path (e.g. "0.2"), so it
-// is updated here to the same segmentAtPath lookup used everywhere else,
-// for consistency with the activeIndex -> activePath change made throughout
-// the rest of this file.
-function renderAnnotatedName(name, segments, activePath, style) {
-  const segment = segmentAtPath(segments, activePath)
-  const range = segment?.name_range
-  // NOTHING ACTIVE IS STILL A RENDER. This used to `return name` here, which
-  // is the raw string -- so on every name that reaches this fallback (spans
-  // unproven, or `segments` empty, which is the partial result documented
-  // above) the typography simply vanished: a von Baeyer name printed its
-  // literal `^` caret, a stereodescriptor stayed roman, and the marks blinked
-  // back on the moment a part was hovered and off again when it was not.
-  // The highlight is the only thing a hover changes; the typography is not.
-  if (!range) {
-    return <Pieces pieces={applyRuns(name, style)} />
-  }
-  const [start, end] = range
-  // The same typography, cut at the highlight's two boundaries. The square
-  // brackets are this renderer's own marks, not part of the name, so they
-  // stay outside the typeset run.
-  return (
-    <>
-      <Pieces pieces={applyRuns(name, style, 0, start)} />
-      <span className="explain-result__name-highlight">
-        [<Pieces pieces={applyRuns(name, style, start, end)} />]
-      </span>
-      <Pieces pieces={applyRuns(name, style, end, name.length)} />
     </>
   )
 }

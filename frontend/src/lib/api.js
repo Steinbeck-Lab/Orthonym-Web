@@ -14,8 +14,10 @@
 //                                   InChI writer and 2D coordinate generation
 //                                   are not total, and losing one must not
 //                                   cost the others.
-//   GET  /api/explain          -> { smiles, name, svg, total_atoms, segments: ExplainSegment[], error }
-//   GET  /api/explain-name     -> same shape, decomposing a typed IUPAC name directly
+//   GET  /api/explain          -> { smiles, name, svg, atom_points, total_atoms, nodes: ExplainNode[], error }
+//   GET  /api/explain-name     -> same shape, for a typed IUPAC name
+//     ExplainNode = { id, parent, kind, label, span: [start,end]|null, copies,
+//                     owns: number[], lights: number[], atoms_unmapped, line }
 //
 // The batch/job layer (one submission, many molecules, answered over time):
 //   POST   /api/parse-preview       -> { format, molecule_count, sample[], errors[] }
@@ -145,18 +147,18 @@ export async function fetchStructureFromName(name) {
 }
 
 /**
- * Names `smiles` (the same way /api/translate would) and decomposes that
- * name into a TREE of hoverable segments, each paired with real RDKit atom
- * indices where that correspondence could be established reliably.
+ * Names `smiles` (the same way /api/translate would) and explains that
+ * name as a flat list of nodes (`parent` links), each with the RDKit atom
+ * indices it owns and lights on the user's molecule.
  *
- * Failure is per part, not per molecule: a part whose atoms could not be
- * pinned down comes back as an ordinary segment with `kind: "unmapped"`,
- * empty `atom_indices`/`highlight_atoms` and its siblings intact. A molecule
- * Orthonym can't confidently name at all is not an error either — it comes
- * back as a normal 2xx response with `error` set; only a network-level
- * failure or non-2xx status rejects the promise.
+ * Failure is per node, not per molecule: a node whose atoms could not be
+ * pinned down keeps its label, span and line, with empty `owns`/`lights`
+ * and `atoms_unmapped: true`; its siblings are intact. A molecule Orthonym
+ * can't confidently name at all is not an error either — it comes back as a
+ * normal 2xx response with `error` set; only a network-level failure or
+ * non-2xx status rejects the promise.
  * @param {string} smiles
- * @returns {Promise<{smiles:string, name:string|null, svg:string|null, total_atoms:number, segments:Array<{label:string,kind:string,owns_atoms:boolean,locant:string|null,explanation:string,atom_indices:number[],highlight_atoms:number[],name_range:[number,number]|null,children:object[]}>, error:string|null}>}
+ * @returns {Promise<{smiles:string, name:string|null, svg:string|null, atom_points:number[][], total_atoms:number, nodes:Array<{id:string,parent:string|null,kind:string,label:string,span:[number,number]|null,copies:number,owns:number[],lights:number[],atoms_unmapped:boolean,line:string}>, error:string|null}>}
  */
 export async function explainMolecule(smiles) {
   const res = await fetch(`/api/explain?smiles=${encodeURIComponent(smiles)}`)
