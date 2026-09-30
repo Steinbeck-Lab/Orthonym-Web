@@ -352,7 +352,7 @@
 }
 
 /* A long name steps down, so its longest unbreakable run (a von Baeyer
-   bracket such as morphine's) fits the station at every desktop width. */
+   bracket such as galantamine's) fits the station at every desktop width. */
 .station__name--long {
   font-size: clamp(1.0625rem, 1.2vw, 1.25rem);
 }

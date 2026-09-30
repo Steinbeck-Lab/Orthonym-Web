@@ -27,7 +27,7 @@ import { backendAnswered } from '../lib/transport'
  *
  *   ibuprofen         pin       round-trips clean
  *   caffeine          pin       round-trips clean
- *   morphine          fallback  names it, round-trips, NOT a verified PIN
+ *   galantamine       fallback  names it, round-trips, NOT a verified PIN
  *   uranium trioxide  abstain   the engine declines to name it at all
  *
  * It rotates on its own only while it is on screen, not hovered or focused,
@@ -48,9 +48,9 @@ const MOLECULES = [
   { key: 'ibuprofen', label: 'Ibuprofen', smiles: 'CC(C)Cc1ccc(cc1)C(C)C(=O)O', expect: 'pin' },
   { key: 'caffeine', label: 'Caffeine', smiles: 'Cn1cnc2c1c(=O)n(C)c(=O)n2C', expect: 'pin' },
   {
-    key: 'morphine',
-    label: 'Morphine',
-    smiles: 'CN1CC[C@]23[C@@H]4[C@H]1Cc1ccc(O)c5c1[C@@]2(CC[C@@H]4O)[C@H](O5)C=C3',
+    key: 'galantamine',
+    label: 'Galantamine',
+    smiles: 'CN1CC[C@@]23C=C[C@@H](C[C@@H]2OC4=C(C=CC(=C34)C1)OC)O',
     expect: 'fallback',
   },
   { key: 'uranium-trioxide', label: 'Uranium trioxide', smiles: 'O=[U](=O)=O', expect: 'abstain' },
