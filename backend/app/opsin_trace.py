@@ -39,6 +39,22 @@ opsin-cli 2.9.0 by SHA-256). If any lookup fails the module disables itself
 and every call returns TraceFailure("unavailable"). Each run is also checked
 against OPSIN's PUBLIC parseToSmiles; a traced molecule that differs is
 rejected ("mismatch"), never shown.
+
+Failures, all of them refusals (never a partial trace):
+
+- "unavailable": the reflection handles could not be resolved.
+- "unreadable": OPSIN itself cannot read the name.
+- "mismatch": the traced molecule is not the one OPSIN's public parse gives.
+- "unplaced": OPSIN read the name but the parts cannot be tied to the text.
+  OPSIN reads a CAS index name ("benzoic acid, 4-amino-, ethyl ester") in
+  uninverted form, so its tokens no longer run in written order: R1 can place
+  only some of them, and a part with no token of its own would otherwise share
+  a neighbour's key and light the wrong atoms. A part takes its key only from
+  its own tag or from an enclosing substituent/root, never from a word or
+  molecule.
+
+Celery's SoftTimeLimitExceeded subclasses Exception; it is re-raised, never
+turned into a failure.
 """
 
 from __future__ import annotations
@@ -49,6 +65,7 @@ from dataclasses import asdict, dataclass, replace
 from functools import cmp_to_key
 from typing import Optional, Union
 
+from celery.exceptions import SoftTimeLimitExceeded
 from rdkit import Chem
 
 logger = logging.getLogger(__name__)
@@ -102,7 +119,14 @@ class Trace:
 
 @dataclass(frozen=True)
 class TraceFailure:
-    reason: str                   # "unavailable" | "unreadable" | "mismatch"
+    # "unavailable" | "unreadable" | "mismatch" | "unplaced"
+    # ("unplaced": OPSIN read the name in a reordered form, e.g. a CAS index
+    # name, so its parts cannot be matched to the written text).
+    reason: str
+
+
+class _Unplaceable(Exception):
+    """OPSIN read the name, but its parts cannot be tied to the written text."""
 
 
 # --------------------------------------------------------------------------
@@ -167,7 +191,7 @@ class _Handles:
         self.sort_parses = _unlock_ctor(self.SortParses).newInstance()
 
         self.nts = self.NameToStructure.getInstance()
-        version = str(self.NameToStructure.getVersion())
+        version = self.version = str(self.NameToStructure.getVersion())
         if version != PINNED_OPSIN_VERSION:
             logger.warning(
                 "opsin_trace: running against OPSIN %s, pinned/tested version is %s",
@@ -236,6 +260,13 @@ def _get_handles() -> Optional[_Handles]:
             )
             _handles = False
     return _handles or None
+
+
+def running_opsin_version() -> Optional[str]:
+    """The version of the OPSIN jar actually loaded, or None when tracing is
+    unavailable (no JVM, or OPSIN's internal shape changed)."""
+    h = _get_handles()
+    return None if h is None else h.version
 
 
 def self_check() -> bool:
@@ -326,6 +357,8 @@ def _stamp_tokens(h, parse_el, text: str) -> list[WrittenToken]:
         _write_span(h, el, TOKEN_TAG, span)
         written.append(WrittenToken(len(written), _name(h, el), value, span))
         cursor = span[1]
+    if not written:
+        raise _Unplaceable(f"no token of {text!r} could be located in it")
     return written
 
 
@@ -392,23 +425,30 @@ def _collect_parts(h, parse_el, heavy: dict[int, int]) -> list[TracePart]:
         return ids
 
     def walk(el, inherited: Optional[Span]) -> None:
+        """`inherited` is the key of the nearest enclosing substituent/root
+        that has one -- never a word's, a wordRule's or the molecule's, which
+        would make unrelated parts share a key."""
         if _is_token(h, el):
             return
         name = _name(h, el)
         span = _read_span(h, el, PART_TAG)
         if name in _PART_KINDS:
+            # A part OPSIN created after the parse has no key of its own; it
+            # takes its nearest enclosing part's. With neither, it is unplaced.
+            key = span if span is not None else inherited
+            if key is None:
+                raise _Unplaceable(f"a {name} has no key of its own and no enclosing part")
             locant = h.get_attribute_value.invoke(el, "locant")
             parts.append(TracePart(
                 index=len(parts),
                 kind=name,
-                # A part OPSIN created after the parse has no key of its own;
-                # it takes its nearest tagged ancestor's.
-                span=span if span is not None else inherited,
+                span=key,
                 locant=None if locant is None else str(locant),
                 atoms=tuple(sorted({heavy[i] for i in atom_ids(el) if i in heavy})),
             ))
+            inherited = key
         for child in _children(h, el):
-            walk(child, span if span is not None else inherited)
+            walk(child, inherited)
 
     walk(parse_el, None)
     return parts
@@ -417,6 +457,8 @@ def _collect_parts(h, parse_el, heavy: dict[int, int]) -> list[TracePart]:
 def _same_molecule(h, name: str, smiles: str) -> bool:
     try:
         public = h.nts.parseToSmiles(name)
+    except SoftTimeLimitExceeded:
+        raise
     except Exception:
         return False
     if public is None:
@@ -476,9 +518,16 @@ def trace(name: str) -> Union[Trace, TraceFailure]:
                 return TraceFailure("unreadable")
             candidates = [parses.get(i) for i in range(parses.size())]
             candidates.sort(key=cmp_to_key(lambda a, b: int(h.sort_parses.compare(a, b))))
+            unplaced = False
             for parse_el in candidates:
                 try:
                     result = _trace_one(h, parse_el, text)
+                except SoftTimeLimitExceeded:
+                    raise
+                except _Unplaceable as why:
+                    logger.warning("opsin_trace: cannot place the parts of %r: %s", name, why)
+                    unplaced = True
+                    continue
                 except Exception:
                     logger.debug("opsin_trace: candidate rejected for %r", name, exc_info=True)
                     continue
@@ -489,7 +538,10 @@ def trace(name: str) -> Union[Trace, TraceFailure]:
                     )
                     return TraceFailure("mismatch")
                 return result
-            return TraceFailure("unreadable")
+            # A readable name whose parts cannot be placed is not "unreadable".
+            return TraceFailure("unplaced" if unplaced else "unreadable")
+    except SoftTimeLimitExceeded:
+        raise
     except Exception:
         logger.debug("opsin_trace: OPSIN could not read %r", name, exc_info=True)
         return TraceFailure("unreadable")

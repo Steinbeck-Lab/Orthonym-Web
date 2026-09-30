@@ -1,6 +1,7 @@
 """opsin_trace: one tagged OPSIN run -> atoms, written tokens, owners, parts, stereo."""
 
 import pytest
+from celery.exceptions import SoftTimeLimitExceeded
 from rdkit import Chem
 
 from app import opsin_trace
@@ -102,3 +103,30 @@ def test_a_chemistry_mismatch_is_rejected(monkeypatch):
 def test_trace_round_trips_through_json():
     t = trace(CAFFEINE)
     assert trace_from_dict(trace_to_dict(t)) == t
+
+
+@pytest.mark.parametrize("name", [
+    "acetic acid, ethyl ester",
+    "benzoic acid, 4-amino-, ethyl ester",
+    "Ethanol, 2-amino-",
+])
+def test_a_name_opsin_reorders_is_unplaced(name):
+    # OPSIN reads CAS index names in uninverted form, so the written tokens no
+    # longer run in parse order; refusing beats lighting the wrong atoms.
+    assert trace(name) == TraceFailure("unplaced")
+
+
+def test_a_soft_time_limit_is_not_swallowed(monkeypatch):
+    def boom(h, parse_el, text):
+        raise SoftTimeLimitExceeded()
+
+    monkeypatch.setattr(opsin_trace, "_trace_one", boom)
+    with pytest.raises(SoftTimeLimitExceeded):
+        trace("ethanol")
+
+
+def test_the_corpus_is_not_vacuously_refused():
+    # The per-name test above returns early on a failure; this floor stops a
+    # change that refuses everything from passing it.
+    traced = sum(isinstance(trace(n), Trace) for _, n in CURATED + FULL)
+    assert traced >= 550
