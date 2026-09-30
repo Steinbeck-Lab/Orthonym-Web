@@ -1,130 +1,165 @@
-"""Explain-coverage census.
+"""Explain coverage census (spec §8.4). On demand -- too slow for the gate.
 
-Buckets are keyed on the STRUCTURAL FEATURE of the input name (the axis the
-corpus assigned), never on what the output looked like, so the result ranks
-build order instead of describing symptoms.
+    cd backend && PYTHONPATH="$(pwd)" REDIS_URL=redis://localhost:6379/11 \
+      .venv/bin/python scripts/explain_census.py [--chembl tests/fixtures/explain_chembl_10k.tsv]
 
-Run it directly to print the coverage table:
-
-    cd backend && PYTHONPATH="$(pwd)" REDIS_URL=redis://localhost:6379/0 \
-      .venv/bin/python scripts/explain_census.py
-
-Outcomes, which a single name may carry several of:
-  ENGINE_ERROR   decompose() failed for this name
-  SPANS_NONE     no span-bearing segment got a name_range -- the name text is
-                 dead in the UI, because nameTargets() returns []
-  SPANS_PARTIAL  some but not all span-bearing segments got a range
-  ATOM_GAP       owning segments do not cover every heavy atom
-  UNMAPPED       at least one segment came back kind == "unmapped"
+Outcomes, measured on the trace and the node list (a name may carry several):
+  CLEAN               nothing below
+  UNREADABLE          OPSIN cannot read the name (reported, not a failure)
+  UNAVAILABLE         reflection disabled (a failure: the census ran blind)
+  MISMATCH            traced molecule != OPSIN's public parse
+  UNPLACED            OPSIN read the name in a reordered form (a CAS index name):
+                      its parts cannot be tied to the text (a failure; not the
+                      same as PART_UNPLACED, which is a node without a span)
+  NODE_ERROR          build_nodes raised
+  PART_UNPLACED       a substituent/parent/suffix node has no span
+  ATOM_GAP            part nodes do not own every heavy atom
+  ATOM_OVERLAP        an atom is owned twice
+  BAD_SPAN            a span outside the name or empty
+  CROSSING            two spans overlap without nesting
+  LABEL_EDGE          a part label starts/ends with glue or leaves a bracket open
+  ORPHAN_TOKEN        a written token no part and no bracket owns
+  HYDRO_WRONG         a hydro / indicated-hydrogen locant lights nothing, or an
+                      atom not carrying that locant
+  STEREO_NO_PARENT    a stereo node with no part
+  STEREO_WRONG_ATOM   a stereo mark with a locant lights an atom without that
+                      locant, an atom that is not a stereocentre (R/S,
+                      alpha/beta) or not on a stereo double bond (E/Z), or
+                      more than one atom
+  LOCANT_UNLIT        a locant node lights nothing (a sugar's alpha/beta, whose
+                      anomeric carbon the structure cannot prove, lights nothing
+                      by design and is not counted)
+  LIT_ATOM_FOREIGN    a locant node lights an atom it has no claim on: not in its
+                      own part, not a copy OPSIN placed at that locant, and not
+                      the atom carrying that locant that the part's substituent
+                      chain is bonded to (app.explain_tree.foreign_lights)
+Every outcome except CLEAN and UNREADABLE fails the run (exit 1).
 """
 
+import argparse
 import collections
+import os
+import re
 import sys
 
-SPAN_BEARING = ("substituent", "parent", "suffix", "modifier")
+PART_KINDS = ("substituent", "parent", "suffix")
+_STEREO_MARK = re.compile(r"^(\d+[a-z]?'*)([RSrs]\*?|[EZ]|alpha|beta)$")
+PASSING = {"CLEAN", "UNREADABLE"}
 
 
-def walk(segments):
-    for segment in segments:
-        yield segment
-        yield from walk(segment.get("children") or [])
+def classify(trace, nodes, owners) -> list[str]:
+    """`trace` is a Trace, `nodes` build_nodes(trace), `owners`
+    assign_owners(trace.tokens)."""
+    from app.explain_tree import _stereo_atoms, foreign_lights
+    out = []
+    parts = [n for n in nodes if n["kind"] in PART_KINDS]
+    if any(n["span"] is None for n in parts):
+        out.append("PART_UNPLACED")
+    owned = [a for n in parts for a in n["owns"]]
+    if set(owned) != set(range(len(trace.atoms))):
+        out.append("ATOM_GAP")
+    if len(owned) != len(set(owned)):
+        out.append("ATOM_OVERLAP")
+    spans = [tuple(n["span"]) for n in nodes if n["span"]]
+    if any(not (0 <= a < b <= len(trace.text)) for a, b in spans):
+        out.append("BAD_SPAN")
+    if any(a[0] < b[0] < a[1] < b[1] for a in spans for b in spans):
+        out.append("CROSSING")
+    for n in parts:
+        label = n["label"]
+        if n["span"] and (not label or label[0] in "-,')]}" or label[-1] in "-,([{"
+                          or any(label.count(o) != label.count(c) for o, c in ("()", "[]", "{}"))):
+            out.append("LABEL_EDGE")
+            break
+    if any(owner is None for owner in owners.values()):
+        out.append("ORPHAN_TOKEN")
+    for n in nodes:
+        if n["kind"] == "indicated_h" or (n["kind"] == "locant" and "hydrogen" in n["line"]):
+            loc = n["label"][:-1] if n["kind"] == "indicated_h" else n["label"]
+            if not n["lights"] or any(loc not in trace.atoms[a].locants for a in n["lights"]):
+                out.append("HYDRO_WRONG")
+                break
+    for n in nodes:
+        if n["kind"] != "stereo":
+            continue
+        if n["parent"] is None:
+            out.append("STEREO_NO_PARENT")
+            break
+    centres, double = _stereo_atoms(trace.smiles)
+    for n in nodes:
+        m = _STEREO_MARK.match(n["label"]) if n["kind"] == "stereo" else None
+        if not m or not n["lights"]:
+            continue       # a mark that names no single atom lights nothing, by design
+        pool = double if m.group(2) in ("E", "Z") else centres
+        if len(n["lights"]) != 1 or any(
+                m.group(1) not in trace.atoms[a].locants or a not in pool for a in n["lights"]):
+            out.append("STEREO_WRONG_ATOM")
+            break
+    for n in nodes:
+        if n["kind"] == "stereo" and re.match(r"^([RSrs]\*?|[EZ])$", n["label"]) and n["lights"]:
+            pool = double if n["label"] in ("E", "Z") else centres
+            if len(n["lights"]) != 1 or n["lights"][0] not in pool:
+                out.append("STEREO_WRONG_ATOM")
+                break
+    if any(n["kind"] == "locant" and not n["lights"] and n["label"].lower() not in ("alpha", "beta")
+           for n in nodes):
+        out.append("LOCANT_UNLIT")
+    if foreign_lights(trace, nodes):
+        out.append("LIT_ATOM_FOREIGN")
+    return out or ["CLEAN"]
 
 
-def _classify(payload: dict):
-    """Shared implementation for classify() and run(): walks the segment
-    tree exactly once and returns (outcome, segments, span_bearing), so a
-    caller that also needs the segments (run(), for its n_span_bearing /
-    n_with_range columns) does not have to walk the same tree a second
-    time to get an outcome.
-    """
-    if payload.get("error"):
-        return ["ENGINE_ERROR"], [], []
+def run(names: list[str]) -> dict[str, list[str]]:
+    from app.explain_tree import build_nodes
+    from app.opsin_trace import Trace, trace
+    from app.token_owner import assign_owners
 
-    segments = list(walk(payload.get("segments") or []))
-    span_bearing = [s for s in segments if s.get("kind") in SPAN_BEARING]
-    with_range = [s for s in span_bearing if s.get("name_range") is not None]
-
-    owned = set()
-    for segment in segments:
-        if segment.get("owns_atoms"):
-            owned.update(segment.get("atom_indices") or [])
-    atom_gap = (payload.get("total_atoms") or 0) - len(owned)
-
-    outcome = []
-    if span_bearing and not with_range:
-        outcome.append("SPANS_NONE")
-    elif span_bearing and len(with_range) < len(span_bearing):
-        outcome.append("SPANS_PARTIAL")
-    if any(s.get("kind") == "unmapped" for s in segments):
-        outcome.append("UNMAPPED")
-    if atom_gap:
-        outcome.append("ATOM_GAP")
-    return outcome or ["CLEAN"], segments, span_bearing
+    results = {}
+    for name in names:
+        t = trace(name)
+        if not isinstance(t, Trace):
+            results[name] = [t.reason.upper()]
+            continue
+        try:
+            nodes = build_nodes(t)
+        except Exception:
+            results[name] = ["NODE_ERROR"]
+            continue
+        results[name] = classify(t, nodes, assign_owners(t.tokens))
+    return results
 
 
-def classify(payload: dict) -> list[str]:
-    """Outcome labels for one explain_name result. ENGINE_ERROR is exclusive:
-    a name that never decomposed has no spans to judge, and reporting both
-    would double-count it against two different causes.
-    """
-    outcome, _segments, _span_bearing = _classify(payload)
-    return outcome
+def _report(title: str, results: dict[str, list[str]]) -> int:
+    counts = collections.Counter(o for outs in results.values() for o in outs)
+    print(f"\n== {title}: {len(results)} names")
+    for outcome in ("CLEAN", "UNREADABLE", "UNAVAILABLE", "MISMATCH", "UNPLACED", "NODE_ERROR", "PART_UNPLACED",
+                    "ATOM_GAP", "ATOM_OVERLAP", "BAD_SPAN", "CROSSING", "LABEL_EDGE", "ORPHAN_TOKEN",
+                    "HYDRO_WRONG", "STEREO_NO_PARENT", "STEREO_WRONG_ATOM", "LOCANT_UNLIT",
+                    "LIT_ATOM_FOREIGN"):
+        print(f"  {outcome:18s} {counts.get(outcome, 0)}")
+    print("  residue:")
+    for name, outs in results.items():
+        if outs != ["CLEAN"]:
+            print(f"    {','.join(outs):40s} {name}")
+    return sum(v for k, v in counts.items() if k not in PASSING)
 
 
-def run(corpus) -> list[dict]:
-    from app.explain import explain_name
+def main() -> int:
+    from tests.conftest import GOLDEN_NAMES
+    from tests.fixtures.explain_corpus import CURATED, FULL
 
-    rows = []
-    for index, (axis, name) in enumerate(corpus, 1):
-        payload = explain_name(name)
-        outcome, _segments, span_bearing = _classify(payload)
-        rows.append({
-            "axis": axis,
-            "name": name,
-            "outcome": outcome,
-            "n_span_bearing": len(span_bearing),
-            "n_with_range": len([
-                s for s in span_bearing if s.get("name_range") is not None
-            ]),
-            "detail": payload.get("error"),
-        })
-        if index % 25 == 0:
-            print(f"... {index}/{len(corpus)}", file=sys.stderr, flush=True)
-    return rows
-
-
-def table(rows) -> str:
-    by_axis = collections.defaultdict(list)
-    for row in rows:
-        by_axis[row["axis"]].append(row)
-
-    def count(subset, label):
-        return sum(1 for r in subset if label in r["outcome"])
-
-    lines = [
-        f"{'axis':24s} {'n':>4s} {'clean':>6s} {'spansNONE':>10s} "
-        f"{'partial':>8s} {'engErr':>7s} {'unmap':>6s} {'atomGap':>7s}"
-    ]
-    for axis in sorted(by_axis):
-        subset = by_axis[axis]
-        lines.append(
-            f"{axis:24s} {len(subset):4d} {count(subset, 'CLEAN'):6d} "
-            f"{count(subset, 'SPANS_NONE'):10d} "
-            f"{count(subset, 'SPANS_PARTIAL'):8d} "
-            f"{count(subset, 'ENGINE_ERROR'):7d} "
-            f"{count(subset, 'UNMAPPED'):6d} "
-            f"{count(subset, 'ATOM_GAP'):7d}"
-        )
-    lines.append(
-        f"{'TOTAL':24s} {len(rows):4d} {count(rows, 'CLEAN'):6d} "
-        f"{count(rows, 'SPANS_NONE'):10d} {count(rows, 'SPANS_PARTIAL'):8d} "
-        f"{count(rows, 'ENGINE_ERROR'):7d} {count(rows, 'UNMAPPED'):6d} "
-        f"{count(rows, 'ATOM_GAP'):7d}"
-    )
-    return "\n".join(lines)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--chembl", help="TSV of chembl_id<TAB>name (see build_chembl_fixture.py)")
+    args = parser.parse_args()
+    bad = _report("corpus", run(sorted({n for _, n in CURATED + FULL} | set(GOLDEN_NAMES))))
+    if args.chembl:
+        with open(args.chembl) as fh:
+            names = [line.rstrip("\n").split("\t", 1)[1] for line in fh if "\t" in line]
+        bad += _report("chembl", run(names))
+    return 1 if bad else 0
 
 
 if __name__ == "__main__":
-    from tests.fixtures.explain_corpus import FULL
-
-    print(table(run(FULL)))
+    code = main()
+    sys.stdout.flush()
+    os._exit(code)   # the JVM would otherwise keep the process alive
