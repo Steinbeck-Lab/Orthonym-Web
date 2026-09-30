@@ -49,13 +49,21 @@ PASSING = {"CLEAN", "UNREADABLE"}
 
 def _spiro_primes(trace, node, loc: str) -> int:
     """How many primes OPSIN puts on the atom a locant names. In
-    spiro[A-x,y'-B] every locant written after the spiro locants is a position
-    of a later component, and OPSIN numbers those atoms 1', 2', ... (a second
-    spiro locant makes the third component ''). The gate still demands an EXACT
-    locant: an atom carrying the bare number in a later component is wrong."""
-    if loc.endswith("'") or not node["span"] or not any(t.kind == "polyCyclicSpiro" for t in trace.tokens):
+    spiro[A-x,y'-B] every locant written after the spiro locants of THAT spiro
+    system is a position of a later component, and OPSIN numbers those atoms
+    1', 2', ... (a second spiro locant makes the third component ''). A name
+    may hold several spiro systems; only the one the node is written in counts.
+    The gate still demands an EXACT locant: an atom carrying the bare number in a
+    later component is wrong."""
+    if loc.endswith("'") or not node["span"]:
         return 0
-    return sum(1 for t in trace.tokens if t.kind == "spiroLocant" and t.span[1] <= node["span"][0])
+    start = node["span"][0]
+    heads = [t for t in trace.tokens if t.kind == "polyCyclicSpiro" and t.span[1] <= start]
+    if not heads:
+        return 0
+    head = heads[-1]
+    return sum(1 for t in trace.tokens if t.kind == "spiroLocant" and head.span[1] <= t.span[0]
+               and t.span[1] <= start)
 
 
 def classify(trace, nodes, owners) -> list[str]:

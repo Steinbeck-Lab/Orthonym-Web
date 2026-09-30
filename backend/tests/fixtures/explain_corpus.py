@@ -91,6 +91,8 @@ CURATED: list[tuple[str, str]] = [
     ("esters-salts-amides", "3-acetyloxypropyl acetate"),
     # Task 9: hydro / indicated-H locants written in the SECOND spiro component are primed atoms
     ("von-baeyer-spiro", "3-(4-fluorophenyl)-1'-[(2-fluorophenyl)methyl]-2',4-dioxospiro[1,3-thiazolidine-2,3'-2,3-dihydro-1H-indole]"),
+    # Task 9: two spiro systems in one name; the primes restart at each
+    ("von-baeyer-spiro", "3-hydroxy-7,7-dimethyl-1'-[4'-oxospiro[2,3-dihydro-1H-indene-2,5'-4,5-dihydro-1,3-oxazole]-2'-yl]spiro[6H,7H-furo[3,4-b]pyridine-5,4'-piperidine]"),
 ]
 
 # Names OPSIN 2.9.0 itself genuinely cannot parse. Verified against

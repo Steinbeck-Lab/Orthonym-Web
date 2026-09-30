@@ -573,3 +573,19 @@ def test_hydro_locants_in_the_second_spiro_component_light_the_primed_atoms():
     wrong = next(a.index for a in t.atoms if "2" in a.locants)
     two["lights"] = [wrong]
     assert "HYDRO_WRONG" in classify(t, nodes, assign_owners(t.tokens))
+
+
+def test_the_primes_of_a_spiro_system_restart_at_the_next_spiro_system():
+    """Two spiro systems in one name: the first component of the SECOND ("6H,7H-furo...")
+    is unprimed again, however many spiro locants were written before it."""
+    t, nodes = _nodes("3-hydroxy-7,7-dimethyl-1'-[4'-oxospiro[2,3-dihydro-1H-indene-2,5'-"
+                      "4,5-dihydro-1,3-oxazole]-2'-yl]spiro[6H,7H-furo[3,4-b]pyridine-5,4'-piperidine]")
+    assert classify(t, nodes, assign_owners(t.tokens)) == ["CLEAN"]
+    for label, element in (("6H", "O"), ("7H", "C")):
+        h = _one(nodes, kind="indicated_h", label=label)
+        (atom,) = h["lights"]
+        assert label[:-1] in t.atoms[atom].locants and t.atoms[atom].element == element
+    four_five = t.text.index("4,5-dihydro")
+    four = next(n for n in nodes if n["kind"] == "locant" and n["span"] == [four_five, four_five + 1])
+    (atom,) = four["lights"]
+    assert "4'" in t.atoms[atom].locants                      # the first system's second component
