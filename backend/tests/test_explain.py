@@ -443,6 +443,25 @@ def test_a_repeated_suffix_is_labelled_with_its_multiplier():
     assert locants == ["1", "2", "3"]
 
 
+
+@pytest.mark.parametrize("name, label", [
+    ("butane-1,2,3,4-tetrol", "tetrol"),
+    ("cyclohexane-1,2,4,5-tetrone", "tetrone"),
+    ("butane-1,2,3,4-tetramine", "tetramine"),
+    ("pentane-1,2,3,4,5-pentol", "pentol"),
+    ("hexane-1,2,3,4,5,6-hexol", "hexol"),
+    ("cyclohexane-1,2,3,4,5,6-hexone", "hexone"),
+])
+def test_a_repeated_suffix_label_is_spelt_the_way_the_name_spells_it(name, label):
+    # The label must read as the name reads. Two ways it did not: the "a" of
+    # tetra/penta/... stayed before a vowel ("tetraol" beside "tetrol" in the
+    # name), and a table that stopped at tetra dropped the count for five or
+    # more, so a pentol was labelled plain "ol".
+    result = explain_name(name)
+    suffix = next(s for s in result["segments"] if s["kind"] == "suffix")
+    assert suffix["label"] == label
+    assert label in name
+
 def test_suffix_children_are_ordered_by_number_not_by_text():
     result = explain_name("decane-1,10-diol")
     suffix = next(s for s in result["segments"] if s["kind"] == "suffix")
