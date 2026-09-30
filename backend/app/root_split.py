@@ -48,7 +48,7 @@ def _has_element_locant(locants) -> bool:
 
 _DIGITS = re.compile(r"\d+(?:[a-z](?![a-z]))?'*")
 _LOCANT_LIKE = ("locant", "colonOrSemiColonDelimitedLocant", "stereoChemistry")
-_SKIPPED = ("multiplier", "hyphen", "ine", "e")
+_SKIPPED = ("multiplier", "hyphen", "ine", "e", "infix", "suffixPrefix")
 
 
 def _group_locants(trace: Trace, indices) -> set[str]:
@@ -115,9 +115,18 @@ def split_root(trace: Trace, atoms: Sequence[int]) -> RootSplit:
         carbon with no numeric locant joined to the skeleton that carries a
         candidate (benzoic acid's and benzonitrile's carbon)."""
         near = [n for n in hetero_of(carbon) if n in candidates or not _has_numeric_locant(by_index[n].locants)]
-        if len(near) >= 2:
-            return True
         locants = by_index[carbon].locants
+        # Two heteroatoms on one carbon make a group carbon only when it is
+        # the one the suffix names: a carbon with no numeric locant, one on a
+        # written suffix locant, or one on a plainly numbered skeleton
+        # ("citric acid": 1, 5). An amino-acid stem numbers its side chain
+        # with Greek letters too (asparagine's C4 is 4/gamma, arginine's
+        # guanidine carbon is guanidino-C/99): that carboxamide or guanidine is
+        # the stem's, not the ending's.
+        plain = all(re.match(r"^\d+'*$", loc) for loc in locants)
+        if len(near) >= 2 and (not _has_numeric_locant(locants) or plain
+                               or any(loc.rstrip("'") in numbered for loc in locants)):
+            return True
         if any(loc.rstrip("'") in numbered for loc in locants) and near:
             return True
         return (not _has_numeric_locant(locants) and any(_has_element_locant(by_index[n].locants) for n in near)

@@ -60,13 +60,18 @@ def _suffix_elements(name):
     ("L-phenylalaninamide", ["C", "N", "O"]),        # C(=O)N; the alpha/beta carbons stay in the parent
     ("L-(+)-lactic acid", ["O", "O"]),               # the 2-hydroxyl oxygen stays in the parent
     # side-chain heteroatoms carry element locants too, but sit on Cbeta, not on the group's carbon
+    # a side-chain carboxamide or guanidine is the stem's (4/gamma, guanidino-C/99), not the ending's
+    ("L-asparaginamide", ["N", "O"]),
+    ("L-glutaminamide", ["N", "O"]),
+    ("methyl L-asparaginate", ["O", "O"]),
+    ("L-argininamide", ["N", "O"]),
     ("L-serinamide", ["N", "O"]),
     ("methyl L-serinate", ["O", "O"]),
     ("L-threoninamide", ["N", "O"]),
     ("L-tyrosinamide", ["C", "N", "O"]),
     ("L-cysteinamide", ["N", "O"]),
     ("methyl L-methioninate", ["O", "O"]),
-    ("N-methyl-D-aspartic acid", ["O", "O", "O", "O"]),   # two acids; the N-methylamino nitrogen is the stem's
+    ("N-methyl-D-aspartic acid", ["O", "O"]),   # one acid is the ending; the side-chain acid (4/gamma) and the N-methylamino N are the stem's
 ])
 def test_an_amino_acid_group_owns_only_its_own_atoms(name, suffix):
     assert _suffix_elements(name) == suffix
@@ -102,6 +107,13 @@ def test_phenylalaninamide_keeps_alpha_and_beta_in_the_parent():
     ("mandelic acid", ["C", "O", "O"]),             # the alpha-hydroxyl and its carbon stay in the parent
     ("hexanedioic acid", ["O", "O", "O", "O"]),      # a counted group sits on both ends
     ("pentanedial", ["O", "O"]),
+    # a locanted infix ("di|thi|ol") sits between the locants and the suffix
+    ("ethane-1,2-dithiol", ["S", "S"]),
+    ("propane-1,3-dithiol", ["S", "S"]),
+    ("butane-1,4-dithiol", ["S", "S"]),
+    ("citric acid", ["C", "O", "O", "O", "O", "O", "O"]),   # plainly numbered: all three acids
+    ("succinic acid", ["O", "O", "O", "O"]),
+    ("butanediamide", ["N", "N", "O", "O"]),
     ("naphthalene-2-sulfonate", ["O", "O", "O", "S"]),
     ("estra-1,3,5(10)-triene-3,17beta-diol", ["O", "O"]),
     # two root copies; the bridging oxygen has no locant but sits on a group carbon
