@@ -26,7 +26,7 @@ const TAG = { italic: 'i', super: 'sup', sub: 'sub' }
  * Renders `{ text, style }` pieces.
  *
  * Exported for the callers that do their own cutting first: /explain slices
- * the name by the backend's `name_range` offsets into hover targets, then asks
+ * the name by the backend's node spans into hover targets, then asks
  * nameTypography for the runs inside each target's range and hands them here.
  */
 export function Pieces({ pieces, breaks = true }) {
