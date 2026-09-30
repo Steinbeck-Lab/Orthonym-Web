@@ -382,7 +382,6 @@ def test_a_bracketed_chain_locant_names_the_position_on_the_substituent_it_hangs
     ("2-(2-thienylmethyl)pyridine", "thienyl"),
     ("2-(2-furylmethylsulfanyl)pyridine", "furyl"),
     ("2-(2-naphthyloxy)propanoic acid", "naphthyl"),
-    ("2-naphthyloxyacetic acid", "naphthyl"),          # unbracketed: both readings are true chemistry
     ("N-(2-pyridylmethyl)acetamide", "pyridyl"),       # different numbers: was always right
 ])
 def test_a_ring_substituents_own_attachment_locant_lights_its_own_atom(name, part):
@@ -403,3 +402,71 @@ def test_a_ring_substituents_own_attachment_locant_lights_its_own_atom(name, par
     foreign = next(a for a in root["owns"] if leading["label"] in t.atoms[a].locants)
     leading["lights"] = [foreign]
     assert foreign_lights(t, nodes) == [(leading["label"], [foreign])], name
+
+
+def _owner_label(nodes, atom):
+    return next(n["label"] for n in nodes if n["kind"] in PART_NODE_KINDS and atom in n["owns"])
+
+
+# NB6 + NB7 (controller ruling, IUPAC P-16.5.1). A leading locant written directly before an
+# UNBRACKETED chained substituent names the PARENT position the whole chain hangs on -- always.
+# A ring's own attachment number is only one written inside it ("pyridin-2-yl"), read from the
+# written text (OPSIN drops that token). Bracketed chains keep their own reading.
+@pytest.mark.parametrize("name,part,root", [
+    # NB6: the ring writes its own attachment; the number in front is still the parent's
+    ("2-pyridin-2-yloxybenzoic acid", "pyridin-2-yl", "benz"),
+    ("2-naphthalen-2-yloxyacetic acid", "naphthalen-2-yl", "acet"),
+    ("3-pyridin-3-yloxypropan-1-ol", "pyridin-3-yl", "propan"),
+    ("4-pyridin-4-ylmethylpyridine", "pyridin-4-yl", "pyridine"),
+    ("2-thiophen-2-ylmethylpyridine", "thiophen-2-yl", "pyridine"),
+    # NB7: phenyl / cyclohexyl never write an attachment, and the linker's own "1" is not a position
+    ("1-phenylmethoxynaphthalene", "phenyl", "naphthalene"),
+    ("1-phenylmethoxy-4-nitrobenzene", "phenyl", "benzene"),
+    ("1-cyclohexyloxy-4-nitrobenzene", "cyclohexyl", "benzene"),
+    ("1-phenylsulfanyl-2-nitrobenzene", "phenyl", "benzene"),
+    ("1-cyclohexylmethoxybenzene", "cyclohexyl", "benzene"),
+    ("1-phenylmethylpiperazine", "phenyl", "piperazine"),
+    ("1-naphthalen-1-ylmethylnaphthalene", "naphthalen-1-yl", "naphthalene"),
+    # the round-4 reading of these two (the ring's own number) is reversed: unbracketed -> parent
+    ("2-pyridyloxybenzoic acid", "pyridyl", "benz"),
+    ("2-naphthyloxyacetic acid", "naphthyl", "acet"),
+])
+def test_a_leading_locant_before_an_unbracketed_chain_names_the_parent_position(name, part, root):
+    t, nodes = _nodes(name)
+    (p,) = [n for n in nodes if n["kind"] == "substituent" and n["label"] == part]
+    leading = min((n for n in nodes if n["parent"] == p["id"] and n["kind"] == "locant"),
+                  key=lambda n: n["span"][0])
+    (atom,) = leading["lights"]
+    assert atom not in p["owns"] and leading["label"] in t.atoms[atom].locants, (name, leading)
+    assert _owner_label(nodes, atom).startswith(root), (name, _owner_label(nodes, atom))
+    assert foreign_lights(t, nodes) == [], name
+    # the gate sees the old behaviour: an atom of the substituent (or its linker) for that number
+    chain = [a for n in nodes if n["kind"] == "substituent" for a in n["owns"]
+             if leading["label"] in t.atoms[a].locants]
+    assert chain, name
+    leading["lights"] = [chain[0]]
+    assert foreign_lights(t, nodes) == [(leading["label"], [chain[0]])], name
+
+
+@pytest.mark.parametrize("name,part", [
+    ("2-(2-pyridylmethyl)benzoic acid", "pyridyl"),
+    ("2-(2-naphthyloxy)propanoic acid", "naphthyl"),
+])
+def test_a_bracketed_chain_keeps_the_rings_own_attachment_locant(name, part):
+    t, nodes = _nodes(name)
+    (p,) = [n for n in nodes if n["kind"] == "substituent" and n["label"] == part]
+    inner = min((n for n in nodes if n["parent"] == p["id"] and n["kind"] == "locant"),
+                key=lambda n: n["span"][0])
+    (atom,) = inner["lights"]
+    assert atom in p["owns"], (name, inner)
+    assert foreign_lights(t, nodes) == [], name
+
+
+def test_a_linkers_own_number_is_not_a_position_the_bracketed_chain_hangs_on():
+    """NB7, chain_edge: "(1-phenylmethoxyethyl)": methoxy's CH2 carries 1/C, but the 1 is ethyl's."""
+    t, nodes = _nodes("4-(1-phenylmethoxyethyl)phenol")
+    (p,) = [n for n in nodes if n["kind"] == "substituent" and n["label"] == "phenyl"]
+    (leading,) = [n for n in nodes if n["parent"] == p["id"] and n["kind"] == "locant"]
+    (atom,) = leading["lights"]
+    assert _owner_label(nodes, atom) == "ethyl" and "1" in t.atoms[atom].locants
+    assert foreign_lights(t, nodes) == []
