@@ -22,7 +22,7 @@ CORE = frozenset({
 })
 PREFIX = frozenset({
     "stereoChemistry", "indicatedHydrogen", "hydro", "subtractivePrefix", "orthoMetaPara",
-    "spiroLocant", "colonOrSemiColonDelimitedLocant",
+    "spiroLocant", "colonOrSemiColonDelimitedLocant", "lambdaConvention",
 })
 CONTEXTUAL = frozenset({"locant", "multiplier"})
 GLUE = frozenset({

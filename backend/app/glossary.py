@@ -237,6 +237,7 @@ _TOKEN_LINES = {
     ),
     "vonBaeyer": '"{text}" counts the atoms in each bridge of the ring cage.',
     "spiro": '"{text}" marks one atom shared between two rings.',
+    "lambdaConvention": '"{text}" gives the bonding number of the atom it names, when that differs from its usual one.',
 }
 
 GENERIC_TOKEN_LINE = '"{text}" is part of how this name is written.'

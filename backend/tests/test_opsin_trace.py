@@ -100,6 +100,22 @@ def test_a_chemistry_mismatch_is_rejected(monkeypatch):
     assert trace("ethanol") == TraceFailure("mismatch")
 
 
+@pytest.mark.parametrize("name", [
+    "ethyl 2-(diphenyl-λ5-phosphanonyl)pentanoate",
+    "(3Z)-2-methyl-4-[methyl(phenyl)-λ5-phosphanonyl]but-3-en-2-ol",
+])
+def test_the_candidate_opsin_returns_is_the_one_traced(name):
+    """OPSIN's parseChemicalName returns the first candidate that builds with NO
+    BuildState warning. "phosphanonyl" reads first as phospha+nonyl (a warning)
+    and second as phosph+on+yl; the trace used to take the first and was refused
+    as a mismatch. It must take the one OPSIN's public parse takes."""
+    t = trace(name)
+    assert isinstance(t, Trace), t
+    assert ("group", "phosph") in [(tok.kind, tok.value) for tok in t.tokens]
+    assert not any(tok.kind == "heteroatom" and tok.value == "phospha" for tok in t.tokens)
+    assert "P(=O)" in t.smiles
+
+
 def test_trace_round_trips_through_json():
     t = trace(CAFFEINE)
     assert trace_from_dict(trace_to_dict(t)) == t

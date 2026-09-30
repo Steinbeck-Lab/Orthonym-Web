@@ -345,3 +345,11 @@ def test_a_locant_in_the_second_spiro_component_names_the_primed_atom():
     dihydro = t.text.index("2,3-dihydro")
     (atom,) = kids[("2", dihydro)]["lights"]
     assert "2" in t.atoms[atom].locants
+
+
+def test_a_lambda_convention_is_its_own_child_of_the_group_it_names():
+    t, nodes = _nodes("ethyl 2-(diphenyl-λ5-phosphanonyl)pentanoate")
+    lam = _one_node(nodes, "token", "lambda5")
+    phosphanonyl = _one_node(nodes, "substituent", "phosphanonyl")
+    assert lam["parent"] == phosphanonyl["id"] and lam["lights"] == phosphanonyl["lights"]
+    assert "bonding number" in lam["line"]

@@ -232,6 +232,7 @@ class _Handles:
         self.get_locants = _unlock_method(self.Atom, "getLocants")
         self.get_atom_element = _unlock_method(self.Atom, "getElement")
         self.frag_manager_field = _unlock_field(self.BuildState, "fragManager")
+        self.get_warnings = _unlock_method(self.BuildState, "getWarnings")
 
 
 _lock = threading.Lock()
@@ -477,7 +478,9 @@ def _same_molecule(h, name: str, smiles: str) -> bool:
     return a is not None and b is not None and Chem.MolToSmiles(a) == Chem.MolToSmiles(b)
 
 
-def _trace_one(h, parse_el, text: str) -> Trace:
+def _trace_one(h, parse_el, text: str) -> tuple[Trace, bool]:
+    """(the trace of one candidate parse, whether OPSIN's BuildState recorded a
+    warning while building it)."""
     written = _stamp_tokens(h, parse_el, text)
     _stamp_parts(h, parse_el)
     state = h.state_ctor.newInstance(h.config)
@@ -486,6 +489,7 @@ def _trace_one(h, parse_el, text: str) -> Trace:
     h.cp_process.invoke(h.cp_ctor.newInstance(state, suffix_applier), parse_el)
     written = _record_owners(h, parse_el, written)
     fragment = h.build_fragment.invoke(h.sb_ctor.newInstance(state), parse_el)
+    warned = not bool(h.get_warnings.invoke(state).isEmpty())
     h.convert_spare_valencies.invoke(h.frag_manager_field.get(state))
 
     writer = h.sw_ctor.newInstance(fragment, h.default_smiles_opts)
@@ -507,7 +511,7 @@ def _trace_one(h, parse_el, text: str) -> Trace:
     parts = _collect_parts(h, parse_el, heavy)
     if not parts:
         raise ValueError("no name parts recovered")
-    return Trace(text, smiles, tuple(atoms), tuple(written), tuple(parts))
+    return Trace(text, smiles, tuple(atoms), tuple(written), tuple(parts)), warned
 
 
 def trace(name: str) -> Union[Trace, TraceFailure]:
@@ -529,9 +533,15 @@ def trace(name: str) -> Union[Trace, TraceFailure]:
             candidates = [parses.get(i) for i in range(parses.size())]
             candidates.sort(key=cmp_to_key(lambda a, b: int(h.sort_parses.compare(a, b))))
             unplaced = False
+            # NameToStructure.parseChemicalName returns the first candidate that
+            # builds WITHOUT a BuildState warning; a candidate that builds with
+            # one is only kept as a fallback ("diphenyl-λ5-phosphanonyl" reads
+            # as phospha+nonyl first, with a warning, then as phosph+on+yl).
+            warned_first: Optional[Trace] = None
+            chosen: Optional[Trace] = None
             for parse_el in candidates:
                 try:
-                    result = _trace_one(h, parse_el, text)
+                    result, warned = _trace_one(h, parse_el, text)
                 except SoftTimeLimitExceeded:
                     raise
                 except _Unplaceable as why:
@@ -541,13 +551,20 @@ def trace(name: str) -> Union[Trace, TraceFailure]:
                 except Exception:
                     logger.debug("opsin_trace: candidate rejected for %r", name, exc_info=True)
                     continue
-                if not _same_molecule(h, name, result.smiles):
+                if not warned:
+                    chosen = result
+                    break
+                if warned_first is None:
+                    warned_first = result
+            chosen = chosen or warned_first
+            if chosen is not None:
+                if not _same_molecule(h, name, chosen.smiles):
                     logger.warning(
                         "opsin_trace: traced molecule for %r differs from OPSIN's "
                         "public parse -- rejecting", name,
                     )
                     return TraceFailure("mismatch")
-                return result
+                return chosen
             # A readable name whose parts cannot be placed is not "unreadable".
             return TraceFailure("unplaced" if unplaced else "unreadable")
     except SoftTimeLimitExceeded:

@@ -75,6 +75,8 @@ CURATED: list[tuple[str, str]] = [
     ("von-baeyer-spiro", "(2R,11'S,13'S)-11',13'-dimethyl-5,6'-dioxospiro[oxolane-2,14'-tetracyclo[8.7.0.0^4,9.0^13,17]heptadeca-4,9-diene]"),
     ("von-baeyer-spiro", "4'-(1,1-dimethylethan-1-yl)-6'-(4-nitrocyclohexa-1,3,5-trien-1-yl)spiro[1,3-dioxolane-2,10'-1-azabicyclo[4.3.1]decane]"),
     ("von-baeyer-spiro", "13'-hydroxy-5-methoxy-1,3,3-trimethylspiro[2,3-dihydro-1H-indole-2,5'-6-oxatricyclo[8.4.0.0^2,7]tetradeca-1,3,7,9,11,13-hexaene]"),
+    # Task 9: OPSIN's own pick is the candidate that builds without a warning
+    ("esters-salts-amides", "ethyl 2-(diphenyl-λ5-phosphanonyl)pentanoate"),
 ]
 
 # Names OPSIN 2.9.0 itself genuinely cannot parse. Verified against
