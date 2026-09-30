@@ -102,21 +102,39 @@ def _stereo_atoms(smiles: str) -> tuple[set, set]:
     return centres, bonds
 
 
+def _attachment_written_inside(trace: Trace, key: Optional[Span]) -> bool:
+    """True when a substituent writes its own attachment point after its group
+    ("pentan-3-yl": the -3-), so a number in front can only be another's."""
+    mine = [t for t in trace.tokens if t.owner == key]
+    core = next((t for t in mine if t.kind == "group"), None)
+    return key is not None and core is not None and any(
+        t.kind in LOCANT_KINDS and t.index > core.index for t in mine)
+
+
+def _joined_to_next_substituent(trace: Trace, key: Optional[Span]) -> bool:
+    """True when a substituent is followed directly (hyphens skipped) by
+    another substituent's group token it is joined to ("acetyl|oxy",
+    "pyridyl|methyl")."""
+    mine = [t for t in trace.tokens if t.owner == key]
+    if key is None or not mine:
+        return False
+    nxt = next((t for t in trace.tokens[max(t.index for t in mine) + 1:] if t.kind != "hyphen"), None)
+    return (nxt is not None and nxt.kind == "group" and nxt.owner not in (None, key)
+            and any(p.span == nxt.owner and p.kind == "substituent" for p in trace.parts))
+
+
 def _locant_is_not_own_attachment(trace: Trace, key: Optional[Span]) -> bool:
     """True when a substituent's leading locant cannot be its own attachment
     point: the substituent either writes that point inside itself
     ("pentan-3-yl": the -3- after the group) or is followed directly by
     another substituent it is joined to ("pentan-3-yl|oxy", "acetyl|oxy"),
-    so the locant in front of the run names a position on the parent."""
-    mine = [t for t in trace.tokens if t.owner == key]
-    if key is None or not mine:
-        return False
-    core = next((t for t in mine if t.kind == "group"), None)
-    if core is not None and any(t.kind in LOCANT_KINDS and t.index > core.index for t in mine):
-        return True
-    nxt = next((t for t in trace.tokens[max(t.index for t in mine) + 1:] if t.kind != "hyphen"), None)
-    return (nxt is not None and nxt.kind == "group" and nxt.owner not in (None, key)
-            and any(p.span == nxt.owner and p.kind == "substituent" for p in trace.parts))
+    so the locant in front of the run names a position on the parent.
+
+    The second case has one exception, decided from the bonds by the caller
+    (the builder and the gate): a RING substituent needs its attachment
+    number ("2-pyridyl|methyl"), so a ring atom of it that carries the number
+    and is bonded out of it is its own attachment point."""
+    return _attachment_written_inside(trace, key) or _joined_to_next_substituent(trace, key)
 
 
 class _Builder:
@@ -280,6 +298,10 @@ class _Builder:
             return []
         return [n.GetIdx() for n in self.mol.GetAtomWithIdx(atom).GetNeighbors()]
 
+    def in_ring(self, atom: int) -> bool:
+        return (self.mol is not None and atom < self.mol.GetNumAtoms()
+                and self.mol.GetAtomWithIdx(atom).IsInRing())
+
     def component(self, start) -> set[int]:
         """`start` plus every substituent atom bonded to it, transitively: the
         whole substituent chain/tree one root position carries."""
@@ -335,9 +357,11 @@ class _Builder:
              its own ring locants ("1,4-phenylene"): the root atoms it bonds to;
           2. its own attachment atom ("2-pyridyl", "1-naphthyl": the atom that
              carries the locant AND is bonded out of the substituent) -- unless
-             the substituent writes its attachment inside itself or is joined
-             to a following substituent ("3-pentan-3-yloxy|cyclohexene": the
-             3 in front is the cyclohexene's);
+             the substituent writes its attachment inside itself
+             ("3-pentan-3-yloxy|cyclohexene": the 3 in front is the
+             cyclohexene's); when it is merely joined to a following
+             substituent ("2-acetyloxy", "2-pyridyl|methyl") only a RING atom
+             counts: an open-chain attachment carbon is the parent's position;
           3. its own ring heteroatom ("1,3-benzodioxol", "1-benzofuran");
           4. the atom of the parent the whole chain is bonded to
              ("2-acetyloxy|benzoic acid");
@@ -349,8 +373,15 @@ class _Builder:
             hit = self.carrying(roots, loc)
             if hit:
                 return hit
-        if not _locant_is_not_own_attachment(self.t, w.key):
+        inside = _attachment_written_inside(self.t, w.key)
+        if not inside:
             attach = [a for a in self.carrying(own, loc) if any(n not in own for n in self.nbrs(a))]
+            # Joined to a following substituent ("2-acetyloxy", "2-propan-2-yloxy"):
+            # an open-chain atom carrying the number is the parent's position,
+            # but a ring atom is the ring substituent's own attachment point
+            # ("2-pyridyl|methyl", "2-naphthyl|oxy").
+            if _joined_to_next_substituent(self.t, w.key):
+                attach = [a for a in attach if self.in_ring(a)]
             if attach:
                 return attach
         hetero = [a for a in self.carrying(own, loc) if self.by_index[a].element != "C"]
@@ -647,6 +678,20 @@ def foreign_lights(trace: Trace, nodes: list[dict]) -> list[tuple[str, list[int]
             key = next((p.span for p in trace.parts if p.kind == "substituent"
                         and p.atoms and set(p.atoms) <= set(parent["owns"])), None)
             chained = parent["kind"] == "substituent" and _locant_is_not_own_attachment(trace, key)
+            # A ring substituent joined to a linker ("2-pyridyl|methyl"): the
+            # number is the ring's own attachment atom, so the atom it bonds
+            # out of -- a ring atom carrying the number -- is the only claim;
+            # lighting the parent's atom of the same number is foreign.
+            ring_attach = set()
+            if chained and not _attachment_written_inside(trace, key) and mol is not None:
+                ring_attach = {a for a in seed if label in by_atom[a].locants
+                               and mol.GetAtomWithIdx(a).IsInRing() and any(x not in seed for x in nbrs(a))}
+            core_tok = next((t for t in trace.tokens if t.owner == key and t.kind == "group"), None)
+            leading = bool(ring_attach and core_tok is not None and n["span"]
+                           and n["span"][1] <= core_tok.span[0] and "hydrogen" not in n["line"])
+            if leading:
+                ok = ok and lit - placed <= ring_attach
+                chained = False
             # A substituent that cannot have its own attachment point in front
             # ("3-pentan-3-yloxy", "1-acetyloxy", "(2-acetyloxyethyl)") may not
             # light a carbon of its own (acetyl's CH3 also carries the number

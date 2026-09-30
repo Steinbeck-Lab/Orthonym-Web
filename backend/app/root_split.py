@@ -123,14 +123,21 @@ def split_root(trace: Trace, atoms: Sequence[int]) -> RootSplit:
         # with Greek letters too (asparagine's C4 is 4/gamma, arginine's
         # guanidine carbon is guanidino-C/99): that carboxamide or guanidine is
         # the stem's, not the ending's.
-        plain = all(re.match(r"^\d+'*$", loc) for loc in locants)
+        # "Plain": digits, or a bare element symbol beside them (oxalic acid's
+        # second carbon is 2/C). A Greek letter or a compound symbol marks a stem.
+        plain = all(re.match(r"^(\d+|[A-Z][a-z]?)'*$", loc) for loc in locants)
         if len(near) >= 2 and (not _has_numeric_locant(locants) or plain
                                or any(loc.rstrip("'") in numbered for loc in locants)):
             return True
         if any(loc.rstrip("'") in numbered for loc in locants) and near:
             return True
+        # benzoic acid's and benzonitrile's carbon: joined to the skeleton by a
+        # carbon that is not itself the ending. A stem's alpha carbon (methyl
+        # phenylalaninate: alpha, with the amino N beside it) is joined to the
+        # ester's own carboxyl carbon, so the ending is next door, not here.
         return (not _has_numeric_locant(locants) and any(_has_element_locant(by_index[n].locants) for n in near)
-                and any(by_index[n].element == "C" for n in neighbours(carbon)))
+                and any(by_index[n].element == "C" for n in neighbours(carbon))
+                and not any(by_index[n].element == "C" and len(hetero_of(n)) >= 2 for n in neighbours(carbon)))
 
     hetero = {i for i in candidates
               if any(by_index[n].element == "C" and on_group_carbon(n) for n in neighbours(i))}

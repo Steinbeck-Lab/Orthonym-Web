@@ -71,6 +71,16 @@ def _suffix_elements(name):
     ("L-tyrosinamide", ["C", "N", "O"]),
     ("L-cysteinamide", ["N", "O"]),
     ("methyl L-methioninate", ["O", "O"]),
+    # NB3: OPSIN numbers these residues' alpha carbon only "alpha", and the amino N has an element
+    # locant; neither belongs to the ester ending -- only the carboxyl's own C, O, O (the C has no locant at all)
+    ("methyl L-phenylalaninate", ["C", "O", "O"]),
+    ("ethyl L-phenylalaninate", ["C", "O", "O"]),
+    ("methyl L-tyrosinate", ["C", "O", "O"]),
+    ("ethyl L-tyrosinate", ["C", "O", "O"]),
+    ("methyl L-tryptophanate", ["C", "O", "O"]),
+    ("ethyl L-tryptophanate", ["C", "O", "O"]),
+    ("methyl L-histidinate", ["C", "O", "O"]),
+    ("ethyl L-histidinate", ["C", "O", "O"]),
     ("N-methyl-D-aspartic acid", ["O", "O"]),   # one acid is the ending; the side-chain acid (4/gamma) and the N-methylamino N are the stem's
 ])
 def test_an_amino_acid_group_owns_only_its_own_atoms(name, suffix):
@@ -111,6 +121,12 @@ def test_phenylalaninamide_keeps_alpha_and_beta_in_the_parent():
     ("ethane-1,2-dithiol", ["S", "S"]),
     ("propane-1,3-dithiol", ["S", "S"]),
     ("butane-1,4-dithiol", ["S", "S"]),
+    # NB4: oxalic's second carbon is numbered 2/C (an element symbol beside the digit): still plain
+    ("oxalic acid", ["O", "O", "O", "O"]),
+    ("diethyl oxalate", ["O", "O", "O", "O"]),
+    ("dimethyl oxalate", ["O", "O", "O", "O"]),
+    # a ketone's carbonyl carbon (alpha, bonded to the ring twice) still belongs to the ending
+    ("benzophenone", ["C", "O"]),
     ("citric acid", ["C", "O", "O", "O", "O", "O", "O"]),   # plainly numbered: all three acids
     ("succinic acid", ["O", "O", "O", "O"]),
     ("butanediamide", ["N", "N", "O", "O"]),
@@ -134,3 +150,11 @@ def test_known_limitation_a_conjunctive_name_hands_its_chain_carbon_to_the_suffi
     well as the oxygen. The right split is suffix = the O only. When this is
     fixed, this test should FLIP: change the expected suffix to ['O']."""
     assert _suffix_elements("cyclohexaneethanol") == ["C", "O"]
+
+
+def test_an_amino_acid_ester_leaves_the_alpha_nitrogen_and_carbon_in_the_stem():
+    for name in ("methyl L-phenylalaninate", "ethyl L-tyrosinate", "methyl L-tryptophanate", "ethyl L-histidinate"):
+        t, by_index, split = _split(name)
+        alpha = [i for i, a in by_index.items() if "alpha" in a.locants and "1" not in a.locants]
+        assert len(alpha) == 1 and alpha[0] in split.parent_atoms, name
+        assert not any(by_index[i].element == "N" for i in split.suffix_atoms), name

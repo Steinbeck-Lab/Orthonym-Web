@@ -371,3 +371,35 @@ def test_a_bracketed_chain_locant_names_the_position_on_the_substituent_it_hangs
     own = next(a for a in p["owns"] if t.atoms[a].element == "C")
     leading["lights"] = [own]
     assert foreign_lights(t, nodes) == [(locant, [own])]
+
+
+# NB5. a ring substituent's own attachment number, followed by a linker ("2-pyridylmethyl"):
+# the inner number is the ring's, even when the parent has a position with the same number
+@pytest.mark.parametrize("name,part", [
+    ("2-(2-pyridylmethyl)benzoic acid", "pyridyl"),
+    ("2-(2-pyridylmethoxy)benzaldehyde", "pyridyl"),
+    ("3-(3-pyridylmethyl)benzoic acid", "pyridyl"),
+    ("2-(2-thienylmethyl)pyridine", "thienyl"),
+    ("2-(2-furylmethylsulfanyl)pyridine", "furyl"),
+    ("2-(2-naphthyloxy)propanoic acid", "naphthyl"),
+    ("2-naphthyloxyacetic acid", "naphthyl"),          # unbracketed: both readings are true chemistry
+    ("N-(2-pyridylmethyl)acetamide", "pyridyl"),       # different numbers: was always right
+])
+def test_a_ring_substituents_own_attachment_locant_lights_its_own_atom(name, part):
+    t, nodes = _nodes(name)
+    (p,) = [n for n in nodes if n["kind"] == "substituent" and n["label"] == part]
+    leading = min((n for n in nodes if n["parent"] == p["id"] and n["kind"] == "locant"),
+                  key=lambda n: n["span"][0])
+    (atom,) = leading["lights"]
+    mol = Chem.MolFromSmiles(t.smiles)
+    assert atom in p["owns"] and leading["label"] in t.atoms[atom].locants, (name, leading)
+    assert mol.GetAtomWithIdx(atom).IsInRing()
+    assert any(n not in p["owns"] for n in _neighbours(t, atom))          # the atom the linker hangs on
+    assert foreign_lights(t, nodes) == [], name
+    # the gate sees the old behaviour: the parent's position carrying the same number
+    if name.startswith("N-"):
+        return
+    root = next(n for n in nodes if n["kind"] == "parent")
+    foreign = next(a for a in root["owns"] if leading["label"] in t.atoms[a].locants)
+    leading["lights"] = [foreign]
+    assert foreign_lights(t, nodes) == [(leading["label"], [foreign])], name
