@@ -67,9 +67,9 @@ def test_unnamed_rows_sort_last_in_an_a_to_z_sort():
 def test_unnamed_rows_stay_last_when_the_name_sort_is_reversed():
     # Reversing Z-A must not drag the nameless rows to the front: they are
     # not the "last name alphabetically", they have no name at all.
-    rows = [row(0, "abstain"), row(1, name="zzz"), row(2, name="aaa")]
+    rows = [row(0, "abstain"), row(1, name="zzz"), row(2, name="aaa"), row(3, "error")]
     out = sort_rows(rows, "name", "desc")
-    assert indices(out) == [0, 1, 2]
+    assert indices(out) == [1, 2, 0, 3]
 
 
 def test_roundtrip_groups_match_then_mismatch_then_unavailable_then_none():
