@@ -17,10 +17,6 @@ def test_suffix_describes_the_group():
     assert "C=O" in describe_part("suffix", "one", None, 2)
 
 
-def test_parent_ring_is_named():
-    assert "purin" in describe_part("parent", "purin", None, 9)
-
-
 def test_known_parent_stem_gets_a_real_explanation():
     # OPSIN's <group> token for caffeine's core is the stem "purin", not
     # "purine". The glossary must still explain it in plain words.
@@ -58,6 +54,11 @@ def test_substituent_and_suffix_locants_never_name_an_atom():
         text = describe_locant(kind, "7", "N")
         assert "7" in text, kind
         assert "N7" not in text, f"{kind} fabricated an atom label: {text!r}"
+    # The two branches say different things: a suffix hangs off the parent
+    # skeleton, a substituent is simply attached. A suffix line that fell
+    # through to the bare "Position 7." would pass the loop above.
+    assert "parent skeleton" in describe_locant("suffix", "7", "N")
+    assert "parent skeleton" not in describe_locant("substituent", "7", "N")
 
 
 def test_carbonyl_suffix_does_not_claim_it_is_a_ketone():
@@ -83,6 +84,42 @@ def test_a_ring_assembly_multiplier_says_how_many():
     line = describe_token("ringAssemblyMultiplier", "bi")
     assert line is not None
     assert "two" in line.lower()
+
+
+def test_a_ring_assembly_multiplier_counts_by_its_own_word():
+    # "ter" (terphenyl) is three copies. A count fixed at two for every
+    # multiplier word would still pass the "bi" case above.
+    from app.glossary import describe_token
+
+    assert "three" in describe_token("ringAssemblyMultiplier", "ter").lower()
+    assert "two" not in describe_token("ringAssemblyMultiplier", "ter").lower()
+
+
+def test_every_listed_token_category_gets_its_own_line():
+    # A describe_token that answered every known category with one line
+    # (the fusion-bracket sentence, say) passes the single-category cases
+    # above. Each category's line must say what THAT token does.
+    from app.glossary import describe_token
+
+    expect = {
+        "fusionBracket": "fused",
+        "diOrTri": "how many",
+        "multiplier": "how many",
+        "hydro": "hydrogens were added",
+        "bigCapitalH": "carries a hydrogen",
+        "stereochemistryBracket": "three-dimensional",
+        "vonBaeyer": "bridge",
+        "spiroDescriptor": "shared between two rings",
+    }
+    for category, phrase in expect.items():
+        line = describe_token(category, "x")
+        assert line is not None and phrase in line, (category, line)
+
+
+def test_a_single_atom_part_is_not_pluralised():
+    text = describe_part("substituent", "zzzql", None, 1)
+    assert "1 atom " in text or text.rstrip(".").endswith("1 atom"), text
+    assert "atoms" not in text
 
 
 def test_an_elision_vowel_teaches_nothing_and_gets_no_line():

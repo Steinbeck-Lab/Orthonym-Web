@@ -99,6 +99,47 @@ def test_the_same_text_at_two_places_gets_two_runs():
     assert runs[0].start < runs[2].start
 
 
+def test_two_adjacent_same_text_parts_written_separately_get_two_runs():
+    """Adjacent parts sharing a text are only clones of one multiplied
+    substituent when a single locant group of that size decorates them.
+    Here each 'chloro' is written out with its own locant, so a guard that
+    always merged adjacent equal texts would swallow the second occurrence.
+    """
+    tokens = toks(
+        ("2-", "locant"), ("chloro", "substituent"), ("-", "hyphen"),
+        ("3-", "locant"), ("chloro", "substituent"), ("-", "hyphen"),
+        ("ethan", "alkaneStem"),
+    )
+    runs = assign_runs(tokens, ["chloro", "chloro", "ethan"])
+    assert runs is not None
+    assert [r.part_indices for r in runs] == [(0,), (1,), (2,)]
+
+
+def test_a_run_does_not_grow_left_over_the_hyphen_its_neighbour_took():
+    """interSubstituentHyphen is both a trailing and a leading category. The
+    methyl run takes it on its right; the benzene run must not take it back
+    on its left, or the two overlap and the whole name is withheld.
+    """
+    tokens = toks(
+        ("meth", "alkaneStemTrivial"), ("yl", "inlineSuffix"),
+        ("-", "interSubstituentHyphen"), ("benzen", "trivialRing"),
+    )
+    runs = assign_runs(tokens, ["meth", "benzen"])
+    assert runs is not None
+    assert [(r.start, r.end) for r in runs] == [(0, 7), (7, 13)]
+
+
+def test_a_run_does_not_grow_right_over_the_next_runs_own_anchor():
+    """'e' is a trailing category, but here it is also the next part's own
+    anchor token. Growing right past the next anchor start would hand the
+    same token to both runs.
+    """
+    tokens = toks(("eth", "alkaneStem"), ("e", "e"))
+    runs = assign_runs(tokens, ["eth", "e"])
+    assert runs is not None
+    assert [(r.start, r.end) for r in runs] == [(0, 3), (3, 4)]
+
+
 def test_runs_never_overlap_and_always_increase():
     tokens = toks(
         ("meth", "alkaneStemTrivial"), ("yl", "inlineSuffix"),
@@ -286,3 +327,15 @@ def test_locant_subspans_walked_cursor_does_not_confuse_a_prefix_locant():
     found = _locant_subspans(token)
     assert found["11"] == (100, 102)
     assert found["1"] == (103, 104)
+
+
+def test_locant_subspans_keeps_the_first_of_a_repeated_locant():
+    """A locant written twice in one token keeps its first span; a later
+    occurrence overwriting it would point the locant child at the wrong
+    characters.
+    """
+    from app.name_tokens import _locant_subspans
+    from app.opsin_tokenizer import Token
+
+    token = Token(text="1,3,1-", category="locant", start=10, end=16)
+    assert _locant_subspans(token)["1"] == (10, 11)

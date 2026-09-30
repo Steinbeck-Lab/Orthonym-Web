@@ -250,6 +250,21 @@ def test_structure_in_path_still_works_and_indices_are_in_range():
             )
 
 
+def test_structure_in_path_remaps_onto_the_users_atom_order():
+    # OPSIN builds ethanol as C-C-O; the user drew O-C-C. A remap that hands
+    # back OPSIN's own indices stays inside the valid range, so only the
+    # exact atoms tell the two apart.
+    from app.explain import explain_molecule
+    from app.orthonym_service import get_primary_namer
+
+    result = explain_molecule("OCC", namer=get_primary_namer())
+    assert result["error"] is None, result["error"]
+    parent = next(s for s in result["segments"] if s["kind"] == "parent")
+    suffix = next(s for s in result["segments"] if s["kind"] == "suffix")
+    assert parent["atom_indices"] == [1, 2]
+    assert suffix["atom_indices"] == [0]
+
+
 def test_an_unnameable_molecule_is_not_explained_as_if_its_placeholder_were_a_name():
     """Uranium trioxide: the engine returns "inorganic compound (not
     supported)", a failure placeholder, not a name. /explain showed it under
@@ -307,6 +322,29 @@ def test_a_symmetric_molecule_unmaps_only_the_disputed_parts():
             assert segment["owns_atoms"] is False
             assert segment["atom_indices"] == []
             assert segment["highlight_atoms"] == []
+
+
+def test_agreed_atoms_unmaps_a_part_whose_index_is_outside_the_match():
+    # Filtering the missing index would ship a shrunken highlight that looks
+    # confident; the whole part must come back unmapped instead.
+    from app.explain import _agreed_atoms
+
+    assert _agreed_atoms([0, 5], [(3, 4)]) is None
+    assert _agreed_atoms([0, 1], [(3, 4)]) == frozenset({3, 4})
+
+
+def test_a_match_enumeration_that_hit_its_cap_is_inconclusive(monkeypatch):
+    # With the cap reached there may be automorphisms never seen, so the
+    # agreement check proves nothing and every part must be unmapped -- even
+    # for a molecule whose one visible match would otherwise map cleanly.
+    import app.explain as explain
+    from app.orthonym_service import get_primary_namer
+
+    monkeypatch.setattr(explain, "_MAX_SUBSTRUCT_MATCHES", 1)
+    result = explain.explain_molecule("OCC", namer=get_primary_namer())
+    assert result["error"] is None, result["error"]
+    assert result["segments"]
+    assert {s["kind"] for s in result["segments"]} == {"unmapped"}
 
 
 class _SubstructureNamer:
@@ -370,6 +408,59 @@ def test_a_fusion_name_exposes_its_tokens_as_hoverable_children():
     assert bracket["owns_atoms"] is False
     assert bracket["atom_indices"] == []
     assert bracket["name_range"] is not None
+    # A token owns no atoms of its own, so hovering it must light the
+    # owner's atoms; an empty highlight makes the child dead on hover.
+    assert bracket["highlight_atoms"] == parent["highlight_atoms"]
+    assert bracket["highlight_atoms"]
+
+
+def test_caffeines_multiplier_and_hydro_tokens_are_hoverable_children():
+    # Only the fusion bracket is checked above. A token-child pass that kept
+    # just "[a]" would leave every counting word and hydro token as dead text.
+    result = explain_name(CAFFEINE)
+
+    def token_labels(kind):
+        segment = next(s for s in result["segments"] if s["kind"] == kind)
+        return [c["label"] for c in segment["children"] if c["kind"] == "token"]
+
+    assert token_labels("substituent") == ["tri"]
+    assert token_labels("suffix") == ["di"]
+    assert token_labels("modifier") == ["di", "hydro", "1H-"]
+    modifier = next(s for s in result["segments"] if s["kind"] == "modifier")
+    for child in modifier["children"]:
+        if child["kind"] == "token":
+            assert child["highlight_atoms"] == modifier["highlight_atoms"]
+
+
+def test_a_repeated_suffix_is_labelled_with_its_multiplier():
+    # The multiplier table maps a count to a word; the caffeine case only
+    # reaches "di". A table that gave three suffixes the two-suffix word
+    # would label glycerol "diol".
+    result = explain_name("propane-1,2,3-triol")
+    suffix = next(s for s in result["segments"] if s["kind"] == "suffix")
+    assert suffix["label"] == "triol"
+    locants = [c["locant"] for c in suffix["children"] if c["kind"] == "suffix"]
+    assert locants == ["1", "2", "3"]
+
+
+def test_suffix_children_are_ordered_by_number_not_by_text():
+    result = explain_name("decane-1,10-diol")
+    suffix = next(s for s in result["segments"] if s["kind"] == "suffix")
+    locants = [c["locant"] for c in suffix["children"] if c["kind"] == "suffix"]
+    assert locants == ["1", "10"]
+
+
+def test_a_root_whose_suffix_token_spells_nothing_gets_no_suffix_segment():
+    # OPSIN hands back ('',) for retained amino-acid roots: a suffix token
+    # that exists but names nothing. Treated as a real suffix it becomes a
+    # segment labelled "" that drops out of the span pass.
+    result = explain_name("glycine")
+    assert result["error"] is None
+    kinds = [s["kind"] for s in result["segments"]]
+    assert "suffix" not in kinds, kinds
+    assert all(s["label"] for s in result["segments"])
+    parent = next(s for s in result["segments"] if s["kind"] == "parent")
+    assert len(parent["atom_indices"]) == result["total_atoms"]
 
 
 def test_token_children_never_nest_deeper_than_one_level():
