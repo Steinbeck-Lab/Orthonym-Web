@@ -13,9 +13,14 @@ positions on the multiplied parents.
 
 What a node lights is never a guess:
 
-* a position locant lights the copy OPSIN put at that locant; if no copy
-  carries it (a multiplicative bridge: "4,4'-methylene|bis(...)"), the atoms
-  that carry exactly that locant in the rest of the word; else its own part;
+* a position locant lights the copy OPSIN put at that locant. When no copy
+  sits there, the locant is read by structure, never by "any atom in the word
+  that carries the number": on a multiplicative bridge ("4,4'-methylene|bis(...)",
+  a substituent bonded to two copies of the root) it names the atoms of the
+  multiplied root that the bridge is bonded to; otherwise it is the
+  substituent's own attachment atom ("2-pyridyl"), its own ring heteroatom
+  ("1,3-benzodioxol"), the atom of the parent the whole substituent chain is
+  bonded to ("2-acetyloxy|benzoic acid"), or else an atom of its own part;
 * a counting word lights what the locants it counts light ("3,7-di|hydro"
   -> N3, N7; "2,6-di|one" -> both C=O);
 * a stereo mark with a locant ("2S", "9Z", "17beta") lights the ONE atom
@@ -48,7 +53,7 @@ from .label_rules import (
 )
 from .opsin_trace import STEREO_KIND, Span, Trace, TracePart, WrittenToken
 from .root_split import split_root
-from .token_owner import CLOSE_KINDS, assign_owners, innermost_bracket, written_brackets
+from .token_owner import assign_owners, innermost_bracket, written_brackets
 
 PART_NODE_KINDS = frozenset({"substituent", "parent", "suffix"})
 _NODE_KIND = {
@@ -107,6 +112,9 @@ class _Builder:
         self.part_node: dict[Span, tuple[str, list[int]]] = {}   # key -> (node id, atoms)
         self.suffix_node: dict[Span, tuple[str, list[int], dict]] = {}  # root key -> (id, atoms, locants)
         self.centres, self.double = _stereo_atoms(trace.smiles)
+        self.mol = Chem.MolFromSmiles(trace.smiles)
+        self.part_of = {a: p for p in trace.parts for a in p.atoms}
+        self.carbohydrate_atoms: Optional[list[int]] = None   # set while a sugar root's children are built
 
     def add(self, kind, label, span, *, line, parent=None, owns=(), lights=(), copies=1) -> str:
         node_id = f"n{len(self.nodes)}"
@@ -184,8 +192,10 @@ class _Builder:
         self.part_node[w.key] = (parent, parent_atoms + suffix_atoms)
         run = spans.suffix_tokens if has_suffix else frozenset()
         head = [(t, r) for t, r in zip(w.tokens, roles) if t.index not in run]
+        self.carbohydrate_atoms = parent_atoms if carbohydrate else None
         self.children(parent, w, [t for t, _ in head], [r for _, r in head], parent_atoms, parent_atoms,
                       mode="parent")
+        self.carbohydrate_atoms = None
         if has_suffix:
             s_label = self.text(spans.suffix_label)
             carrying = set(suffix_locants.values())
@@ -226,7 +236,7 @@ class _Builder:
                         continue
                     lights, line = self.locant(loc, i < first_core, target, mode, atoms, w.copies,
                                                used_copies, suffix_atoms, suffix_locants or {},
-                                               written[loc], w)
+                                               written[loc], w, [x for x, _ in items])
                     counted.update(lights)
                     self.add("locant", loc, sub, parent=owner, lights=lights, line=line)
             elif tok.kind == "indicatedHydrogen":
@@ -247,14 +257,88 @@ class _Builder:
             elif roles[i] == "core":
                 counted = set()
 
-    def elsewhere(self, loc, own, word_of) -> list[int]:
-        """Atoms carrying exactly `loc` in the other parts of the same word."""
-        own = set(own)
-        return [a for w in self.parts if w.tokens and self.word(w.tokens[0].span[0]) == word_of
-                for a in self.atoms_of(w) if a not in own and loc in self.by_index[a].locants]
+    # -- structure helpers (bonds of the traced molecule) --------------------
+    def nbrs(self, atom: int) -> list[int]:
+        if self.mol is None or atom >= self.mol.GetNumAtoms():
+            return []
+        return [n.GetIdx() for n in self.mol.GetAtomWithIdx(atom).GetNeighbors()]
+
+    def component(self, start) -> set[int]:
+        """`start` plus every substituent atom bonded to it, transitively: the
+        whole substituent chain/tree one root position carries."""
+        comp, stack = set(start), list(start)
+        while stack:
+            for n in self.nbrs(stack.pop()):
+                part = self.part_of.get(n)
+                if n not in comp and part is not None and part.kind == "substituent":
+                    comp.add(n)
+                    stack.append(n)
+        return comp
+
+    def edge(self, comp) -> set[int]:
+        return {n for a in comp for n in self.nbrs(a) if n not in comp}
+
+    def carrying(self, atoms, loc) -> list[int]:
+        return sorted(a for a in atoms if loc in self.by_index[a].locants)
+
+    def root_edge(self, inside) -> tuple[set[int], bool]:
+        """(root atoms bonded to `inside`, whether `inside` is a bridge: it is
+        bonded to two or more distinct copies of a multiplied root)."""
+        roots = {a for a in self.edge(inside) if self.part_of.get(a) is not None
+                 and self.part_of[a].kind == "root"}
+        return roots, len({self.part_of[a].index for a in roots}) >= 2
+
+    def anomeric_carbon(self, atoms) -> list[int]:
+        """The ring carbon of a sugar that holds both a ring oxygen and an
+        exocyclic oxygen, when exactly one does; else nothing."""
+        if self.mol is None:
+            return []
+        pool, found = set(atoms), []
+        for a in sorted(pool):
+            atom = self.mol.GetAtomWithIdx(a)
+            if atom.GetSymbol() != "C" or not atom.IsInRing():
+                continue
+            ring_o = exo_o = False
+            for n in atom.GetNeighbors():
+                if n.GetSymbol() != "O" or n.GetIdx() not in pool:
+                    continue
+                if self.mol.GetBondBetweenAtoms(a, n.GetIdx()).IsInRing():
+                    ring_o = True
+                else:
+                    exo_o = True
+            if ring_o and exo_o:
+                found.append(a)
+        return found if len(found) == 1 else []
+
+    def leading_substituent_locant(self, loc, token_locs, w) -> list[int]:
+        """A substituent's leading locant that no copy of it carries. Decided
+        by the bonds, in this order:
+          1. bridge: the substituent chain is bonded to two copies of a
+             multiplied root ("4,4'-methylene|bis(...)") and the token is not
+             its own ring locants ("1,4-phenylene"): the root atoms it bonds to;
+          2. its own attachment atom ("2-pyridyl", "1-naphthyl": the atom that
+             carries the locant AND is bonded out of the substituent);
+          3. its own ring heteroatom ("1,3-benzodioxol", "1-benzofuran");
+          4. the atom of the parent the whole chain is bonded to
+             ("2-acetyloxy|benzoic acid");
+          5. any own atom carrying the locant, else the whole part."""
+        own = set(self.atoms_of(w))
+        comp = self.component(own)
+        roots, bridge = self.root_edge(comp)
+        if bridge and not all(self.carrying(own, x) for x in token_locs):
+            hit = self.carrying(roots, loc)
+            if hit:
+                return hit
+        attach = [a for a in self.carrying(own, loc) if any(n not in own for n in self.nbrs(a))]
+        if attach:
+            return attach
+        hetero = [a for a in self.carrying(own, loc) if self.by_index[a].element != "C"]
+        if hetero:
+            return hetero
+        return self.carrying(self.edge(comp), loc) or self.carrying(own, loc) or sorted(own)
 
     def locant(self, loc, leading, target, mode, atoms, copies, used, suffix_atoms, suffix_locants,
-               written, w):
+               written, w, token_locs):
         if target is not None and target.kind == "hydro":
             hit = self.with_locant(atoms, loc)
             element = self.by_index[hit[0]].element if len(hit) == 1 else None
@@ -269,30 +353,34 @@ class _Builder:
                 if c.index not in used:
                     used.add(c.index)
                     return list(c.atoms), describe_locant("substituent", loc)
-            # No copy sits at this locant: a multiplicative bridge
-            # ("4,4'-methylene|bis(2-chlorophenol)") -- the locant names the
-            # positions on the parents it joins.
-            there = self.elsewhere(loc, atoms, self.word(w.tokens[0].span[0]))
-            return (there or list(atoms)), describe_locant("substituent", loc)
+            if at_loc:
+                return [a for c in at_loc for a in c.atoms], describe_locant("substituent", loc)
+            return self.leading_substituent_locant(loc, token_locs, w), describe_locant("substituent", loc)
         if mode == "suffix":
             own = [i for i in suffix_atoms if suffix_locants.get(i) == loc]
             return own + self.with_locant(atoms, loc), describe_locant("suffix", loc)
         hit = self.with_locant(atoms, loc)
+        if not hit and self.carbohydrate_atoms is not None and loc.lower() in ("alpha", "beta"):
+            # A sugar's anomer mark names the anomeric carbon -- only when the
+            # structure proves exactly one; otherwise it lights nothing.
+            return self.anomeric_carbon(self.carbohydrate_atoms), describe_locant("position", loc, anomer=True)
         return (hit or list(atoms)), describe_locant("position", loc)
 
     # -- brackets, orphans, stereo ----------------------------------------
-    def bracket_token(self, tok: WrittenToken, bracket: Span, multiplicative: bool) -> None:
+    def bracket_token(self, tok: WrittenToken, bracket: Span) -> None:
         """A bracket's own locant / counting word lights every part whose
         first written token sits inside that bracket -- or, when the bracket
-        is multiplied into the parent ("4,4'-(propane-2,2-diyl)di|phenol"),
-        the positions it names on the parents outside it."""
+        is bonded to two copies of a multiplied root
+        ("4,4'-(propane-2,2-diyl)di|phenol"), the positions it names on those
+        roots."""
         inside = [w for w in self.parts if w.tokens and bracket[0] < w.tokens[0].span[0] < bracket[1]]
         atoms = [a for w in inside for a in self.atoms_of(w)]
         if tok.kind in LOCANT_KINDS:
+            roots, bridge = self.root_edge(self.component(atoms)) if atoms else (set(), False)
             for loc, sub in locant_items(self.t.text, tok.span):
                 lights = atoms
-                if multiplicative:
-                    lights = self.elsewhere(loc, atoms, self.word(bracket[0])) or atoms
+                if bridge:
+                    lights = self.carrying(roots, loc) or atoms
                 self.add("locant", loc, sub, lights=lights, line=describe_locant("substituent", loc))
             return
         span = self.trim(tok.span)
@@ -362,9 +450,14 @@ class _Builder:
                     self.add("stereo", label, span, parent=self.part_node.get(head.key, (None, []))[0],
                              lights=single, line=describe_token(STEREO_KIND, label))
                 elif _BARE_LOCANT.match(label):
-                    # A locant listed with a mark ("3,17beta-diol"): it is the
-                    # suffix's own locant.
-                    self.token_locant(label, span, head)
+                    # A locant listed with a mark: "3,17beta-diol" (it is the
+                    # suffix's own locant) or "11beta,17,21-trihydroxy" (it is
+                    # the substituent's). What the list precedes decides.
+                    after = next((t for t in tokens[idx + 1:] if owners.get(t.index) is not None), None)
+                    nxt = None
+                    if after is not None and owners[after.index].kind == "part":
+                        nxt = by_key.get(owners[after.index].span)
+                    self.token_locant(label, span, head, nxt)
                 else:
                     # A bare mark (L, D, trans, E) names no atom. D/L, and any
                     # mark that does not start its word, describe the part
@@ -380,7 +473,15 @@ class _Builder:
                     self.add("stereo", label, span, parent=parent, lights=[],
                              line=describe_token(STEREO_KIND, label))
 
-    def token_locant(self, loc: str, span: Span, head: Optional[_WrittenPart]) -> None:
+    def token_locant(self, loc: str, span: Span, head: Optional[_WrittenPart],
+                     nxt: Optional[_WrittenPart] = None) -> None:
+        if nxt is not None and nxt.kind == "substituent" and nxt.key in self.part_node:
+            copies = [c for c in nxt.copies if c.locant == loc]
+            if copies:
+                self.add("locant", loc, span, parent=self.part_node[nxt.key][0],
+                         lights=[a for c in copies for a in c.atoms],
+                         line=describe_locant("substituent", loc))
+                return
         suffix = self.suffix_node.get(head.key) if head else None
         if suffix is not None:
             node, atoms, locants = suffix
@@ -391,13 +492,6 @@ class _Builder:
         node, atoms = self.part_node.get(head.key, (None, [])) if head else (None, [])
         self.add("locant", loc, span, parent=node, lights=self.with_locant(atoms, loc),
                  line=describe_locant("position", loc))
-
-
-def _multiplicative(tokens, bracket: Span) -> bool:
-    """A bracket directly followed (after its close and any glue) by a
-    counting word is multiplied into the parent: "(propane-2,2-diyl)di|phenol"."""
-    after = [t for t in tokens if t.span[0] >= bracket[1] and t.kind not in GLUE]
-    return bool(after) and after[0].kind == "multiplier"
 
 
 def build_nodes(trace: Trace) -> list[dict]:
@@ -425,8 +519,78 @@ def build_nodes(trace: Trace) -> list[dict]:
             b.root(w)
     for tok, bracket in loose:
         if bracket is not None:
-            b.bracket_token(tok, bracket, _multiplicative(trace.tokens, bracket))
+            b.bracket_token(tok, bracket)
         else:
             b.orphan(tok)
     b.stereo(owners)
     return b.nodes
+
+
+def _written_list(text: str, nodes: list[dict], node: dict) -> list[str]:
+    """The labels of the locant nodes written in one comma list with `node`."""
+    same = sorted((x for x in nodes if x["kind"] == "locant" and x["parent"] == node["parent"] and x["span"]),
+                  key=lambda x: x["span"][0])
+    run: list[dict] = []
+    for x in same:
+        if run and text[run[-1]["span"][1]:x["span"][0]] not in (",", ", "):
+            if node in run:
+                break
+            run = []
+        run.append(x)
+    return [x["label"] for x in run] if node in run else [node["label"]]
+
+
+def foreign_lights(trace: Trace, nodes: list[dict]) -> list[tuple[str, list[int]]]:
+    """The lit-atom gate: (label, atoms) for every locant node that lights an
+    atom it has no claim on. Derived from the trace and the node list alone
+    (not from the builder), so the builder cannot grade itself.
+
+    A locant that is a child of a part may light: atoms of that part's own
+    written root/substituent (every copy); a copy OPSIN placed at that locant;
+    or an atom carrying the locant that the part's whole substituent chain is
+    bonded to (the parent position it hangs on, or a multiplied root's
+    bridged position). A bracket's own locant (no parent) may light parts
+    written inside it, or atoms carrying the locant."""
+    mol = Chem.MolFromSmiles(trace.smiles)
+    by_atom = {a.index: a for a in trace.atoms}
+    part_of = {a: p for p in trace.parts for a in p.atoms}
+    by_id = {n["id"]: n for n in nodes}
+    owner_node = {a: n for n in nodes if n["kind"] in PART_NODE_KINDS for a in n["owns"]}
+
+    def nbrs(a):
+        return [x.GetIdx() for x in mol.GetAtomWithIdx(a).GetNeighbors()] if mol is not None else []
+
+    bad = []
+    for n in nodes:
+        if n["kind"] != "locant" or not n["lights"]:
+            continue
+        label, lit = n["label"], set(n["lights"])
+        if n["parent"] is None:
+            after = n["span"][0] if n["span"] else 0
+            ok = all(label in by_atom[a].locants or (
+                a in owner_node and owner_node[a]["span"] and owner_node[a]["span"][0] > after) for a in lit)
+        else:
+            parent = by_id[n["parent"]]
+            seed = set(parent["owns"]) or set(parent["lights"])
+            family = {a for p in trace.parts if seed & set(p.atoms) for a in p.atoms}
+            comp, stack = set(family), list(family)
+            while stack:
+                for x in nbrs(stack.pop()):
+                    if x not in comp and part_of.get(x) is not None and part_of[x].kind == "substituent":
+                        comp.add(x)
+                        stack.append(x)
+            edge = {x for a in comp for x in nbrs(a) if x not in comp and label in by_atom[x].locants}
+            placed = {a for p in trace.parts if p.locant == label for a in p.atoms}
+            ok = lit <= family | placed | edge
+            # "1,4-phenylene": when the part itself carries EVERY locant of
+            # the list and this locant's own atom is where it is bonded out,
+            # the list is its own numbering, never a bridge's.
+            if ok and not lit <= family | placed:
+                own_attach = [a for a in family if label in by_atom[a].locants
+                              and any(x not in family for x in nbrs(a))]
+                siblings = _written_list(trace.text, nodes, n)
+                if own_attach and all(any(x in by_atom[a].locants for a in family) for x in siblings):
+                    ok = False
+        if not ok:
+            bad.append((label, sorted(lit)))
+    return bad

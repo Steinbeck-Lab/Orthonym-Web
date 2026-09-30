@@ -154,3 +154,180 @@ def test_engine_names_for_chiral_substituents_are_clean():
         if outcomes != ["CLEAN"]:
             bad[name] = outcomes
     assert bad == {}
+
+
+# -- Phase B fix round 1 ------------------------------------------------------
+from rdkit import Chem
+
+from app.explain_tree import foreign_lights
+
+
+def _lit(t, nodes, node):
+    """[(owning part label, locants)] of the atoms a node lights."""
+    owner = {a: n["label"] for n in nodes if n["kind"] in PART_NODE_KINDS for a in n["owns"]}
+    return [(owner[a], t.atoms[a].locants) for a in node["lights"]]
+
+
+def _kid(nodes, parent_label, label, kind="locant"):
+    (p,) = [n for n in nodes if n["kind"] in PART_NODE_KINDS and n["label"] == parent_label]
+    (k,) = [n for n in nodes if n["parent"] == p["id"] and n["kind"] == kind and n["label"] == label]
+    return k
+
+
+TADALAFIL_NAME = ("(6R,12aR)-6-(1,3-benzodioxol-5-yl)-2-methyl-2,3,6,7,12,12a-hexahydropyrazino"
+                  "[1',2':1,6]pyrido[3,4-b]indole-1,4-dione")
+
+
+# C1. a substituent's own locant lights the substituent's own atom
+@pytest.mark.parametrize("name,part,locant,element", [
+    ("1-(2-pyrimidinyl)piperazine", "pyrimidinyl", "2", "C"),
+    ("N-(2-pyridyl)acetamide", "pyridyl", "2", "C"),
+    ("3-methyl-N-(2-pyridyl)butanamide", "pyridyl", "2", "C"),
+    ("2-chloro-N-(4-methyl-2-pyridyl)acetamide", "pyridyl", "2", "C"),
+    ("3-(2-furyl)propanoic acid", "furyl", "2", "C"),
+    ("4-(1-piperidinyl)butan-2-one", "piperidinyl", "1", "N"),
+    ("2-(1-naphthyl)acetic acid", "naphthyl", "1", "C"),
+    ("1-naphthylacetic acid", "naphthyl", "1", "C"),
+    ("N,N-bis(2-chloroethyl)-2-naphthylamine", "naphthyl", "2", "C"),
+    ("2-methyl-N-phenyl-1-naphthylamine", "naphthyl", "1", "C"),
+    ("2-methyl-3-(1-adamantyl)propanoic acid", "adamantyl", "1", "C"),
+    ("1-(1,3-benzodioxol-5-yl)-N-methylpropan-2-amine", "benzodioxol-5-yl", "1", "O"),
+    ("1-(1,3-benzodioxol-5-yl)-N-methylpropan-2-amine", "benzodioxol-5-yl", "3", "O"),
+    ("5-(1,3-benzodioxol-5-yl)-2-methylpentanoic acid", "benzodioxol-5-yl", "1", "O"),
+    ("2-(2,3-dihydro-1-benzofuran-5-yl)propan-1-ol", "benzofuran-5-yl", "1", "O"),
+    (TADALAFIL_NAME, "benzodioxol-5-yl", "1", "O"),
+    (TADALAFIL_NAME, "benzodioxol-5-yl", "3", "O"),
+])
+def test_a_substituents_own_locant_lights_its_own_atom(name, part, locant, element):
+    t, nodes = _nodes(name)
+    node = _kid(nodes, part, locant)
+    (lit,) = _lit(t, nodes, node)
+    assert lit[0] == part and locant in lit[1]
+    assert t.atoms[node["lights"][0]].element == element
+
+
+# C1. a bridge's locant names the bonded positions of the multiplied root, and
+#     only those (not a substituent's atom that happens to carry the number)
+@pytest.mark.parametrize("name,bridge,root,locants", [
+    ("1,1'-methylenebis(4-methylbenzene)", "methylene", "benzene", ["1", "1'"]),
+    ("4,4'-methylenebis(N-butylaniline)", "methylene", "aniline", ["4", "4'"]),
+    ("1,1'-(ethane-1,2-diyl)bis(4-methylbenzene)", None, "benzene", ["1", "1'"]),
+    ("4,4'-methylenebis(2-chlorophenol)", "methylene", "phenol", ["4", "4'"]),
+    ("4,4'-oxydianiline", "oxy", "aniline", ["4", "4'"]),
+    ("4,4'-sulfonyldianiline", "sulfonyl", "aniline", ["4", "4'"]),
+    ("2,2'-oxydiethanol", "oxy", "ethan", ["2", "2'"]),
+    ("4,4'-(propane-2,2-diyl)diphenol", None, "phenol", ["4", "4'"]),
+    ("1,1'-methylenebis(4-isocyanatobenzene)", "methylene", "benzene", ["1", "1'"]),
+    ("2,2'-methylenebis(6-tert-butyl-4-methylphenol)", "methylene", "phenol", ["2", "2'"]),
+    ("2,2'-[ethane-1,2-diylbis(oxy)]diethanol", None, "ethan", ["2", "2'"]),
+    ("1,1'-(1,4-phenylene)diethanone", None, "ethan", ["1", "1'"]),
+    ("2,2'-[1,4-phenylenebis(oxy)]diacetic acid", None, "acet", ["2", "2'"]),
+])
+def test_a_bridge_locant_lights_only_the_bonded_root_positions(name, bridge, root, locants):
+    t, nodes = _nodes(name)
+    for locant in locants:
+        if bridge:
+            node = _kid(nodes, bridge, locant)
+        else:                                  # a bracket's own locant
+            (node,) = [n for n in nodes if n["kind"] == "locant" and n["parent"] is None and n["label"] == locant]
+        lit = _lit(t, nodes, node)
+        assert len(lit) == 1, (name, locant, lit)
+        assert lit[0][0] == root and locant in lit[0][1], (name, locant, lit)
+    assert foreign_lights(t, nodes) == []
+
+
+def test_a_phenylene_keeps_its_locants_and_the_ureas_get_theirs():
+    t, nodes = _nodes("1,1'-[methylenebis(4,1-phenylene)]bis(3-phenylurea)")
+    for label in ("4", "1"):
+        node = _kid(nodes, "phenylene", label)
+        assert {owner for owner, _ in _lit(t, nodes, node)} == {"phenylene"}
+    for label in ("1", "1'"):
+        (node,) = [n for n in nodes if n["kind"] == "locant" and n["parent"] is None and n["label"] == label]
+        (lit,) = _lit(t, nodes, node)
+        assert lit[0] == "urea" and label in lit[1]
+
+
+# C1. a bracket followed by a ring word is not a multiplicative bridge
+@pytest.mark.parametrize("name", [
+    "2-(hydroxymethyl)dibenzofuran", "3-(bromomethyl)dibenzothiophene",
+    "N-(4-chlorophenyl)diethylamine", "1-(4-chlorophenyl)dimethylsilane",
+])
+def test_a_bracket_before_a_counting_word_lights_its_own_parts(name):
+    t, nodes = _nodes(name)
+    (first,) = [n for n in nodes if n["kind"] == "locant" and n["parent"] is None]
+    roots = {n["label"] for n in nodes if n["kind"] in ("parent", "suffix")}
+    assert first["lights"] and not {owner for owner, _ in _lit(t, nodes, first)} & roots
+    assert foreign_lights(t, nodes) == []
+
+
+def test_a_chain_locant_before_a_root_names_the_root_position():
+    for name, part, locant in [("2-acetyloxybenzoic acid", "acetyl", "2"),
+                               ("3-methoxycarbonylbenzoic acid", "methoxy", "3")]:
+        t, nodes = _nodes(name)
+        (lit,) = _lit(t, nodes, _kid(nodes, part, locant))
+        assert lit[0].startswith("benz") and locant in lit[1], name
+
+
+# gate: the names the review probed carry no foreign lit atom
+@pytest.mark.parametrize("name", [
+    "(2S)-2-[(2S)-2-aminopropanamido]propanoic acid", "ethyl (2R)-2-hydroxypropanoate",
+    "1,3-bis(1H-1,2,4-triazol-1-yl)propan-2-ol", "N-(1,3-thiazol-2-yl)acetamide",
+    "2-(1,3-dioxolan-2-yl)ethan-1-amine", "4-(1,3-oxazol-2-yl)butan-1-ol",
+    "bis(2-ethylhexyl) benzene-1,2-dicarboxylate", "tris(2-chloroethyl) phosphate",
+    "2-[(4-chlorophenyl)methyl]-1H-benzimidazole", "N-[4-(dimethylamino)phenyl]acetamide",
+    "1,1,1-trichloro-2,2-bis(4-chlorophenyl)ethane", "5alpha-androstane-3beta,17beta-diol",
+    "11beta,17,21-trihydroxypregn-4-ene-3,20-dione", "alpha-D-glucopyranose", "beta-D-fructofuranose",
+    "methyl beta-D-ribofuranoside", "2,2'-bipyridine", "[1,1'-biphenyl]-4-carboxylic acid",
+])
+def test_probed_names_light_no_foreign_atom(name):
+    t, nodes = _nodes(name)
+    assert foreign_lights(t, nodes) == [], name
+
+
+# I1. a locant in a stereo list in front of a prefix is the prefix's
+def test_a_locant_listed_with_a_mark_before_a_prefix_belongs_to_the_prefix():
+    t, nodes = _nodes("11beta,17,21-trihydroxypregn-4-ene-3,20-dione")
+    hydroxy = [n for n in nodes if n["kind"] == "substituent" and n["label"] == "hydroxy"]
+    assert len(hydroxy) == 1 and hydroxy[0]["copies"] == 3
+    for label in ("17", "21"):
+        node = _kid(nodes, "hydroxy", label)
+        (atom,) = node["lights"]
+        assert atom in hydroxy[0]["owns"] and t.atoms[atom].element == "O"
+        # the hydroxyl sits on the carbon that carries that locant
+        assert any(label in t.atoms[x].locants and x not in hydroxy[0]["owns"] for x in _neighbours(t, atom))
+    dione = _one(nodes, kind="suffix", label="dione")
+    assert sorted(n["label"] for n in nodes if n["parent"] == dione["id"] and n["kind"] == "locant") == ["20", "3"]
+    # the stereo mark of the same token still lights its stereocentre
+    (atom,) = _one(nodes, kind="stereo", label="11beta")["lights"]
+    assert "11" in t.atoms[atom].locants
+
+
+def _neighbours(t, atom):
+    return {n.GetIdx() for n in Chem.MolFromSmiles(t.smiles).GetAtomWithIdx(atom).GetNeighbors()}
+
+
+# I2. glossary lines on live names
+def test_a_greek_position_is_not_an_anomer():
+    for name in ("alpha,alpha,alpha-trifluorotoluene", "alpha-methylbenzyl alcohol"):
+        t, nodes = _nodes(name)
+        assert not [n for n in nodes if "anomer" in n["line"]], name
+
+
+def test_a_sugar_anomer_line_survives_on_a_sugar():
+    t, nodes = _nodes("alpha-D-glucopyranose")
+    assert [n for n in nodes if n["label"] == "alpha" and "anomer" in n["line"]]
+
+
+@pytest.mark.parametrize("name,wrong", [
+    ("ethanethiol", "-OH"),
+    ("benzenesulfonic acid", "C(=O)OH"),
+    ("methyl methanesulfonate", "ester"),
+    ("4-methylbenzenesulfonamide", "C(=O)N"),
+    ("pyridine-2(1H)-thione", "C=O"),
+    ("phenoxyacetic acid", "-O- linkage"),
+])
+def test_no_part_line_states_a_wrong_group(name, wrong):
+    t, nodes = _nodes(name)
+    for n in nodes:
+        if n["kind"] in PART_NODE_KINDS:
+            assert wrong not in n["line"], (name, n["label"], n["line"])

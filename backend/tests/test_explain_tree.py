@@ -3,8 +3,9 @@
 import re
 
 import pytest
+from rdkit import Chem
 
-from app.explain_tree import PART_NODE_KINDS, build_nodes
+from app.explain_tree import PART_NODE_KINDS, _Builder, _written_parts, build_nodes, foreign_lights
 from app.opsin_trace import Trace, TraceAtom, TracePart
 from tests.fixtures.traces import load_traces
 
@@ -171,3 +172,100 @@ def test_corpus_invariants(name):
             m = STEREO_LOCANT.match(n["label"])
             if m:
                 assert n["lights"] and all(m.group(1) in t.atoms[a].locants for a in n["lights"]), (name, n)
+    # the lit-atom gate: no locant lights an atom it has no claim on
+    assert foreign_lights(t, nodes) == [], name
+
+
+# -- C1: a locant lights only atoms it can name (the lit-atom gate) --------------
+def _owner_label(nodes, atom):
+    return next(n["label"] for n in nodes if n["kind"] in PART_NODE_KINDS and atom in n["owns"])
+
+
+def test_the_lit_atom_gate_catches_a_foreign_atom():
+    """Not vacuous: a locant child that lights an atom of another part is
+    reported, however plausible the atom looks."""
+    t, nodes = _nodes(IBUPROFEN)
+    (methyl,) = [n for n in nodes if n["label"] == "methyl"]
+    (propyl,) = [n for n in nodes if n["label"] == "propyl"]
+    (two,) = _under(nodes, methyl, "locant")
+    assert foreign_lights(t, nodes) == []
+    two["lights"] = [propyl["owns"][0]]
+    assert foreign_lights(t, nodes) == [("2", [propyl["owns"][0]])]
+
+
+TADALAFIL = "(6R,12aR)-6-(1,3-benzodioxol-5-yl)-2-methyl-3,6,12,12a-tetrahydropyrazino[2',1':6,1]pyrido[3,4-b]indole-1,4-dione"
+
+
+def test_ring_heteroatom_locants_light_the_ring_heteroatoms():
+    t, nodes = _nodes(TADALAFIL)
+    dioxole = _one_node(nodes, "substituent", "benzodioxol-5-yl")
+    kids = {n["label"]: n for n in _under(nodes, dioxole, "locant")}
+    assert set(kids) == {"1", "3", "5"}
+    for label in ("1", "3"):
+        (atom,) = kids[label]["lights"]
+        assert t.atoms[atom].element == "O" and label in t.atoms[atom].locants
+        assert atom in dioxole["owns"]
+
+
+def _one_node(nodes, kind, label):
+    (n,) = [n for n in nodes if n["kind"] == kind and n["label"] == label]
+    return n
+
+
+def test_a_phenylene_keeps_its_own_locants():
+    t, nodes = _nodes("1,1'-(1,4-phenylene)diethanone")
+    phenylene = _one_node(nodes, "substituent", "phenylene")
+    for n in _under(nodes, phenylene, "locant"):
+        (atom,) = n["lights"]
+        assert atom in phenylene["owns"] and n["label"] in t.atoms[atom].locants
+    # the bracket's own locants name the two ketone carbons it is bonded to
+    top = [n for n in nodes if n["kind"] == "locant" and n["parent"] is None]
+    assert sorted(n["label"] for n in top) == ["1", "1'"]
+    for n in top:
+        (atom,) = n["lights"]
+        assert _owner_label(nodes, atom) != "phenylene"
+        assert t.atoms[atom].element == "C" and n["label"] in t.atoms[atom].locants
+
+
+def test_a_bridge_locant_names_the_bonded_positions_of_the_multiplied_root():
+    t, nodes = _nodes("1,1'-[methylenebis(4,1-phenylene)]bis(3-phenylurea)")
+    phenylene = _one_node(nodes, "substituent", "phenylene")
+    for n in _under(nodes, phenylene, "locant"):
+        assert all(a in phenylene["owns"] and n["label"] in t.atoms[a].locants for a in n["lights"]), n
+    top = {n["label"]: n for n in nodes if n["kind"] == "locant" and n["parent"] is None}
+    for label in ("1", "1'"):
+        (atom,) = top[label]["lights"]
+        assert t.atoms[atom].element == "N" and label in t.atoms[atom].locants
+
+
+def test_a_chain_locant_names_the_parent_position_not_its_own_ch3():
+    """"2-acetyloxy": the 2 is on benzoic acid, not acetyl's own CH3 (which
+    also carries the number 2)."""
+    t, nodes = _nodes("2-acetyloxybenzoic acid")
+    acetyl = _one_node(nodes, "substituent", "acetyl")
+    (two,) = [n for n in _under(nodes, acetyl, "locant")]
+    (atom,) = two["lights"]
+    assert atom not in acetyl["owns"] and "2" in t.atoms[atom].locants
+    assert _owner_label(nodes, atom).startswith("benz")
+
+
+# -- m2: a sugar's alpha/beta names the anomeric carbon, or nothing -----------------
+def test_a_carbohydrate_anomer_mark_lights_the_anomeric_carbon_only():
+    t, nodes = _nodes("alpha-D-glucopyranose")
+    alpha = _one_node(nodes, "locant", "alpha")
+    (atom,) = alpha["lights"]
+    assert t.atoms[atom].element == "C" and "anomer" in alpha["line"]
+    neighbours = Chem.MolFromSmiles(t.smiles).GetAtomWithIdx(atom).GetNeighbors()
+    assert sorted(t.atoms[n.GetIdx()].element for n in neighbours) == ["C", "O", "O"]
+
+
+def test_an_anomer_mark_with_no_single_anomeric_carbon_lights_nothing():
+    def builder(smiles, n):
+        t = Trace(text="x", smiles=smiles, tokens=(), parts=(),
+                  atoms=tuple(TraceAtom(i, 1, "C", ()) for i in range(n)))
+        return _Builder(t, _written_parts(t))
+
+    # two ring carbons each hold a ring O and an exocyclic O: unprovable
+    assert builder("OC1CCC(O)O1", 7).anomeric_carbon(range(7)) == []
+    # exactly one does: tetrahydropyran-2-ol, carbon 3
+    assert builder("C1CCC(O)O1", 6).anomeric_carbon(range(6)) == [3]
