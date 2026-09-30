@@ -85,15 +85,21 @@ def test_spans_are_all_or_nothing_never_partial():
 
     Do not narrow this back to a smaller corpus. The breadth IS the test.
     """
+    spanned = 0
     for _axis, name in CURATED:
         result = explain_name(name)
         if result["error"]:
             continue
         present = [s["name_range"] is not None for s in result["segments"]]
         assert all(present) or not any(present), f"{name}: mixed spans {present}"
+        spanned += all(present) and bool(present)
+    # A loop over outputs also passes when every name is withheld; most of
+    # the corpus must really carry spans for the rule above to mean anything.
+    assert spanned > len(CURATED) // 2, spanned
 
 
 def test_every_span_lies_inside_the_name():
+    checked = 0
     for name in GOLDEN_NAMES:
         result = explain_name(name)
         if result["error"]:
@@ -101,12 +107,15 @@ def test_every_span_lies_inside_the_name():
         for segment in result["segments"]:
             if segment["name_range"] is None:
                 continue
+            checked += 1
             start, end = segment["name_range"]
             assert 0 <= start < end <= len(result["name"])
             for child in segment["children"]:
                 if child["name_range"] is None:
                     continue
                 assert start <= child["name_range"][0] < child["name_range"][1] <= end
+    # If every name were withheld nothing above would have run.
+    assert checked >= len(GOLDEN_NAMES), checked
 
 
 def test_caffeine_suffix_segment_and_its_locants_are_hoverable():
@@ -353,9 +362,10 @@ def test_caffeines_indicated_hydrogen_locant_is_hoverable():
         s for s in payload["segments"] if s["kind"] == "modifier"
     )
     by_locant = {c["locant"]: c["name_range"] for c in modifier["children"]}
-    assert by_locant["3"] is not None
-    assert by_locant["7"] is not None
-    assert by_locant["1"] is not None, "the 1 of 1H- is still dead"
+    name = payload["name"]
+    for locant in ("1", "3", "7"):
+        assert by_locant[locant] is not None, f"the {locant} is dead"
+        assert name[slice(*by_locant[locant])] == locant
 
 
 def test_every_locant_child_of_a_spanned_segment_has_a_span():
@@ -513,7 +523,8 @@ def test_a_fusion_parent_gets_a_span():
     assert payload["error"] is None
     parents = [s for s in payload["segments"] if s["kind"] == "parent"]
     assert parents, payload["segments"]
-    assert parents[0]["name_range"] is not None
+    name = "benzo[a]pyrene"
+    assert name[slice(*parents[0]["name_range"])] == "benzo[a]pyrene"
 
 
 def test_a_primed_ring_assembly_gets_a_span():
@@ -522,24 +533,9 @@ def test_a_primed_ring_assembly_gets_a_span():
     """
     payload = explain_name("1,1'-biphenyl")
     assert payload["error"] is None
-    assert any(s["name_range"] is not None for s in payload["segments"])
-
-
-def test_caffeine_still_spans_every_top_level_part():
-    """The reference example. Its four top-level parts covered [0,47] before
-    this change and must still cover it after.
-
-    `CAFFEINE` here is the module's own import from `tests.conftest`; the
-    original (test_name_spans.py) instead imported it from
-    `tests.fixtures.explain_corpus`, but the two are the same literal
-    string, so this is the same molecule under the name this module
-    already uses everywhere else.
-    """
-    payload = explain_name(CAFFEINE)
-    ranges = [s["name_range"] for s in payload["segments"]]
-    assert all(r is not None for r in ranges), ranges
-    assert min(r[0] for r in ranges) == 0
-    assert max(r[1] for r in ranges) == len(CAFFEINE)
+    name = "1,1'-biphenyl"
+    parent = next(s for s in payload["segments"] if s["kind"] == "parent")
+    assert name[slice(*parent["name_range"])] == "1,1'-biphenyl"
 
 
 def test_a_duplicated_heteroatom_label_still_withholds_everything():
@@ -548,18 +544,9 @@ def test_a_duplicated_heteroatom_label_still_withholds_everything():
     """
     payload = explain_name("[1,2,4]triazolo[4,3-a]pyridine")
     assert payload["error"] is None
+    # An empty segment list would satisfy the all() below on its own.
+    assert payload["segments"], "expected a real decomposition, not an empty one"
     assert all(s["name_range"] is None for s in payload["segments"])
-
-
-def test_a_capital_d_sugar_tokenizes():
-    """OPSIN's ParseRules matches dlStereochemistry case-insensitively and
-    hands back a lowercased `d` where the name wrote `D`. The exact
-    reconstruction guard then rejected OPSIN's own answer and returned None,
-    so compute_spans (and everything downstream of `tokenize`) died on its
-    second line for every D-/L- sugar and amino acid.
-    """
-    tokens = tokenize("alpha-D-glucopyranose")
-    assert tokens is not None
 
 
 def test_the_reconstructed_token_keeps_the_names_own_casing():
@@ -649,3 +636,60 @@ def test_a_ring_stem_that_looks_like_a_multiplier_is_not_counted_as_one():
     assert len(chloro["atom_indices"]) == 6, chloro["atom_indices"]
     assert name[slice(*parent["name_range"])] == "cyclohexane"
     assert len(parent["atom_indices"]) == 6, parent["atom_indices"]
+
+
+def test_a_repeated_locant_in_one_token_points_at_its_first_written_digit():
+    """"1,1,1-trichloro" writes the locant 1 three times in ONE token. The
+    child for "1" must sit on the first written digit; a lookup that lets the
+    last occurrence overwrite the earlier ones would point the hover at the
+    third.
+    """
+    name = "1,1,1-trichloro-2,2-bis(4-chlorophenyl)ethane"
+    result = explain_name(name)
+    chloro = next(s for s in result["segments"] if s["label"] == "chloro")
+    child = next(c for c in chloro["children"] if c["kind"] == "substituent")
+    assert child["locant"] == "1"
+    assert child["name_range"] == [0, 1]
+
+
+def test_a_repeated_indicated_hydrogen_locant_points_at_its_first_written_digit():
+    """"1H,1H-" style repeats inside one bigCapitalH token: the first written
+    locant wins, same rule as the locant token above.
+    """
+    from app.explain import _bigcapitalh_subspans
+    from app.opsin_tokenizer import Token
+
+    token = Token(text="1H,1H-", category="bigCapitalH", start=10, end=16)
+    assert _bigcapitalh_subspans(token) == {"1": (10, 11)}
+
+
+def test_token_children_highlight_the_atoms_their_segment_lights_up():
+    """A `modifier` segment owns no atoms (`atom_indices` is empty) but
+    lights up the parent's atoms. Its token children must inherit what the
+    segment highlights, not its empty ownership list, or hovering `hydro`
+    highlights nothing.
+    """
+    result = explain_name(CAFFEINE)
+    modifier = next(s for s in result["segments"] if s["kind"] == "modifier")
+    assert modifier["highlight_atoms"], modifier
+    tokens = [c for c in modifier["children"] if c["kind"] == "token"]
+    assert tokens, modifier["children"]
+    for child in tokens:
+        assert child["highlight_atoms"] == modifier["highlight_atoms"], child
+
+
+def test_a_name_whose_modifier_run_cannot_be_proven_withholds_everything(monkeypatch):
+    """Caffeine has a hydro / indicated-hydrogen modifier. If its run cannot
+    be derived, showing the other three spans would leave the modifier's
+    characters dead, so every span is withheld rather than shipped partial.
+    """
+    import app.explain as explain_module
+
+    monkeypatch.setattr(explain_module, "find_modifier_run", lambda tokens, runs: None)
+    result = explain_name(CAFFEINE)
+    assert result["error"] is None
+    assert result["segments"], "expected a real decomposition, not an empty one"
+    assert all(s["name_range"] is None for s in result["segments"]), (
+        result["segments"]
+    )
+

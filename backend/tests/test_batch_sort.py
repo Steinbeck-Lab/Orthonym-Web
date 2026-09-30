@@ -41,6 +41,9 @@ def test_tier_descending_still_leaves_ties_in_input_order():
     # descending would reverse the tiebreak too, so "weakest tier first"
     # would silently also mean "last molecule first" inside each tier.
     rows = [row(i, "pin") for i in range(4)] + [row(i, "abstain") for i in range(4, 8)]
+    # Handed over out of index order, so a sort that only trusts the input
+    # order (no index tiebreak of its own) cannot pass by luck.
+    rows = rows[::-1]
     out = sort_rows(rows, "tier", "desc")
     assert indices(out) == [4, 5, 6, 7, 0, 1, 2, 3]
 
@@ -53,8 +56,10 @@ def test_an_unknown_status_sorts_after_every_known_tier():
 
 
 def test_name_sorts_alphabetically_and_case_insensitively():
-    rows = [row(0, name="benzene"), row(1, name="Acetic acid"), row(2, name="ethanol")]
-    assert indices(sort_rows(rows, "name")) == [1, 0, 2]
+    # Capitals that a case-sensitive compare would file before every lowercase
+    # name ("Zinc" < "aluminium" in ASCII), so only casefolding gives 1, 2, 0.
+    rows = [row(0, name="Zinc"), row(1, name="aluminium"), row(2, name="Beryl")]
+    assert indices(sort_rows(rows, "name")) == [1, 2, 0]
 
 
 def test_unnamed_rows_sort_last_in_an_a_to_z_sort():
@@ -110,9 +115,17 @@ def test_every_sort_is_a_total_order_so_paging_cannot_repeat_or_drop_a_row():
         row(5, "error"),
         row(6, "error"),
     ]
+    # Shuffled: rows already in index order make every stable sort look total.
+    rows = [rows[i] for i in (4, 1, 6, 0, 5, 3, 2)]
     for field in ("index", "tier", "name", "roundtrip"):
         for order in ("asc", "desc"):
             out = sort_rows(rows, field, order)
+            ties = [r["index"] for r in out]
+            if field != "index":
+                # Rows that compare equal on the field stay in index order.
+                for a, b in zip(out, out[1:]):
+                    if all(a[k] == b[k] for k in ("status", "name", "roundtrip_smiles", "roundtrip_match")):
+                        assert a["index"] < b["index"], (field, order, ties)
             paged = [r for start in range(0, len(out), 3) for r in out[start : start + 3]]
             assert sorted(indices(paged)) == list(range(7)), (field, order)
             assert indices(paged) == indices(out), (field, order)
