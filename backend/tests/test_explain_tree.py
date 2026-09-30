@@ -7,6 +7,7 @@ from rdkit import Chem
 
 from app.explain_tree import PART_NODE_KINDS, _Builder, _written_parts, build_nodes, foreign_lights
 from app.opsin_trace import Trace, TraceAtom, TracePart
+from scripts.explain_census import _spiro_primes
 from tests.fixtures.traces import load_traces
 
 TRACES = load_traces()
@@ -166,6 +167,7 @@ def test_corpus_invariants(name):
     for n in nodes:
         if n["kind"] == "indicated_h" or (n["kind"] == "locant" and "hydrogen" in n["line"]):
             loc = n["label"][:-1] if n["kind"] == "indicated_h" else n["label"]
+            loc += "'" * _spiro_primes(t, n, loc)        # a later spiro component is numbered 1', 2', ...
             assert n["lights"] and all(loc in t.atoms[a].locants for a in n["lights"]), (name, n)
         if n["kind"] == "stereo":
             assert n["span"] and n["parent"], (name, n)

@@ -89,6 +89,8 @@ CURATED: list[tuple[str, str]] = [
     ("esters-salts-amides", "2-acetyloxyethyl acetate"),
     ("esters-salts-amides", "2-benzoyloxyethyl benzoate"),
     ("esters-salts-amides", "3-acetyloxypropyl acetate"),
+    # Task 9: hydro / indicated-H locants written in the SECOND spiro component are primed atoms
+    ("von-baeyer-spiro", "3-(4-fluorophenyl)-1'-[(2-fluorophenyl)methyl]-2',4-dioxospiro[1,3-thiazolidine-2,3'-2,3-dihydro-1H-indole]"),
 ]
 
 # Names OPSIN 2.9.0 itself genuinely cannot parse. Verified against

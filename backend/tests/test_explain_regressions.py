@@ -549,3 +549,27 @@ def test_the_gate_accepts_a_number_naming_a_later_member_of_an_unbracketed_chain
     own = next(a for a in p["owns"] if t.atoms[a].element == "C")
     leading["lights"] = [own]
     assert foreign_lights(t, nodes) == [(locant, [own])]
+
+
+# -- Task 9: hydro locants of a LATER spiro component name OPSIN's primed atoms --------------
+SPIRO_HYDRO_B = ("3-(4-fluorophenyl)-1'-[(2-fluorophenyl)methyl]-2',4-dioxospiro"
+                 "[1,3-thiazolidine-2,3'-2,3-dihydro-1H-indole]")
+
+
+def test_hydro_locants_in_the_second_spiro_component_light_the_primed_atoms():
+    """"spiro[1,3-thiazolidine-2,3'-2,3-dihydro-1H-indole]": the indole is the second
+    component, so its 2,3-dihydro and 1H are positions 2', 3' and 1'. The census gate
+    reads that numbering (and stays exact): the first component's 2 and 3 are wrong."""
+    t, nodes = _nodes(SPIRO_HYDRO_B)
+    assert classify(t, nodes, assign_owners(t.tokens)) == ["CLEAN"]
+    h = _one(nodes, kind="indicated_h", label="1H")
+    (atom,) = h["lights"]
+    assert t.atoms[atom].element == "N" and "1'" in t.atoms[atom].locants
+    dihydro = t.text.index("2,3-dihydro")
+    two = next(n for n in nodes if n["kind"] == "locant" and n["span"] == [dihydro, dihydro + 1])
+    (atom,) = two["lights"]
+    assert "2'" in t.atoms[atom].locants
+    # the old reading: the thiazolidine carbon that carries a bare 2
+    wrong = next(a.index for a in t.atoms if "2" in a.locants)
+    two["lights"] = [wrong]
+    assert "HYDRO_WRONG" in classify(t, nodes, assign_owners(t.tokens))
