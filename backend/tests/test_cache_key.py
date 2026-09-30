@@ -1,4 +1,5 @@
 from app import name_cache
+from app.core.config import get_settings
 from app.schemas import ResultItem
 
 
@@ -48,7 +49,10 @@ def test_round_trip_through_redis(redis_client):
         assert got is not None
         assert got.name == "ethanol"
         assert got.status == "pin"
-        assert redis_client.ttl(key) > 0
+        # The configured TTL, not merely "some expiry": a hard-coded 1 s
+        # would pass a bare `> 0`.
+        ttl_limit = get_settings().NAME_CACHE_TTL_SECONDS
+        assert ttl_limit - 60 < redis_client.ttl(key) <= ttl_limit
     finally:
         redis_client.delete(key)
 
@@ -342,3 +346,45 @@ def test_the_fast_and_batch_paths_agree_on_the_cache_key(redis_client):
         "the spellings are collapsing to one cache key, so something is "
         "RDKit-canonicalising the input again -- see commit 170174b"
     )
+
+
+def test_the_fingerprint_follows_the_source_contents(monkeypatch, tmp_path):
+    """The fingerprint must change when a source file's CONTENT changes, not
+    just when files appear or are renamed; hashing file names would leave
+    the cache serving names from an edited engine.
+    """
+    (tmp_path / "engine.py").write_text("X = 1\n")
+    monkeypatch.setattr(name_cache.orthonym, "__file__", str(tmp_path / "__init__.py"))
+    before = name_cache._engine_fingerprint()
+    assert before != "nofingerprint"
+    (tmp_path / "engine.py").write_text("X = 2\n")
+    assert name_cache._engine_fingerprint() != before
+
+
+def test_the_key_embeds_the_manual_key_version(monkeypatch):
+    # _KEY_VERSION is the manual half of invalidation; a key that ignores it
+    # cannot be flushed by bumping it.
+    before = name_cache.cache_key("CCO", best_effort=True)
+    monkeypatch.setattr(name_cache, "_KEY_VERSION", "v999")
+    after = name_cache.cache_key("CCO", best_effort=True)
+    assert after != before
+    assert "v999" in after
+
+
+def test_a_verified_fallback_row_is_cached(redis_client):
+    item = ResultItem(
+        smiles="CCO",
+        status="fallback",
+        name="ethanol",
+        tier="systematic_verified",
+        roundtrip_smiles="CCO",
+        roundtrip_match=True,
+    )
+    key = name_cache.cache_key("CCO", best_effort=True)
+    redis_client.delete(key)
+    try:
+        name_cache.put_cached(item, best_effort=True)
+        assert redis_client.exists(key) == 1
+        assert name_cache.get_cached("CCO", best_effort=True).status == "fallback"
+    finally:
+        redis_client.delete(key)
