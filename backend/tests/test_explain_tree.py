@@ -189,8 +189,10 @@ def test_the_lit_atom_gate_catches_a_foreign_atom():
     (propyl,) = [n for n in nodes if n["label"] == "propyl"]
     (two,) = _under(nodes, methyl, "locant")
     assert foreign_lights(t, nodes) == []
-    two["lights"] = [propyl["owns"][0]]
-    assert foreign_lights(t, nodes) == [("2", [propyl["owns"][0]])]
+    # an atom of propyl other than C2, where the methyl hangs (that one is a legitimate reading)
+    far = next(a for a in propyl["owns"] if "2" not in t.atoms[a].locants)
+    two["lights"] = [far]
+    assert foreign_lights(t, nodes) == [("2", [far])]
 
 
 TADALAFIL = "(6R,12aR)-6-(1,3-benzodioxol-5-yl)-2-methyl-3,6,12,12a-tetrahydropyrazino[2',1':6,1]pyrido[3,4-b]indole-1,4-dione"

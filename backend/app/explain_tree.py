@@ -356,7 +356,28 @@ class _Builder:
         hetero = [a for a in self.carrying(own, loc) if self.by_index[a].element != "C"]
         if hetero:
             return hetero
-        return self.carrying(self.edge(comp), loc) or self.carrying(own, loc) or sorted(own)
+        return (self.chain_edge(w, loc) or self.carrying(self.edge(comp), loc)
+                or self.carrying(own, loc) or sorted(own))
+
+    def chain_edge(self, w, loc) -> list[int]:
+        """Walk the substituents written one after another from `w`
+        ("acetyl|oxy|ethyl"): the first prefix of that chain that is bonded to
+        an atom carrying `loc` names it. "4-(2-acetyloxyethyl)phenol": acetyl
+        alone is bonded to the O, acetyl+oxy to ethyl C2."""
+        by_key = {p.key: p for p in self.parts if p.key is not None}
+        seen, atoms, part = {w.key}, set(self.atoms_of(w)), w
+        while True:
+            edge = self.edge(atoms)
+            hit = self.carrying(edge, loc)
+            if hit:
+                return hit
+            last = max(t.index for t in part.tokens) if part.tokens else -1
+            nxt = next((t for t in self.t.tokens[last + 1:] if t.kind != "hyphen"), None)
+            part = by_key.get(nxt.owner) if nxt is not None and nxt.kind == "group" else None
+            if part is None or part.kind != "substituent" or part.key in seen:
+                return []
+            seen.add(part.key)
+            atoms |= set(self.atoms_of(part))
 
     def locant(self, loc, leading, target, mode, atoms, copies, used, suffix_atoms, suffix_locants,
                written, w, token_locs):
@@ -547,6 +568,22 @@ def build_nodes(trace: Trace) -> list[dict]:
     return b.nodes
 
 
+def _chain_prefixes(trace: Trace, key: Optional[Span]) -> list[set[int]]:
+    """Atom sets of the growing run of substituents written one after another
+    from the part `key` ("acetyl", "acetyl+oxy", "acetyl+oxy+ethyl")."""
+    by_key = {p.span: p for p in trace.parts if p.span is not None and p.kind == "substituent"}
+    out, atoms, seen = [], set(), set()
+    while key is not None and key in by_key and key not in seen:
+        seen.add(key)
+        atoms = atoms | {a for p in trace.parts if p.span == key for a in p.atoms}
+        out.append(set(atoms))
+        mine = [t for t in trace.tokens if t.owner == key]
+        nxt = next((t for t in trace.tokens[max(t.index for t in mine) + 1:] if t.kind != "hyphen"), None) \
+            if mine else None
+        key = nxt.owner if nxt is not None and nxt.kind == "group" else None
+    return out
+
+
 def _written_list(text: str, nodes: list[dict], node: dict) -> list[str]:
     """The labels of the locant nodes written in one comma list with `node`."""
     same = sorted((x for x in nodes if x["kind"] == "locant" and x["parent"] == node["parent"] and x["span"]),
@@ -601,18 +638,26 @@ def foreign_lights(trace: Trace, nodes: list[dict]) -> list[tuple[str, list[int]
                         comp.add(x)
                         stack.append(x)
             edge = {x for a in comp for x in nbrs(a) if x not in comp and label in by_atom[x].locants}
+            own_key = next((p.span for p in trace.parts if p.kind == "substituent"
+                            and p.atoms and set(p.atoms) <= set(parent["owns"])), None)
+            for prefix in _chain_prefixes(trace, own_key):
+                edge |= {x for a in prefix for x in nbrs(a) if x not in prefix and label in by_atom[x].locants}
             placed = {a for p in trace.parts if p.locant == label for a in p.atoms}
             ok = lit <= family | placed | edge
             key = next((p.span for p in trace.parts if p.kind == "substituent"
                         and p.atoms and set(p.atoms) <= set(parent["owns"])), None)
             chained = parent["kind"] == "substituent" and _locant_is_not_own_attachment(trace, key)
             # A substituent that cannot have its own attachment point in front
-            # ("3-pentan-3-yloxy", "1-acetyloxy") may not light the atom it is
-            # bonded out of: that is the parent's position, not its own.
+            # ("3-pentan-3-yloxy", "1-acetyloxy", "(2-acetyloxyethyl)") may not
+            # light a carbon of its own (acetyl's CH3 also carries the number
+            # 2) nor the atom it is bonded out of: the number is the parent's.
+            # Ring heteroatoms ("1,3-benzodioxol-5-yloxy") and hydro locants stay.
             if ok and chained:
                 core = next((t for t in trace.tokens if t.owner == key and t.kind == "group"), None)
                 if (core is not None and n["span"] and n["span"][1] <= core.span[0]
-                        and any(a in seed and any(x not in seed for x in nbrs(a)) for a in lit - placed)):
+                        and "hydrogen" not in n["line"]
+                        and any(a in seed and (by_atom[a].element == "C" or any(x not in seed for x in nbrs(a)))
+                                for a in lit - placed)):
                     ok = False
             # "1,4-phenylene": when the part itself carries EVERY locant of
             # the list and this locant's own atom is where it is bonded out,

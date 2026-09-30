@@ -351,3 +351,23 @@ def test_a_nested_naphthyl_keeps_its_own_attachment_locant():
     t, nodes = _nodes("4-(2-naphthyl)phenol")
     (lit,) = _lit(t, nodes, _kid(nodes, "naphthyl", "2"))
     assert lit[0] == "naphthyl" and "2" in lit[1]
+
+
+# OOS-1. a bracketed compound substituent: the number is on the parent, not acetyl's CH3
+@pytest.mark.parametrize("name,part,locant,root", [
+    ("4-(2-acetyloxyethyl)phenol", "acetyl", "2", "ethyl"),
+    ("4-(2-benzoyloxyethyl)phenol", "benzoyl", "2", "ethyl"),
+    ("4-(3-acetyloxypropyl)phenol", "acetyl", "3", "propyl"),
+])
+def test_a_bracketed_chain_locant_names_the_position_on_the_substituent_it_hangs_on(name, part, locant, root):
+    t, nodes = _nodes(name)
+    (p,) = [n for n in nodes if n["kind"] == "substituent" and n["label"] == part]
+    leading = min((n for n in nodes if n["parent"] == p["id"] and n["kind"] == "locant"
+                   and n["label"] == locant), key=lambda n: n["span"][0])
+    (lit,) = _lit(t, nodes, leading)
+    assert lit[0] == root and locant in lit[1], (name, lit)
+    assert foreign_lights(t, nodes) == []
+    # the gate sees the old behaviour: a carbon of acetyl itself (its CH3 also carries a 2)
+    own = next(a for a in p["owns"] if t.atoms[a].element == "C")
+    leading["lights"] = [own]
+    assert foreign_lights(t, nodes) == [(locant, [own])]
