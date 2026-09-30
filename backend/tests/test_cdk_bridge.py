@@ -65,6 +65,19 @@ def test_cdk_is_available_in_this_process():
     assert cdk_bridge.self_check() is True
 
 
+def test_self_check_fails_when_the_cip_path_is_broken(monkeypatch):
+    """The other half of the good-case test above: a check that always says
+    True would pass it. A CIP pass that stopped labelling still returns a good
+    SVG, so self_check has to read the labels, and has to report False when
+    CDK is not there at all.
+    """
+    monkeypatch.setattr(cdk_bridge, "cip_labels", lambda smiles: [])
+    assert cdk_bridge.self_check() is False
+    monkeypatch.undo()
+    monkeypatch.setattr(cdk_bridge, "available", lambda: False)
+    assert cdk_bridge.self_check() is False
+
+
 @pytest.mark.parametrize(
     "smiles,expected",
     [
@@ -100,6 +113,25 @@ def test_cdk_draws_what_rdkit_cannot_parse():
     assert svg is not None
     assert svg.lstrip().startswith("<")
     assert "<!DOCTYPE svg PUBLIC" in svg
+    # A marker alone is satisfied by a constant string; require the picture
+    # itself, at the size asked for, and one that depends on the molecule.
+    assert "<path" in svg
+    assert "width='240.0px'" in svg and "height='180.0px'" in svg
+    assert svg != cdk_bridge.depict_svg("CCCCO", 240, 180)
+
+
+def test_the_picture_carries_the_cip_labels(monkeypatch):
+    """depict_svg must annotate before it draws. The labels are glyph paths,
+    so the only way to see them is that the drawing changes when the
+    annotation pass is switched off; cip_labels having its own call would
+    otherwise hide a depiction that lost them.
+    """
+    smiles = "C[C@H](N)C(=O)O"
+    labelled = cdk_bridge.depict_svg(smiles, 240, 180)
+    monkeypatch.setattr(cdk_bridge, "_annotate_cip", lambda mol: None)
+    unlabelled = cdk_bridge.depict_svg(smiles, 240, 180)
+    assert labelled and unlabelled
+    assert labelled != unlabelled
 
 
 def test_cdk_declines_what_it_cannot_read():
@@ -117,6 +149,15 @@ class TestDepictionEnginePreference:
         assert mol is not None
         uri = structure_svg_data_uri("CCO", mol)
         assert _engine_of(uri) == "cdk"
+        assert "<path" in _svg_of(uri)
+        assert _svg_of(uri) != _svg_of(structure_svg_data_uri("CCCCO", None))
+
+    def test_the_picture_is_drawn_at_the_size_the_page_expects(self):
+        """depiction owns the 240x180 size and hands it to CDK; swapped or
+        dropped, every card would render at the wrong aspect."""
+        uri = structure_svg_data_uri("CCO", Chem.MolFromSmiles("CCO"))
+        svg = _svg_of(uri)
+        assert "width='240.0px'" in svg and "height='180.0px'" in svg
 
     def test_rdkit_draws_when_cdk_is_absent(self, monkeypatch):
         """The web-process case: no JVM, so no CDK, but still a picture.
@@ -128,6 +169,8 @@ class TestDepictionEnginePreference:
         mol = Chem.MolFromSmiles("CCO")
         uri = structure_svg_data_uri("CCO", mol)
         assert _engine_of(uri) == "rdkit"
+        # The marker is one attribute; the drawing must actually be there.
+        assert _svg_of(uri).count("<path") > 2
 
     def test_no_engine_and_no_mol_gives_none_not_a_broken_picture(self, monkeypatch):
         monkeypatch.setattr(cdk_bridge, "depict_svg", lambda *a, **k: None)
@@ -138,6 +181,7 @@ class TestDepictionEnginePreference:
         """Callers that hold only an RDKit Mol keep working."""
         uri = structure_svg_data_uri(None, Chem.MolFromSmiles("CCO"))
         assert _engine_of(uri) == "rdkit"
+        assert _svg_of(uri).count("<path") > 2
 
 
 class TestCanonicalisationFallback:
@@ -152,6 +196,12 @@ class TestCanonicalisationFallback:
         parsed = _canonical_or_error(0, "row", RDKIT_REJECTS_CDK_ACCEPTS, None)
         assert parsed.error is None
         assert parsed.smiles is not None
+
+    def test_the_rescued_smiles_is_the_canonical_form_the_cache_keys_on(self):
+        """normalise_smiles must rewrite, not echo: the name cache keys on
+        this string, so two spellings of one molecule must meet."""
+        assert cdk_bridge.normalise_smiles("OCC") == "CCO"
+        assert cdk_bridge.normalise_smiles("C(O)C") == "CCO"
 
     def test_unreadable_smiles_is_still_an_error(self):
         """Fail-closed: CDK must not turn nonsense into a molecule."""
@@ -257,4 +307,51 @@ def test_atom_count_matches_what_the_dos_bound_expects():
     """/api/depict bounds coordinate-generation cost with this number."""
     mol = cdk_bridge.parse_smiles("CN1C=NC2=C1C(=O)N(C)C(=O)N2C")  # caffeine
     assert cdk_bridge.atom_count(mol) == 14
+    assert cdk_bridge.atom_count(cdk_bridge.parse_smiles("CCO")) == 3
     assert cdk_bridge.atom_count(None) == 0
+
+
+def test_best_effort_off_never_consults_the_escalated_namer(monkeypatch):
+    """A primary abstain ships as an abstain for a caller who refused
+    best-effort names; escalating anyway would hand back the very name they
+    refused. With it on, the same abstain must escalate.
+    """
+    from app import orthonym_service
+
+    calls = []
+
+    class _Abstains:
+        def name_tiered(self, smiles):
+            return {"name": None, "tier": "abstain"}
+
+    class _Escalated:
+        def name_tiered(self, smiles):
+            calls.append(smiles)
+            return {"name": None, "tier": "abstain"}
+
+    monkeypatch.setattr(orthonym_service, "_namer", _Abstains())
+    monkeypatch.setattr(orthonym_service, "_escalated_namer", _Escalated())
+
+    orthonym_service.translate_one("CCO", best_effort=False)
+    assert calls == []
+    orthonym_service.translate_one("CCO", best_effort=True)
+    assert calls == ["CCO"]
+
+
+def test_an_engine_refusal_on_an_rdkit_readable_smiles_is_not_swallowed(monkeypatch):
+    """Only a CDK-only structure is turned into an abstain when the engine
+    raises ValueError. For a SMILES RDKit read, the error is a real fault and
+    must reach the caller, not be relabelled as the engine declining.
+    """
+    from app import orthonym_service
+
+    class _Refuses:
+        def name_tiered(self, smiles):
+            raise ValueError("Invalid SMILES")
+
+    monkeypatch.setattr(orthonym_service, "_namer", _Refuses())
+    with pytest.raises(ValueError):
+        orthonym_service.translate_one("CCO")
+
+    item = orthonym_service.translate_one(RDKIT_REJECTS_CDK_ACCEPTS)
+    assert item.status == "abstain"

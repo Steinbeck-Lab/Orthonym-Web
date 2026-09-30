@@ -59,6 +59,14 @@ def test_the_molblock_round_trips_to_the_same_molecule(redis_client):
     parsed = Chem.MolFromMolBlock(body["molblock"])
     assert parsed is not None
     assert Chem.MolToInchiKey(parsed) == ASPIRIN_INCHIKEY
+    # Same InChIKey says nothing about coordinates: a molblock written from a
+    # molecule with no 2D layout has every atom at the origin and a viewer
+    # draws one dot.
+    positions = {
+        (round(float(x), 3), round(float(y), 3))
+        for x, y, _ in parsed.GetConformer().GetPositions()
+    }
+    assert len(positions) == parsed.GetNumAtoms()
 
 
 def test_a_name_opsin_cannot_parse_returns_an_error_row(redis_client):
@@ -97,4 +105,21 @@ def test_an_inchi_failure_degrades_instead_of_failing_the_row(
     # The identifiers that did not depend on InChI survive.
     assert body["smiles"]
     assert body["canonical_smiles"]
+    assert body["molblock"]
     assert body["depiction_svg"]
+
+
+def test_an_empty_inchi_is_reported_as_missing_not_as_an_empty_string(
+    redis_client, monkeypatch
+):
+    """RDKit's InChI writer can also decline by returning "" and logging. An
+    empty string is not an identifier; the row must carry null for it, like
+    the raising case above, and must not derive a key from it.
+    """
+    monkeypatch.setattr("rdkit.Chem.MolToInchi", lambda *a, **k: "")
+
+    body = _convert(ASPIRIN)
+    assert body["error"] is None
+    assert body["inchi"] is None
+    assert body["inchikey"] is None
+    assert body["molblock"]

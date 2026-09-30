@@ -56,3 +56,23 @@ def test_every_atom_gets_its_own_distinct_point():
     assert len(set(points)) == len(points), (
         f"{len(points) - len(set(points))} atoms share a coordinate"
     )
+
+
+def test_each_point_belongs_to_its_own_atom():
+    # Distinct and in-bounds still pass for points shuffled between atoms,
+    # which would light the wrong atom. RDKit draws every bond at one length,
+    # so a point list in the wrong order or invented rather than read from
+    # the drawer makes bonded atoms land far apart or at uneven distances.
+    import math
+
+    from rdkit import Chem
+
+    result = explain_name(CAFFEINE)
+    mol = Chem.MolFromSmiles(result["smiles"])
+    points = result["atom_points"]
+    lengths = [
+        math.dist(points[b.GetBeginAtomIdx()], points[b.GetEndAtomIdx()])
+        for b in mol.GetBonds()
+    ]
+    assert len(lengths) == 15
+    assert max(lengths) - min(lengths) < 0.1 * max(lengths), lengths

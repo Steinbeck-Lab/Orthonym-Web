@@ -68,3 +68,37 @@ def test_degrades_to_all_parent_when_smiles_cannot_be_parsed():
     split = split_root(result, result.parts[0])
     assert split.parent_atoms == (0, 1)
     assert split.suffix_atoms == ()
+
+
+def test_a_suffix_atom_reports_the_first_numeric_locant_of_its_neighbour():
+    # OPSIN can give a skeleton atom more than one numeric locant. The caffeine
+    # cases carry one each, so a split that reported the last instead of the
+    # first would still pass them.
+    result = _fake(
+        [
+            DecomposedAtom(0, 1, "C", ("2", "3")),
+            DecomposedAtom(1, 2, "O", ("O",)),
+        ],
+        [1, 2],
+        smiles="CO",
+    )
+    split = split_root(result, result.parts[0])
+    assert split.suffix_atoms == (1,)
+    assert split.suffix_locants == {1: "2"}
+
+
+def test_a_suffix_atom_between_two_skeleton_atoms_takes_the_first_neighbour():
+    # Stopping at the first skeleton neighbour is what keeps one suffix atom
+    # from being labelled by whichever neighbour happens to come last.
+    result = _fake(
+        [
+            DecomposedAtom(0, 1, "C", ("1",)),
+            DecomposedAtom(1, 2, "O", ("O",)),
+            DecomposedAtom(2, 3, "C", ("2",)),
+        ],
+        [1, 2, 3],
+        smiles="COC",
+    )
+    split = split_root(result, result.parts[0])
+    assert split.parent_atoms == (0, 2)
+    assert split.suffix_locants == {1: "1"}

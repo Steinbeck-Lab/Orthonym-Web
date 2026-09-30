@@ -105,3 +105,13 @@ def test_the_error_string_does_not_blame_opsin():
 
     payload = explain_name("dinitrogen tetroxide")
     assert payload["error"] == "Orthonym could not decompose this name."
+
+
+def test_a_name_with_a_greek_letter_is_preprocessed_before_parsing():
+    """OPSIN's own entry point normalises the name (alpha -> the spelled-out
+    form) before it parses. Handing the raw string to the parser makes a name
+    OPSIN reads fine come back as "cannot decompose".
+    """
+    result = decompose("2-(\u03b1-methylbenzyl)phenol")
+    assert result is not None
+    assert result.smiles
