@@ -186,20 +186,25 @@ Things the repo does not tell you, or tells you only after they cost time.
   every copy/CSV/SDF path reads the data object, so the caret of `0^4,9` still leaves the page.
 - `/from-name` computes no tier and no verdict: OPSIN either parses a name or does not, and borrowing
   Home's grammar there would claim a check that never ran.
-- `/explain` explains **how the name is written**, from ONE OPSIN run (`app/opsin_trace.py`): every
-  written token is tagged with its text position right after OPSIN parses it; after
-  `ComponentProcessor` every kept token records the part OPSIN placed it in (so a hydro prefix or
-  ring bridge OPSIN moves into a ring lands on the ring), and `app/token_owner.py` assigns the tokens
-  OPSIN used up by their written neighbours and brackets. `app/label_rules.py` is the token-kind table;
-  `app/explain_tree.py` builds the flat `nodes` list; a stereo mark lights only the one atom that
-  carries its locant AND is a real stereocentre / stereo-double-bond atom (RDKit on the traced
-  molecule), searched from its IUPAC scope. Names OPSIN reads in a reordered form (CAS index names)
-  are refused as `unplaced`. Known limitation: conjunctive names split the chain into the suffix.
-  Honesty is **per node**: nothing lights a guessed atom, and on the SMILES
-  path a part whose atoms cannot be agreed keeps its text with `atoms_unmapped`. Measured 2026-09-30 --
-  corpus 576 names: CLEAN 574, 2 OPSIN cannot read; ChEMBL 10k
-  (`tests/fixtures/explain_chembl_10k.tsv`): CLEAN 9998, UNREADABLE 2, every failure class 0. Gate: `tests/test_explain_coverage.py`; census:
-  `backend/scripts/explain_census.py [--chembl ...]`.
+- `/explain` explains **how the name is written**, from one OPSIN trace (`app/opsin_trace.py`): every
+  written token is tagged with its text position right after OPSIN parses it; the trace keeps the
+  candidate OPSIN itself returns (first one that builds without a warning) and checks it against
+  OPSIN's public parse (`mismatch` refused). After `ComponentProcessor` every kept token records the
+  part OPSIN placed it in (so a hydro prefix or ring bridge OPSIN moves into a ring lands on the
+  ring), and `app/token_owner.py` assigns the tokens OPSIN used up by their written neighbours and
+  brackets (a part OPSIN kept no token of, such as `spiro[...]`, adopts the used-up tokens inside its
+  key range). `app/label_rules.py` is the token-kind table; `app/explain_tree.py` builds the flat
+  `nodes` list. A stereo mark lights exactly one atom or none: the atom that carries its locant AND
+  is a real stereocentre / stereo-double-bond atom (RDKit on the traced molecule), searched from its
+  IUPAC scope; a bare R/S/E/Z lights the scope's main part's only stereocentre (or stereo double
+  bond) when there is exactly one; a sugar's alpha/beta lights its one anomeric carbon, found by
+  structure; D/L and bare cis/trans light nothing. Names OPSIN reads in a reordered form (CAS index
+  names) are refused as `unplaced`. Known limitation: conjunctive names split the chain into the
+  suffix. Honesty is **per node**: nothing lights a guessed atom, and on the SMILES path a part
+  whose atoms cannot be agreed keeps its text with `atoms_unmapped`. Measured 2026-09-30 -- corpus
+  576 names: CLEAN 574, 2 OPSIN cannot read; ChEMBL 10k: CLEAN 9998, UNREADABLE 2, every failure
+  class 0. Gate: `tests/test_explain_coverage.py`; census: `backend/scripts/explain_census.py`
+  (`cd backend && ... scripts/explain_census.py --chembl tests/fixtures/explain_chembl_10k.tsv`).
 - The three legal pages describe **this deployment**, and every factual claim in `Privacy.jsx` was
   read out of the backend or measured against a running stack. Do not adapt wording from another
   site's policy: a policy that claims processing which does not happen is as wrong as one that hides

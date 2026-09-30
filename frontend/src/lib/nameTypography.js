@@ -12,7 +12,7 @@
 //
 // WHAT IS AND IS NOT CLAIMED. These runs are TYPOGRAPHY, not chemistry. They
 // make no letters-to-atoms claim the way /explain's node spans do, so
-// unlike the node spans they are deliberately NOT all-or-nothing: a name whose
+// they are never withheld for lack of an atom match: a name whose
 // stereodescriptor is recognised and whose fusion bracket is not still gets
 // the stereodescriptor italicised. Nothing downstream reads them as evidence.
 //
