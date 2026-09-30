@@ -269,7 +269,7 @@ def test_classify_reports_an_abstain_without_a_name():
 
 
 def test_a_broken_reflection_shim_does_not_take_naming_offline(monkeypatch):
-    """CC5: the worker stamped its health from opsin_decompose.self_check(),
+    """CC5: the worker stamped its health from opsin_trace.self_check(),
     which is the /explain REFLECTION-SHAPE probe, not the naming one.
 
     _get_handles() returns None for two unrelated reasons: OPSIN itself is
@@ -288,11 +288,11 @@ def test_a_broken_reflection_shim_does_not_take_naming_offline(monkeypatch):
     monkeypatch.setattr(celery_mod, "_jvm_is_started", lambda: False)
     # OPSIN itself is healthy; only the reflection shim is broken.
     monkeypatch.setattr(celery_mod, "_opsin_can_verify", lambda: True)
-    # celery_app imports opsin_decompose inside the function (it must not
+    # celery_app imports opsin_trace inside the function (it must not
     # start a JVM in the pre-fork parent), so patch the source module.
-    from app import opsin_decompose
+    from app import opsin_trace
 
-    monkeypatch.setattr(opsin_decompose, "self_check", lambda: False)
+    monkeypatch.setattr(opsin_trace, "self_check", lambda: False)
 
     stamped: dict = {}
     from app import redis_store
@@ -323,9 +323,9 @@ def test_opsin_being_genuinely_unavailable_still_refuses(monkeypatch):
 
     monkeypatch.setattr(celery_mod, "_jvm_is_started", lambda: False)
     monkeypatch.setattr(celery_mod, "_opsin_can_verify", lambda: False)
-    from app import opsin_decompose
+    from app import opsin_trace
 
-    monkeypatch.setattr(opsin_decompose, "self_check", lambda: True)
+    monkeypatch.setattr(opsin_trace, "self_check", lambda: True)
 
     stamped: dict = {}
     from app import redis_store

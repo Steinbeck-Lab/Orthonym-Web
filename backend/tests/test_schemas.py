@@ -1,27 +1,24 @@
-from app.schemas import ExplainSegment
+from app.schemas import ExplainNode, ExplainResponse
 
 
-def test_segment_nests_children():
-    child = ExplainSegment(
-        label="7", kind="substituent", owns_atoms=True, locant="7",
-        explanation="Position 7", atom_indices=[11], highlight_atoms=[11],
-    )
-    parent = ExplainSegment(
-        label="1,3,7-trimethyl", kind="substituent", owns_atoms=True,
-        explanation="three CH3 groups", atom_indices=[0, 11, 12],
-        highlight_atoms=[0, 11, 12], children=[child],
-    )
-    assert parent.children[0].locant == "7"
-    # The owned atoms must survive construction, at both levels.
-    assert parent.atom_indices == [0, 11, 12]
-    assert parent.children[0].atom_indices == [11]
+def test_a_part_node_owns_its_atoms():
+    node = ExplainNode(id="n0", kind="substituent", label="methyl", span=[9, 15], copies=3,
+                       owns=[0, 11, 12], lights=[0, 11, 12], line="three CH3 groups")
+    assert node.owns == [0, 11, 12] and node.copies == 3 and node.parent is None
 
 
-def test_referential_segment_owns_nothing():
-    segment = ExplainSegment(
-        label="3,7-dihydro-1H-", kind="modifier", owns_atoms=False,
-        explanation="records where hydrogens sit",
-        atom_indices=[], highlight_atoms=[1, 3, 7],
-    )
-    assert segment.atom_indices == []
-    assert segment.highlight_atoms == [1, 3, 7]
+def test_a_token_node_owns_nothing_and_lights_its_atoms():
+    node = ExplainNode(id="n1", parent="n0", kind="locant", label="7", span=[4, 5],
+                       lights=[11], line="Position 7")
+    assert node.owns == [] and node.lights == [11] and node.parent == "n0"
+
+
+def test_an_unplaced_node_has_no_span():
+    node = ExplainNode(id="n2", kind="stereo", label="2S", line="x")
+    assert node.span is None and node.atoms_unmapped is False
+
+
+def test_the_response_carries_nodes():
+    body = ExplainResponse(smiles="CCO", name="ethanol", nodes=[
+        ExplainNode(id="n0", kind="parent", label="ethan", span=[0, 5], owns=[0, 1], line="x")])
+    assert body.model_dump()["nodes"][0]["label"] == "ethan"

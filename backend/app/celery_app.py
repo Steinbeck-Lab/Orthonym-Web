@@ -16,7 +16,7 @@ of this docstring got wrong): a child that refuses a JVM inherited across
 fork() still returns CORRECT tiers, because opsin_parse falls through to a
 `java -jar` subprocess. It loses throughput -- 0.8 ms per OPSIN call becomes
 ~216 ms, several calls per molecule -- and it loses /explain and /teach
-entirely, because opsin_decompose hard-gates on opsin_available() with no
+entirely, because opsin_trace hard-gates on opsin_available() with no
 subprocess fallback. The mislabeled-tier fail-open is a different failure:
 OPSIN unavailable altogether, which Task 8's build-time check guards.
 """
@@ -141,7 +141,7 @@ def _opsin_liveness_probe() -> bool:
     read "fallback" shipped labelled "pin". C3's cache guard stops that
     persisting for 7 days; it does not stop it being served.
 
-    Neither opsin_available() nor opsin_decompose.self_check() can substitute
+    Neither opsin_available() nor opsin_trace.self_check() can substitute
     here -- both cache their answer for the life of the process
     (orthonym.jvm_bridge._ensure_jvm keys its cached _STATE on the pid), so
     calling either per tick replays the boot decision exactly like the old
@@ -210,7 +210,7 @@ def _start_status_heartbeat(
     the process dying kept reporting healthy and a name that should have read
     "fallback" shipped labelled "pin".
 
-    Neither opsin_available() nor opsin_decompose.self_check() can serve as the
+    Neither opsin_available() nor opsin_trace.self_check() can serve as the
     probe -- both cache per process (orthonym.jvm_bridge._ensure_jvm keys its
     cached _STATE on the pid), so calling either per tick replays the boot
     decision exactly like the code this replaced. Only a real call through the
@@ -290,7 +290,7 @@ def _start_status_heartbeat(
 def _opsin_can_verify() -> bool:
     """Can OPSIN verify a name in this process?
 
-    Deliberately NOT opsin_decompose.self_check(): that resolves the
+    Deliberately NOT opsin_trace.self_check(): that resolves the
     package-private reflection handles /explain needs, and returns False when
     OPSIN's internal shape changes even though name verification is fine.
     This asks only the question require_a_live_jvm() actually refuses on.
@@ -386,17 +386,17 @@ def _start_child_jvm(**_kwargs) -> None:
     here, because a raise does not fail at all.
     """
     # Imported INSIDE the function, not at module scope: importing
-    # opsin_decompose (or orthonym.jvm_bridge through it) in the Celery
+    # opsin_trace (or orthonym.jvm_bridge through it) in the Celery
     # PARENT risks starting a JVM before fork, which is the exact condition
     # _assert_parent_has_no_jvm exists to prevent.
-    from app import cdk_bridge, opsin_decompose
+    from app import cdk_bridge, opsin_trace
     from app.redis_store import record_worker_opsin_status
 
     pid = os.getpid()
 
     if _jvm_is_started():
         # Inherited across fork. This child can never own it, so OPSIN will
-        # work only via subprocess and opsin_decompose will not work at all.
+        # work only via subprocess and opsin_trace will not work at all.
         logger.critical(
             "Celery child %s inherited a JVM from its parent and cannot use "
             "it. OPSIN will fall back to a ~216 ms subprocess per call and "
@@ -416,18 +416,18 @@ def _start_child_jvm(**_kwargs) -> None:
     # names with nobody verifying them ships a fallback labelled pin.
     #
     # `decompose_ok` asks a narrower question -- whether OPSIN's
-    # package-private parse-tree shape is still what opsin_decompose reflects
+    # package-private parse-tree shape is still what opsin_trace reflects
     # into. Only /explain and /teach need it, and they already degrade
     # honestly on their own ("could not decompose" rather than a guess).
     #
-    # These used to be the same call. opsin_decompose._get_handles() returns
+    # These used to be the same call. opsin_trace._get_handles() returns
     # None for BOTH reasons, so a vendored OPSIN bump that moved an internal
     # class -- leaving name verification working perfectly -- took
     # /api/translate, /api/jobs and the three GET endpoints down site-wide
     # with a 503 asserting "OPSIN cannot verify any name", which would have
     # been false. Spec section 5's Failure A treated as Failure B.
     naming_ok = _opsin_can_verify()
-    decompose_ok = opsin_decompose.self_check()
+    decompose_ok = opsin_trace.self_check()
     # A THIRD, narrower question again: can this child draw with CDK, with the
     # CIP labels? It gates nothing -- depiction.py falls back to RDKit and a
     # picture without stereo labels is still a picture -- so it is logged, not
@@ -441,7 +441,7 @@ def _start_child_jvm(**_kwargs) -> None:
         "CDK depiction %s",
         pid,
         "available" if naming_ok else "UNAVAILABLE (naming will be refused)",
-        "available" if decompose_ok else "DISABLED (/explain and /teach only)",
+        "available" if decompose_ok else "DISABLED (/explain only)",
         "available" if cdk_ok else "UNAVAILABLE (falling back to RDKit, no CIP labels)",
     )
     _stamp_and_beat(record_worker_opsin_status, pid, ok=naming_ok)

@@ -481,7 +481,7 @@ def self_check() -> bool:
     """Prove the whole CDK path works in this process, including CIP labelling.
 
     Called from the Celery child's JVM boot alongside
-    ``opsin_decompose.self_check()``. The classloader trick depends on which jar
+    ``opsin_trace.self_check()``. The classloader trick depends on which jar
     shadows which package -- a CDK or centres version bump can silently break it
     -- so it is verified at boot rather than discovered when a user's picture
     comes back blank or unlabelled.

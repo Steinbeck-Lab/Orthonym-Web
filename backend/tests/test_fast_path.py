@@ -281,7 +281,7 @@ def test_translate_checks_the_job_cap_before_canonicalizing(
 
 def test_importing_main_does_not_start_a_jvm():
     """The web process must never start a JVM -- this task's headline
-    claim, tested for real. opsin_decompose.self_check() (called via the
+    claim, tested for real. opsin_trace.self_check() (called via the
     old startup hook, since removed) reaches opsin_available() ->
     _ensure_jvm() -> jpype.startJVM(), so every uvicorn worker would boot
     its own 512 MB JVM. OPSIN now lives only in Celery workers
