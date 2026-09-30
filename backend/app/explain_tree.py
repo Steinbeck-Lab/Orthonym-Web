@@ -53,7 +53,7 @@ from .label_rules import (
 )
 from .opsin_trace import STEREO_KIND, Span, Trace, TracePart, WrittenToken
 from .root_split import split_root
-from .token_owner import assign_owners, innermost_bracket, written_brackets
+from .token_owner import adopt_orphan_tokens, assign_owners, innermost_bracket, written_brackets
 
 PART_NODE_KINDS = frozenset({"substituent", "parent", "suffix"})
 _NODE_KIND = {
@@ -208,6 +208,19 @@ class _Builder:
     def with_locant(self, atoms, locant) -> list[int]:
         return [i for i in atoms if locant in self.by_index[i].locants]
 
+    def spiro_lookup(self, tokens, i: int, atoms, loc: str) -> str:
+        """The locant as OPSIN numbers it. In spiro[A-x,y'-B] every locant
+        written after the spiro locants belongs to a later component, and
+        OPSIN primes those atoms ("6-oxa" in the second component is 6'): the
+        bare number would light the first component's atom."""
+        if not any(t.kind == "polyCyclicSpiro" for t in tokens) or loc.endswith("'"):
+            return loc
+        primes = sum(1 for t in tokens[:i] if t.kind == "spiroLocant")
+        if tokens[i].kind == "spiroLocant" or not primes:
+            return loc
+        primed = loc + "'" * primes
+        return primed if self.with_locant(atoms, primed) else loc
+
     def word(self, pos: int) -> int:
         return self.t.text.count(" ", 0, pos)
 
@@ -299,18 +312,21 @@ class _Builder:
                     added = _ADDED_H.match(loc)
                     if added:
                         # "2(1H)": hydrogen added at position 1 of the parent.
-                        hit = self.with_locant(atoms, added.group(1))
+                        at = self.spiro_lookup(tokens, i, atoms, added.group(1))
+                        hit = self.with_locant(atoms, at)
                         element = self.by_index[hit[0]].element if len(hit) == 1 else None
                         self.add("indicated_h", loc, sub, parent=owner, lights=hit,
-                                 line=describe_locant("modifier", added.group(1), element))
+                                 line=describe_locant("modifier", at, element))
                         continue
-                    lights, line = self.locant(loc, i < first_core, target, mode, atoms, w.copies,
+                    lights, line = self.locant(self.spiro_lookup(tokens, i, atoms, loc), i < first_core,
+                                               target, mode, atoms, w.copies,
                                                used_copies, suffix_atoms, suffix_locants or {},
                                                written[loc], w, [x for x, _ in items])
                     counted.update(lights)
                     self.add("locant", loc, sub, parent=owner, lights=lights, line=line)
             elif tok.kind == "indicatedHydrogen":
                 for loc, sub in indicated_h_items(self.t.text, tok.span):
+                    loc = self.spiro_lookup(tokens, i, atoms, loc)
                     hit = self.with_locant(atoms, loc)
                     element = self.by_index[hit[0]].element if len(hit) == 1 else None
                     self.add("indicated_h", self.text(sub), sub, parent=owner, lights=hit,
@@ -626,6 +642,7 @@ class _Builder:
 
 
 def build_nodes(trace: Trace) -> list[dict]:
+    trace = adopt_orphan_tokens(trace)
     parts = _written_parts(trace)
     b = _Builder(trace, parts)
     by_key = {w.key: w for w in parts if w.key is not None}
@@ -698,6 +715,7 @@ def foreign_lights(trace: Trace, nodes: list[dict]) -> list[tuple[str, list[int]
     bonded to (the parent position it hangs on, or a multiplied root's
     bridged position). A bracket's own locant (no parent) may light parts
     written inside it, or atoms carrying the locant."""
+    trace = adopt_orphan_tokens(trace)
     mol = Chem.MolFromSmiles(trace.smiles)
     by_atom = {a.index: a for a in trace.atoms}
     part_of = {a: p for p in trace.parts for a in p.atoms}

@@ -71,6 +71,10 @@ CURATED: list[tuple[str, str]] = [
     ("real-drug-names", "2-acetyloxybenzoic acid"),
     ("real-drug-names", "2-amino-3-(1H-indol-3-yl)propanoic acid"),
     ("real-drug-names", "4-hydroxy-3-(3-oxo-1-phenylbutyl)chromen-2-one"),
+    # Task 9 (ChEMBL census): spiro skeletons whose tokens OPSIN keeps in no part
+    ("von-baeyer-spiro", "(2R,11'S,13'S)-11',13'-dimethyl-5,6'-dioxospiro[oxolane-2,14'-tetracyclo[8.7.0.0^4,9.0^13,17]heptadeca-4,9-diene]"),
+    ("von-baeyer-spiro", "4'-(1,1-dimethylethan-1-yl)-6'-(4-nitrocyclohexa-1,3,5-trien-1-yl)spiro[1,3-dioxolane-2,10'-1-azabicyclo[4.3.1]decane]"),
+    ("von-baeyer-spiro", "13'-hydroxy-5-methoxy-1,3,3-trimethylspiro[2,3-dihydro-1H-indole-2,5'-6-oxatricyclo[8.4.0.0^2,7]tetradeca-1,3,7,9,11,13-hexaene]"),
 ]
 
 # Names OPSIN 2.9.0 itself genuinely cannot parse. Verified against

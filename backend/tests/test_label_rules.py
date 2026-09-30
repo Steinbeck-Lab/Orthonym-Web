@@ -7,7 +7,7 @@ from app.label_rules import (
     stereo_items,
 )
 from app.opsin_trace import WrittenToken
-from app.token_owner import Owner, assign_owners, innermost_bracket, written_brackets
+from app.token_owner import Owner, adopt_orphan_tokens, assign_owners, innermost_bracket, written_brackets
 from tests.fixtures.traces import load_traces
 
 TRACES = load_traces()
@@ -110,3 +110,37 @@ def test_a_core_token_never_belongs_to_a_bracket():
 def test_every_non_glue_token_has_an_owner(name):
     owners = assign_owners(TRACES[name].tokens)
     assert [i for i, o in owners.items() if o is None] == [], name
+
+
+# -- Task 9 (ChEMBL census): a part OPSIN keeps no token of ---------------------------
+SPIRO_NAMES = [
+    "(2R,11'S,13'S)-11',13'-dimethyl-5,6'-dioxospiro[oxolane-2,14'-tetracyclo[8.7.0.0^4,9.0^13,17]heptadeca-4,9-diene]",
+    "4'-(1,1-dimethylethan-1-yl)-6'-(4-nitrocyclohexa-1,3,5-trien-1-yl)spiro[1,3-dioxolane-2,10'-1-azabicyclo[4.3.1]decane]",
+    "13'-hydroxy-5-methoxy-1,3,3-trimethylspiro[2,3-dihydro-1H-indole-2,5'-6-oxatricyclo[8.4.0.0^2,7]tetradeca-1,3,7,9,11,13-hexaene]",
+]
+
+
+@pytest.mark.parametrize("name", SPIRO_NAMES)
+def test_a_spiro_skeleton_owns_the_tokens_opsin_kept_in_no_part(name):
+    """OPSIN builds "spiro[...]" from its tokens and keeps none in the tree, so
+    the root has a key and no token. Its used-up tokens used to fall backward to
+    the substituent written before it ("methylspiro[...]" as one label)."""
+    t = TRACES[name]
+    root = next(p for p in t.parts if p.kind == "root")
+    assert not any(tok.owner == root.span for tok in t.tokens)           # the premise
+    before = assign_owners(t.tokens)
+    spiro = _tok(t, "spiro")
+    assert before[spiro.index] != Owner("part", root.span)                # the bug
+    adopted = adopt_orphan_tokens(t)
+    after = assign_owners(adopted.tokens)
+    assert after[spiro.index] == Owner("part", root.span)
+    inside = [tok for tok in adopted.tokens if tok.span[0] >= spiro.span[0] and tok.kind not in GLUE]
+    assert inside and all(after[tok.index] == Owner("part", root.span) for tok in inside)
+    assert adopt_orphan_tokens(adopted) == adopted                         # idempotent
+
+
+def test_a_part_that_already_owns_a_token_never_adopts_more():
+    t = TRACES[IBUPROFEN]
+    assert adopt_orphan_tokens(t) is t
+    t = TRACES[CAFFEINE]
+    assert adopt_orphan_tokens(t) is t

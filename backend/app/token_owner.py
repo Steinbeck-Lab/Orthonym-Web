@@ -26,11 +26,11 @@ before a mark can be recorded, and such a token still names its part.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional, Sequence
 
 from .label_rules import CORE, GLUE
-from .opsin_trace import Span, WrittenToken
+from .opsin_trace import Span, Trace, WrittenToken
 
 
 OPEN_KINDS = frozenset({"openbracket", "structuralOpenBracket"})
@@ -117,3 +117,27 @@ def assign_owners(tokens: Sequence[WrittenToken]) -> dict[int, Optional[Owner]]:
         else:
             result[tok.index] = forward(i) or backward(i)
     return result
+
+
+def adopt_orphan_tokens(trace: Trace) -> Trace:
+    """A part OPSIN gave a key but no kept token ("spiro[...]": OPSIN builds the
+    whole spiro skeleton from its tokens and keeps none in the tree) owns the
+    used-up tokens written inside its key range. Without this they fall to the
+    substituent written before them and swallow the skeleton into its label.
+
+    Only a part with NO owned token adopts, and only tokens nobody owns: a
+    parse-time range over-reaches into neighbours (spec §4), so a part that
+    already has tokens never claims more. The narrowest key wins. Idempotent."""
+    owned = {t.owner for t in trace.tokens if t.owner is not None}
+    empty = sorted({p.span for p in trace.parts if p.span is not None and p.span not in owned},
+                   key=lambda s: s[1] - s[0])
+    if not empty:
+        return trace
+    tokens = []
+    for t in trace.tokens:
+        if t.owner is None and t.kind not in GLUE:
+            key = next((k for k in empty if k[0] <= t.span[0] and t.span[1] <= k[1]), None)
+            if key is not None:
+                t = replace(t, owner=key)
+        tokens.append(t)
+    return replace(trace, tokens=tuple(tokens))

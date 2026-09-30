@@ -298,3 +298,50 @@ def test_the_lit_atom_gate_catches_the_round_1_oseltamivir_behaviour():
     own_c3 = next(a for a in pentyl["owns"] if "3" in t.atoms[a].locants)
     leading["lights"] = [own_c3]
     assert foreign_lights(t, nodes) == [("3", [own_c3])]
+
+
+# -- Task 9 (ChEMBL census): spiro[...] skeletons ---------------------------------------
+from scripts.explain_census import classify  # noqa: E402
+from app.token_owner import assign_owners  # noqa: E402
+
+SPIRO_INDOLE = ("13'-hydroxy-5-methoxy-1,3,3-trimethylspiro[2,3-dihydro-1H-indole-2,5'-"
+                "6-oxatricyclo[8.4.0.0^2,7]tetradeca-1,3,7,9,11,13-hexaene]")
+SPIRO_NAMES = [
+    "(2R,11'S,13'S)-11',13'-dimethyl-5,6'-dioxospiro[oxolane-2,14'-tetracyclo[8.7.0.0^4,9.0^13,17]heptadeca-4,9-diene]",
+    "4'-(1,1-dimethylethan-1-yl)-6'-(4-nitrocyclohexa-1,3,5-trien-1-yl)spiro[1,3-dioxolane-2,10'-1-azabicyclo[4.3.1]decane]",
+    SPIRO_INDOLE,
+]
+
+
+@pytest.mark.parametrize("name", SPIRO_NAMES)
+def test_a_spiro_name_places_its_skeleton_as_one_root_and_is_clean(name):
+    t, nodes = _nodes(name)
+    (root,) = [n for n in nodes if n["kind"] == "parent"]
+    assert root["span"] is not None and root["label"].startswith("spiro[") and root["label"].endswith("]")
+    assert root["label"] == t.text[root["span"][0]:]
+    assert not any("spiro" in n["label"] for n in nodes if n["kind"] == "substituent")
+    assert classify(t, nodes, assign_owners(t.tokens)) == ["CLEAN"]
+
+
+def test_a_locant_in_the_second_spiro_component_names_the_primed_atom():
+    """"6-oxa" after the spiro locants is position 6' of the second ring system;
+    the bare 6 is an indole benzo carbon. The hydro / indicated-H locants of the
+    FIRST component keep the unprimed atoms."""
+    t, nodes = _nodes(SPIRO_INDOLE)
+    (root,) = [n for n in nodes if n["kind"] == "parent"]
+    kids = {(n["label"], n["span"][0]): n for n in _under(nodes, root) if n["kind"] in ("locant", "indicated_h")}
+    by_label = lambda label, after=0: [n for (lab, pos), n in sorted(kids.items(), key=lambda kv: kv[0][1])
+                                        if lab == label and pos >= after]
+    oxa_at = t.text.index("6-oxa")
+    (six,) = by_label("6", oxa_at)
+    (atom,) = six["lights"]
+    assert t.atoms[atom].element == "O" and "6'" in t.atoms[atom].locants
+    hexaene = t.text.index("1,3,7,9,11,13")
+    lit = [t.atoms[a].locants for n in by_label("1", hexaene) for a in n["lights"]]
+    assert lit == [("1'",)]
+    (h,) = [n for n in nodes if n["kind"] == "indicated_h"]
+    (atom,) = h["lights"]
+    assert t.atoms[atom].element == "N" and "1" in t.atoms[atom].locants
+    dihydro = t.text.index("2,3-dihydro")
+    (atom,) = kids[("2", dihydro)]["lights"]
+    assert "2" in t.atoms[atom].locants
