@@ -710,8 +710,7 @@ def _build_segments(result, plan: Optional[_SpanPlan]) -> list[dict]:
             # tell an alcohol it has a C=O, which the never-guess rule forbids.
             texts = root.suffix_texts
             if len(set(texts)) == 1 and len(texts) > 1:
-                multiplier = {2: "di", 3: "tri", 4: "tetra"}.get(len(texts), "")
-                suffix_label = f"{multiplier}{texts[0]}"
+                suffix_label = _multiplied_suffix(len(texts), texts[0])
             else:
                 # `texts` is non-empty here -- a root with no suffix tokens
                 # never reaches this branch (see names_its_suffix above), so
@@ -778,6 +777,28 @@ def _build_segments(result, plan: Optional[_SpanPlan]) -> list[dict]:
                 modifier_segment["_run"] = plan.modifier_run
             segments.append(modifier_segment)
     return segments
+
+
+# The multiplying prefix of a repeated suffix. ponytail: stops at deca; a
+# suffix repeated more than ten times gets no prefix, add undeca... if one ever
+# reaches /explain.
+_SUFFIX_MULTIPLIERS = {
+    2: "di", 3: "tri", 4: "tetra", 5: "penta", 6: "hexa",
+    7: "hepta", 8: "octa", 9: "nona", 10: "deca",
+}
+
+
+def _multiplied_suffix(count: int, text: str) -> str:
+    """The repeated suffix as the name writes it: the final "a" of tetra,
+    penta, ... drops before a vowel. That is how the engine spells it
+    (butane-1,2,3,4-tetrol, cyclohexane-1,2,4,5-tetrone, butane-1,2,3,4-
+    tetramine), and a label that reads "tetraol" beside a name that reads
+    "tetrol" looks like a second, different part.
+    """
+    prefix = _SUFFIX_MULTIPLIERS.get(count, "")
+    if prefix.endswith("a") and text.startswith(("a", "e", "i", "o", "u")):
+        prefix = prefix[:-1]
+    return prefix + text
 
 
 def explain_name(name: str) -> dict:
