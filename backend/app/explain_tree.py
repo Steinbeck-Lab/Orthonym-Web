@@ -102,6 +102,23 @@ def _stereo_atoms(smiles: str) -> tuple[set, set]:
     return centres, bonds
 
 
+def _locant_is_not_own_attachment(trace: Trace, key: Optional[Span]) -> bool:
+    """True when a substituent's leading locant cannot be its own attachment
+    point: the substituent either writes that point inside itself
+    ("pentan-3-yl": the -3- after the group) or is followed directly by
+    another substituent it is joined to ("pentan-3-yl|oxy", "acetyl|oxy"),
+    so the locant in front of the run names a position on the parent."""
+    mine = [t for t in trace.tokens if t.owner == key]
+    if key is None or not mine:
+        return False
+    core = next((t for t in mine if t.kind == "group"), None)
+    if core is not None and any(t.kind in LOCANT_KINDS and t.index > core.index for t in mine):
+        return True
+    nxt = next((t for t in trace.tokens[max(t.index for t in mine) + 1:] if t.kind != "hyphen"), None)
+    return (nxt is not None and nxt.kind == "group" and nxt.owner not in (None, key)
+            and any(p.span == nxt.owner and p.kind == "substituent" for p in trace.parts))
+
+
 class _Builder:
     def __init__(self, trace: Trace, parts: list[_WrittenPart]):
         self.t = trace
@@ -317,7 +334,10 @@ class _Builder:
              multiplied root ("4,4'-methylene|bis(...)") and the token is not
              its own ring locants ("1,4-phenylene"): the root atoms it bonds to;
           2. its own attachment atom ("2-pyridyl", "1-naphthyl": the atom that
-             carries the locant AND is bonded out of the substituent);
+             carries the locant AND is bonded out of the substituent) -- unless
+             the substituent writes its attachment inside itself or is joined
+             to a following substituent ("3-pentan-3-yloxy|cyclohexene": the
+             3 in front is the cyclohexene's);
           3. its own ring heteroatom ("1,3-benzodioxol", "1-benzofuran");
           4. the atom of the parent the whole chain is bonded to
              ("2-acetyloxy|benzoic acid");
@@ -329,9 +349,10 @@ class _Builder:
             hit = self.carrying(roots, loc)
             if hit:
                 return hit
-        attach = [a for a in self.carrying(own, loc) if any(n not in own for n in self.nbrs(a))]
-        if attach:
-            return attach
+        if not _locant_is_not_own_attachment(self.t, w.key):
+            attach = [a for a in self.carrying(own, loc) if any(n not in own for n in self.nbrs(a))]
+            if attach:
+                return attach
         hetero = [a for a in self.carrying(own, loc) if self.by_index[a].element != "C"]
         if hetero:
             return hetero
@@ -582,10 +603,21 @@ def foreign_lights(trace: Trace, nodes: list[dict]) -> list[tuple[str, list[int]
             edge = {x for a in comp for x in nbrs(a) if x not in comp and label in by_atom[x].locants}
             placed = {a for p in trace.parts if p.locant == label for a in p.atoms}
             ok = lit <= family | placed | edge
+            key = next((p.span for p in trace.parts if p.kind == "substituent"
+                        and p.atoms and set(p.atoms) <= set(parent["owns"])), None)
+            chained = parent["kind"] == "substituent" and _locant_is_not_own_attachment(trace, key)
+            # A substituent that cannot have its own attachment point in front
+            # ("3-pentan-3-yloxy", "1-acetyloxy") may not light the atom it is
+            # bonded out of: that is the parent's position, not its own.
+            if ok and chained:
+                core = next((t for t in trace.tokens if t.owner == key and t.kind == "group"), None)
+                if (core is not None and n["span"] and n["span"][1] <= core.span[0]
+                        and any(a in seed and any(x not in seed for x in nbrs(a)) for a in lit - placed)):
+                    ok = False
             # "1,4-phenylene": when the part itself carries EVERY locant of
             # the list and this locant's own atom is where it is bonded out,
             # the list is its own numbering, never a bridge's.
-            if ok and not lit <= family | placed:
+            if ok and not chained and not lit <= family | placed:
                 own_attach = [a for a in family if label in by_atom[a].locants
                               and any(x not in family for x in nbrs(a))]
                 siblings = _written_list(trace.text, nodes, n)

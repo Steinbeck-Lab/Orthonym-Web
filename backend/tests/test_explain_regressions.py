@@ -3,8 +3,9 @@ Each class once lit a wrong atom or showed a false line while every gate
 stayed green; each test pins the corrected behaviour on a live trace."""
 
 import pytest
+from rdkit import Chem
 
-from app.explain_tree import PART_NODE_KINDS, build_nodes
+from app.explain_tree import PART_NODE_KINDS, build_nodes, foreign_lights
 from app.opsin_trace import Trace, trace
 from app.orthonym_service import get_primary_namer
 from app.token_owner import assign_owners
@@ -157,9 +158,6 @@ def test_engine_names_for_chiral_substituents_are_clean():
 
 
 # -- Phase B fix round 1 ------------------------------------------------------
-from rdkit import Chem
-
-from app.explain_tree import foreign_lights
 
 
 def _lit(t, nodes, node):
@@ -331,3 +329,25 @@ def test_no_part_line_states_a_wrong_group(name, wrong):
     for n in nodes:
         if n["kind"] in PART_NODE_KINDS:
             assert wrong not in n["line"], (name, n["label"], n["line"])
+
+
+# N1. an unbracketed compound substituent: the locant in front is the parent's
+@pytest.mark.parametrize("name,part,locant,root", [
+    ("2-propan-2-yloxyethanol", "propan-2-yl", "2", "ethan"),
+    ("2-butan-2-yloxypyridine", "butan-2-yl", "2", "pyridine"),
+    ("1-acetyloxy-2-methylbenzene", "acetyl", "1", "benzene"),
+])
+def test_a_compound_substituents_leading_locant_lights_the_parent_atom(name, part, locant, root):
+    t, nodes = _nodes(name)
+    (p,) = [n for n in nodes if n["kind"] == "substituent" and n["label"] == part]
+    leading = min((n for n in nodes if n["parent"] == p["id"] and n["kind"] == "locant"
+                   and n["label"] == locant), key=lambda n: n["span"][0])
+    (lit,) = _lit(t, nodes, leading)
+    assert lit[0] == root and locant in lit[1], (name, lit)
+    assert foreign_lights(t, nodes) == []
+
+
+def test_a_nested_naphthyl_keeps_its_own_attachment_locant():
+    t, nodes = _nodes("4-(2-naphthyl)phenol")
+    (lit,) = _lit(t, nodes, _kid(nodes, "naphthyl", "2"))
+    assert lit[0] == "naphthyl" and "2" in lit[1]

@@ -269,3 +269,30 @@ def test_an_anomer_mark_with_no_single_anomeric_carbon_lights_nothing():
     assert builder("OC1CCC(O)O1", 7).anomeric_carbon(range(7)) == []
     # exactly one does: tetrahydropyran-2-ol, carbon 3
     assert builder("C1CCC(O)O1", 6).anomeric_carbon(range(6)) == [3]
+
+
+# -- N1: an unbracketed compound substituent's leading locant is the parent's --------
+OSELTAMIVIR = "ethyl (3R,4S,5R)-4-acetamido-5-amino-3-pentan-3-yloxycyclohexene-1-carboxylate"
+
+
+def test_a_chained_substituents_leading_locant_names_the_parent_position():
+    t, nodes = _nodes(OSELTAMIVIR)
+    pentyl = _one_node(nodes, "substituent", "pentan-3-yl")
+    leading, own = sorted(_under(nodes, pentyl, "locant"), key=lambda n: n["span"][0])
+    (atom,) = leading["lights"]
+    assert atom not in pentyl["owns"] and "3" in t.atoms[atom].locants
+    assert _owner_label(nodes, atom) == "cyclohexene"
+    (atom,) = own["lights"]                      # the -3- written inside "pentan-3-yl" stays its own
+    assert atom in pentyl["owns"] and "3" in t.atoms[atom].locants
+
+
+def test_the_lit_atom_gate_catches_the_round_1_oseltamivir_behaviour():
+    """Round 1 lit pentan-3-yl's own C3 for the leading 3 (its attachment atom,
+    which carries the number 3). The gate must call that foreign."""
+    t, nodes = _nodes(OSELTAMIVIR)
+    assert foreign_lights(t, nodes) == []
+    pentyl = _one_node(nodes, "substituent", "pentan-3-yl")
+    leading = min(_under(nodes, pentyl, "locant"), key=lambda n: n["span"][0])
+    own_c3 = next(a for a in pentyl["owns"] if "3" in t.atoms[a].locants)
+    leading["lights"] = [own_c3]
+    assert foreign_lights(t, nodes) == [("3", [own_c3])]
