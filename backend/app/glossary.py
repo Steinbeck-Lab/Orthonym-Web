@@ -41,14 +41,18 @@ _SUFFIXES = {
     "amine": "a nitrogen with free hydrogens",
     "amide": "a -C(=O)N- group",
     "nitrile": "a -C≡N triple bond",
-    # Order matters: _lookup falls back to endswith, so the MORE SPECIFIC
-    # acid endings must come first. "propanoic acid" ends with both
-    # "oic acid" and "ic acid"; the first match wins.
+    "onitrile": "a -C≡N triple bond",
+    "carbonitrile": "a -C≡N triple bond",
+    "carboxamide": "a -C(=O)N- group",
+    "ophenone": "a C=O group (a carbonyl)",
+    # Exact keys only (a counting word in front is stripped): the ending
+    # "ic acid" inside "sulfonic acid" is not a carboxylic acid.
     "oic acid": "a -C(=O)OH group",
     "carboxylic acid": "a -C(=O)OH group",
     "ic acid": "a -C(=O)OH group",
     "oate": "an ester -C(=O)O- linkage",
     "ate": "an ester -C(=O)O- linkage",
+    "carboxylate": "an ester -C(=O)O- linkage",
 }
 
 # Parent skeleton stems, as OPSIN's <group> token spells them. Verified live
@@ -72,15 +76,29 @@ _PARENTS = {
     "acet": "a two-carbon acetyl skeleton",
 }
 
-def _lookup(table: dict, text: str) -> str | None:
+# "2-methylpropyl", "tert-butyl", "isopropyl": the text in front of a table key
+# is only branching, so the key still names the chain. Anything else in front
+# ("cyclo", "phen", "thio", "sulfon") changes what the ending means.
+_BRANCHING = re.compile(r"^(?:[\d,']+-|tert-|sec-|iso|neo|n-|methyl|ethyl|propyl|butyl|-)*$")
+_COUNTING = re.compile(r"^(?:di|tri|tetra|penta|hexa|hepta|octa|bis|tris|tetrakis)")
+
+
+def _lookup(table: dict, text: str, *, endings: bool = False) -> str | None:
+    """Exact key, or a key with only branching written in front of it
+    (substituents), or a counted key ("dione" -> "one"). Never a key that
+    merely ends the text: "thiol" is not "ol", "sulfonic acid" is not
+    "ic acid", "phenoxy" is not "oxy". Unsure means None, and the caller
+    then says only what it can count."""
     key = text.strip("-").lower()
     if key in table:
         return table[key]
-    for name, description in table.items():
-        # The ending fallback ("2-methylpropyl" -> "propyl") must not turn a
-        # RING into a chain: "cyclopropyl" is not "a three-carbon chain".
-        if key.endswith(name) and not (key.startswith("cyclo") and not name.startswith("cyclo")):
-            return description
+    counted = _COUNTING.sub("", key, count=1) if not endings else key
+    if not endings and counted != key and counted in table:
+        return table[counted]
+    if endings:
+        for name, description in table.items():
+            if key.endswith(name) and _BRANCHING.match(key[: -len(name)]):
+                return description
     return None
 
 
@@ -100,7 +118,7 @@ def describe_part(kind: str, text: str, locant: str | None, atom_count: int,
     many = f" The name writes it once for {copies} copies." if copies > 1 else ""
 
     if kind == "substituent":
-        known = _lookup(_SUBSTITUENTS, label)
+        known = _lookup(_SUBSTITUENTS, label, endings=True)
         if known:
             return f'"{label}" is {known}.{where}{many}'
     elif kind == "suffix":
@@ -128,7 +146,7 @@ def describe_part(kind: str, text: str, locant: str | None, atom_count: int,
     return f'"{label}" covers {atom_count} {plural} of this structure.{where}{many}'
 
 
-def describe_locant(kind: str, locant: str, element: str | None = None) -> str:
+def describe_locant(kind: str, locant: str, element: str | None = None, *, anomer: bool = False) -> str:
     """One line for a CHILD segment, which is identified only by its locant.
 
     `element` names an atom in the sentence, so there is exactly one rule
@@ -164,7 +182,9 @@ def describe_locant(kind: str, locant: str, element: str | None = None) -> str:
     which atoms are meant. Saying less is allowed; saying something false is
     not.
     """
-    if locant.lower() in ("alpha", "beta"):
+    if anomer and locant.lower() in ("alpha", "beta"):
+        # Only a sugar's alpha/beta names an anomer. A Greek locant elsewhere
+        # ("alpha,alpha,alpha-trifluorotoluene") is just a position.
         return (
             f'"{locant}" names the anomer: which way the OH on the ring carbon '
             f"next to the ring oxygen points."

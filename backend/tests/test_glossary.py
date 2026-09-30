@@ -163,8 +163,49 @@ def test_a_ring_is_never_described_as_a_chain():
     assert "chain" in describe_part("substituent", "2-methylpropyl", None, 4)
 
 
-def test_an_anomeric_locant_has_its_own_line():
-    assert "anomer" in describe_locant("position", "alpha")
+def test_an_anomeric_locant_has_its_own_line_only_for_a_sugar():
+    assert "anomer" in describe_locant("position", "alpha", anomer=True)
+    assert "anomer" in describe_locant("position", "beta", anomer=True)
+    # "alpha,alpha,alpha-trifluorotoluene": a Greek position, not an anomer.
+    assert "anomer" not in describe_locant("position", "alpha")
+    assert "anomer" not in describe_locant("substituent", "alpha")
+    assert describe_locant("position", "alpha") == "Position alpha."
+
+
+# Each of these once got a confidently wrong line from the ending fallback.
+WRONG = [
+    ("suffix", "thiol", "-OH"),
+    ("suffix", "esulfonic acid", "C(=O)OH"),
+    ("suffix", "onate", "ester"),
+    ("suffix", "sulfonamide", "C(=O)N"),
+    ("suffix", "thione", "C=O"),
+    ("suffix", "sulfinic acid", "C(=O)OH"),
+    ("suffix", "phosphonate", "ester"),
+    ("substituent", "phenoxy", "-O- linkage"),
+    ("substituent", "cyclopropyl", "chain"),
+    ("substituent", "thiomethyl", "CH3 group"),
+]
+
+
+def test_an_ending_that_merely_looks_like_a_known_one_gets_a_neutral_line():
+    for kind, label, claim in WRONG:
+        line = describe_part(kind, label, None, 3)
+        assert claim not in line, (label, line)
+        assert f'"{label}" covers 3 atoms' in line, (label, line)
+
+
+def test_known_endings_and_counted_endings_still_say_what_they_are():
+    assert "C=O" in describe_part("suffix", "dione", None, 2)
+    assert "-OH" in describe_part("suffix", "triol", None, 3)
+    assert "nitrogen" in describe_part("suffix", "diamine", None, 2)
+    assert "-C(=O)OH" in describe_part("suffix", "oic acid", None, 3)
+    assert "-C(=O)OH" in describe_part("suffix", "dicarboxylic acid", None, 4)
+    assert "C≡N" in describe_part("suffix", "onitrile", None, 2)
+    assert "-C(=O)N-" in describe_part("suffix", "dicarboxamide", None, 6)
+    assert "ester" in describe_part("suffix", "dicarboxylate", None, 6)
+    assert "four-carbon" in describe_part("substituent", "tert-butyl", None, 4)
+    assert "three-carbon" in describe_part("substituent", "isopropyl", None, 3)
+    assert "-O-CH3" in describe_part("substituent", "methoxy", None, 2)
 
 
 def test_generic_token_line_names_the_text():
