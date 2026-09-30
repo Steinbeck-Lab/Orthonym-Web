@@ -353,3 +353,42 @@ def test_a_lambda_convention_is_its_own_child_of_the_group_it_names():
     phosphanonyl = _one_node(nodes, "substituent", "phosphanonyl")
     assert lam["parent"] == phosphanonyl["id"] and lam["lights"] == phosphanonyl["lights"]
     assert "bonding number" in lam["line"]
+
+
+# -- Task 9 (ChEMBL census): a glycosyl substituent's anomer mark -------------------------
+GLYCOSIDES = [
+    ("3-(α-D-mannopyranosyloxy)benzoic acid", "alpha"),
+    ("4-(β-L-glucopyranosyloxy)-1,3,7-trihydroxy-9H-xanthen-9-one", "beta"),
+]
+
+
+@pytest.mark.parametrize("name,mark", GLYCOSIDES)
+def test_a_glycosyl_substituents_anomer_mark_lights_the_anomeric_carbon_only(name, mark):
+    """"alpha-D-mannopyranosyl|oxy": the mark names the ring carbon that holds
+    the ring oxygen and the glycosidic bond, not the whole 11-atom sugar."""
+    t, nodes = _nodes(name)
+    glycosyl = next(n for n in nodes if n["kind"] == "substituent" and "pyranosyl" in n["label"])
+    (node,) = [n for n in _under(nodes, glycosyl, "locant") if n["label"] == mark]
+    (atom,) = node["lights"]
+    assert atom in glycosyl["owns"] and "anomer" in node["line"]
+    mol = Chem.MolFromSmiles(t.smiles)
+    neighbours = mol.GetAtomWithIdx(atom).GetNeighbors()
+    assert sorted(t.atoms[n.GetIdx()].element for n in neighbours) == ["C", "O", "O"]
+    assert sum(1 for n in neighbours if n.GetIdx() not in glycosyl["owns"]) == 1     # the glycosidic bond
+    assert foreign_lights(t, nodes) == []
+
+
+@pytest.mark.parametrize("name,mark", GLYCOSIDES)
+def test_the_gate_still_calls_a_wrong_atom_foreign_for_a_glycosyl_anomer_mark(name, mark):
+    """The gate accepts the anomer mark on ONE atom it can prove from the
+    molecule; the whole sugar, or any other atom, is still foreign."""
+    t, nodes = _nodes(name)
+    glycosyl = next(n for n in nodes if n["kind"] == "substituent" and "pyranosyl" in n["label"])
+    (node,) = [n for n in _under(nodes, glycosyl, "locant") if n["label"] == mark]
+    right = list(node["lights"])
+    other = next(a for a in glycosyl["owns"] if a not in right)
+    for wrong in (list(glycosyl["owns"]), [other]):
+        node["lights"] = wrong
+        assert foreign_lights(t, nodes) == [(mark, sorted(wrong))]
+    node["lights"] = right
+    assert foreign_lights(t, nodes) == []

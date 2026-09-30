@@ -77,6 +77,9 @@ CURATED: list[tuple[str, str]] = [
     ("von-baeyer-spiro", "13'-hydroxy-5-methoxy-1,3,3-trimethylspiro[2,3-dihydro-1H-indole-2,5'-6-oxatricyclo[8.4.0.0^2,7]tetradeca-1,3,7,9,11,13-hexaene]"),
     # Task 9: OPSIN's own pick is the candidate that builds without a warning
     ("esters-salts-amides", "ethyl 2-(diphenyl-λ5-phosphanonyl)pentanoate"),
+    # Task 9: a glycosyl substituent's anomer mark
+    ("real-drug-names", "3-(α-D-mannopyranosyloxy)benzoic acid"),
+    ("real-drug-names", "4-(β-L-glucopyranosyloxy)-1,3,7-trihydroxy-9H-xanthen-9-one"),
 ]
 
 # Names OPSIN 2.9.0 itself genuinely cannot parse. Verified against

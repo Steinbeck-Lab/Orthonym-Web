@@ -53,7 +53,7 @@ from .label_rules import (
 )
 from .opsin_trace import STEREO_KIND, Span, Trace, TracePart, WrittenToken
 from .root_split import split_root
-from .token_owner import adopt_orphan_tokens, assign_owners, innermost_bracket, written_brackets
+from .token_owner import Owner, adopt_orphan_tokens, assign_owners, innermost_bracket, written_brackets
 
 PART_NODE_KINDS = frozenset({"substituent", "parent", "suffix"})
 _NODE_KIND = {
@@ -244,7 +244,11 @@ class _Builder:
         node = self.add("substituent", label, span, owns=owns, lights=owns, copies=len(w.copies),
                         line=describe_part("substituent", label, None, len(set(owns)), copies=len(w.copies)))
         self.part_node[w.key] = (node, owns)
+        # A glycosyl substituent ("alpha-D-mannopyranosyl|oxy") names its anomer
+        # the same way a sugar root does.
+        self.carbohydrate_atoms = owns if any(t.kind == "carbohydrateRingSize" for t in w.tokens) else None
         self.children(node, w, w.tokens, roles, owns, owns, mode="substituent")
+        self.carbohydrate_atoms = None
 
     def root(self, w: _WrittenPart) -> None:
         roles = resolve_roles(w.tokens, "root", len(w.copies))
@@ -392,9 +396,11 @@ class _Builder:
                  and self.part_of[a].kind == "root"}
         return roots, len({self.part_of[a].index for a in roots}) >= 2
 
-    def anomeric_carbon(self, atoms) -> list[int]:
+    def anomeric_carbon(self, atoms, *, attached: bool = False) -> list[int]:
         """The ring carbon of a sugar that holds both a ring oxygen and an
-        exocyclic oxygen, when exactly one does; else nothing."""
+        exocyclic oxygen, when exactly one does; else nothing. A glycosyl
+        substituent (`attached`) holds its exocyclic bond to whatever it is
+        attached to, which lies outside its own atoms."""
         if self.mol is None:
             return []
         pool, found = set(atoms), []
@@ -404,11 +410,13 @@ class _Builder:
                 continue
             ring_o = exo_o = False
             for n in atom.GetNeighbors():
-                if n.GetSymbol() != "O" or n.GetIdx() not in pool:
-                    continue
-                if self.mol.GetBondBetweenAtoms(a, n.GetIdx()).IsInRing():
-                    ring_o = True
-                else:
+                in_ring = self.mol.GetBondBetweenAtoms(a, n.GetIdx()).IsInRing()
+                if n.GetSymbol() == "O" and n.GetIdx() in pool:
+                    if in_ring:
+                        ring_o = True
+                    else:
+                        exo_o = True
+                elif attached and n.GetIdx() not in pool and not in_ring:
                     exo_o = True
             if ring_o and exo_o:
                 found.append(a)
@@ -490,6 +498,10 @@ class _Builder:
             hit = self.with_locant(atoms, loc)
             element = self.by_index[hit[0]].element if len(hit) == 1 else None
             return hit, describe_locant("modifier", loc, element)
+        if (mode == "substituent" and self.carbohydrate_atoms is not None
+                and loc.lower() in ("alpha", "beta")):
+            return (self.anomeric_carbon(self.carbohydrate_atoms, attached=True),
+                    describe_locant("position", loc, anomer=True))
         if mode == "substituent" and leading:
             at_loc = [c for c in copies if c.locant == loc]
             if len(at_loc) > written:
@@ -704,6 +716,24 @@ def _written_list(text: str, nodes: list[dict], node: dict) -> list[str]:
     return [x["label"] for x in run] if node in run else [node["label"]]
 
 
+def _holds_anomeric_bonds(mol, atom: int, pool: set[int]) -> bool:
+    """A ring carbon of a sugar with a ring oxygen AND an exocyclic bond to an
+    oxygen of the sugar or to whatever the sugar is attached to (outside
+    `pool`): the only atom an anomer mark may light. Read off the molecule,
+    not from the builder."""
+    a = mol.GetAtomWithIdx(atom)
+    if a.GetSymbol() != "C" or not a.IsInRing():
+        return False
+    ring_o = exo = False
+    for n in a.GetNeighbors():
+        in_ring = mol.GetBondBetweenAtoms(atom, n.GetIdx()).IsInRing()
+        if in_ring and n.GetSymbol() == "O" and n.GetIdx() in pool:
+            ring_o = True
+        elif not in_ring and (n.GetIdx() not in pool or n.GetSymbol() == "O"):
+            exo = True
+    return ring_o and exo
+
+
 def foreign_lights(trace: Trace, nodes: list[dict]) -> list[tuple[str, list[int]]]:
     """The lit-atom gate: (label, atoms) for every locant node that lights an
     atom it has no claim on. Derived from the trace and the node list alone
@@ -720,6 +750,7 @@ def foreign_lights(trace: Trace, nodes: list[dict]) -> list[tuple[str, list[int]
     by_atom = {a.index: a for a in trace.atoms}
     part_of = {a: p for p in trace.parts for a in p.atoms}
     by_id = {n["id"]: n for n in nodes}
+    owners = assign_owners(trace.tokens)
     owner_node = {a: n for n in nodes if n["kind"] in PART_NODE_KINDS for a in n["owns"]}
 
     def nbrs(a):
@@ -753,6 +784,14 @@ def foreign_lights(trace: Trace, nodes: list[dict]) -> list[tuple[str, list[int]
             ok = lit <= family | placed | edge
             key = next((p.span for p in trace.parts if p.kind == "substituent"
                         and p.atoms and set(p.atoms) <= set(parent["owns"])), None)
+            if (mol is not None and key is not None and label.lower() in ("alpha", "beta")
+                    and any(t.kind == "carbohydrateRingSize" and owners.get(t.index) == Owner("part", key)
+                            for t in trace.tokens)):
+                # A glycosyl substituent's anomer mark may light exactly one
+                # atom: the ring carbon holding the ring O and the glycosidic bond.
+                if not (len(lit) == 1 and _holds_anomeric_bonds(mol, next(iter(lit)), set(parent["owns"]))):
+                    bad.append((label, sorted(lit)))
+                continue
             chained = parent["kind"] == "substituent" and _joined_to_next_substituent(trace, key)
             # A ring substituent joined to a linker ("2-pyridyl|methyl"): the
             # number is the ring's own attachment atom, so the atom it bonds
