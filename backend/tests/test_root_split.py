@@ -1,104 +1,161 @@
-from app.opsin_decompose import decompose
+import pytest
+
+from app.opsin_trace import trace
 from app.root_split import split_root
 from tests.conftest import CAFFEINE
 
 
-def _root(result):
-    return next(p for p in result.parts if p.kind == "root")
+def _root(t):
+    return next(p for p in t.parts if p.kind == "root")
 
 
 def test_caffeine_root_splits_into_nine_ring_atoms_and_two_oxygens():
-    result = decompose(CAFFEINE)
-    split = split_root(result, _root(result))
+    t = trace(CAFFEINE)
+    split = split_root(t, _root(t).atoms)
     assert len(split.parent_atoms) == 9
     assert len(split.suffix_atoms) == 2
     assert not set(split.parent_atoms) & set(split.suffix_atoms)
 
 
 def test_caffeine_suffix_oxygens_are_oxygens():
-    result = decompose(CAFFEINE)
-    split = split_root(result, _root(result))
-    by_index = {a.rdkit_index: a for a in result.atoms}
+    t = trace(CAFFEINE)
+    split = split_root(t, _root(t).atoms)
+    by_index = {a.index: a for a in t.atoms}
     assert {by_index[i].element for i in split.suffix_atoms} == {"O"}
 
 
 def test_caffeine_suffix_oxygens_hang_off_c2_and_c6():
-    result = decompose(CAFFEINE)
-    split = split_root(result, _root(result))
+    t = trace(CAFFEINE)
+    split = split_root(t, _root(t).atoms)
     assert sorted(split.suffix_locants.values()) == ["2", "6"]
 
 
 def test_benzene_has_no_suffix_atoms():
-    result = decompose("benzene")
-    split = split_root(result, _root(result))
+    t = trace("benzene")
+    split = split_root(t, _root(t).atoms)
     assert split.suffix_atoms == ()
     assert len(split.parent_atoms) == 6
 
 
-from app.opsin_decompose import DecomposedAtom, Decomposition, NamePart
+# -- amino-acid and peptide roots: the group owns only its own atoms ------------
+def _split(name):
+    t = trace(name)
+    root = next(p for p in t.parts if p.kind == "root")
+    split = split_root(t, root.atoms)
+    by_index = {a.index: a for a in t.atoms}
+    return t, by_index, split
 
 
-def _fake(atoms, part_ids, smiles="CCO"):
-    return Decomposition(
-        smiles=smiles,
-        atoms=tuple(atoms),
-        parts=(NamePart("root", "x", None, tuple(part_ids), ()),),
-    )
+def _suffix_elements(name):
+    t, by_index, split = _split(name)
+    return sorted(by_index[i].element for i in split.suffix_atoms)
 
 
-def test_degrades_to_all_parent_when_no_atom_has_a_numeric_locant():
-    # Every locant is element-symbol style, so the numeric rule finds no
-    # parent. It must hand back everything as parent, not call it all suffix.
-    result = _fake(
-        [DecomposedAtom(0, 1, "C", ("C",)), DecomposedAtom(1, 2, "O", ("O",))],
-        [1, 2],
-    )
-    split = split_root(result, result.parts[0])
-    assert split.parent_atoms == (0, 1)
-    assert split.suffix_atoms == ()
-    assert split.suffix_locants == {}
+@pytest.mark.parametrize("name,suffix", [
+    ("glycinamide", ["N", "O"]),                     # the alpha nitrogen is glycine's, not the amide's
+    ("L-alaninamide", ["N", "O"]),
+    ("L-alanyl-L-alaninamide", ["N", "O"]),
+    ("L-prolyl-L-leucylglycinamide", ["N", "O"]),
+    ("methyl L-alaninate", ["O", "O"]),              # the amino nitrogen is alanine's, not the ester's
+    ("L-phenylalaninamide", ["C", "N", "O"]),        # C(=O)N; the alpha/beta carbons stay in the parent
+    ("L-(+)-lactic acid", ["O", "O"]),               # the 2-hydroxyl oxygen stays in the parent
+    # side-chain heteroatoms carry element locants too, but sit on Cbeta, not on the group's carbon
+    # a side-chain carboxamide or guanidine is the stem's (4/gamma, guanidino-C/99), not the ending's
+    ("L-asparaginamide", ["N", "O"]),
+    ("L-glutaminamide", ["N", "O"]),
+    ("methyl L-asparaginate", ["O", "O"]),
+    ("L-argininamide", ["N", "O"]),
+    ("L-serinamide", ["N", "O"]),
+    ("methyl L-serinate", ["O", "O"]),
+    ("L-threoninamide", ["N", "O"]),
+    ("L-tyrosinamide", ["C", "N", "O"]),
+    ("L-cysteinamide", ["N", "O"]),
+    ("methyl L-methioninate", ["O", "O"]),
+    # NB3: OPSIN numbers these residues' alpha carbon only "alpha", and the amino N has an element
+    # locant; neither belongs to the ester ending -- only the carboxyl's own C, O, O (the C has no locant at all)
+    ("methyl L-phenylalaninate", ["C", "O", "O"]),
+    ("ethyl L-phenylalaninate", ["C", "O", "O"]),
+    ("methyl L-tyrosinate", ["C", "O", "O"]),
+    ("ethyl L-tyrosinate", ["C", "O", "O"]),
+    ("methyl L-tryptophanate", ["C", "O", "O"]),
+    ("ethyl L-tryptophanate", ["C", "O", "O"]),
+    ("methyl L-histidinate", ["C", "O", "O"]),
+    ("ethyl L-histidinate", ["C", "O", "O"]),
+    ("N-methyl-D-aspartic acid", ["O", "O"]),   # one acid is the ending; the side-chain acid (4/gamma) and the N-methylamino N are the stem's
+])
+def test_an_amino_acid_group_owns_only_its_own_atoms(name, suffix):
+    assert _suffix_elements(name) == suffix
 
 
-def test_degrades_to_all_parent_when_smiles_cannot_be_parsed():
-    result = _fake(
-        [DecomposedAtom(0, 1, "C", ("1",)), DecomposedAtom(1, 2, "O", ("O",))],
-        [1, 2],
-        smiles="this is not a smiles",
-    )
-    split = split_root(result, result.parts[0])
-    assert split.parent_atoms == (0, 1)
-    assert split.suffix_atoms == ()
+@pytest.mark.parametrize("name,element", [
+    ("L-serinamide", "O"), ("methyl L-serinate", "O"), ("L-threoninamide", "O"),
+    ("L-tyrosinamide", "O"), ("L-cysteinamide", "S"), ("methyl L-methioninate", "S"),
+])
+def test_a_side_chain_heteroatom_stays_in_the_parent(name, element):
+    t, by_index, split = _split(name)
+    side = [i for i in split.parent_atoms if by_index[i].element == element]
+    assert side, name
+    assert not any(by_index[i].element == element for i in split.suffix_atoms if element == "S")
 
 
-def test_a_suffix_atom_reports_the_first_numeric_locant_of_its_neighbour():
-    # OPSIN can give a skeleton atom more than one numeric locant. The caffeine
-    # cases carry one each, so a split that reported the last instead of the
-    # first would still pass them.
-    result = _fake(
-        [
-            DecomposedAtom(0, 1, "C", ("2", "3")),
-            DecomposedAtom(1, 2, "O", ("O",)),
-        ],
-        [1, 2],
-        smiles="CO",
-    )
-    split = split_root(result, result.parts[0])
-    assert split.suffix_atoms == (1,)
-    assert split.suffix_locants == {1: "2"}
+def test_phenylalaninamide_keeps_alpha_and_beta_in_the_parent():
+    t, by_index, split = _split("L-phenylalaninamide")
+    greek = {i for i, a in by_index.items() if set(a.locants) & {"alpha", "beta"}}
+    assert len(greek) == 2 and greek <= set(split.parent_atoms)
 
 
-def test_a_suffix_atom_between_two_skeleton_atoms_takes_the_first_neighbour():
-    # Stopping at the first skeleton neighbour is what keeps one suffix atom
-    # from being labelled by whichever neighbour happens to come last.
-    result = _fake(
-        [
-            DecomposedAtom(0, 1, "C", ("1",)),
-            DecomposedAtom(1, 2, "O", ("O",)),
-            DecomposedAtom(2, 3, "C", ("2",)),
-        ],
-        [1, 2, 3],
-        smiles="COC",
-    )
-    split = split_root(result, result.parts[0])
-    assert split.parent_atoms == (0, 2)
-    assert split.suffix_locants == {1: "1"}
+@pytest.mark.parametrize("name,suffix", [
+    ("benzoic acid", ["C", "O", "O"]),               # the group's own carbon has only a Greek locant
+    ("benzonitrile", ["C", "N"]),
+    ("acetamide", ["N", "O"]),
+    ("butanamide", ["N", "O"]),
+    ("trans-cinnamic acid", ["C", "O", "O"]),
+    ("benzeneacetic acid", ["C", "O", "O"]),
+    ("benzaldehyde", ["C", "O"]),
+    ("benzamide", ["C", "N", "O"]),
+    ("salicylic acid", ["C", "O", "O"]),             # the phenolic oxygen stays in the parent
+    ("mandelic acid", ["C", "O", "O"]),             # the alpha-hydroxyl and its carbon stay in the parent
+    ("hexanedioic acid", ["O", "O", "O", "O"]),      # a counted group sits on both ends
+    ("pentanedial", ["O", "O"]),
+    # a locanted infix ("di|thi|ol") sits between the locants and the suffix
+    ("ethane-1,2-dithiol", ["S", "S"]),
+    ("propane-1,3-dithiol", ["S", "S"]),
+    ("butane-1,4-dithiol", ["S", "S"]),
+    # NB4: oxalic's second carbon is numbered 2/C (an element symbol beside the digit): still plain
+    ("oxalic acid", ["O", "O", "O", "O"]),
+    ("diethyl oxalate", ["O", "O", "O", "O"]),
+    ("dimethyl oxalate", ["O", "O", "O", "O"]),
+    # a ketone's carbonyl carbon (alpha, bonded to the ring twice) still belongs to the ending
+    ("benzophenone", ["C", "O"]),
+    ("citric acid", ["C", "O", "O", "O", "O", "O", "O"]),   # plainly numbered: all three acids
+    ("succinic acid", ["O", "O", "O", "O"]),
+    ("butanediamide", ["N", "N", "O", "O"]),
+    ("naphthalene-2-sulfonate", ["O", "O", "O", "S"]),
+    ("estra-1,3,5(10)-triene-3,17beta-diol", ["O", "O"]),
+    # two root copies, one oxygen each; the bridging oxygen is the word "anhydride"'s own atom
+    # (final review I2: the trace hands the functional word its atoms), not a root's
+    ("acetic anhydride", ["O", "O"]),
+])
+def test_acids_nitriles_and_amides_keep_their_group_carbon(name, suffix):
+    t = trace(name)
+    by_index = {a.index: a for a in t.atoms}
+    got = sorted(by_index[i].element for p in t.parts if p.kind == "root"
+                 for i in split_root(t, p.atoms).suffix_atoms)
+    assert got == suffix
+
+
+def test_known_limitation_a_conjunctive_name_hands_its_chain_carbon_to_the_suffix():
+    """KNOWN LIMITATION, pinned (not xfail): "cyclohexaneethanol" writes a ring
+    and a chain into one root, and OPSIN gives the chain carbon next to the
+    oxygen an element locant (alpha/C'), so the suffix 'ol' owns that CH2 as
+    well as the oxygen. The right split is suffix = the O only. When this is
+    fixed, this test should FLIP: change the expected suffix to ['O']."""
+    assert _suffix_elements("cyclohexaneethanol") == ["C", "O"]
+
+
+def test_an_amino_acid_ester_leaves_the_alpha_nitrogen_and_carbon_in_the_stem():
+    for name in ("methyl L-phenylalaninate", "ethyl L-tyrosinate", "methyl L-tryptophanate", "ethyl L-histidinate"):
+        t, by_index, split = _split(name)
+        alpha = [i for i, a in by_index.items() if "alpha" in a.locants and "1" not in a.locants]
+        assert len(alpha) == 1 and alpha[0] in split.parent_atoms, name
+        assert not any(by_index[i].element == "N" for i in split.suffix_atoms), name

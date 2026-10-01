@@ -11,8 +11,8 @@
 // engine ran at all.
 //
 // WHAT IS AND IS NOT CLAIMED. These runs are TYPOGRAPHY, not chemistry. They
-// make no letters-to-atoms claim the way /explain's `name_range` spans do, so
-// unlike compute_spans they are deliberately NOT all-or-nothing: a name whose
+// make no letters-to-atoms claim the way /explain's node spans do, so
+// they are never withheld for lack of an atom match: a name whose
 // stereodescriptor is recognised and whose fusion bracket is not still gets
 // the stereodescriptor italicised. Nothing downstream reads them as evidence.
 //
@@ -352,7 +352,7 @@ export function formulaRuns(formula) {
  *
  * The range arguments are what lets /explain compose this with its own
  * character spans: that page has already cut the name into hover targets by
- * `name_range` offset, and each of those pieces asks here for the typography
+ * node-span offset, and each of those pieces asks here for the typography
  * inside its own range rather than re-parsing a fragment -- a fragment can cut
  * a token in half, and half a token parses as nothing.
  */

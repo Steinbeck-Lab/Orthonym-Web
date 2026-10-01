@@ -1,7 +1,7 @@
 import DOMPurify from 'dompurify'
 
 // Shared by every page that draws an RDKit-generated SVG and highlights
-// atoms/bonds on hover (Explain.jsx, Teach.jsx). `sanitizeSvg` carries the
+// atoms/bonds on hover (Explain.jsx). `sanitizeSvg` carries the
 // DOMPurify configuration, and two independent copies of a sanitizer config
 // is exactly the kind of thing that drifts silently -- one copy gets a fix,
 // the other doesn't, and the one that didn't is an XSS hole. It lives here,
@@ -32,18 +32,4 @@ export const ATOM_REF_RE = /atom-(\d+)/g
 export function atomRefsOf(classAttr) {
   if (!classAttr) return []
   return [...classAttr.matchAll(ATOM_REF_RE)].map((m) => Number(m[1]))
-}
-
-// Resolves a dotted path like "0.2" to its segment: top-level index 0, then
-// its child index 2. Returns null for a stale path, which happens normally
-// when `data` changes while something is still pinned -- e.g. a new
-// molecule replaces the old one while a part is pinned.
-export function segmentAtPath(segments, path) {
-  if (path === null || path === undefined) return null
-  const parts = String(path).split('.').map(Number)
-  let node = segments?.[parts[0]]
-  for (let i = 1; i < parts.length && node; i += 1) {
-    node = node.children?.[parts[i]]
-  }
-  return node || null
 }

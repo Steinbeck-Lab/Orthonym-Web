@@ -1,0 +1,170 @@
+"""Which written part -- or which written bracket -- each written token
+belongs to (spec §4; the fix for OPSIN's parse-time nesting).
+
+A token OPSIN kept through ComponentProcessor carries its owner already
+(``WrittenToken.owner``, recorded by opsin_trace): OPSIN itself put it
+there, including hydro prefixes and ring bridges it MOVED into a ring. A
+token OPSIN used up (most locants and multipliers, merged alkane stems,
+"alpha-", "pyran") is assigned by its written neighbours:
+
+* scan forward: if an opening bracket comes first, a locant / multiplier /
+  prefix belongs to THAT BRACKET ("2-[4-(...)phenyl]": the "2-" says where
+  the whole bracket attaches; "bis(" counts the bracket). A core token
+  never belongs to a bracket ("bi(cyclohexane)", "spiro[...]" name a ring),
+  and a used-up core token met on the way decides for the tokens before it
+  ("1,1'-bi(cyclohexane)": the locants go where "bi" goes, the ring).
+* an ENDING (suffix, unsaturator, ...) follows its group, so it belongs to
+  whatever the non-glue token right before it belongs to ("sulfin|yl]";
+  the bridge "meth|an|o", all used up, goes where "meth" goes);
+* anything else belongs to the part of the first kept token after it
+  ("4-|methyl", "alpha-D-|gluco", "benz|imidazole");
+* nothing kept on the preferred side -> the other side.
+
+Stereo tokens are assigned too: OPSIN drops some ("L-" in an amino acid)
+before a mark can be recorded, and such a token still names its part.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+from typing import Optional, Sequence
+
+from .label_rules import CORE, GLUE
+from .opsin_trace import Span, Trace, WrittenToken
+
+
+OPEN_KINDS = frozenset({"openbracket", "structuralOpenBracket"})
+CLOSE_KINDS = frozenset({"closebracket", "structuralCloseBracket"})
+
+
+def written_brackets(tokens: Sequence[WrittenToken]) -> list[Span]:
+    """Matched bracket pairs in the WRITTEN token list: (open start, close end)."""
+    out: list[Span] = []
+    stack: list[int] = []
+    for tok in tokens:
+        if tok.kind in OPEN_KINDS:
+            stack.append(tok.span[0])
+        elif tok.kind in CLOSE_KINDS and stack:
+            out.append((stack.pop(), tok.span[1]))
+    return out
+
+
+def innermost_bracket(brackets: Sequence[Span], pos: int) -> Optional[Span]:
+    inside = [b for b in brackets if b[0] < pos < b[1]]
+    return min(inside, key=lambda b: b[1] - b[0], default=None)
+
+
+def tokens_of(trace: Trace, key: Optional[Span]) -> list[WrittenToken]:
+    """The written tokens the part `key` owns."""
+    return [t for t in trace.tokens if t.owner == key]
+
+
+def next_nonhyphen(tokens: Sequence[WrittenToken], after_index: int) -> Optional[WrittenToken]:
+    """The first token after position `after_index` that is not a hyphen."""
+    return next((t for t in tokens[after_index + 1:] if t.kind != "hyphen"), None)
+
+
+def bracket_end(text: str, open_pos: int) -> Optional[int]:
+    """The index just past the bracket that opens at text[open_pos] (the "[" after
+    "spiro"), or None when none opens there."""
+    if open_pos >= len(text) or text[open_pos] not in "[({":
+        return None
+    depth = 0
+    for k in range(open_pos, len(text)):
+        if text[k] in "[({":
+            depth += 1
+        elif text[k] in "])}":
+            depth -= 1
+            if depth == 0:
+                return k + 1
+    return None
+
+
+# Used-up tokens that FOLLOW what they belong to.
+_ENDINGS = frozenset({
+    "suffix", "unsaturator", "infix", "ine", "carbohydrateRingSize", "chargeSpecifier",
+    "oxidationNumberSpecifier",     # "copper(II)": the number follows the metal it states
+})
+
+
+@dataclass(frozen=True)
+class Owner:
+    kind: str       # "part" | "bracket"
+    span: Span      # the part's key, or the bracket's (open start, close end)
+
+
+def assign_owners(tokens: Sequence[WrittenToken]) -> dict[int, Optional[Owner]]:
+    """WrittenToken.index -> Owner, for every non-glue token.
+    A value of None means nothing could own it (counted by the census)."""
+    brackets = {b[0]: b for b in written_brackets(tokens)}
+    result: dict[int, Optional[Owner]] = {}
+    ahead: dict[int, Optional[Owner]] = {}
+
+    def forward(i: int) -> Optional[Owner]:
+        """What the tokens after position i give token i. A used-up CORE
+        token on the way decides for itself (recursively), so "1,1'-|bi(" is
+        owned by the ring "bi" names, not by the bracket after "bi"."""
+        if i in ahead:
+            return ahead[i]
+        tok = tokens[i]
+        found: Optional[Owner] = None
+        for j in range(i + 1, len(tokens)):
+            nxt = tokens[j]
+            if nxt.kind in OPEN_KINDS:
+                if tok.kind not in CORE and nxt.span[0] in brackets:
+                    found = Owner("bracket", brackets[nxt.span[0]])
+                    break
+                continue
+            if nxt.kind in GLUE:
+                continue
+            if nxt.owner is not None:
+                found = Owner("part", nxt.owner)
+                break
+            if nxt.kind in CORE:
+                found = forward(j) or backward(j)
+                break
+        ahead[i] = found
+        return found
+
+    def backward(i: int) -> Optional[Owner]:
+        for prev in reversed(tokens[:i]):
+            if prev.owner is not None:
+                return Owner("part", prev.owner)
+        return None
+
+    for i, tok in enumerate(tokens):
+        if tok.kind in GLUE:
+            continue
+        if tok.owner is not None:
+            result[tok.index] = Owner("part", tok.owner)
+        elif tok.kind in _ENDINGS:
+            before = next((p for p in reversed(tokens[:i]) if p.kind not in GLUE), None)
+            result[tok.index] = (result.get(before.index) if before is not None else None) \
+                or backward(i) or forward(i)
+        else:
+            result[tok.index] = forward(i) or backward(i)
+    return result
+
+
+def adopt_orphan_tokens(trace: Trace) -> Trace:
+    """A part OPSIN gave a key but no kept token ("spiro[...]": OPSIN builds the
+    whole spiro skeleton from its tokens and keeps none in the tree) owns the
+    used-up tokens written inside its key range. Without this they fall to the
+    substituent written before them and swallow the skeleton into its label.
+
+    Only a part with NO owned token adopts, and only tokens nobody owns: a
+    parse-time range over-reaches into neighbours (spec §4), so a part that
+    already has tokens never claims more. The narrowest key wins. Idempotent."""
+    owned = {t.owner for t in trace.tokens if t.owner is not None}
+    empty = sorted({p.span for p in trace.parts if p.span is not None and p.span not in owned},
+                   key=lambda s: s[1] - s[0])
+    if not empty:
+        return trace
+    tokens = []
+    for t in trace.tokens:
+        if t.owner is None and t.kind not in GLUE:
+            key = next((k for k in empty if k[0] <= t.span[0] and t.span[1] <= k[1]), None)
+            if key is not None:
+                t = replace(t, owner=key)
+        tokens.append(t)
+    return replace(trace, tokens=tuple(tokens))

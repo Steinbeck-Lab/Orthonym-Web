@@ -1,0 +1,1626 @@
+{
+ "name:(+-)-trans-4-methylcyclohexan-1-ol": {
+  "atom_points": [
+   [
+    323.0,
+    130.0
+   ],
+   [
+    253.6,
+    130.0
+   ],
+   [
+    218.9,
+    190.1
+   ],
+   [
+    149.5,
+    190.1
+   ],
+   [
+    114.8,
+    130.0
+   ],
+   [
+    149.5,
+    69.9
+   ],
+   [
+    218.9,
+    69.9
+   ],
+   [
+    45.4,
+    130.0
+   ]
+  ],
+  "error": null,
+  "name": "(+-)-trans-4-methylcyclohexan-1-ol",
+  "nodes": [
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n0",
+    "kind": "substituent",
+    "label": "methyl",
+    "lights": [
+     0
+    ],
+    "line": "\"methyl\" is a CH3 group \u2014 one carbon with three hydrogens.",
+    "owns": [
+     0
+    ],
+    "parent": null,
+    "span": [
+     13,
+     19
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n1",
+    "kind": "locant",
+    "label": "4",
+    "lights": [
+     0
+    ],
+    "line": "Position 4 \u2014 this group is attached at position 4.",
+    "owns": [],
+    "parent": "n0",
+    "span": [
+     11,
+     12
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n2",
+    "kind": "parent",
+    "label": "cyclohexan",
+    "lights": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6
+    ],
+    "line": "\"cyclohexan\" is the core skeleton the rest of the name is built around. It has 6 atoms.",
+    "owns": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6
+    ],
+    "parent": null,
+    "span": [
+     19,
+     29
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n3",
+    "kind": "suffix",
+    "label": "ol",
+    "lights": [
+     4,
+     7
+    ],
+    "line": "The \"ol\" ending means an -OH group.",
+    "owns": [
+     7
+    ],
+    "parent": null,
+    "span": [
+     30,
+     34
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n4",
+    "kind": "locant",
+    "label": "1",
+    "lights": [
+     4,
+     7
+    ],
+    "line": "Position 1 \u2014 this group is attached at position 1 of the parent skeleton.",
+    "owns": [],
+    "parent": "n3",
+    "span": [
+     30,
+     31
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n5",
+    "kind": "stereo",
+    "label": "+-",
+    "lights": [],
+    "line": "\"+-\" fixes the three-dimensional arrangement at the positions it names.",
+    "owns": [],
+    "parent": "n2",
+    "span": [
+     1,
+     3
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n6",
+    "kind": "stereo",
+    "label": "trans",
+    "lights": [],
+    "line": "\"trans\" fixes the three-dimensional arrangement at the positions it names.",
+    "owns": [],
+    "parent": "n2",
+    "span": [
+     5,
+     10
+    ]
+   }
+  ],
+  "smiles": "C[C@@H]1CC[C@H](CC1)O",
+  "svg": "<svg/>",
+  "total_atoms": 8
+ },
+ "name:(1R,2S)-2-(methylamino)-1-phenylpropan-1-ol": {
+  "atom_points": [
+   [
+    29.9,
+    17.9
+   ],
+   [
+    86.4,
+    56.6
+   ],
+   [
+    81.0,
+    124.9
+   ],
+   [
+    137.5,
+    163.7
+   ],
+   [
+    132.2,
+    232.0
+   ],
+   [
+    199.3,
+    134.2
+   ],
+   [
+    204.7,
+    65.9
+   ],
+   [
+    266.5,
+    36.4
+   ],
+   [
+    323.0,
+    75.2
+   ],
+   [
+    317.7,
+    143.5
+   ],
+   [
+    255.8,
+    173.0
+   ],
+   [
+    19.2,
+    154.5
+   ]
+  ],
+  "error": null,
+  "name": "(1R,2S)-2-(methylamino)-1-phenylpropan-1-ol",
+  "nodes": [
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n0",
+    "kind": "substituent",
+    "label": "methyl",
+    "lights": [
+     0
+    ],
+    "line": "\"methyl\" is a CH3 group \u2014 one carbon with three hydrogens.",
+    "owns": [
+     0
+    ],
+    "parent": null,
+    "span": [
+     11,
+     17
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n1",
+    "kind": "substituent",
+    "label": "amino",
+    "lights": [
+     1
+    ],
+    "line": "\"amino\" is an -NH2 group.",
+    "owns": [
+     1
+    ],
+    "parent": null,
+    "span": [
+     17,
+     22
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n2",
+    "kind": "substituent",
+    "label": "phenyl",
+    "lights": [
+     5,
+     6,
+     7,
+     8,
+     9,
+     10
+    ],
+    "line": "\"phenyl\" is a benzene ring attached by one of its carbons.",
+    "owns": [
+     5,
+     6,
+     7,
+     8,
+     9,
+     10
+    ],
+    "parent": null,
+    "span": [
+     26,
+     32
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n3",
+    "kind": "locant",
+    "label": "1",
+    "lights": [
+     5,
+     6,
+     7,
+     8,
+     9,
+     10
+    ],
+    "line": "Position 1 \u2014 this group is attached at position 1.",
+    "owns": [],
+    "parent": "n2",
+    "span": [
+     24,
+     25
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n4",
+    "kind": "parent",
+    "label": "propan",
+    "lights": [
+     2,
+     3,
+     11
+    ],
+    "line": "\"propan\" is a three-carbon skeleton. It is the core the rest of the name is built around, and it holds 3 atoms.",
+    "owns": [
+     2,
+     3,
+     11
+    ],
+    "parent": null,
+    "span": [
+     32,
+     38
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n5",
+    "kind": "suffix",
+    "label": "ol",
+    "lights": [
+     3,
+     4
+    ],
+    "line": "The \"ol\" ending means an -OH group.",
+    "owns": [
+     4
+    ],
+    "parent": null,
+    "span": [
+     39,
+     43
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n6",
+    "kind": "locant",
+    "label": "1",
+    "lights": [
+     3,
+     4
+    ],
+    "line": "Position 1 \u2014 this group is attached at position 1 of the parent skeleton.",
+    "owns": [],
+    "parent": "n5",
+    "span": [
+     39,
+     40
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n7",
+    "kind": "locant",
+    "label": "2",
+    "lights": [
+     0,
+     1
+    ],
+    "line": "Position 2 \u2014 this group is attached at position 2.",
+    "owns": [],
+    "parent": null,
+    "span": [
+     8,
+     9
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n8",
+    "kind": "stereo",
+    "label": "1R",
+    "lights": [
+     3
+    ],
+    "line": "\"1R\" fixes the three-dimensional arrangement at the positions it names.",
+    "owns": [],
+    "parent": "n4",
+    "span": [
+     1,
+     3
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n9",
+    "kind": "stereo",
+    "label": "2S",
+    "lights": [
+     2
+    ],
+    "line": "\"2S\" fixes the three-dimensional arrangement at the positions it names.",
+    "owns": [],
+    "parent": "n4",
+    "span": [
+     4,
+     6
+    ]
+   }
+  ],
+  "smiles": "CN[C@H]([C@H](O)C1=CC=CC=C1)C",
+  "svg": "<svg/>",
+  "total_atoms": 12
+ },
+ "name:(2S,3R,4E)-2-aminooctadec-4-ene-1,3-diol": {
+  "atom_points": [
+   [
+    57.9,
+    106.0
+   ],
+   [
+    58.0,
+    125.2
+   ],
+   [
+    41.4,
+    134.8
+   ],
+   [
+    24.8,
+    125.2
+   ],
+   [
+    74.5,
+    134.7
+   ],
+   [
+    91.1,
+    125.1
+   ],
+   [
+    107.7,
+    134.6
+   ],
+   [
+    124.2,
+    125.0
+   ],
+   [
+    140.8,
+    134.6
+   ],
+   [
+    157.4,
+    125.0
+   ],
+   [
+    173.9,
+    134.5
+   ],
+   [
+    190.5,
+    124.9
+   ],
+   [
+    207.1,
+    134.4
+   ],
+   [
+    223.6,
+    124.9
+   ],
+   [
+    240.2,
+    134.4
+   ],
+   [
+    256.7,
+    124.8
+   ],
+   [
+    273.3,
+    134.3
+   ],
+   [
+    289.9,
+    124.7
+   ],
+   [
+    306.5,
+    134.3
+   ],
+   [
+    323.0,
+    124.7
+   ],
+   [
+    74.6,
+    153.8
+   ]
+  ],
+  "error": null,
+  "name": "(2S,3R,4E)-2-aminooctadec-4-ene-1,3-diol",
+  "nodes": [
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n0",
+    "kind": "substituent",
+    "label": "amino",
+    "lights": [
+     0
+    ],
+    "line": "\"amino\" is an -NH2 group.",
+    "owns": [
+     0
+    ],
+    "parent": null,
+    "span": [
+     13,
+     18
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n1",
+    "kind": "locant",
+    "label": "2",
+    "lights": [
+     0
+    ],
+    "line": "Position 2 \u2014 this group is attached at position 2.",
+    "owns": [],
+    "parent": "n0",
+    "span": [
+     11,
+     12
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n2",
+    "kind": "parent",
+    "label": "octadec-4-ene",
+    "lights": [
+     1,
+     2,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19
+    ],
+    "line": "\"octadec-4-ene\" is the core skeleton the rest of the name is built around. It has 18 atoms.",
+    "owns": [
+     1,
+     2,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19
+    ],
+    "parent": null,
+    "span": [
+     18,
+     31
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n3",
+    "kind": "locant",
+    "label": "4",
+    "lights": [
+     5
+    ],
+    "line": "Position 4.",
+    "owns": [],
+    "parent": "n2",
+    "span": [
+     26,
+     27
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n4",
+    "kind": "suffix",
+    "label": "diol",
+    "lights": [
+     2,
+     3,
+     4,
+     20
+    ],
+    "line": "The \"diol\" ending means an -OH group.",
+    "owns": [
+     3,
+     20
+    ],
+    "parent": null,
+    "span": [
+     32,
+     40
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n5",
+    "kind": "locant",
+    "label": "1",
+    "lights": [
+     2,
+     3
+    ],
+    "line": "Position 1 \u2014 this group is attached at position 1 of the parent skeleton.",
+    "owns": [],
+    "parent": "n4",
+    "span": [
+     32,
+     33
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n6",
+    "kind": "locant",
+    "label": "3",
+    "lights": [
+     4,
+     20
+    ],
+    "line": "Position 3 \u2014 this group is attached at position 3 of the parent skeleton.",
+    "owns": [],
+    "parent": "n4",
+    "span": [
+     34,
+     35
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n7",
+    "kind": "multiplier",
+    "label": "di",
+    "lights": [
+     2,
+     3,
+     4,
+     20
+    ],
+    "line": "\"di\" is a counting word \u2014 it says how many of the next group there are.",
+    "owns": [],
+    "parent": "n4",
+    "span": [
+     36,
+     38
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n8",
+    "kind": "stereo",
+    "label": "2S",
+    "lights": [
+     1
+    ],
+    "line": "\"2S\" fixes the three-dimensional arrangement at the positions it names.",
+    "owns": [],
+    "parent": "n2",
+    "span": [
+     1,
+     3
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n9",
+    "kind": "stereo",
+    "label": "3R",
+    "lights": [
+     4
+    ],
+    "line": "\"3R\" fixes the three-dimensional arrangement at the positions it names.",
+    "owns": [],
+    "parent": "n2",
+    "span": [
+     4,
+     6
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n10",
+    "kind": "stereo",
+    "label": "4E",
+    "lights": [
+     5
+    ],
+    "line": "\"4E\" fixes the three-dimensional arrangement at the positions it names.",
+    "owns": [],
+    "parent": "n2",
+    "span": [
+     7,
+     9
+    ]
+   }
+  ],
+  "smiles": "N[C@@H](CO)[C@@H](\\C=C\\CCCCCCCCCCCCC)O",
+  "svg": "<svg/>",
+  "total_atoms": 21
+ },
+ "name:1,3,7-trimethyl-3,7-dihydro-1H-purine-2,6-dione": {
+  "atom_points": [
+   [
+    261.6,
+    41.1
+   ],
+   [
+    223.4,
+    87.7
+   ],
+   [
+    244.7,
+    144.0
+   ],
+   [
+    206.6,
+    190.7
+   ],
+   [
+    147.1,
+    180.9
+   ],
+   [
+    100.1,
+    218.6
+   ],
+   [
+    49.8,
+    185.5
+   ],
+   [
+    65.7,
+    127.4
+   ],
+   [
+    125.8,
+    124.6
+   ],
+   [
+    164.0,
+    78.0
+   ],
+   [
+    142.7,
+    21.6
+   ],
+   [
+    28.0,
+    80.4
+   ],
+   [
+    227.9,
+    247.0
+   ],
+   [
+    304.2,
+    153.8
+   ]
+  ],
+  "error": null,
+  "name": "1,3,7-trimethyl-3,7-dihydro-1H-purine-2,6-dione",
+  "nodes": [
+   {
+    "atoms_unmapped": false,
+    "copies": 3,
+    "id": "n0",
+    "kind": "substituent",
+    "label": "methyl",
+    "lights": [
+     0,
+     11,
+     12
+    ],
+    "line": "\"methyl\" is a CH3 group \u2014 one carbon with three hydrogens. The name writes it once for 3 copies.",
+    "owns": [
+     0,
+     11,
+     12
+    ],
+    "parent": null,
+    "span": [
+     9,
+     15
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n1",
+    "kind": "locant",
+    "label": "1",
+    "lights": [
+     0
+    ],
+    "line": "Position 1 \u2014 this group is attached at position 1.",
+    "owns": [],
+    "parent": "n0",
+    "span": [
+     0,
+     1
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n2",
+    "kind": "locant",
+    "label": "3",
+    "lights": [
+     12
+    ],
+    "line": "Position 3 \u2014 this group is attached at position 3.",
+    "owns": [],
+    "parent": "n0",
+    "span": [
+     2,
+     3
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n3",
+    "kind": "locant",
+    "label": "7",
+    "lights": [
+     11
+    ],
+    "line": "Position 7 \u2014 this group is attached at position 7.",
+    "owns": [],
+    "parent": "n0",
+    "span": [
+     4,
+     5
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n4",
+    "kind": "multiplier",
+    "label": "tri",
+    "lights": [
+     0,
+     11,
+     12
+    ],
+    "line": "\"tri\" is a counting word \u2014 it says how many of the next group there are.",
+    "owns": [],
+    "parent": "n0",
+    "span": [
+     6,
+     9
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n5",
+    "kind": "parent",
+    "label": "purine",
+    "lights": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9
+    ],
+    "line": "\"purine\" is purine \u2014 two fused rings holding four nitrogens. It is the core the rest of the name is built around, and it holds 9 atoms.",
+    "owns": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9
+    ],
+    "parent": null,
+    "span": [
+     31,
+     37
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n6",
+    "kind": "locant",
+    "label": "3",
+    "lights": [
+     3
+    ],
+    "line": "Position 3 \u2014 the N3 atom carries a hydrogen here.",
+    "owns": [],
+    "parent": "n5",
+    "span": [
+     16,
+     17
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n7",
+    "kind": "locant",
+    "label": "7",
+    "lights": [
+     7
+    ],
+    "line": "Position 7 \u2014 the N7 atom carries a hydrogen here.",
+    "owns": [],
+    "parent": "n5",
+    "span": [
+     18,
+     19
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n8",
+    "kind": "multiplier",
+    "label": "di",
+    "lights": [
+     3,
+     7
+    ],
+    "line": "\"di\" is a counting word \u2014 it says how many of the next group there are.",
+    "owns": [],
+    "parent": "n5",
+    "span": [
+     20,
+     22
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n9",
+    "kind": "hydro",
+    "label": "hydro",
+    "lights": [
+     3,
+     7
+    ],
+    "line": "\"hydro\" records that hydrogens were added here, which fixes where the double bonds go.",
+    "owns": [],
+    "parent": "n5",
+    "span": [
+     22,
+     27
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n10",
+    "kind": "indicated_h",
+    "label": "1H",
+    "lights": [
+     1
+    ],
+    "line": "Position 1 \u2014 the N1 atom carries a hydrogen here.",
+    "owns": [],
+    "parent": "n5",
+    "span": [
+     28,
+     30
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n11",
+    "kind": "suffix",
+    "label": "dione",
+    "lights": [
+     2,
+     9,
+     10,
+     13
+    ],
+    "line": "The \"dione\" ending means a C=O group (a carbonyl).",
+    "owns": [
+     10,
+     13
+    ],
+    "parent": null,
+    "span": [
+     38,
+     47
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n12",
+    "kind": "locant",
+    "label": "2",
+    "lights": [
+     2,
+     13
+    ],
+    "line": "Position 2 \u2014 this group is attached at position 2 of the parent skeleton.",
+    "owns": [],
+    "parent": "n11",
+    "span": [
+     38,
+     39
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n13",
+    "kind": "locant",
+    "label": "6",
+    "lights": [
+     9,
+     10
+    ],
+    "line": "Position 6 \u2014 this group is attached at position 6 of the parent skeleton.",
+    "owns": [],
+    "parent": "n11",
+    "span": [
+     40,
+     41
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n14",
+    "kind": "multiplier",
+    "label": "di",
+    "lights": [
+     2,
+     9,
+     10,
+     13
+    ],
+    "line": "\"di\" is a counting word \u2014 it says how many of the next group there are.",
+    "owns": [],
+    "parent": "n11",
+    "span": [
+     42,
+     44
+    ]
+   }
+  ],
+  "smiles": "CN1C(N(C=2N=CN(C2C1=O)C)C)=O",
+  "svg": "<svg/>",
+  "total_atoms": 14
+ },
+ "name:2-[4-(2-methylpropyl)phenyl]propanoic acid": {
+  "atom_points": [
+   [
+    17.0,
+    125.8
+   ],
+   [
+    58.4,
+    123.3
+   ],
+   [
+    81.3,
+    157.9
+   ],
+   [
+    122.6,
+    155.3
+   ],
+   [
+    141.1,
+    118.2
+   ],
+   [
+    182.5,
+    115.7
+   ],
+   [
+    205.4,
+    150.2
+   ],
+   [
+    186.9,
+    187.3
+   ],
+   [
+    145.5,
+    189.9
+   ],
+   [
+    246.7,
+    147.7
+   ],
+   [
+    265.2,
+    110.6
+   ],
+   [
+    242.3,
+    76.1
+   ],
+   [
+    306.6,
+    108.1
+   ],
+   [
+    269.6,
+    182.3
+   ],
+   [
+    76.9,
+    86.2
+   ]
+  ],
+  "error": null,
+  "name": "2-[4-(2-methylpropyl)phenyl]propanoic acid",
+  "nodes": [
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n0",
+    "kind": "substituent",
+    "label": "methyl",
+    "lights": [
+     0
+    ],
+    "line": "\"methyl\" is a CH3 group \u2014 one carbon with three hydrogens.",
+    "owns": [
+     0
+    ],
+    "parent": null,
+    "span": [
+     8,
+     14
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n1",
+    "kind": "locant",
+    "label": "2",
+    "lights": [
+     0
+    ],
+    "line": "Position 2 \u2014 this group is attached at position 2.",
+    "owns": [],
+    "parent": "n0",
+    "span": [
+     6,
+     7
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n2",
+    "kind": "substituent",
+    "label": "propyl",
+    "lights": [
+     1,
+     2,
+     14
+    ],
+    "line": "\"propyl\" is a three-carbon chain.",
+    "owns": [
+     1,
+     2,
+     14
+    ],
+    "parent": null,
+    "span": [
+     14,
+     20
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n3",
+    "kind": "substituent",
+    "label": "phenyl",
+    "lights": [
+     3,
+     4,
+     5,
+     6,
+     7,
+     8
+    ],
+    "line": "\"phenyl\" is a benzene ring attached by one of its carbons.",
+    "owns": [
+     3,
+     4,
+     5,
+     6,
+     7,
+     8
+    ],
+    "parent": null,
+    "span": [
+     21,
+     27
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n4",
+    "kind": "parent",
+    "label": "propan",
+    "lights": [
+     9,
+     10,
+     13
+    ],
+    "line": "\"propan\" is a three-carbon skeleton. It is the core the rest of the name is built around, and it holds 3 atoms.",
+    "owns": [
+     9,
+     10,
+     13
+    ],
+    "parent": null,
+    "span": [
+     28,
+     34
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n5",
+    "kind": "suffix",
+    "label": "oic acid",
+    "lights": [
+     10,
+     11,
+     12
+    ],
+    "line": "The \"oic acid\" ending means a -C(=O)OH group.",
+    "owns": [
+     11,
+     12
+    ],
+    "parent": null,
+    "span": [
+     34,
+     42
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n6",
+    "kind": "locant",
+    "label": "2",
+    "lights": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     14
+    ],
+    "line": "Position 2 \u2014 this group is attached at position 2.",
+    "owns": [],
+    "parent": null,
+    "span": [
+     0,
+     1
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n7",
+    "kind": "locant",
+    "label": "4",
+    "lights": [
+     0,
+     1,
+     2,
+     14
+    ],
+    "line": "Position 4 \u2014 this group is attached at position 4.",
+    "owns": [],
+    "parent": null,
+    "span": [
+     3,
+     4
+    ]
+   }
+  ],
+  "smiles": "CC(CC1=CC=C(C=C1)C(C(=O)O)C)C",
+  "svg": "<svg/>",
+  "total_atoms": 15
+ },
+ "name:nonsenseane": {
+  "atom_points": [],
+  "error": "OPSIN cannot read this name, so it cannot be explained.",
+  "name": "nonsenseane",
+  "nodes": [],
+  "smiles": "",
+  "svg": null,
+  "total_atoms": 0
+ },
+ "smiles:CC(C)Cc1ccc(cc1)C(C)C(=O)O": {
+  "atom_points": [
+   [
+    17.0,
+    125.8
+   ],
+   [
+    58.4,
+    123.3
+   ],
+   [
+    76.9,
+    86.2
+   ],
+   [
+    81.3,
+    157.9
+   ],
+   [
+    122.6,
+    155.3
+   ],
+   [
+    141.1,
+    118.2
+   ],
+   [
+    182.5,
+    115.7
+   ],
+   [
+    205.4,
+    150.2
+   ],
+   [
+    186.9,
+    187.3
+   ],
+   [
+    145.5,
+    189.9
+   ],
+   [
+    246.7,
+    147.7
+   ],
+   [
+    269.6,
+    182.3
+   ],
+   [
+    265.2,
+    110.6
+   ],
+   [
+    242.3,
+    76.1
+   ],
+   [
+    306.6,
+    108.1
+   ]
+  ],
+  "error": null,
+  "name": "2-[4-(2-methylpropyl)phenyl]propanoic acid",
+  "nodes": [
+   {
+    "atoms_unmapped": true,
+    "copies": 1,
+    "id": "n0",
+    "kind": "substituent",
+    "label": "methyl",
+    "lights": [],
+    "line": "\"methyl\" is a CH3 group \u2014 one carbon with three hydrogens.",
+    "owns": [],
+    "parent": null,
+    "span": [
+     8,
+     14
+    ]
+   },
+   {
+    "atoms_unmapped": true,
+    "copies": 1,
+    "id": "n1",
+    "kind": "locant",
+    "label": "2",
+    "lights": [],
+    "line": "Position 2 \u2014 this group is attached at position 2.",
+    "owns": [],
+    "parent": "n0",
+    "span": [
+     6,
+     7
+    ]
+   },
+   {
+    "atoms_unmapped": true,
+    "copies": 1,
+    "id": "n2",
+    "kind": "substituent",
+    "label": "propyl",
+    "lights": [],
+    "line": "\"propyl\" is a three-carbon chain.",
+    "owns": [],
+    "parent": null,
+    "span": [
+     14,
+     20
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n3",
+    "kind": "substituent",
+    "label": "phenyl",
+    "lights": [
+     4,
+     5,
+     6,
+     7,
+     8,
+     9
+    ],
+    "line": "\"phenyl\" is a benzene ring attached by one of its carbons.",
+    "owns": [
+     4,
+     5,
+     6,
+     7,
+     8,
+     9
+    ],
+    "parent": null,
+    "span": [
+     21,
+     27
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n4",
+    "kind": "parent",
+    "label": "propan",
+    "lights": [
+     10,
+     11,
+     12
+    ],
+    "line": "\"propan\" is a three-carbon skeleton. It is the core the rest of the name is built around, and it holds 3 atoms.",
+    "owns": [
+     10,
+     11,
+     12
+    ],
+    "parent": null,
+    "span": [
+     28,
+     34
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n5",
+    "kind": "suffix",
+    "label": "oic acid",
+    "lights": [
+     12,
+     13,
+     14
+    ],
+    "line": "The \"oic acid\" ending means a -C(=O)OH group.",
+    "owns": [
+     13,
+     14
+    ],
+    "parent": null,
+    "span": [
+     34,
+     42
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n6",
+    "kind": "locant",
+    "label": "2",
+    "lights": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9
+    ],
+    "line": "Position 2 \u2014 this group is attached at position 2.",
+    "owns": [],
+    "parent": null,
+    "span": [
+     0,
+     1
+    ]
+   },
+   {
+    "atoms_unmapped": false,
+    "copies": 1,
+    "id": "n7",
+    "kind": "locant",
+    "label": "4",
+    "lights": [
+     0,
+     1,
+     2,
+     3
+    ],
+    "line": "Position 4 \u2014 this group is attached at position 4.",
+    "owns": [],
+    "parent": null,
+    "span": [
+     3,
+     4
+    ]
+   }
+  ],
+  "smiles": "CC(C)Cc1ccc(cc1)C(C)C(=O)O",
+  "svg": "<svg/>",
+  "total_atoms": 15
+ }
+}

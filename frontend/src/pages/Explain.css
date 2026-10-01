@@ -357,6 +357,16 @@
   color: var(--ink);
 }
 
+/* The error caption holds a whole sentence: body type, sentence case, a readable measure. */
+.explain-patch__state-label--sentence {
+  max-width: 46ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-md);
+  line-height: 1.5;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
 .explain-patch__pending-cloth {
   display: flex;
   flex-direction: column;
@@ -461,7 +471,9 @@
    ink underline — a weight no tier uses — plus the glow wash. The
    transparent rule at rest reserves the space so nothing shifts. */
 .explain-name__part {
-  padding: 0 0.06em;
+  /* No horizontal padding: v2 cuts words in two (tri|methyl, di|one), and
+     padding would print a gap inside the word. */
+  padding: 0;
   border-bottom: 1px solid transparent;
   cursor: pointer;
   transition:
@@ -484,10 +496,50 @@
    A DOTTED rest-state underline says so before the pointer arrives, and it is
    FORM not hue on purpose (CLAUDE.md's TierLamp rule): the mark survives
    greyscale and colour blindness where a tint would not. Hover/active still
-   paint the border --ink at higher specificity, but leave the dotted STYLE
-   in place, so a notation part reads as notation even while lit. */
+   paint the border INK, but the dotted STYLE stays, so a notation part
+   reads as notation even while lit. */
 .explain-name__part--ref {
   border-bottom: 1px dotted var(--muted);
+}
+
+/* After --ref at higher specificity: the ref shorthand above would otherwise
+   reset the ink colour that --active and :hover set, and a pinned notation
+   piece would look like its context. */
+.explain-name__part--ref:hover,
+.explain-name__part--ref.explain-name__part--active {
+  border-bottom-color: var(--ink);
+}
+
+.explain-name__part--context {
+  background: color-mix(in srgb, var(--glow, #ffd400) 18%, transparent);
+  border-radius: 2px;
+}
+
+.explain-unplaced {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+}
+
+.explain-unplaced__item {
+  font: inherit;
+  background: none;
+  border: 0;
+  padding: 0.125rem 0;
+  color: var(--ink);
+  text-decoration: underline dotted;
+  cursor: pointer;
+}
+
+.explain-unplaced__item--active {
+  text-decoration-style: solid;
+}
+
+.explain-unplaced__note {
+  color: var(--muted);
 }
 
 .explain-result__name-highlight {
@@ -553,7 +605,8 @@
   font-weight: 400;
   line-height: 1.3;
   letter-spacing: 0.0625rem;
-  text-transform: uppercase;
+  /* IUPAC case is semantic (4aR, tert-butyl, a pseudo-asymmetric r/s): never uppercased. */
+  text-transform: none;
   color: var(--ink);
 }
 
@@ -583,87 +636,6 @@
   color: var(--muted);
 }
 
-/* -------------------- fallback segment list -------------------- */
-/* Used when the backend could not give per-character name spans. Rows on
-   hairlines, the way Bugatti sets a career listing. */
-
-.explain-segments {
-  display: flex;
-  flex-direction: column;
-  border-top: 1px solid var(--hairline);
-}
-
-.explain-segment__item {
-  border-bottom: 1px solid var(--hairline);
-}
-
-.explain-segment {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-xxs);
-  width: 100%;
-  padding: var(--s-md) 0;
-  background: transparent;
-  border: none;
-  /* The row's hover fill is a rounded tile like every other small surface
-     in the bento, not a square-cornered band from the flat world. */
-  border-radius: var(--r-card-sm);
-  text-align: left;
-  cursor: pointer;
-  transition: background-color 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.explain-segment:hover {
-  background: var(--surface-soft);
-}
-
-.explain-segment--active {
-  background: var(--surface-card);
-}
-
-.explain-segment__label {
-  font-family: var(--font-display);
-  font-size: var(--t-title-sm);
-  font-weight: 400;
-  line-height: 1.3;
-  letter-spacing: var(--track-display-sm);
-  text-transform: uppercase;
-  color: var(--ink);
-}
-
-/* A part the parse could not pin to atoms is struck, not coloured — the
-   same failure mark the rest of the site uses. */
-.explain-segment--unmapped .explain-segment__label {
-  color: var(--muted);
-  text-decoration: line-through;
-  text-decoration-thickness: 1px;
-}
-
-/* A referential part in the fallback list wears the same dotted mark the
-   hoverable name uses -- notation, not an atom-owning part. Dotted UNDERLINE,
-   so it never collides with the line-THROUGH an unmapped part carries. */
-.explain-segment--ref .explain-segment__label {
-  text-decoration: underline dotted var(--muted);
-  text-underline-offset: 3px;
-}
-
-.explain-segment__explanation {
-  font-family: var(--font-body);
-  font-size: var(--t-body-sm);
-  line-height: 1.5;
-  color: var(--body);
-}
-
-/* Children are indented on a hairline stem rather than nested in a box. */
-.explain-segment__children {
-  padding-left: var(--s-lg);
-  border-left: 1px solid var(--hairline);
-}
-
-.explain-segment__children .explain-segment__item:last-child {
-  border-bottom: none;
-}
-
 @media (min-width: 1400px) {
   .explain-result__body {
     flex-direction: row;
@@ -676,8 +648,7 @@
     min-width: 0;
   }
 
-  .explain-detail,
-  .explain-segments {
+  .explain-detail {
     flex: 1 1 45%;
     min-width: 0;
   }
@@ -700,7 +671,7 @@
    -- the omission was. */
 @media (prefers-reduced-motion: reduce) {
   .explain-name__part,
-  .explain-segment {
+  .explain-unplaced__item {
     transition: none;
   }
 

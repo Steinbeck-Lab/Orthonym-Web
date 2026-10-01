@@ -241,7 +241,7 @@ curl -s  https://orthonym.example.org/api/health                   # {"status":"
 # the round-trip gate, end to end: ethanol must be `pin`, the fused polycyclic `fallback`
 curl -s -X POST https://orthonym.example.org/api/translate \
   -H 'Content-Type: application/json' \
-  -d '{"smiles":["CCO","COC1C2=C(C)C(=O)OC2CC2CCC(O)C(C)C21C"]}' | head -c 400
+  -d '{"smiles":["CCO","CC1=C2C=CN=CC2=C(C3=C1NC4=CC=CC=C43)C"]}' | head -c 400
 ```
 
 **Confirm the rate limiter sees real client addresses.** If this shows one shared bucket instead

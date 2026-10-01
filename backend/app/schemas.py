@@ -142,51 +142,42 @@ class IupacToSmilesResponse(BaseModel):
     error: Optional[str] = None
 
 
-SegmentKind = Literal[
-    "substituent", "parent", "suffix", "modifier", "stereo", "unmapped", "token"
+NodeKind = Literal[
+    "substituent", "parent", "suffix",
+    "locant", "multiplier", "stereo", "hydro", "indicated_h", "token",
 ]
 
 
-class ExplainSegment(BaseModel):
+class ExplainNode(BaseModel):
+    """One written piece of the name (spec §5). Part kinds (substituent,
+    parent, suffix) own a disjoint slice of the heavy atoms and together own
+    all of them; every other kind owns nothing and only lights atoms."""
+
+    id: str
+    parent: Optional[str] = None
+    kind: NodeKind
     label: str
-    kind: SegmentKind
-    # Owning parts (substituent/parent/suffix) hold a disjoint slice of the
-    # molecule's heavy atoms; together they cover it. Referential parts
-    # (modifier/stereo) own nothing -- "3,7-dihydro-1H-" adds no atoms, it
-    # only records where hydrogens sit on atoms the parent already owns.
-    # Conflating the two breaks the partition invariant, so it is explicit.
-    owns_atoms: bool = True
-    # The single locant this segment corresponds to, for child segments
-    # ("7" -> N7). None for a top-level part.
-    locant: Optional[str] = None
-    explanation: str
-    # Atoms this segment OWNS. Empty when owns_atoms is False.
-    atom_indices: list[int] = []
-    # Atoms to light up on hover. May overlap other segments -- a suffix
-    # owns only its oxygen but highlights the whole C=O so it reads right.
-    highlight_atoms: list[int] = []
-    # [start, end) character offsets into ExplainResponse.name.
-    name_range: Optional[list[int]] = None
-    children: list["ExplainSegment"] = []
-
-
-ExplainSegment.model_rebuild()
+    # [start, end) into ExplainResponse.name, or None when no position could
+    # be proven ("not placed in the name"). Spans never cross.
+    span: Optional[list[int]] = None
+    copies: int = 1
+    owns: list[int] = []
+    lights: list[int] = []
+    # SMILES-in only: the atoms could not be pinned on the user's molecule.
+    # The text, label and line stay.
+    atoms_unmapped: bool = False
+    line: str
 
 
 class ExplainResponse(BaseModel):
     smiles: str
     name: Optional[str] = None
-    # Raw inline SVG markup (NOT a data: URI) -- meant to be inlined
-    # directly into the page DOM so the frontend can style individual
-    # atom-N/bond-N elements on hover. Null when name/svg could not be
-    # produced (see `error`).
+    # Raw inline SVG markup (NOT a data: URI); null when it could not be drawn.
     svg: Optional[str] = None
-    # Pixel coordinates of every heavy atom within `svg`'s own viewBox,
-    # indexed by atom index. Produced by the SAME MolDraw2D instance that
-    # rendered `svg`, so the two cannot drift. Empty when svg is None.
+    # Pixel coordinates of every heavy atom in `svg`, from the SAME drawer.
     atom_points: list[list[float]] = []
     total_atoms: int = 0
-    segments: list[ExplainSegment] = []
+    nodes: list[ExplainNode] = []
     error: Optional[str] = None
 
 

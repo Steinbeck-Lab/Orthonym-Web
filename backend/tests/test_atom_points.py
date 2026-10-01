@@ -20,18 +20,13 @@ def test_every_point_is_inside_the_drawing():
 
 
 def test_methyl_carbons_get_points_even_though_rdkit_draws_no_symbol():
-    # This is the whole point of the task. RDKit emits a standalone atom-N
-    # element only for atoms it draws a symbol for, so caffeine's methyl
-    # carbons have none and cannot be highlighted today.
+    # RDKit emits a standalone atom-N element only for atoms it draws a
+    # symbol for, so caffeine's methyl carbons have none; the glow needs a
+    # real coordinate for each of them.
     result = explain_name(CAFFEINE)
-    methyl = next(s for s in result["segments"] if s["kind"] == "substituent")
-    # kind == "substituent" only: the methyl segment's children now also
-    # include TOKEN siblings ("tri", the "1,3,7-" locant token), which own no
-    # atoms at all (atom_indices == []) by design.
-    for child in methyl["children"]:
-        if child["kind"] != "substituent":
-            continue
-        index = child["atom_indices"][0]
+    methyl = next(n for n in result["nodes"] if n["kind"] == "substituent")
+    assert len(methyl["owns"]) == 3
+    for index in methyl["owns"]:
         x, y = result["atom_points"][index]
         assert (x, y) != (0.0, 0.0), f"atom {index} has no real coordinate"
 

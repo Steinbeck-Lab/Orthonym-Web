@@ -12,11 +12,11 @@ verdict. A non-zero exit fails the Docker build, which is the point.
 
 import sys
 
-# A fused polycyclic. With a working OPSIN round trip the engine ships a
-# verified systematic name: "fallback". Without OPSIN it abstains (measured
-# 2026-09-28, engine 68f50d1), so anything but "fallback" means the gate did
-# not run.
-FUSED_POLYCYCLIC = "COC1C2=C(C)C(=O)OC2CC2CCC(O)C(C)C21C"
+# A fused polycyclic (ellipticine). With a working OPSIN round trip the engine
+# ships a verified systematic name: "fallback". Without the round trip the
+# status can only be best_effort (measured 2026-10-01, engine 1.0.2 and the
+# one before it), so anything but "fallback" means the gate did not run.
+FUSED_POLYCYCLIC = "CC1=C2C=CN=CC2=C(C3=C1NC4=CC=CC=C43)C"
 
 
 def main() -> int:

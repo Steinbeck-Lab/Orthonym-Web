@@ -22,7 +22,7 @@ docker compose up -d redis           # container orthonym-redis, localhost:6379
 
 # tests — from the repo root; this script is the only correct way to run them
 backend/scripts/run-tests.sh                              # full suite
-backend/scripts/run-tests.sh tests/test_name_range.py -v  # one file
+backend/scripts/run-tests.sh tests/test_explain_tree.py -v  # one file
 
 # backend — from backend/, three processes in three terminals
 REDIS_URL=redis://localhost:6379/0 .venv/bin/python -m uvicorn app.main:app --port 8001
@@ -32,7 +32,7 @@ REDIS_URL=redis://localhost:6379/0 .venv/bin/python -m celery -A app.celery_app 
 # ad hoc scripts importing app.*
 cd backend && PYTHONPATH="$(pwd)" REDIS_URL=redis://localhost:6379/0 .venv/bin/python <script.py>
 
-# explain coverage census -- 544 names, prints the per-axis table. Runs the
+# explain coverage census -- 670 names, prints the per-axis table. Runs the
 # interpreter directly (not via run-tests.sh, which is for pytest only); the
 # interpreter is backend/.venv/bin/python -- run-tests.sh itself now
 # auto-detects .venv-mac (macOS) or .venv (Linux) and picks whichever exists.
@@ -65,8 +65,7 @@ the backend CI job are what notice. A red one after an engine push is an engine 
 The engine fetches its own **OPSIN 2.9.0** and **centres 1.2.1** jars from their releases and
 SHA-checks them (`orthonym/jars.py`), into `$ORTHONYM_JAR_DIR` (the image sets `/opt/orthonym/jars`)
 or `~/.cache/orthonym/jars`. `orthonym --fetch-jars` is the loud version the Dockerfile and CI run. An
-installed engine carries no OPSIN source tree, so app code reads OPSIN resources out of the jar
-(`app/opsin_tokenizer.py`), never from `PROJECT_ROOT/opsin/...`.
+installed engine carries no OPSIN source tree, so app code never reads `PROJECT_ROOT/opsin/...`.
 
 **CDK** is the app's own: `backend/Dockerfile` downloads it into `backend/vendor/cdk/` and checks it
 against the SHA-256 in the tracked `backend/vendor/cdk/NOTICE`. `backend/.dockerignore` keeps
@@ -187,21 +186,32 @@ Things the repo does not tell you, or tells you only after they cost time.
   every copy/CSV/SDF path reads the data object, so the caret of `0^4,9` still leaves the page.
 - `/from-name` computes no tier and no verdict: OPSIN either parses a name or does not, and borrowing
   Home's grammar there would claim a check that never ran.
-- `/explain` explains **how the name is written**: every name token that teaches something is its
-  own hoverable child with its own plain-language line. Token children are referential -- OPSIN
-  gives a fused ring ONE atom set, so `[a]` cannot own atoms and inherits its parent's highlight.
-  Spans are DERIVED from token offsets (`app/name_tokens.py`), never searched for by text. If the
-  token run cannot be accounted for, the name withholds EVERY span rather than guess. Coverage is
-  measured, not assumed: `backend/scripts/explain_census.py` classifies all 544 names and prints
-  the residue rather than hiding it, and `backend/tests/test_explain_coverage.py` gates a curated
-  subset of that corpus so a class already fixed cannot silently regress. This is **not**
-  near-total coverage. Measured 2026-09-11 over the 544-name corpus: **282 clean, 159 fully
-  inert** (`SPANS_NONE`, 154 of them plus 5 that also carry an unmapped part), **99 partially
-  spanned** (94 plus 5 with an unmapped part), **2 fully spanned but carrying an unmapped
-  part**, and **2 that OPSIN itself cannot parse**. The residue is real and named,
-  not accidental (lossy OPSIN labels where a duplicated token means the part text is no longer a
-  substring of the name, plus a text-grouped-substituent class worth a measured +55 names that a
-  follow-on project owns, not this one).
+- `/explain` explains **how the name is written**, from one OPSIN trace (`app/opsin_trace.py`): every
+  written token is tagged with its text position right after OPSIN parses it; the trace keeps the
+  candidate OPSIN itself returns (first one that builds without a warning) and checks it against
+  OPSIN's public parse (`mismatch` refused). After `ComponentProcessor` every kept token records the
+  part OPSIN placed it in (so a hydro prefix or ring bridge OPSIN moves into a ring lands on the
+  ring), and `app/token_owner.py` assigns the tokens OPSIN used up by their written neighbours and
+  brackets (a part OPSIN kept no token of, such as `spiro[...]`, adopts the used-up tokens inside its
+  key range). `app/label_rules.py` is the token-kind table; `app/explain_tree.py` builds the flat
+  `nodes` list. A stereo mark lights exactly one atom or none: the atom that carries its locant AND
+  is a real stereocentre / stereo-double-bond atom (RDKit on the traced molecule), searched from its
+  IUPAC scope; a bare R/S/E/Z lights the scope's main part's only stereocentre (or stereo double
+  bond) when there is exactly one; a sugar's alpha/beta lights its one anomeric carbon, found by
+  structure; D/L and bare cis/trans light nothing. A functional-class word ("ketone", "ether",
+  "anhydride", "oxime", "chloride") is a part of its own over the atoms OPSIN's build adds for it
+  (the trace takes them out of the alkyl written before it); a number beside an element symbol in
+  front of a substituent ("4-O-") lights the PARENT's oxygen and carbon, never the substituent's own
+  atoms. Suffix and parent lines state what the atoms are only when the atoms bear it out. Names
+  OPSIN reads in a reordered form (CAS index names) are refused as `unplaced`. Known limitation:
+  conjunctive names split the chain into the suffix. Honesty is **per node**: nothing lights a
+  guessed atom, and on the SMILES path a part whose atoms cannot be agreed keeps its text with
+  `atoms_unmapped`. Measured 2026-10-01 -- corpus 670 names: CLEAN 668, 2 OPSIN cannot read;
+  ChEMBL 10k (run in 30 shards): CLEAN 9998, UNREADABLE 2, every failure class 0 (the census
+  classes are listed in the header of `explain_census.py`). The gated sets are engine-named or
+  curated, so a class they hold no name of is invisible to them: add the names to `CURATED` with
+  the fix. Gate: `tests/test_explain_coverage.py`; census: `backend/scripts/explain_census.py`
+  (`cd backend && ... scripts/explain_census.py --chembl tests/fixtures/explain_chembl_10k.tsv`).
 - The three legal pages describe **this deployment**, and every factual claim in `Privacy.jsx` was
   read out of the backend or measured against a running stack. Do not adapt wording from another
   site's policy: a policy that claims processing which does not happen is as wrong as one that hides
