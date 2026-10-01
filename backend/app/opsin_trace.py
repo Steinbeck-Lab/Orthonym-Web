@@ -53,6 +53,21 @@ Failures, all of them refusals (never a partial trace):
   its own tag or from an enclosing substituent/root, never from a word or
   molecule.
 
+Functional-class names ("methyl ethyl ketone", "diethyl ether", "acetic
+anhydride", "cyclohexanone oxime"). The functional word is a ``functionalTerm``
+element of the parse. ``StructureBuilder`` creates its atoms at build time and
+merges them into the FIRST substituent's / root's fragment, so without help the
+first alkyl would own and light the C=O, and the word itself would own nothing.
+The trace therefore snapshots every atom id in the token fragments just before
+``buildFragment``; the atoms of the first copy of a part that were not in the
+snapshot are the functional term's. They are removed from that part and emitted
+as a part of kind ``functional``, keyed on the term's own ``stitchPart``. (Only
+the FIRST copy of a part is read: later copies are clones made by the build,
+whose atoms are all new.) Two or more terms of one word rule ("ketone oxime")
+share one key and one part, because their atoms cannot be told apart. A term
+that adds no atoms ("ester") is a part with no atoms. Names with no
+``functionalTerm`` are untouched.
+
 Celery's SoftTimeLimitExceeded subclasses Exception; it is re-raised, never
 turned into a failure.
 """
@@ -75,6 +90,8 @@ TOKEN_TAG = "stitchSpan"
 PART_TAG = "stitchPart"
 _NO_SPAN = "none"
 _PART_KINDS = ("substituent", "root")
+FUNCTIONAL_ELEMENT = "functionalTerm"     # OPSIN's element for "ketone", "ether", "anhydride", ...
+FUNCTIONAL_KIND = "functional"            # TracePart.kind of a functional word
 STEREO_KIND = "stereoChemistry"
 
 Span = tuple[int, int]
@@ -102,7 +119,7 @@ class WrittenToken:
 @dataclass(frozen=True)
 class TracePart:
     index: int
-    kind: str                     # "substituent" | "root"
+    kind: str                     # "substituent" | "root" | "functional" (see the module docstring)
     span: Optional[Span]          # identity key (parse-time range); copies share it
     locant: Optional[str]         # OPSIN's resolved LOCANT_ATR on this copy
     atoms: tuple[int, ...]        # heavy-atom indices
@@ -328,7 +345,7 @@ def _owner_key(h, el) -> Optional[Span]:
     """Key of the nearest enclosing part that carries a part tag."""
     parent = h.get_parent.invoke(el)
     while parent is not None:
-        if _name(h, parent) in _PART_KINDS:
+        if _name(h, parent) in _PART_KINDS or _name(h, parent) == FUNCTIONAL_ELEMENT:
             key = _read_span(h, parent, PART_TAG)
             if key is not None:
                 return key
@@ -414,10 +431,72 @@ def _record_owners(h, parse_el, written: list[WrittenToken]) -> list[WrittenToke
 
 
 # --------------------------------------------------------------------------
+# Functional-class words (see the module docstring)
+# --------------------------------------------------------------------------
+
+def _functional_groups(h, parse_el) -> list[tuple[list, list]]:
+    """For every word rule that holds functionalTerm elements: (those terms, every
+    substituent / root element of the word rule), in document order."""
+    out: list[tuple[list, list]] = []
+
+    def gather(el, terms: list, scope: list) -> None:
+        if _is_token(h, el):
+            return
+        name = _name(h, el)
+        if name == FUNCTIONAL_ELEMENT:
+            terms.append(el)
+        elif name in _PART_KINDS:
+            scope.append(el)
+        for child in _children(h, el):
+            gather(child, terms, scope)
+
+    def walk(el) -> None:
+        if _is_token(h, el):
+            return
+        if _name(h, el) == "wordRule":
+            terms: list = []
+            scope: list = []
+            gather(el, terms, scope)
+            if terms:
+                out.append((terms, scope))
+            return
+        for child in _children(h, el):
+            walk(child)
+
+    walk(parse_el)
+    return out
+
+
+def _share_one_key(h, groups) -> None:
+    """Two functional terms of one word rule ("ketone oxime") cannot have their atoms
+    told apart, so they get one identity key, the range of both."""
+    for terms, _ in groups:
+        spans = [s for s in (_read_span(h, t, PART_TAG) for t in terms) if s is not None]
+        if len(terms) > 1 and len(spans) == len(terms):
+            combined = (min(a for a, _ in spans), max(b for _, b in spans))
+            for t in terms:
+                _write_span(h, t, PART_TAG, combined)
+
+
+def _token_atom_ids(h, parse_el) -> set[int]:
+    """Every atom id held by a token fragment right now."""
+    ids: set[int] = set()
+    for tok in _tokens(h, parse_el):
+        frag = h.get_frag.invoke(tok)
+        if frag is None:
+            continue
+        atoms = h.get_atom_list.invoke(frag)
+        ids.update(int(h.get_id.invoke(atoms.get(i))) for i in range(atoms.size()))
+    return ids
+
+
+# --------------------------------------------------------------------------
 # 3. After the build
 # --------------------------------------------------------------------------
 
-def _collect_parts(h, parse_el, heavy: dict[int, int]) -> list[TracePart]:
+def _collect_parts(h, parse_el, heavy: dict[int, int], groups=(), before: frozenset = frozenset()) -> list[TracePart]:
+    """`groups` and `before` carry the functional-class bookkeeping: the atom ids the
+    token fragments held before the build, and the word rules with functional terms."""
     parts: list[TracePart] = []
 
     def atom_ids(el) -> list[int]:
@@ -434,6 +513,20 @@ def _collect_parts(h, parse_el, heavy: dict[int, int]) -> list[TracePart]:
                 continue
             ids.extend(atom_ids(child))
         return ids
+
+    # The functional terms' atoms: those the build added to the first copy of a part.
+    functional_atoms: list[set[int]] = []
+    for _, scope in groups:
+        seen: set[Span] = set()
+        added: set[int] = set()
+        for el in scope:
+            key = _read_span(h, el, PART_TAG)
+            if key is None or key in seen:
+                continue
+            seen.add(key)
+            added.update(i for i in atom_ids(el) if i not in before)
+        functional_atoms.append(added)
+    taken = set().union(*functional_atoms) if functional_atoms else set()
 
     def walk(el, inherited: Optional[Span]) -> None:
         """`inherited` is the key of the nearest enclosing substituent/root
@@ -455,13 +548,21 @@ def _collect_parts(h, parse_el, heavy: dict[int, int]) -> list[TracePart]:
                 kind=name,
                 span=key,
                 locant=None if locant is None else str(locant),
-                atoms=tuple(sorted({heavy[i] for i in atom_ids(el) if i in heavy})),
+                atoms=tuple(sorted({heavy[i] for i in atom_ids(el) if i in heavy and i not in taken})),
             ))
             inherited = key
         for child in _children(h, el):
             walk(child, inherited)
 
     walk(parse_el, None)
+    for (terms, _), added in zip(groups, functional_atoms):
+        key = _read_span(h, terms[0], PART_TAG)
+        if key is None:
+            continue
+        parts.append(TracePart(
+            index=len(parts), kind=FUNCTIONAL_KIND, span=key, locant=None,
+            atoms=tuple(sorted(heavy[i] for i in added if i in heavy)),
+        ))
     return parts
 
 
@@ -483,11 +584,14 @@ def _trace_one(h, parse_el, text: str) -> tuple[Trace, bool]:
     warning while building it)."""
     written = _stamp_tokens(h, parse_el, text)
     _stamp_parts(h, parse_el)
+    groups = _functional_groups(h, parse_el)
+    _share_one_key(h, groups)
     state = h.state_ctor.newInstance(h.config)
     h.cg_process.invoke(h.cg_ctor.newInstance(state), parse_el)
     suffix_applier = h.sa_ctor.newInstance(state, h.suffix_rules)
     h.cp_process.invoke(h.cp_ctor.newInstance(state, suffix_applier), parse_el)
     written = _record_owners(h, parse_el, written)
+    before = frozenset(_token_atom_ids(h, parse_el)) if groups else frozenset()
     fragment = h.build_fragment.invoke(h.sb_ctor.newInstance(state), parse_el)
     warned = not bool(h.get_warnings.invoke(state).isEmpty())
     h.convert_spare_valencies.invoke(h.frag_manager_field.get(state))
@@ -508,7 +612,7 @@ def _trace_one(h, parse_el, text: str) -> tuple[Trace, bool]:
             element=str(h.get_atom_element.invoke(atom)),
             locants=tuple(str(locants.get(j)) for j in range(locants.size())),
         ))
-    parts = _collect_parts(h, parse_el, heavy)
+    parts = _collect_parts(h, parse_el, heavy, groups, before)
     if not parts:
         raise ValueError("no name parts recovered")
     return Trace(text, smiles, tuple(atoms), tuple(written), tuple(parts)), warned

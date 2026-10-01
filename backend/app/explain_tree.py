@@ -11,6 +11,12 @@ ARE the part and get no child. A bracket's own locants and counting words
 bracket -- or, for a multiplicative bracket ("4,4'-(...)di|phenol"), the
 positions on the multiplied parents.
 
+A functional-class word ("ketone", "ether", "anhydride", "oxime", "chloride") is a
+part of its own, kind ``functional`` in the trace and a ``suffix`` node here, over the
+atoms the word adds (app/opsin_trace.py takes them out of the alkyl written before
+it); a word that adds none ("ester") owns none. Suffix and parent lines state what the
+atoms are only when the atoms bear it out (app/glossary.py).
+
 What a node lights is never a guess:
 
 * a position locant lights the copy OPSIN put at that locant. When no copy
@@ -21,6 +27,11 @@ What a node lights is never a guess:
   substituent's own attachment atom ("2-pyridyl"), its own ring heteroatom
   ("1,3-benzodioxol"), the atom of the parent the whole substituent chain is
   bonded to ("2-acetyloxy|benzoic acid"), or else an atom of its own part;
+* a number written beside an element symbol in front of a substituent ("4-O-",
+  "2,3,4-tri-O-acetyl") names the PARENT: the symbol lights the parent's atom of that
+  element that the substituent chain is bonded to, the number the parent carbon that
+  atom is bonded to -- never an atom of the substituent itself. When the bonds do not
+  prove exactly one atom, nothing is lit;
 * a counting word lights what the locants it counts light ("3,7-di|hydro"
   -> N3, N7; "2,6-di|one" -> both C=O);
 * a stereo mark with a locant ("2S", "9Z", "17beta") lights the ONE atom
@@ -46,12 +57,15 @@ from typing import Optional
 
 from rdkit import Chem
 
-from .glossary import GENERIC_TOKEN_LINE, describe_locant, describe_part, describe_token
+from .glossary import (
+    GENERIC_TOKEN_LINE, describe_cage_multiplier, describe_functional, describe_locant, describe_part,
+    describe_token, suffix_claim_holds,
+)
 from .label_rules import (
     CONTEXTUAL, GLUE, LOCANT_KINDS, covered_positions, fusion_component_elements, indicated_h_items,
     label_span, locant_items, resolve_roles, root_spans, stereo_items,
 )
-from .opsin_trace import STEREO_KIND, Span, Trace, TracePart, WrittenToken
+from .opsin_trace import FUNCTIONAL_KIND, STEREO_KIND, Span, Trace, TracePart, WrittenToken
 from .root_split import split_root
 from .token_owner import Owner, adopt_orphan_tokens, assign_owners, innermost_bracket, written_brackets
 
@@ -365,11 +379,23 @@ class _Builder:
             carrying = set(suffix_locants.values())
             lights = suffix_atoms + [i for i in parent_atoms if carrying & set(self.by_index[i].locants)]
             suffix = self.add("suffix", s_label, spans.suffix, owns=suffix_atoms, lights=lights,
-                              line=describe_part("suffix", s_label, None, len(set(suffix_atoms))))
+                              line=describe_part("suffix", s_label, None, len(set(suffix_atoms)),
+                                                 holds=suffix_claim_holds(s_label, self.mol, suffix_atoms)))
             self.suffix_node[w.key] = (suffix, suffix_atoms, suffix_locants)
             tail = [(t, r) for t, r in zip(w.tokens, roles) if t.index in run]
             self.children(suffix, w, [t for t, _ in tail], [r for _, r in tail], parent_atoms, lights,
                           mode="suffix", suffix_atoms=suffix_atoms, suffix_locants=suffix_locants)
+
+    def functional(self, w: _WrittenPart) -> None:
+        """A functional-class word ("ketone", "ether", "anhydride", "oxime"): its own
+        node, over its own atoms (the trace took them out of the alkyls written
+        before it). A word that adds no atoms ("ester") owns none."""
+        atoms = self.atoms_of(w)
+        span = (min(t.span[0] for t in w.tokens), max(t.span[1] for t in w.tokens))
+        label = self.text(span)
+        node = self.add("suffix", label, span, owns=atoms, lights=atoms,
+                        line=describe_functional(label, len(set(atoms))))
+        self.part_node[w.key] = (node, atoms)
 
     # -- children ---------------------------------------------------------
     def children(self, owner, w, tokens, roles, atoms, token_lights, *, mode,
@@ -389,7 +415,7 @@ class _Builder:
                 items = locant_items(self.t.text, tok.span)
                 written = {loc: sum(1 for x, _ in items if x == loc) for loc, _ in items}
                 counted = set()
-                for loc, sub in items:
+                for item_at, (loc, sub) in enumerate(items):
                     added = _ADDED_H.match(loc)
                     if added:
                         # "2(1H)": hydrogen added at position 1 of the parent.
@@ -410,6 +436,19 @@ class _Builder:
                         counted.update(lit)
                         self.add("locant", loc, sub, parent=owner, lights=lit,
                                  line=describe_locant("position", loc))
+                        continue
+                    pair = (self.oxy_pair(tokens, roles, i, items, item_at, w)
+                            if mode == "substituent" and i < first_core else None)
+                    if pair is not None:
+                        # "4-O-": the O names the PARENT's oxygen of that element, the number
+                        # the parent carbon it is bonded to -- never the substituent's own atoms.
+                        role, element, lit = pair
+                        if lit:
+                            line = (describe_locant("oxy_element", loc) if role == "element"
+                                    else describe_locant("oxy_number", loc, element))
+                        else:
+                            line = describe_locant("substituent", loc)
+                        self.add("locant", loc, sub, parent=owner, lights=lit, line=line)
                         continue
                     at = self.spiro_lookup(tokens, i, atoms, loc)
                     if at is None:
@@ -434,10 +473,21 @@ class _Builder:
                     element = self.by_index[hit[0]].element if len(hit) == 1 else None
                     self.add("indicated_h", self.text(sub), sub, parent=owner, lights=hit,
                              line=describe_locant("modifier", at or loc, element))
+            elif tok.kind == "isotopeSpecification":
+                # "(2H3)", "(125I)": it lights the atoms of the isotope's element in
+                # the part, and nothing when it names no element it can read.
+                span = self.trim(tok.span)
+                symbols = set(re.findall(r"\d+([A-Z][a-z]?)", self.text(span)))
+                self.add("token", self.text(span), span, parent=owner,
+                         lights=[a for a in token_lights if self.by_index[a].element in symbols],
+                         line=describe_token(tok.kind, self.text(span)))
             elif tok.kind in _LINE_KINDS:
                 span = self.trim(tok.span)
+                line = describe_token(tok.kind, self.text(span))
+                if tok.kind == "multiplier" and self.counts_cage_rings(tokens, roles, i):
+                    line = describe_cage_multiplier(self.text(span))
                 self.add(_NODE_KIND.get(tok.kind, "token"), self.text(span), span, parent=owner,
-                         lights=counted or token_lights, line=describe_token(tok.kind, self.text(span)))
+                         lights=counted or token_lights, line=line)
             elif roles[i] == "prefix":
                 span = self.trim(tok.span)
                 line = describe_token(tok.kind, self.text(span)) or GENERIC_TOKEN_LINE.format(text=self.text(span))
@@ -445,6 +495,14 @@ class _Builder:
                          lights=token_lights, line=line)
             elif roles[i] == "core":
                 counted = set()
+
+    @staticmethod
+    def counts_cage_rings(tokens, roles, i: int) -> bool:
+        """"bi" / "tri" in "bicyclo[2.2.2]octane" count the rings of the cage: OPSIN's
+        von Baeyer token ("cyclo[2.2.2]") follows. ("di" in "dicyclohexyl" counts copies:
+        a plain cyclo token follows.)"""
+        rest = next((t for j, t in enumerate(tokens[i + 1:], i + 1) if roles[j] != "glue" and t.kind != "hyphen"), None)
+        return rest is not None and rest.kind == "vonBaeyer"
 
     # -- structure helpers (bonds of the traced molecule) --------------------
     def nbrs(self, atom: int) -> list[int]:
@@ -520,6 +578,67 @@ class _Builder:
             if ring_o and exo_o:
                 found.append(a)
         return found if len(found) == 1 else []
+
+    def oxy_pair(self, tokens, roles, i: int, items, k: int, w: _WrittenPart):
+        """(role, element, atoms) when item k of locant token i is half of a "4-O-" pair,
+        else None. "4-O-beta-D-galactopyranosyl-D-glucopyranose", "6-O-acetyl",
+        "2,3,4-tri-O-acetyl": a number and an element symbol written one after the
+        other in front of a substituent say the substituent is joined through the
+        PARENT's atom of that element, on the parent carbon with that number. So the
+        number lights that parent carbon and the symbol that parent atom -- both found
+        by the bonds of the substituent chain, outside the substituent's own atoms --
+        and when the bonds do not prove exactly one, nothing is lit.
+        role is "number" or "element"."""
+        text = self.t.text
+        number = lambda x: bool(_BARE_LOCANT.match(x))
+        element = lambda x: bool(_ELEMENT_LOCANT.match(x))
+        loc, (a, b) = items[k][0], items[k][1]
+        found = None
+        if element(loc) and k > 0 and number(items[k - 1][0]) and text[items[k - 1][1][1]:a] == "-":
+            found = ("element", loc, [items[k - 1][0]])
+        elif number(loc) and k + 1 < len(items) and element(items[k + 1][0]) \
+                and text[b:items[k + 1][1][0]] == "-":
+            found = ("number", items[k + 1][0], [loc])
+        else:
+            def run_past(j: int, step: int):
+                j += step
+                while 0 <= j < len(tokens) and (roles[j] == "glue" or tokens[j].kind in ("hyphen", "multiplier")):
+                    j += step
+                return j if 0 <= j < len(tokens) else None
+            if element(loc) and len(items) == 1:
+                j = run_past(i, -1)
+                if j is not None and tokens[j].kind in LOCANT_KINDS:
+                    numbers = [x for x, _ in locant_items(text, tokens[j].span)]
+                    if numbers and all(number(x) for x in numbers):
+                        found = ("element", loc, numbers)
+            elif number(loc):
+                j = run_past(i, 1)
+                if j is not None and tokens[j].kind in LOCANT_KINDS:
+                    nxt = locant_items(text, tokens[j].span)
+                    if len(nxt) == 1 and element(nxt[0][0]) and all(number(x) for x, _ in items):
+                        found = ("number", nxt[0][0], [loc])
+        if found is None:
+            return None
+        role, symbol, numbers = found
+        own = set(self.atoms_of(w))
+        comp = self.component(own)
+        joined = [y for y in self.edge(comp) if self.by_index[y].element == symbol.rstrip("'")]
+        carbon: dict[str, set[int]] = {}
+        joint: dict[str, set[int]] = {}
+        for y in joined:
+            for x in self.nbrs(y):
+                if x in comp:
+                    continue
+                for n in numbers:
+                    if n in self.by_index[x].locants:
+                        carbon.setdefault(n, set()).add(x)
+                        joint.setdefault(n, set()).add(y)
+        unique = [n for n in numbers if len(carbon.get(n, ())) == 1]
+        if role == "number":
+            lit = sorted(carbon[loc]) if loc in unique else []
+        else:
+            lit = sorted(y for n in unique for y in joint[n])
+        return role, symbol, lit
 
     def leading_substituent_locant(self, loc, token_locs, w) -> list[int]:
         """A substituent's leading locant that no copy of it carries. Decided
@@ -687,14 +806,15 @@ class _Builder:
                 continue
             scope = innermost_bracket(brackets, tok.span[0])
             if scope is not None:
-                scope_parts = [w for w in self.parts if w.tokens and
+                scope_parts = [w for w in self.parts if w.tokens and w.kind != FUNCTIONAL_KIND and
                                scope[0] < w.tokens[0].span[0] < scope[1]]
                 direct = [t for t in tokens if t.owner is not None and
                           innermost_bracket(brackets, t.span[0]) == scope]
                 head = by_key.get(direct[-1].owner) if direct else None
             else:
                 word = self.word(tok.span[0])
-                scope_parts = [w for w in self.parts if w.tokens and self.word(w.tokens[0].span[0]) == word]
+                scope_parts = [w for w in self.parts if w.tokens and w.kind != FUNCTIONAL_KIND
+                               and self.word(w.tokens[0].span[0]) == word]
                 roots = [w for w in scope_parts if w.kind == "root"]
                 head = roots[0] if roots else (scope_parts[-1] if scope_parts else None)
             leading = not any(p.kind not in GLUE and p.kind != STEREO_KIND
@@ -827,6 +947,8 @@ def build_nodes(trace: Trace) -> list[dict]:
             b.unplaced_part(w)
         elif w.kind == "substituent":
             b.substituent(w)
+        elif w.kind == FUNCTIONAL_KIND:
+            b.functional(w)
         else:
             b.root(w)
     for tok, bracket in loose:
@@ -886,6 +1008,79 @@ def _holds_anomeric_bonds(mol, atom: int, pool: set[int]) -> bool:
     return ring_o and exo
 
 
+_PAIR_IN_ONE_TOKEN = re.compile(r"(\d+[a-z]?'*)-([A-Z][a-z]?'*)(?=-|$)")
+
+
+def oxy_pair_allowed(trace: Trace, node: dict, parent: dict) -> Optional[set[int]]:
+    """For a locant node that is half of an "n-O-" pair ("4-O-beta-D-galactopyranosyl",
+    "6-O-acetyl", "2,3,4-tri-O-acetyl") in front of the substituent `parent`: the
+    atoms it may light, else None (not such a node). A pair names the PARENT's atom of
+    that element, bonded to the substituent chain, and the parent carbon carrying the
+    number that atom is bonded to; neither may be an atom of the substituent itself.
+    Read from the written tokens and the bonds, not from the builder."""
+    if parent["kind"] != "substituent" or not node["span"] or not parent["span"] \
+            or node["span"][1] > parent["span"][0]:
+        return None
+    text, tokens = trace.text, trace.tokens
+    tok = next((t for t in tokens if t.kind in LOCANT_KINDS and t.span[0] <= node["span"][0] < t.span[1]), None)
+    if tok is None:
+        return None
+    label = node["label"]
+    number = re.compile(r"^\d+[a-z]?'*$")
+    element = re.compile(r"^[A-Z][a-z]?'*$")
+    raw = text[tok.span[0]:tok.span[1]]
+
+    def around(index: int, step: int):
+        j = index + step
+        while 0 <= j < len(tokens) and tokens[j].kind in ("hyphen", "multiplier"):
+            j += step
+        return tokens[j] if 0 <= j < len(tokens) else None
+
+    role, symbol, numbers = None, None, []
+    m = next((m for m in _PAIR_IN_ONE_TOKEN.finditer(raw)
+              if tok.span[0] + m.start(1) == node["span"][0] or tok.span[0] + m.start(2) == node["span"][0]), None)
+    if m is not None:
+        symbol, numbers = m.group(2), [m.group(1)]
+        role = "number" if tok.span[0] + m.start(1) == node["span"][0] else "element"
+    elif element.match(label) and re.fullmatch(r"[A-Z][a-z]?'*-?", raw):
+        before = around(tok.index, -1)
+        if before is not None and before.kind in LOCANT_KINDS:
+            listed = [x for x, _ in locant_items(text, before.span)]
+            if listed and all(number.match(x) for x in listed):
+                role, symbol, numbers = "element", label, listed
+    elif number.match(label):
+        after = around(tok.index, 1)
+        if after is not None and after.kind in LOCANT_KINDS:
+            listed = [x for x, _ in locant_items(text, after.span)]
+            if len(listed) == 1 and element.match(listed[0]):
+                role, symbol, numbers = "number", listed[0], [label]
+    if role is None:
+        return None
+    mol = Chem.MolFromSmiles(trace.smiles)
+    if mol is None:
+        return set()
+    part_of = {a: p for p in trace.parts for a in p.atoms}
+    chain = set(parent["owns"])
+    stack = list(chain)
+    while stack:
+        for x in mol.GetAtomWithIdx(stack.pop()).GetNeighbors():
+            q = part_of.get(x.GetIdx())
+            if x.GetIdx() not in chain and q is not None and q.kind == "substituent":
+                chain.add(x.GetIdx())
+                stack.append(x.GetIdx())
+    joined = {y.GetIdx() for a in chain for y in mol.GetAtomWithIdx(a).GetNeighbors()
+              if y.GetIdx() not in chain and y.GetSymbol() == symbol.rstrip("'")}
+    allowed: set[int] = set()
+    for y in joined:
+        for x in mol.GetAtomWithIdx(y).GetNeighbors():
+            if x.GetIdx() in chain:
+                continue
+            wanted = numbers if role == "element" else [label]
+            if any(n in trace.atoms[x.GetIdx()].locants for n in wanted):
+                allowed.add(x.GetIdx() if role == "number" else y)
+    return allowed
+
+
 def foreign_lights(trace: Trace, nodes: list[dict]) -> list[tuple[str, list[int]]]:
     """The lit-atom gate: (label, atoms) for every locant node that lights an
     atom it has no claim on. Derived from the trace and the node list alone
@@ -913,6 +1108,12 @@ def foreign_lights(trace: Trace, nodes: list[dict]) -> list[tuple[str, list[int]
         if n["kind"] != "locant" or not n["lights"]:
             continue
         label, lit = n["label"], set(n["lights"])
+        if n["parent"] is not None:
+            pair = oxy_pair_allowed(trace, n, by_id[n["parent"]])
+            if pair is not None:
+                if not lit <= pair:
+                    bad.append((label, sorted(lit)))
+                continue
         if n["parent"] is None:
             after = n["span"][0] if n["span"] else 0
             ok = all(label in by_atom[a].locants or (

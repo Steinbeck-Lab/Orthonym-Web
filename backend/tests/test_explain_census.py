@@ -117,3 +117,42 @@ def test_a_chained_substituent_lighting_its_own_attachment_atom_is_reported():
 def test_a_chained_substituent_lighting_the_parent_position_is_clean():
     t, nodes = _chain_case([0])
     assert "LIT_ATOM_FOREIGN" not in classify(t, nodes, {})
+
+
+# -- final review classes (synthetic, no JVM) ---------------------------------------------
+
+def _words(text, smiles, atoms, tokens, parts=()):
+    return Trace(text=text, smiles=smiles, atoms=tuple(atoms), tokens=tuple(tokens), parts=tuple(parts))
+
+
+def test_a_functional_word_no_part_starts_at_is_swallowed():
+    t = _words("ethyl ketone", "CC(=O)C",
+               [TraceAtom(0, 1, "C", ("1",)), TraceAtom(1, 2, "C", ()), TraceAtom(2, 3, "O", ()), TraceAtom(3, 4, "C", ("1",))],
+               [WrittenToken(0, "group", "eth", (0, 3), None), WrittenToken(1, "functionalGroup", "ketone", (6, 12), None)])
+    swallowed = [_n("substituent", [0, 12], [0, 1, 2, 3], label="ethyl ketone")]
+    assert "FUNCTION_SWALLOWED" in classify(t, swallowed, {})
+    own = [_n("substituent", [0, 5], [0, 3], label="ethyl"), _n("suffix", [6, 12], [1, 2], label="ketone")]
+    assert "FUNCTION_SWALLOWED" not in classify(t, own, {})
+
+
+def test_a_plain_alkyl_owning_a_heteroatom_is_reported_and_an_isotopic_hydrogen_is_not():
+    t = _words("methyl", "CO", [TraceAtom(0, 1, "C", ("1",)), TraceAtom(1, 2, "O", ())], [])
+    assert "ALKYL_HETERO" in classify(t, [_n("substituent", [0, 6], [0, 1], label="methyl")], {})
+    d = _words("methyl", "C[2H]", [TraceAtom(0, 1, "C", ("1",)), TraceAtom(1, 2, "H", ())], [])
+    assert "ALKYL_HETERO" not in classify(d, [_n("substituent", [0, 6], [0, 1], label="methyl")], {})
+
+
+def test_a_suffix_that_owns_a_hydrogen_is_reported():
+    t = _words("ol", "OC", [TraceAtom(0, 1, "O", ("O",)), TraceAtom(1, 2, "H", ())], [])
+    assert "SUFFIX_OWNS_H" in classify(t, [_n("suffix", [0, 2], [0, 1], label="ol")], {})
+    assert "SUFFIX_OWNS_H" not in classify(t, [_n("suffix", [0, 2], [0], label="ol"), _n("parent", [0, 2], [1])], {})
+
+
+def test_an_oxidation_number_must_light_the_part_written_before_it():
+    t = _words("copper(II) sulfate", "[Cu+2].S", [TraceAtom(0, 1, "Cu", ()), TraceAtom(1, 2, "S", ())],
+               [WrittenToken(0, "oxidationNumberSpecifier", "(ii)", (6, 10), None)])
+    base = [_n("parent", [0, 6], [0], label="copper"), _n("parent", [11, 18], [1], label="sulfate")]
+    ok = base + [_n("token", [6, 10], [], label="(II)", lights=[0])]
+    wrong = base + [_n("token", [6, 10], [], label="(II)", lights=[1])]
+    assert "OXIDATION_WRONG" not in classify(t, ok, {})
+    assert "OXIDATION_WRONG" in classify(t, wrong, {})

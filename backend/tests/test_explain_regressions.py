@@ -919,3 +919,303 @@ def test_the_gate_does_not_depend_on_the_wording_of_a_line(name):
     for n in nodes:
         n["line"] = "reworded"
     assert classify(t, nodes, assign_owners(t.tokens)) == before == ["CLEAN"]
+
+
+# ======================================================================================
+# Final whole-branch review (Fable 5.1): I1, I2, I3, I5, M1, M4, M5, M8
+# ======================================================================================
+
+def _owner(nodes, atom):
+    return next(n for n in nodes if n["kind"] in PART_NODE_KINDS and atom in n["owns"])
+
+
+def _clean(t, nodes):
+    return classify(t, nodes, assign_owners(t.tokens))
+
+
+# I1. "n-O-": the O names the PARENT's oxygen, the number the parent carbon it hangs on
+@pytest.mark.parametrize("name,sub,parent,number", [
+    ("4-O-beta-D-galactopyranosyl-D-glucopyranose", "galactopyranosyl", "glucopyranose", "4"),
+    ("4-O-alpha-D-glucopyranosyl-D-glucopyranose", "glucopyranosyl", "glucopyranose", "4"),
+    ("6-O-acetyl-D-glucopyranose", "acetyl", "glucopyranose", "6"),
+    ("3-O-methyl-D-glucose", "methyl", "glucose", "3"),
+    ("2-O-methyl-D-ribose", "methyl", "ribose", "2"),
+])
+def test_an_n_o_pair_lights_the_parents_oxygen_and_carbon_never_the_substituents_own(name, sub, parent, number):
+    t, nodes = _nodes(name)
+    child = _one(nodes, kind="substituent", label=sub)
+    num = next(n for n in nodes if n["kind"] == "locant" and n["parent"] == child["id"] and n["label"] == number)
+    oxy = next(n for n in nodes if n["kind"] == "locant" and n["parent"] == child["id"] and n["label"] == "O")
+    (carbon,) = num["lights"]
+    (oxygen,) = oxy["lights"]
+    own = set(child["owns"])
+    assert carbon not in own and oxygen not in own
+    assert _owner(nodes, carbon)["label"] == parent and _owner(nodes, oxygen)["label"] == parent
+    assert t.atoms[carbon].element == "C" and number in t.atoms[carbon].locants
+    assert t.atoms[oxygen].element == "O"
+    mol = Chem.MolFromSmiles(t.smiles)
+    assert mol.GetBondBetweenAtoms(carbon, oxygen) is not None
+    assert any(n.GetIdx() in own for n in mol.GetAtomWithIdx(oxygen).GetNeighbors())
+    assert _clean(t, nodes) == ["CLEAN"]
+
+
+def test_a_counted_n_o_pair_lights_each_parent_oxygen():
+    t, nodes = _nodes("2,3,4-tri-O-acetyl-D-glucose")
+    acetyl = _one(nodes, kind="substituent", label="acetyl")
+    numbers = {n["label"]: n for n in nodes if n["kind"] == "locant" and n["parent"] == acetyl["id"]
+               and n["label"] in ("2", "3", "4")}
+    oxy = next(n for n in nodes if n["kind"] == "locant" and n["parent"] == acetyl["id"] and n["label"] == "O")
+    assert sorted(len(n["lights"]) for n in numbers.values()) == [1, 1, 1] and len(oxy["lights"]) == 3
+    for label, n in numbers.items():
+        assert label in t.atoms[n["lights"][0]].locants and n["lights"][0] not in acetyl["owns"]
+    # the counting word counts the acetyl groups, not the glucose carbons
+    assert set(_one(nodes, kind="multiplier", label="tri")["lights"]) == set(acetyl["owns"])
+
+
+@pytest.mark.parametrize("name", [
+    "4-O-beta-D-galactopyranosyl-D-glucopyranose", "6-O-acetyl-D-glucopyranose", "3-O-methyl-D-glucose",
+    "2,3,4-tri-O-acetyl-D-glucose",
+])
+def test_the_gate_refuses_a_pair_that_lights_the_substituents_own_atom(name):
+    """Not vacuous: the review's old reading (the number and the O lighting the
+    substituent's own atoms) is reported by both lit-atom checks."""
+    t, nodes = _nodes(name)
+    child = next(n for n in nodes if n["kind"] == "substituent")
+    kids = [n for n in nodes if n["kind"] == "locant" and n["parent"] == child["id"] and n["lights"]
+            and (n["label"] == "O" or n["label"].isdigit())]
+    assert kids and _clean(t, nodes) == ["CLEAN"]
+    for k in kids:
+        k["lights"] = [child["owns"][0]]
+    out = _clean(t, nodes)
+    assert "LIT_ATOM_FOREIGN" in out and "LOCANT_WRONG_ATOM" in out
+    assert foreign_lights(t, nodes)
+
+
+def test_an_element_symbol_without_a_number_is_not_a_pair():
+    """"N-methylacetamide": a lone element locant is the substituent's own position."""
+    t, nodes = _nodes("N-methylacetamide")
+    methyl = _one(nodes, kind="substituent", label="methyl")
+    n = next(n for n in nodes if n["kind"] == "locant" and n["label"] == "N")
+    assert "oxygen" not in n["line"] and "joined through" not in n["line"]
+    assert n["lights"] and _clean(t, nodes) == ["CLEAN"]
+
+
+# I2. a functional-class word owns its own atoms
+@pytest.mark.parametrize("name,word,elements", [
+    ("methyl ethyl ketone", "ketone", ["C", "O"]),
+    ("ethyl methyl ketone", "ketone", ["C", "O"]),
+    ("methyl isobutyl ketone", "ketone", ["C", "O"]),
+    ("methyl vinyl ketone", "ketone", ["C", "O"]),
+    ("methyl phenyl ketone", "ketone", ["C", "O"]),
+    ("methyl tert-butyl ether", "ether", ["O"]),
+    ("ethyl vinyl ether", "ether", ["O"]),
+    ("ethyl phenyl ether", "ether", ["O"]),
+    ("benzyl methyl ether", "ether", ["O"]),
+    ("methyl phenyl sulfide", "sulfide", ["S"]),
+    ("diethyl ether", "ether", ["O"]),
+    ("dimethyl sulfoxide", "sulfoxide", ["O", "S"]),
+    ("acetyl chloride", "chloride", ["Cl"]),
+    ("benzyl alcohol", "alcohol", ["O"]),
+    ("acetic anhydride", "anhydride", ["O"]),
+    ("ethylene glycol", "glycol", ["O", "O"]),
+])
+def test_a_functional_word_owns_the_atoms_it_adds_and_the_alkyls_only_their_own(name, word, elements):
+    t, nodes = _nodes(name)
+    node = _one(nodes, label=word)
+    assert node["kind"] == "suffix" and node["span"] is not None
+    assert sorted(t.atoms[a].element for a in node["owns"]) == elements
+    assert sorted(node["lights"]) == sorted(node["owns"])
+    for n in nodes:
+        if n["kind"] == "substituent" and n["label"] in ("methyl", "ethyl", "isobutyl", "vinyl", "phenyl",
+                                                         "tert-butyl", "benzyl"):
+            assert all(t.atoms[a].element == "C" for a in n["owns"]), (name, n["label"])
+    assert t.text[node["span"][0]:node["span"][1]] == word
+    assert _clean(t, nodes) == ["CLEAN"]
+
+
+def test_the_ester_word_owns_no_atom_and_lights_nothing_else():
+    """"L-alanine methyl ester hydrochloride": the word 'ester' used to light the chloride."""
+    t, nodes = _nodes("L-alanine methyl ester hydrochloride")
+    ester = _one(nodes, label="ester")
+    assert ester["owns"] == [] and ester["lights"] == [] and ester["span"] is not None
+    chloride = _one(nodes, label="hydrochloride")
+    assert not set(chloride["lights"]) & set(ester["lights"])
+    assert [n for n in nodes if n["kind"] != "stereo" and n["parent"] == chloride["id"]] == []
+    assert _clean(t, nodes) == ["CLEAN"]
+
+
+def test_two_functional_words_written_together_are_one_node_over_their_atoms():
+    t, nodes = _nodes("ethyl methyl ketone oxime")
+    word = _one(nodes, label="ketone oxime")
+    assert sorted(t.atoms[a].element for a in word["owns"]) == ["C", "N", "O"]
+    assert _clean(t, nodes) == ["CLEAN"]
+
+
+def _swallow(t, nodes, word):
+    """The pre-fix tree: the functional word's node removed, its atoms handed to the
+    node written right before it, whose label now runs over the word."""
+    fn = next(n for n in nodes if n["label"] == word)
+    nodes.remove(fn)
+    holder = max((n for n in nodes if n["kind"] in PART_NODE_KINDS and n["span"] and n["span"][1] <= fn["span"][0]),
+                 key=lambda n: n["span"][1])
+    holder["owns"] = sorted(set(holder["owns"]) | set(fn["owns"]))
+    holder["span"] = [holder["span"][0], fn["span"][1]]
+    holder["label"] = t.text[holder["span"][0]:holder["span"][1]]
+    return holder
+
+
+@pytest.mark.parametrize("name,word", [
+    ("methyl ethyl ketone", "ketone"), ("diethyl ether", "ether"), ("acetic anhydride", "anhydride"),
+    ("benzyl alcohol", "alcohol"),
+])
+def test_the_gate_sees_a_swallowed_functional_word(name, word):
+    t, nodes = _nodes(name)
+    _swallow(t, nodes, word)
+    out = _clean(t, nodes)
+    assert "FUNCTION_SWALLOWED" in out, out
+
+
+def test_the_gate_sees_an_alkyl_that_owns_the_functional_groups_atoms():
+    """The review's picture: "methyl" owning (and lighting) the C=O of methyl ethyl ketone."""
+    t, nodes = _nodes("methyl ethyl ketone")
+    ketone = _one(nodes, label="ketone")
+    methyl = _one(nodes, label="methyl")
+    methyl["owns"] = sorted(set(methyl["owns"]) | set(ketone["owns"]))
+    ketone["owns"] = []
+    assert "ALKYL_HETERO" in _clean(t, nodes)
+
+
+# I3. lines that state chemistry are used only when the atoms bear them out
+@pytest.mark.parametrize("name,label", [
+    ("sodium acetate", "ate"), ("sodium benzoate", "oate"), ("calcium acetate", "ate"),
+    ("lithium 2-hydroxypropanoate", "oate"), ("potassium 2-hydroxybenzoate", "oate"),
+    ("2-(trimethylazaniumyl)acetate", "ate"),
+])
+def test_the_ate_line_is_true_of_a_carboxylate_salt(name, label):
+    t, nodes = _nodes(name)
+    line = _one(nodes, kind="suffix", label=label)["line"]
+    assert "carboxylate salt" in line and "ester linkage" in line      # says both, claims neither alone
+    assert _clean(t, nodes) == ["CLEAN"]
+
+
+@pytest.mark.parametrize("name,label", [
+    ("benzoic acid hydrazide", "oic acid"), ("isonicotinic acid hydrazide", "ic acid"),
+    ("benzoic acid methyl ester", "oic acid"), ("acetic acid ethyl ester", "ic acid"),
+])
+def test_an_acid_ending_on_a_hydrazide_or_ester_does_not_claim_a_carboxylic_acid(name, label):
+    t, nodes = _nodes(name)
+    line = _one(nodes, kind="suffix", label=label)["line"]
+    assert "C(=O)OH" not in line and "covers" in line
+    assert _clean(t, nodes) == ["CLEAN"]
+
+
+def test_the_one_ending_of_an_oxime_or_semicarbazone_does_not_claim_a_carbonyl():
+    for name in ("cyclohexanone oxime", "cyclohexanone semicarbazone"):
+        t, nodes = _nodes(name)
+        assert not [n for n in nodes if n["kind"] == "suffix" and "a C=O group (a carbonyl)" in n["line"]], name
+        assert _clean(t, nodes) == ["CLEAN"], name
+
+
+def test_a_real_acid_and_a_real_ketone_keep_their_lines():
+    t, nodes = _nodes("benzoic acid")
+    assert "C(=O)OH" in _one(nodes, kind="suffix")["line"]
+    t, nodes = _nodes("butan-2-one")
+    assert "C=O" in _one(nodes, kind="suffix", label="one")["line"]
+
+
+def test_the_gate_sees_a_false_suffix_claim(monkeypatch):
+    from app import glossary
+    t, nodes = _nodes("benzoic acid methyl ester")
+    suffix = _one(nodes, kind="suffix", label="oic acid")
+    suffix["line"] = glossary.describe_part("suffix", "oic acid", None, len(suffix["owns"]))   # the claim, asserted
+    assert "LINE_CLAIM_FALSE" in _clean(t, nodes)
+    # the review's salt: an ester claim on the -C(=O)O- of a carboxylate
+    t, nodes = _nodes("sodium acetate")
+    monkeypatch.setitem(glossary._SUFFIX_CLAIMS, "ate", "ester")
+    assert "LINE_CLAIM_FALSE" in _clean(t, nodes)
+    monkeypatch.undo()
+    t, nodes = _nodes("ethyl acetate")
+    monkeypatch.setitem(glossary._SUFFIX_CLAIMS, "ate", "ester")
+    assert "LINE_CLAIM_FALSE" not in _clean(t, nodes)       # a real ester bears the claim out
+
+
+# I5. an isotopic hydrogen belongs to the skeleton, not the characteristic group
+def test_a_deuterium_is_the_skeletons_not_the_suffixs():
+    t, nodes = _nodes("(2H3)methanol")
+    ol = _one(nodes, kind="suffix", label="ol")
+    assert [t.atoms[a].element for a in ol["owns"]] == ["O"]
+    parent = _one(nodes, kind="parent", label="methan")
+    assert sorted(t.atoms[a].element for a in parent["owns"]) == ["C", "H", "H", "H"]
+    iso = _one(nodes, kind="token", label="2H3")
+    assert sorted(iso["lights"]) == sorted(a for a in parent["owns"] if t.atoms[a].element == "H")
+    assert "isotope" in iso["line"] and "written" not in iso["line"]
+    assert _clean(t, nodes) == ["CLEAN"]
+
+
+def test_the_gate_sees_a_hydrogen_in_a_suffix():
+    t, nodes = _nodes("(2H3)methanol")
+    ol = _one(nodes, kind="suffix", label="ol")
+    parent = _one(nodes, kind="parent", label="methan")
+    h = next(a for a in parent["owns"] if t.atoms[a].element == "H")
+    parent["owns"].remove(h)
+    ol["owns"].append(h)
+    assert "SUFFIX_OWNS_H" in _clean(t, nodes)
+
+
+# M1. one atom is not "1 atoms"
+@pytest.mark.parametrize("name", ["sodium", "triethylamine", "hydroxylamine hydrochloride", "methane"])
+def test_a_single_atom_parent_says_atom_not_atoms(name):
+    t, nodes = _nodes(name)
+    for n in nodes:
+        assert "1 atoms" not in n["line"], (name, n["line"])
+    assert any("1 atom." in n["line"] for n in nodes if n["kind"] == "parent")
+
+
+# M4. an oxidation number belongs to the metal written before it
+def test_an_oxidation_number_lights_its_metal_not_the_anion():
+    t, nodes = _nodes("copper(II) sulfate pentahydrate")
+    roman = _one(nodes, label="(II)")
+    copper = _one(nodes, kind="parent", label="copper")
+    assert roman["parent"] == copper["id"] and roman["lights"] == copper["owns"]
+    assert "oxidation number" in roman["line"]
+    assert _clean(t, nodes) == ["CLEAN"]
+    sulfate = _one(nodes, kind="parent", label="sulfate")
+    roman["lights"] = list(sulfate["owns"])
+    assert "OXIDATION_WRONG" in _clean(t, nodes)
+
+
+def test_water_of_crystallisation_is_not_called_the_core_skeleton():
+    t, nodes = _nodes("magnesium sulfate heptahydrate")
+    line = _one(nodes, kind="parent", label="hydrate")["line"]
+    assert "water of crystallisation" in line and "core" not in line and "7 copies" in line
+
+
+# M5. the prose of a parent stem is used only when the atom count fits it
+@pytest.mark.parametrize("name,parent", [("acetophenone", "acet"), ("benzophenone", "benz")])
+def test_a_parent_stem_whose_node_holds_more_than_the_stem_gets_the_neutral_line(name, parent):
+    t, nodes = _nodes(name)
+    node = _one(nodes, kind="parent", label=parent)
+    assert "is the core skeleton" in node["line"] and "acetyl" not in node["line"] and "benzene ring" not in node["line"]
+    assert _clean(t, nodes) == ["CLEAN"]
+    # the gate: the prose asserted over atoms it does not fit
+    from app import glossary
+    prose, _ = glossary.parent_claim(parent)
+    node["line"] = f'"{parent}" is {prose}. It holds {len(node["owns"])} atoms.'
+    assert "LINE_CLAIM_FALSE" in _clean(t, nodes)
+
+
+def test_a_parent_stem_that_fits_keeps_its_prose():
+    t, nodes = _nodes("benzoic acid")
+    assert "a benzene ring" in _one(nodes, kind="parent", label="benz")["line"]
+    t, nodes = _nodes("ethanol")
+    assert "two-carbon" in _one(nodes, kind="parent", label="ethan")["line"]
+
+
+# M8. "bi" in "bicyclo[...]" counts rings, not copies
+def test_a_von_baeyer_multiplier_counts_rings_and_dicyclohexyl_counts_copies():
+    t, nodes = _nodes("bicyclo[2.2.2]octane")
+    assert "rings of the cage" in _one(nodes, kind="multiplier", label="bi")["line"]
+    t, nodes = _nodes("tricyclo[3.3.1.1^{3,7}]decane")
+    assert "three" in _one(nodes, kind="multiplier", label="tri")["line"]
+    t, nodes = _nodes("dicyclohexyl ether")
+    assert "how many of the next group" in _one(nodes, kind="multiplier", label="di")["line"]

@@ -57,6 +57,7 @@ def innermost_bracket(brackets: Sequence[Span], pos: int) -> Optional[Span]:
 # Used-up tokens that FOLLOW what they belong to.
 _ENDINGS = frozenset({
     "suffix", "unsaturator", "infix", "ine", "carbohydrateRingSize", "chargeSpecifier",
+    "oxidationNumberSpecifier",     # "copper(II)": the number follows the metal it states
 })
 
 

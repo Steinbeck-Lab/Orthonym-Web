@@ -132,8 +132,9 @@ def test_phenylalaninamide_keeps_alpha_and_beta_in_the_parent():
     ("butanediamide", ["N", "N", "O", "O"]),
     ("naphthalene-2-sulfonate", ["O", "O", "O", "S"]),
     ("estra-1,3,5(10)-triene-3,17beta-diol", ["O", "O"]),
-    # two root copies; the bridging oxygen has no locant but sits on a group carbon
-    ("acetic anhydride", ["O", "O", "O"]),
+    # two root copies, one oxygen each; the bridging oxygen is the word "anhydride"'s own atom
+    # (final review I2: the trace hands the functional word its atoms), not a root's
+    ("acetic anhydride", ["O", "O"]),
 ])
 def test_acids_nitriles_and_amides_keep_their_group_carbon(name, suffix):
     t = trace(name)

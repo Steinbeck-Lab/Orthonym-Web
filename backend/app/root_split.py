@@ -97,14 +97,16 @@ def split_root(trace: Trace, atoms: Sequence[int]) -> RootSplit:
         return [n.GetIdx() for n in mol.GetAtomWithIdx(i).GetNeighbors() if n.GetIdx() in pool]
 
     def hetero_of(i):
-        return [n for n in neighbours(i) if by_index[n].element != "C"]
+        return [n for n in neighbours(i) if by_index[n].element not in ("C", "H")]
 
     # Candidate group heteroatoms: an element-symbol locant and no numeric one
     # ("O", "O'", "N"), or no locant at all. Whether one IS the group's is
     # decided by where it sits, never by its locant alone: OPSIN gives a
     # serine side-chain O, a cysteine S or an amino-acid alpha N the same kind
     # of locant as an amide's.
-    candidates = {i for i in indices if by_index[i].element != "C"
+    # Hydrogen is never a characteristic-group atom: an isotopic hydrogen ("(2H3)methanol")
+    # belongs to the skeleton it is bonded to.
+    candidates = {i for i in indices if by_index[i].element not in ("C", "H")
                   and not _has_numeric_locant(by_index[i].locants)
                   and (_has_element_locant(by_index[i].locants) or not by_index[i].locants)}
     numbered = _group_locants(trace, indices)

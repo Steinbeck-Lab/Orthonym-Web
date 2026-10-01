@@ -33,12 +33,29 @@ Outcomes, measured on the trace and the node list (a name may carry several):
                       fusion component's own numbering that no element / ring
                       evidence pins to one atom, light nothing by design and are
                       not counted)
-  LOCANT_WRONG_ATOM   (a fusion component's number must light an atom of the element it
+  LOCANT_WRONG_ATOM   (a "4-O-" pair in front of a substituent must light the PARENT's O
+                      and the parent carbon it is bonded to, never an atom of the
+                      substituent itself; see app.explain_tree.oxy_pair_allowed)
+                      (a fusion component's number must light an atom of the element it
                       puts in the ring, and, among several, one sharing a ring with its
                       siblings' atoms) a locant node inside its own part (not a substituent's leading
                       position, not hydro / anomer, which have their own checks) lights
                       an atom that does not carry that locant, primed per spiro
                       component (suffix-owned atoms excepted); see wrong_locant_atoms
+  FUNCTION_SWALLOWED  a functional-class word ("ketone", "ether", "anhydride", "ester",
+                      "oxime", "chloride") that no part node starts at: the word is
+                      swallowed into the tail of the alkyl written before it ("ethyl
+                      ketone"), or into a root, or has no node at all
+  ALKYL_HETERO        a plain alkyl / aryl substituent ("methyl", "isobutyl", "phenyl")
+                      owning a heteroatom: the atoms of a functional word, or of a suffix,
+                      handed to the group written before it
+  LINE_CLAIM_FALSE    a suffix line that says what its atoms are ("-C(=O)OH", "C=O",
+                      "-C(=O)O-") when they are not, or a parent line whose prose does
+                      not fit the number of atoms the parent holds
+  SUFFIX_OWNS_H       a suffix node owning a hydrogen atom (an isotopic hydrogen of the
+                      skeleton, handed to the characteristic group)
+  OXIDATION_WRONG     an oxidation-number token ("(II)") that lights atoms other than the
+                      part written right before it ("copper(II)" is the copper's)
   LIT_ATOM_FOREIGN    a locant node lights an atom it has no claim on: not in its
                       own part, not a copy OPSIN placed at that locant, and not
                       the atom carrying that locant that the part's substituent
@@ -243,6 +260,7 @@ def wrong_locant_atoms(trace, nodes) -> list:
     number must be one of the numbers its atoms are bonded to. A fusion component's
     own number lights exactly the atom the element and rings prove, else nothing.
     The atoms a suffix owns carry no number."""
+    from app.explain_tree import oxy_pair_allowed
     by_id = {n["id"]: n for n in nodes}
     carbohydrate = any(t.kind == "carbohydrateRingSize" for t in trace.tokens)
     bad = []
@@ -250,6 +268,11 @@ def wrong_locant_atoms(trace, nodes) -> list:
         if n["kind"] != "locant" or n["parent"] is None:
             continue
         parent = by_id[n["parent"]]
+        pair = oxy_pair_allowed(trace, n, parent)
+        if pair is not None:
+            if not set(n["lights"]) <= pair:
+                bad.append((n["label"], sorted(n["lights"])))
+            continue
         tok = _locant_token(trace, n)
         comp = _component_for(trace, n)
         if comp is not None:
@@ -283,6 +306,106 @@ def wrong_locant_atoms(trace, nodes) -> list:
         if not carries:
             bad.append((n["label"], sorted(n["lights"])))
     return bad
+
+
+FUNCTIONAL_KINDS = ("functionalGroup", "functionalClass")
+_HYDROCARBON_RADICAL = re.compile(
+    r"^(?:\d+(?:,\d+)*-)?(?:n-|iso|tert-|sec-|neo)?"
+    r"(?:(?:meth|eth|prop|but|pent|hex|hept|oct|non|dec|undec|dodec)yl|phenyl|benzyl|vinyl|allyl|"
+    r"cyclo(?:prop|but|pent|hex|hept|oct)yl|naphthyl)$")
+
+
+def swallowed_functional_words(trace, nodes) -> list:
+    """The functional-class words no part node starts at. A word's node may start at
+    the locants / counting word written right before it ("1,1-dioxide"), or at the
+    first of several words written together ("ketone oxime")."""
+    parts = [n for n in nodes if n["kind"] in PART_KINDS and n["span"]]
+    out = []
+    for tok in trace.tokens:
+        if tok.kind not in FUNCTIONAL_KINDS:
+            continue
+        starts, j = {tok.span[0]}, tok.index - 1
+        while j >= 0 and trace.tokens[j].kind in ("locant", "multiplier", "hyphen") + FUNCTIONAL_KINDS:
+            starts.add(trace.tokens[j].span[0])
+            j -= 1
+        holders = [n for n in parts if n["span"][0] <= tok.span[0] and tok.span[1] <= n["span"][1]]
+        if not any(n["span"][0] in starts for n in holders):
+            out.append(trace.text[tok.span[0]:tok.span[1]])
+    return out
+
+
+def alkyl_owning_heteroatoms(trace, nodes) -> list:
+    """(label, elements) for every plain alkyl / aryl substituent that owns an atom
+    that is neither carbon nor hydrogen (an isotopic hydrogen is the group's own)."""
+    out = []
+    for n in nodes:
+        if n["kind"] == "substituent" and _HYDROCARBON_RADICAL.match(n["label"].lower()):
+            odd = sorted({trace.atoms[a].element for a in n["owns"] if trace.atoms[a].element not in ("C", "H")})
+            if odd:
+                out.append((n["label"], odd))
+    return out
+
+
+def _claim_true(claim, mol, owns) -> bool:
+    """Whether the atoms a suffix owns are what its line says. Written here, not shared
+    with the glossary: look at every carbon next to an owned oxygen."""
+    from rdkit import Chem
+    owned_o = {a for a in owns if a < mol.GetNumAtoms() and mol.GetAtomWithIdx(a).GetSymbol() == "O"}
+    carbons = {n.GetIdx() for o in owned_o for n in mol.GetAtomWithIdx(o).GetNeighbors() if n.GetSymbol() == "C"}
+    for c in carbons:
+        kinds = {o: mol.GetBondBetweenAtoms(c, o).GetBondType() for o in owned_o if mol.GetBondBetweenAtoms(c, o)}
+        double = [o for o, b in kinds.items() if b == Chem.BondType.DOUBLE]
+        single = [o for o, b in kinds.items() if b == Chem.BondType.SINGLE]
+        if claim == "carbonyl" and double:
+            return True
+        if claim == "carboxylate" and double and single:
+            return True
+        # (no table line claims an ester today; the check stays so the class stays visible:
+        # "sodium acetate" has the -C(=O)O- of an ester and none of its second carbon)
+        if claim == "ester" and double and any(mol.GetAtomWithIdx(o).GetDegree() >= 2 for o in single):
+            return True
+        if claim == "acid" and double and any(mol.GetAtomWithIdx(o).GetDegree() == 1 for o in single):
+            return True
+    return False
+
+
+def false_line_claims(trace, nodes) -> list:
+    """(label, line) for every suffix line that asserts what its atoms are when they
+    are not, and every parent line whose prose does not fit its atom count. Whether a
+    node asserts the claim is read from the glossary's own output, never from wording
+    typed here."""
+    from rdkit import Chem
+    from app import glossary
+    mol = Chem.MolFromSmiles(trace.smiles)
+    out = []
+    for n in nodes:
+        if n["kind"] == "suffix" and mol is not None:
+            claim = glossary.suffix_claim(n["label"])
+            asserted = n["line"] == glossary.describe_part("suffix", n["label"], None, len(set(n["owns"])))
+            if claim and asserted and not _claim_true(claim, mol, n["owns"]):
+                out.append((n["label"], n["line"]))
+        elif n["kind"] == "parent":
+            claim = glossary.parent_claim(n["label"])
+            copies = n.get("copies", 1) or 1
+            total = len(set(n["owns"]))
+            per_copy = total // copies if copies > 1 and total % copies == 0 else total
+            if claim and claim[0] in n["line"] and not claim[1][0] <= per_copy <= claim[1][1]:
+                out.append((n["label"], n["line"]))
+    return out
+
+
+def oxidation_numbers_misplaced(trace, nodes) -> list:
+    """Oxidation-number tokens ("(II)") whose node lights atoms other than the part
+    written right before them."""
+    out = []
+    for tok in trace.tokens:
+        if tok.kind != "oxidationNumberSpecifier":
+            continue
+        before = next((n for n in nodes if n["kind"] in PART_KINDS and n["span"] and n["span"][1] == tok.span[0]), None)
+        mine = [n for n in nodes if n["span"] and tuple(n["span"]) == tok.span and n["kind"] not in PART_KINDS]
+        if before is None or any(not set(n["lights"]) <= set(before["owns"]) for n in mine):
+            out.append(trace.text[tok.span[0]:tok.span[1]])
+    return out
 
 
 def classify(trace, nodes, owners) -> list[str]:
@@ -349,6 +472,16 @@ def classify(trace, nodes, owners) -> list[str]:
         out.append("LIT_ATOM_FOREIGN")
     if wrong_locant_atoms(trace, nodes):
         out.append("LOCANT_WRONG_ATOM")
+    if swallowed_functional_words(trace, nodes):
+        out.append("FUNCTION_SWALLOWED")
+    if alkyl_owning_heteroatoms(trace, nodes):
+        out.append("ALKYL_HETERO")
+    if false_line_claims(trace, nodes):
+        out.append("LINE_CLAIM_FALSE")
+    if any(n["kind"] == "suffix" and any(trace.atoms[a].element == "H" for a in n["owns"]) for n in nodes):
+        out.append("SUFFIX_OWNS_H")
+    if oxidation_numbers_misplaced(trace, nodes):
+        out.append("OXIDATION_WRONG")
     return out or ["CLEAN"]
 
 
@@ -378,7 +511,8 @@ def _report(title: str, results: dict[str, list[str]]) -> int:
     for outcome in ("CLEAN", "UNREADABLE", "UNAVAILABLE", "MISMATCH", "UNPLACED", "NODE_ERROR", "PART_UNPLACED",
                     "ATOM_GAP", "ATOM_OVERLAP", "BAD_SPAN", "CROSSING", "PART_CONTAINS_PART", "LABEL_EDGE", "ORPHAN_TOKEN",
                     "HYDRO_WRONG", "STEREO_NO_PARENT", "STEREO_WRONG_ATOM", "LOCANT_UNLIT",
-                    "LIT_ATOM_FOREIGN", "LOCANT_WRONG_ATOM"):
+                    "LIT_ATOM_FOREIGN", "LOCANT_WRONG_ATOM", "FUNCTION_SWALLOWED", "ALKYL_HETERO",
+                    "LINE_CLAIM_FALSE", "SUFFIX_OWNS_H", "OXIDATION_WRONG"):
         print(f"  {outcome:18s} {counts.get(outcome, 0)}")
     print("  residue:")
     for name, outs in results.items():

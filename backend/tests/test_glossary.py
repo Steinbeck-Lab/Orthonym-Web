@@ -210,3 +210,55 @@ def test_known_endings_and_counted_endings_still_say_what_they_are():
 
 def test_generic_token_line_names_the_text():
     assert "zzz" in GENERIC_TOKEN_LINE.format(text="zzz")
+
+
+# -- final review: M1, M2, M5, I3 (glossary level) ------------------------------------
+
+def test_one_atom_is_not_one_atoms():
+    from app.glossary import describe_functional
+    assert "1 atom." in describe_part("parent", "zzzql", None, 1)
+    assert "1 atom." in describe_part("parent", "purin", None, 1)
+    assert "1 atoms" not in describe_part("substituent", "zzzql", None, 1)
+    assert "1 atoms" not in describe_functional("zzz", 1)
+
+
+def test_the_parent_prose_is_used_only_when_the_atom_count_fits_the_stem():
+    assert "two-carbon" in describe_part("parent", "acet", None, 2)
+    assert "two-carbon" not in describe_part("parent", "acet", None, 8)      # acetophenone
+    assert "benzene ring" not in describe_part("parent", "benz", None, 12)    # benzophenone
+    assert "benzene ring" in describe_part("parent", "benz", None, 12, copies=2)   # two benzene rings
+    assert "core skeleton" in describe_part("parent", "acet", None, 8)
+
+
+def test_a_suffix_line_needs_atoms_that_bear_it_out():
+    from rdkit import Chem
+    from app.glossary import suffix_claim, suffix_claim_holds
+    acid = Chem.MolFromSmiles("CC(=O)O")
+    ester = Chem.MolFromSmiles("CC(=O)OC")
+    salt = Chem.MolFromSmiles("CC(=O)[O-]")
+    hydrazide = Chem.MolFromSmiles("CC(=O)NN")
+    assert suffix_claim("oic acid") == "acid" and suffix_claim("one") == "carbonyl" and suffix_claim("ol") is None
+    assert suffix_claim_holds("oic acid", acid, [2, 3]) and suffix_claim_holds("oic acid", salt, [2, 3])
+    assert not suffix_claim_holds("oic acid", ester, [2, 3])
+    assert not suffix_claim_holds("oic acid", hydrazide, [2])
+    assert suffix_claim_holds("ate", ester, [2, 3]) and suffix_claim_holds("ate", salt, [2, 3])
+    assert not suffix_claim_holds("ate", hydrazide, [2])
+    assert suffix_claim_holds("one", Chem.MolFromSmiles("CC(=O)C"), [2])
+    assert not suffix_claim_holds("one", Chem.MolFromSmiles("CC(=NO)C"), [4, 5])
+    assert not suffix_claim_holds("oic acid", None, [2])              # no molecule: neutral, never a guess
+    assert suffix_claim_holds("ol", None, [0])                         # no claim to check
+    assert "covers 2 atoms" in describe_part("suffix", "oic acid", None, 2, holds=False)
+
+
+def test_a_functional_word_line_is_used_only_for_the_atoms_the_word_adds():
+    from app.glossary import describe_functional
+    assert "C=O" in describe_functional("ketone", 2)
+    assert "C=O" not in describe_functional("ketone", 3)
+    assert "adds" not in describe_functional("ester", 0) and "no atoms of its own" in describe_functional("ester", 0)
+    assert "covers 6 atoms" in describe_functional("hexafluoride", 6)
+
+
+def test_the_glossary_has_no_branch_nothing_can_reach():
+    # describe_locant("unmapped") and describe_part("modifier") were unreachable in v2
+    assert describe_locant("unmapped", "7") == "Position 7."
+    assert "does not add atoms" not in describe_part("modifier", "7", None, 1)

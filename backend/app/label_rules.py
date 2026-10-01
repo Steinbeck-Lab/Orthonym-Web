@@ -17,12 +17,13 @@ CORE = frozenset({
     "group", "suffix", "unsaturator", "alkaneStemComponent", "heteroatom", "fusion",
     "cyclo", "vonBaeyer", "spiro", "polyCyclicSpiro", "ringAssemblyMultiplier",
     "hydrocarbonFusedRingSystem", "carbohydrateRingSize", "suffixPrefix", "infix", "ine",
-    "functionalGroup", "fusedRingBridge", "bridgeFormingO", "alkaneStemModifier",
+    "functionalGroup", "functionalClass", "fusedRingBridge", "bridgeFormingO", "alkaneStemModifier",
     "chargeSpecifier",
 })
 PREFIX = frozenset({
     "stereoChemistry", "indicatedHydrogen", "hydro", "subtractivePrefix", "orthoMetaPara",
     "spiroLocant", "colonOrSemiColonDelimitedLocant", "lambdaConvention",
+    "isotopeSpecification", "oxidationNumberSpecifier",
 })
 CONTEXTUAL = frozenset({"locant", "multiplier"})
 GLUE = frozenset({
