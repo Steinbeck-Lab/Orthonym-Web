@@ -35,7 +35,7 @@ Outcomes, measured on the trace and the node list (a name may carry several):
                       not counted)
   LOCANT_WRONG_ATOM   (a "4-O-" pair in front of a substituent must light the PARENT's O
                       and the parent carbon it is bonded to, never an atom of the
-                      substituent itself; see app.explain_tree.oxy_pair_allowed)
+                      substituent itself; see app.explain_gate.oxy_pair_allowed)
                       (a fusion component's number must light an atom of the element it
                       puts in the ring, and, among several, one sharing a ring with its
                       siblings' atoms) a locant node inside its own part (not a substituent's leading
@@ -59,7 +59,7 @@ Outcomes, measured on the trace and the node list (a name may carry several):
   LIT_ATOM_FOREIGN    a locant node lights an atom it has no claim on: not in its
                       own part, not a copy OPSIN placed at that locant, and not
                       the atom carrying that locant that the part's substituent
-                      chain is bonded to (app.explain_tree.foreign_lights)
+                      chain is bonded to (app.explain_gate.foreign_lights)
 Every outcome except CLEAN and UNREADABLE fails the run (exit 1).
 """
 
@@ -72,7 +72,8 @@ import sys
 from rdkit import Chem
 
 from app import glossary, opsin_trace
-from app.explain_tree import build_nodes, foreign_lights, oxy_pair_allowed, stereo_atoms
+from app.explain_gate import foreign_lights, oxy_pair_allowed
+from app.explain_tree import build_nodes, stereo_atoms
 from app.label_rules import (
     BARE_DESCRIPTOR, BUILDS_NAME, LOCANT_KINDS, STEREO_MARK, fusion_component_elements, locant_items,
 )
@@ -251,12 +252,13 @@ def wrong_locant_atoms(trace, nodes) -> list:
     The atoms a suffix owns carry no number."""
     by_id = {n["id"]: n for n in nodes}
     carbohydrate = any(t.kind == "carbohydrateRingSize" for t in trace.tokens)
+    mol = Chem.MolFromSmiles(trace.smiles)
     bad = []
     for n in nodes:
         if n["kind"] != "locant":
             continue
         parent = by_id[n["parent"]] if n["parent"] is not None else None
-        pair = oxy_pair_allowed(trace, n, parent, nodes)
+        pair = oxy_pair_allowed(trace, n, parent, nodes, mol)
         if pair is not None:
             if not set(n["lights"]) <= pair:
                 bad.append((n["label"], sorted(n["lights"])))
@@ -435,7 +437,8 @@ def classify(trace, nodes, owners) -> list[str]:
         if n["parent"] is None:
             out.append("STEREO_NO_PARENT")
             break
-    centres, double = stereo_atoms(Chem.MolFromSmiles(trace.smiles))
+    mol = Chem.MolFromSmiles(trace.smiles)
+    centres, double = stereo_atoms(mol)
     for n in nodes:
         m = STEREO_MARK.match(n["label"]) if n["kind"] == "stereo" else None
         if not m or not n["lights"]:
@@ -454,7 +457,7 @@ def classify(trace, nodes, owners) -> list[str]:
     if any(n["kind"] == "locant" and not n["lights"] and n["label"].lower() not in ("alpha", "beta")
            and not _unproven_component_number(trace, nodes, n) for n in nodes):
         out.append("LOCANT_UNLIT")
-    if foreign_lights(trace, nodes):
+    if foreign_lights(trace, nodes, mol):
         out.append("LIT_ATOM_FOREIGN")
     if wrong_locant_atoms(trace, nodes):
         out.append("LOCANT_WRONG_ATOM")

@@ -5,7 +5,8 @@ stayed green; each test pins the corrected behaviour on a live trace."""
 import pytest
 from rdkit import Chem
 
-from app.explain_tree import PART_NODE_KINDS, build_nodes, foreign_lights
+from app.explain_gate import foreign_lights
+from app.explain_tree import PART_NODE_KINDS, build_nodes
 from app.opsin_trace import Trace, trace
 from app.orthonym_service import get_primary_namer
 from app.token_owner import assign_owners

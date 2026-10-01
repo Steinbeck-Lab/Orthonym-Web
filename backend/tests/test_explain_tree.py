@@ -5,7 +5,8 @@ import re
 import pytest
 from rdkit import Chem
 
-from app.explain_tree import PART_NODE_KINDS, _Builder, _written_parts, build_nodes, foreign_lights
+from app.explain_gate import foreign_lights
+from app.explain_tree import PART_NODE_KINDS, _Builder, _written_parts, build_nodes
 from app.opsin_trace import Trace, TraceAtom, TracePart
 from scripts.explain_census import _spiro_primes, contained_parts, wrong_locant_atoms
 from tests.fixtures.traces import load_traces
