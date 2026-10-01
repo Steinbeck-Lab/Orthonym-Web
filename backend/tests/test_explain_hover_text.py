@@ -342,10 +342,8 @@ def test_a_live_mark_line(name, kind, label, line):
 def _live(name, kind, label):
     """The line of the one node of `kind` and `label` in `name`, after checking that the
     census finds no false line anywhere in the name (every other class is fixed by now)."""
-    t = trace(name)
-    nodes = build_nodes(t)
+    t, nodes, node = _live_node(name, kind, label)
     assert false_hover_lines(t, nodes) == []
-    (node,) = [n for n in nodes if n["kind"] == kind and n["label"] == label]
     return node["line"]
 
 
