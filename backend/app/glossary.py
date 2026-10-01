@@ -112,10 +112,16 @@ _MULTIPLIED_HYDRATE = re.compile(r"^(?:mono|di|tri|tetra|penta|hexa|hepta|octa|n
                                  re.IGNORECASE)
 
 
+def _special_parent(label: str) -> str | None:
+    """The line for a retained parent that comes with the compound ("hydrate", "hydrochloride",
+    and a hydrate with its count written in: "monohydrate"), else None."""
+    return _SPECIAL_PARENTS.get(label.lower()) or (
+        _SPECIAL_PARENTS["hydrate"] if _MULTIPLIED_HYDRATE.match(label) else None)
+
+
 def not_a_core(label: str) -> bool:
     """These come with the compound; none of them is a core the rest of the name is built around."""
-    low = label.lower()
-    return low in _SPECIAL_PARENTS or bool(_MULTIPLIED_HYDRATE.match(low))
+    return _special_parent(label) is not None
 
 # "2-methylpropyl", "tert-butyl", "isopropyl": the text in front of a table key
 # is only branching, so the key still names the chain. Anything else in front
@@ -351,10 +357,6 @@ def _hydrogen_clause(spec, mol, atoms, copies: int) -> str:
     return f" {text}."
 
 
-def _cores(count: int) -> str:
-    return _NUMBER_WORDS.get(count, str(count))
-
-
 def describe_part(kind: str, text: str, atom_count: int, copies: int = 1, *, holds: bool = True,
                   mol=None, atoms=(), cores: int = 1) -> str:
     """One line for a part. `holds` is False when the caller found that the atoms the
@@ -373,7 +375,7 @@ def describe_part(kind: str, text: str, atom_count: int, copies: int = 1, *, hol
         # "methylethyl" ends in "ethyl" but has three carbons.
         if key in _HYDROGEN_SPECS and key != label.lower():
             key = None
-        if key in _CHAIN_LENGTH and not _chain_holds(key, mol, atoms):
+        if not _chain_holds(key, mol, atoms):
             key = None
         if key:
             spec = _HYDROGEN_SPECS.get(key)
@@ -386,18 +388,17 @@ def describe_part(kind: str, text: str, atom_count: int, copies: int = 1, *, hol
             clause = _hydrogen_clause(spec, mol, atoms, 1) if spec else ""
             return f'The "{label}" ending means {_SUFFIXES[key]}.{clause}'
     elif kind == "parent":
-        special = _SPECIAL_PARENTS.get(label.lower()) or (
-            _SPECIAL_PARENTS["hydrate"] if _MULTIPLIED_HYDRATE.match(label) else None)
+        special = _special_parent(label)
         if special:
             return f'"{label}" is {special}.{many}'
+        one_of = f"one of the {_NUMBER_WORDS.get(cores, str(cores))} cores this name is built from"
         claim = parent_claim(label)
         per_copy = atom_count // copies if copies > 1 and atom_count % copies == 0 else atom_count
         if claim and claim[1][0] <= per_copy <= claim[1][1] and holds:
-            role = ("It is the core the rest of the name is built around" if cores <= 1
-                    else f"It is one of the {_cores(cores)} cores this name is built from")
+            role = "It is the core the rest of the name is built around" if cores <= 1 else f"It is {one_of}"
             return f'"{label}" is {claim[0]}. {role}, and it holds {_atoms(atom_count)}.{many}'
         if cores > 1:
-            return f'"{label}" is one of the {_cores(cores)} cores this name is built from. It has {_atoms(atom_count)}.{many}'
+            return f'"{label}" is {one_of}. It has {_atoms(atom_count)}.{many}'
         return (
             f'"{label}" is the core skeleton the rest of the name is built '
             f"around. It has {_atoms(atom_count)}.{many}"
@@ -456,16 +457,18 @@ def _hydrogen_taken(mol, atom: int) -> bool:
 def _modifier_line(locant: str, element: str | None, mol, atom: int | None) -> str:
     """A hydro / indicated / added hydrogen locant. The name puts a hydrogen on that atom
     (IUPAC P-31.2, P-14.7.1, P-14.7.2); whether the atom still carries one is measured."""
+    head = f"Position {locant} — "
     if not element:
-        return f"Position {locant} — the name puts a hydrogen at this position."
+        return f"{head}the name puts a hydrogen at this position."
+    on_atom = f"the {element}{locant} atom"
     if mol is None or atom is None or atom >= mol.GetNumAtoms():
-        return f"Position {locant} — the name puts a hydrogen on the {element}{locant} atom."
+        return f"{head}the name puts a hydrogen on {on_atom}."
     if _hydrogens(mol, atom) >= 1:
-        return f"Position {locant} — the {element}{locant} atom carries a hydrogen here."
+        return f"{head}{on_atom} carries a hydrogen here."
+    puts = f"{head}the name puts a hydrogen on {on_atom}"
     if _hydrogen_taken(mol, atom):
-        return (f"Position {locant} — the name puts a hydrogen on the {element}{locant} atom; "
-                f"here a group or bond named elsewhere takes its place.")
-    return f"Position {locant} — the name puts a hydrogen on the {element}{locant} atom; here that atom carries none."
+        return f"{puts}; here a group or bond named elsewhere takes its place."
+    return f"{puts}; here that atom carries none."
 
 
 def _anomeric_group(mol, atom: int | None) -> str | None:
@@ -566,9 +569,9 @@ def describe_locant(kind: str, locant: str, element: str | None = None, *, anome
         # bonds of `atom`, the lit anomeric carbon.
         group = _anomeric_group(mol, atom)
         here = f" Here that group is {group}." if group else ""
-        element = _sugar_ring_element(mol, atom, pool)
-        ring = (f"the ring {_RING_ELEMENTS[element]}" if element in _RING_ELEMENTS else
-                f"the ring {element} atom" if element else "the ring's heteroatom")
+        ring_element = _sugar_ring_element(mol, atom, pool)
+        ring = (f"the ring {_RING_ELEMENTS[ring_element]}" if ring_element in _RING_ELEMENTS else
+                f"the ring {ring_element} atom" if ring_element else "the ring's heteroatom")
         return (
             f'"{locant}" names the anomer: which way the group on the ring carbon '
             f"next to {ring} points, relative to the sugar's reference stereocentre.{here}"
@@ -702,8 +705,8 @@ def describe_stereo(text: str, within: str | None = None) -> str:
                 f"position {racemic.group(1)} in one and {second} in the other.")
     if mark == "rel":
         # P-93.1.2.1
-        return (f'"rel" says the marks of its set give only a relative arrangement; it does not say '
-                f"which of the two mirror-image forms is meant.")
+        return ('"rel" says the marks of its set give only a relative arrangement; it does not say '
+                "which of the two mirror-image forms is meant.")
     if mark in _ROTATION:
         # 2-Carb-4.5: the sign of optical rotation, not a configuration
         return (f'"{mark}" gives the sign of optical rotation: this form turns polarised light '
@@ -711,7 +714,7 @@ def describe_stereo(text: str, within: str | None = None) -> str:
     starred = _LOCATED_STARRED.match(mark)
     if starred or (located and within == "rel" and mark[-1] in "RS"):
         return f'"{mark}" gives the arrangement at the position it names {_RELATIVE}.'
-    if located and within == "rac":
+    if within == "rac" and (located or mark in ("R", "S")):
         return (f'"{mark}" is part of a racemate mark (rac): the name means an equal mix of '
                 f"this form and its mirror image.")
     if located:
@@ -726,9 +729,6 @@ def describe_stereo(text: str, within: str | None = None) -> str:
         return f'"{mark}" says two groups lie {side} of the ring or double bond they are on.'
     if mark in ("R", "S") and within == "rel":
         return f'"{mark}" gives the arrangement at one stereocentre {_RELATIVE}.'
-    if mark in ("R", "S") and within == "rac":
-        return (f'"{mark}" is part of a racemate mark (rac): the name means an equal mix of '
-                f"this form and its mirror image.")
     if mark in ("R", "S"):
         return (f'"{mark}" fixes the three-dimensional arrangement at one stereocentre; the mark '
                 f"itself carries no position number.")
@@ -740,11 +740,11 @@ def describe_stereo(text: str, within: str | None = None) -> str:
         return (f'"{mark}" fixes the arrangement at one double bond: its higher-ranked groups lie {side}. '
                 f"The mark itself carries no position number.")
     sugar = _SUGAR_PREFIX.get(mark.lower())
-    if sugar and mark.lower() == "glycero":
-        return f'"{mark}" is a sugar configuration prefix: the stereocentre it covers is arranged as in {sugar}.'
     if sugar:
-        # 2-Carb-4.3, 2-Carb-8.4 (the centres it covers need not be next to each other)
-        return f'"{mark}" is a sugar configuration prefix: the stereocentres it covers are arranged as in {sugar}.'
+        # 2-Carb-4.3, 2-Carb-8.4 (the centres it covers need not be next to each other);
+        # glycero covers the one centre of glyceraldehyde
+        covers = "stereocentre it covers is" if mark.lower() == "glycero" else "stereocentres it covers are"
+        return f'"{mark}" is a sugar configuration prefix: the {covers} arranged as in {sugar}.'
     return f'"{mark}" is a stereo descriptor: part of how the name gives the three-dimensional arrangement.'
 
 
@@ -757,14 +757,14 @@ def _spiro_line(text: str) -> str:
     if len(numbers) == 2 and all(n.isdigit() for n in numbers):
         return (f'"{text}" names two rings that share one atom; {numbers[0]} and {numbers[1]} count '
                 f"the other atoms in each ring.")
-    if len(numbers) > 2 and "^" in text:
-        # "4^8": the raised number is a position on the system, not a count of atoms
-        return (f'"{text}" names rings joined at single shared atoms (the counting word before it says '
-                f"how many); its plain numbers count the atoms between them, in order along the system, "
-                f"and a raised number is a position, not a count.")
     if len(numbers) > 2:
-        return (f'"{text}" names rings joined at single shared atoms (the counting word before it says '
-                f"how many); its numbers count the atoms between them, in order along the system.")
+        joined = (f'"{text}" names rings joined at single shared atoms (the counting word before it says '
+                  f"how many); its ")
+        if "^" in text:
+            # "4^8": the raised number is a position on the system, not a count of atoms
+            return (joined + "plain numbers count the atoms between them, in order along the system, "
+                    "and a raised number is a position, not a count.")
+        return joined + "numbers count the atoms between them, in order along the system."
     return f'"{text}" names rings that share single atoms.'
 
 
