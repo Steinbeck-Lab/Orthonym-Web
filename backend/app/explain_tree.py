@@ -216,9 +216,9 @@ class _Builder:
         self.by_key = {w.key: w for w in parts if w.key is not None}
         self.part_of = {a: p for p in trace.parts for a in p.atoms}
         self.carbohydrate_atoms: Optional[list[int]] = None   # set while a sugar root's children are built
-        # (node, label, atom count, copies, holds) of every parent line: restated once the
-        # number of parent nodes is known (finish_parent_lines)
-        self.parent_lines: list[tuple[dict, str, int, int, bool]] = []
+        # parent node id -> holds: a parent line is restated once the number of cores is known
+        # (finish_parent_lines)
+        self.parent_holds: dict[str, bool] = {}
 
     def add(self, kind, label, span, *, line, parent=None, owns=(), lights=(), copies=1) -> str:
         node_id = f"n{len(self.nodes)}"
@@ -228,6 +228,12 @@ class _Builder:
             "owns": sorted(set(owns)), "lights": sorted(set(lights)),
             "atoms_unmapped": False, "line": line,
         })
+        return node_id
+
+    def add_parent(self, label, span, owns, copies, holds=True) -> str:
+        node_id = self.add("parent", label, span, owns=owns, lights=owns, copies=copies,
+                           line=describe_part("parent", label, len(set(owns)), copies=copies, holds=holds))
+        self.parent_holds[node_id] = holds
         return node_id
 
     def text(self, span: Span) -> str:
@@ -304,11 +310,11 @@ class _Builder:
         """A part OPSIN gave no key: still owns its atoms, listed as not
         placed in the name. Never raises."""
         owns = self.atoms_of(w)
-        kind = "substituent" if w.kind == "substituent" else "parent"
-        self.add(kind, w.kind, None, owns=owns, lights=owns, copies=len(w.copies),
-                 line=describe_part(kind, w.kind, len(set(owns)), copies=len(w.copies)))
-        if kind == "parent":
-            self.parent_lines.append((self.nodes[-1], w.kind, len(set(owns)), len(w.copies), True))
+        if w.kind == "substituent":
+            self.add("substituent", w.kind, None, owns=owns, lights=owns, copies=len(w.copies),
+                     line=describe_part("substituent", w.kind, len(set(owns)), copies=len(w.copies)))
+        else:
+            self.add_parent(w.kind, None, owns, len(w.copies))
 
     def foreign_replacement_locants(self, w: _WrittenPart, roles: list[str]) -> list[str]:
         """A locant written right before a heteroatom or alkane-stem token reads
@@ -375,11 +381,7 @@ class _Builder:
         parent_span = spans.parent if has_suffix or spans.suffix is None else (spans.parent[0], spans.suffix[1])
         label = self.text(parent_span)
         holds = parent_claim_holds(label, self.mol, parent_atoms, len(w.copies))
-        parent = self.add("parent", label, parent_span, owns=parent_atoms, lights=parent_atoms,
-                          copies=len(w.copies),
-                          line=describe_part("parent", label, len(set(parent_atoms)), copies=len(w.copies),
-                                             holds=holds))
-        self.parent_lines.append((self.nodes[-1], label, len(set(parent_atoms)), len(w.copies), holds))
+        parent = self.add_parent(label, parent_span, parent_atoms, len(w.copies), holds)
         self.part_node[w.key] = (parent, parent_atoms + suffix_atoms)
         run = spans.suffix_tokens if has_suffix else frozenset()
         head = [(t, r) for t, r in zip(w.tokens, roles) if t.index not in run]
@@ -913,8 +915,10 @@ class _Builder:
         cores = sum(1 for n in self.nodes if n["kind"] == "parent" and not not_a_core(n["label"]))
         if cores < 2:
             return
-        for node, label, count, copies, holds in self.parent_lines:
-            node["line"] = describe_part("parent", label, count, copies=copies, holds=holds, cores=cores)
+        for node in self.nodes:
+            if node["id"] in self.parent_holds:
+                node["line"] = describe_part("parent", node["label"], len(node["owns"]), copies=node["copies"],
+                                             holds=self.parent_holds[node["id"]], cores=cores)
 
     def token_locant(self, loc: str, span: Span, head: Optional[_WrittenPart],
                      nxt: Optional[_WrittenPart] = None, bridge: Optional[dict] = None) -> None:
