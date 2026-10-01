@@ -250,6 +250,13 @@ CURATED: list[tuple[str, str]] = [
     ("stereo-words", "rel-(1R)-1-phenylethan-1-ol"),
     ("replaced-hydrogen", "4aH-fluoren-4a-ylium"),
     ("replaced-hydrogen", "4aH-fluoren-4a-ide"),
+    ("spiro", "dispiro[4.2.4^8.2^5]tetradecane"),
+    ("stereo-words", "D-glycero-D-gluco-heptose"),
+    ("stereo-words", "rel-(R)-2-[(S)-1-hydroxyethyl]butan-1-ol"),
+    ("stereo-words", "rac-(R)-2-[(S)-1-hydroxyethyl]butan-1-ol"),
+    ("hydrates", "propan-2-amine hydrochloride"),
+    ("hydrates", "propan-2-amine hydrobromide"),
+    ("hydrates", "caffeine monohydrate"),
 ]
 
 # Names OPSIN 2.9.0 itself genuinely cannot parse. Verified against

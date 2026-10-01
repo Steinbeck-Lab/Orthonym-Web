@@ -209,7 +209,7 @@ Things the repo does not tell you, or tells you only after they cost time.
   OPSIN reads in a reordered form (CAS index names) are refused as `unplaced`. Known limitation:
   conjunctive names split the chain into the suffix. Honesty is **per node**: nothing lights a
   guessed atom, and on the SMILES path a part whose atoms cannot be agreed keeps its text with
-  `atoms_unmapped`. Measured 2026-10-01 -- corpus 713 names: CLEAN 711, 2 OPSIN cannot read;
+  `atoms_unmapped`. Measured 2026-10-01 -- corpus 720 names: CLEAN 718, 2 OPSIN cannot read;
   ChEMBL 10k (run in 30 shards): CLEAN 9998, UNREADABLE 2, every failure class 0 (the census
   classes are listed in the header of `explain_census.py`). The gated sets are engine-named or
   curated, so a class they hold no name of is invisible to them: add the names to `CURATED` with
