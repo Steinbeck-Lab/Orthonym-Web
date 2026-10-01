@@ -233,6 +233,23 @@ CURATED: list[tuple[str, str]] = [
     ("stereo-words", "cis-but-2-ene"),
     ("stereo-words", "D-threose"),
     ("stereo-words", "2-deoxy-D-erythro-pentose"),
+    # Whole-plan review: a bare mark in a set, a set word beside its marks, a lone atom at the
+    # anomeric carbon, a thio-sugar ring, a hydrate among the parents
+    ("stereo-words", "rac-(R)-butan-2-ol"),
+    ("stereo-words", "rel-(R)-butan-2-ol"),
+    ("stereo-words", "(rac)-(2R)-butan-2-ol"),
+    ("stereo-words", "(2R)-rel-butan-2-ol"),
+    ("stereo-words", "(1R,2S)-rel-2-aminocyclohexan-1-ol"),
+    ("stereo-words", "(1R,2S)-rac-2-aminocyclohexan-1-ol"),
+    ("glycosides", "alpha-D-glucopyranosyl bromide"),
+    ("glycosides", "alpha-D-glucopyranosyl chloride"),
+    ("glycosides", "methyl 5-thio-alpha-D-glucopyranoside"),
+    ("glycosides", "beta-D-glucopyranosylamine"),
+    ("stereo-words", "rel-(2E,4R,5S)-5-chlorohept-2-en-4-ol"),
+    ("stereo-words", "rel-(1R,2S,4r)-4-chloro-1,2-dimethylcyclohexane"),
+    ("stereo-words", "rel-(1R)-1-phenylethan-1-ol"),
+    ("replaced-hydrogen", "4aH-fluoren-4a-ylium"),
+    ("replaced-hydrogen", "4aH-fluoren-4a-ide"),
 ]
 
 # Names OPSIN 2.9.0 itself genuinely cannot parse. Verified against
