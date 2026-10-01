@@ -401,6 +401,8 @@ def false_line_claims(trace, nodes) -> list:
 # shape it does not recognise is itself reported: a reworded table line cannot slip
 # past unchecked. A line with no such vocabulary claims nothing checkable and passes.
 
+_NOT_CORES = re.compile(r"^(?:(?:mono|di|tri|tetra|penta|hexa|hepta|octa|nona|deca|hemi|sesqui)?hydrate"
+                        r"|hydrochloride|hydrobromide|hydroiodide|hydrofluoride)$", re.IGNORECASE)
 _QUOTED = re.compile(r'"[^"]*"')
 _VOCAB = re.compile(r"hydrogen|\bCH3\b|\bNH2\b|on its own|anomer|mirror-image|shared|share one|"
                     r"positions it names|position number|built around|cores this name|benzene ring|"
@@ -417,6 +419,63 @@ _OLD_FORMULA = re.compile(r"(?:\bCH3\b|-NH2|-OH|-O-CH3|-O-CH2CH3|CH3-CH2-|CH3-C\
                           r"|three hydrogens")
 _CLAUSE = re.compile(r"Here (?:its|the|each of its|each of the) (?:end )?(carbon|nitrogen|oxygen)s? carr(?:y|ies) "
                      r"(no hydrogen|1 hydrogen|\d+ hydrogens|[\d, ]+ and \d+ hydrogens)(; other groups take the rest)?\.")
+
+
+# The vocabulary-bearing phrases a true line may contain, written out here (not imported). A line
+# is checked twice: its recognised claim is measured, then these phrases are cut out and any claim
+# vocabulary still left over is a claim nothing checked.
+_PHRASES = [re.compile(p) for p in (
+    r"\((?:[^()]|\([^()]*\))*?on its own\)",                                  # a bare group's formula
+    _CLAUSE.pattern,                                                              # the hydrogens a group's atoms carry
+    r"an =N-NH(?:-C\(=O\)-NH2|2) group in place of the carbonyl oxygen",
+    r"Position \S+ — the \S+ atom carries a hydrogen here\.",
+    r"Position \S+ — the name puts a hydrogen (?:at this position|on the \S+ atom)"
+    r"(?:; here (?:a group or bond named elsewhere takes its place|that atom carries none))?\.",
+    r"Position \S+ — a hydrogen is fixed here\.",
+    r"records that hydrogens were added here, which fixes where the double bonds go",
+    r"pins which ring atom carries a hydrogen",
+    r"is the core skeleton the rest of the name is built around",
+    r"It is the core the rest of the name is built around",
+    r"one of the \w+ cores this name is built from",
+    r"two fused benzene rings", r"a benzene ring fused to", r"a benzene ring attached by one of its carbons",
+    r"is a benzene ring\.", r"is a benzene ring attached", r"a benzene ring\b(?= *$)",
+    r"names two rings that share one atom", r"names rings that share single atoms",
+    r"names rings joined at single shared atoms", r"marks one atom shared between two rings",
+    r"fixes the three-dimensional arrangement at the positions it names",
+    r"fixes the three-dimensional arrangement at one stereocentre; the mark itself carries no position number",
+    r"the arrangement at (?:the positions? it names|one stereocentre) only as a relative arrangement, not an "
+    r"absolute one; it does not say which of the two mirror-image forms is meant",
+    r"says the marks of its set give only a relative arrangement; it does not say which of the two "
+    r"mirror-image forms is meant",
+    r"is written inside a racemate mark \(rac\): the name means an equal mix of this form and its mirror image",
+    r"marks a racemate: an equal mix of the two mirror-image forms",
+    r"gives the sign of optical rotation: this form turns polarised light to the (?:left|right)\. It does not by "
+    r"itself say how the atoms are arranged",
+    r"is a Fischer label: it puts the part named after it in the [DL] series, by comparing one of its "
+    r"stereocentres with [DL]-glyceraldehyde",
+    r"says two groups lie on (?:the same side|opposite sides) of the ring or double bond they are on",
+    r"fixes the arrangement at one double bond: its higher-ranked groups lie on (?:the same side|opposite sides)"
+    r"\. The mark itself carries no position number",
+    r"is a sugar configuration prefix: the stereocentres? it covers (?:is|are) arranged as in \w+",
+    r"is a stereo descriptor: part of how the name gives the three-dimensional arrangement",
+    r"names the anomer: which way the group on the ring carbon next to the ring [^,]+? points, relative to the "
+    r"sugar's reference stereocentre",
+    r"is an isotope label: it says which isotope sits at the positions it names",
+    r"is an isotope label: it says which isotope the part named after it carries in place of the usual one; "
+    r"the label gives no position number",
+    r"its plain numbers count the atoms between them, in order along the system, and a raised number is a "
+    r"position, not a count",
+    r"hydrochloric acid \(HCl\)|hydrobromic acid \(HBr\)|hydroiodic acid \(HI\)|hydrofluoric acid \(HF\)",
+)]
+
+
+def _unchecked_claim(line: str) -> bool:
+    """True when claim vocabulary is left in `line` after the quoted text and every phrase this
+    module knows how to read has been cut out."""
+    rest = _QUOTED.sub("", line)
+    for phrase in _PHRASES:
+        rest = phrase.sub("", rest)
+    return bool(_VOCAB.search(rest))
 
 
 def _h(mol, i: int) -> int:
@@ -530,7 +589,11 @@ def _spiro_problem(mol, node) -> tuple[bool, Optional[str]]:
             return True, "no two lit rings of those sizes share one atom"
         return True, None
     if "names rings joined at single shared atoms" in line:
-        return True, (None if len(numbers) > 2 else "polyspiro line on a two-number descriptor")
+        if len(numbers) <= 2:
+            return True, "polyspiro line on a two-number descriptor"
+        if ("a raised number is a position" in line) != ("^" in node["label"]):
+            return True, "raised numbers are positions, not counts, and only when the descriptor has them"
+        return True, None
     if "names rings that share single atoms" in line:
         return True, None
     return False, None
@@ -608,26 +671,33 @@ _SUGAR_PREFIXES = {"glycero", "erythro", "threo", "arabino", "lyxo", "ribo", "xy
 
 
 def _stereo_set_word(trace, node) -> Optional[str]:
-    """"rel" or "rac" when the mark is governed by one: written inside a "rel-(...)" /
-    "rac-(...)" token, or standing in the stereo token next to a lone "rel-" / "rac-" /
-    "(rac)-" token on either side ("(1R,2S)-rel-", "(rac)-(2R)-")."""
+    """"rel" or "rac" when the mark is governed by one. The word covers the whole compound
+    (IUPAC P-93.1.3), so any stereo token of the name that is a "rel-(...)" / "rac-(...)" or a
+    lone "rel-" / "(rac)-" counts; the nearest one wins (the mark's own token, a touching one,
+    then the nearest before, then after)."""
     if not node["span"]:
         return None
     toks = [t for t in trace.tokens if t.kind == "stereoChemistry"]
-    for tok in toks:
-        if tok.span[0] <= node["span"][0] < tok.span[1]:
-            m = re.match(r"^\s*\(?(rel|rac)\)?-?\(", trace.text[tok.span[0]:tok.span[1]], re.IGNORECASE)
-            if m:
-                return m.group(1).lower()
-            if re.fullmatch(r"\s*\(?(rel|rac)\)?-?\s*", trace.text[tok.span[0]:tok.span[1]], re.IGNORECASE):
-                return None
-            for other in toks:
-                if other.span[1] == tok.span[0] or other.span[0] == tok.span[1]:
-                    w = re.fullmatch(r"\s*\(?(rel|rac)\)?-?\s*", trace.text[other.span[0]:other.span[1]], re.IGNORECASE)
-                    if w:
-                        return w.group(1).lower()
-            return None
-    return None
+    here = next((t for t in toks if t.span[0] <= node["span"][0] < t.span[1]), None)
+    if here is None:
+        return None
+    piece = lambda t: trace.text[t.span[0]:t.span[1]]
+    own = re.match(r"^\s*\(?(rel|rac)\)?-?\(", piece(here), re.IGNORECASE)
+    if own:
+        return own.group(1).lower()
+    if re.fullmatch(r"\s*\(?(rel|rac)\)?-?\s*", piece(here), re.IGNORECASE):
+        return None
+    found = []
+    for j, other in enumerate(toks):
+        if other is here:
+            continue
+        w = (re.match(r"^\s*\(?(rel|rac)\)?-?\(", piece(other), re.IGNORECASE)
+             or re.fullmatch(r"\s*\(?(rel|rac)\)?-?\s*", piece(other), re.IGNORECASE))
+        if w:
+            touching = other.span[1] == here.span[0] or other.span[0] == here.span[1]
+            k = toks.index(here)
+            found.append((0 if touching else 1 if j < k else 2, abs(j - k), w.group(1).lower()))
+    return min(found)[2] if found else None
 
 
 def _marks_follow(trace, node) -> bool:
@@ -666,6 +736,8 @@ def _stereo_problem(trace, node) -> tuple[bool, Optional[str]]:
         ("at one double bond: its higher-ranked groups lie on opposite sides", label == "E"),
         ("at one double bond: its higher-ranked groups lie on the same side", label == "Z"),
         ("is a sugar configuration prefix", label.lower() in _SUGAR_PREFIXES),
+        ("the stereocentres it covers", label.lower() != "glycero"),
+        ("the stereocentre it covers is", label.lower() == "glycero"),
         ("is a stereo descriptor: part of how the name gives", True),
     ]
     made = [(phrase, fits) for phrase, fits in claims if phrase in line]
@@ -677,7 +749,7 @@ def _stereo_problem(trace, node) -> tuple[bool, Optional[str]]:
 
 def _parent_problem(mol, nodes, node) -> tuple[bool, Optional[str]]:
     line = node["line"]
-    cores = sum(1 for n in nodes if n["kind"] == "parent" and n["label"].lower() != "hydrate")
+    cores = sum(1 for n in nodes if n["kind"] == "parent" and not _NOT_CORES.match(n["label"]))
     copies = max(node.get("copies") or 1, 1)
     seen, out = False, None
     if "the rest of the name is built around" in line:
@@ -770,6 +842,8 @@ def false_hover_lines(trace, nodes) -> list:
             out.append((n["label"], n["line"], why))
         elif not known and _VOCAB.search(_QUOTED.sub("", n["line"])):
             out.append((n["label"], n["line"], "a claim this check does not recognise"))
+        elif _unchecked_claim(n["line"]):
+            out.append((n["label"], n["line"], "a claim beyond the one this check measured"))
     return out
 
 

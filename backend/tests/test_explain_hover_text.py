@@ -602,3 +602,122 @@ def test_a_neutral_indicated_hydrogen_keeps_its_line():
     (node,) = [n for n in nodes if n["kind"] == "indicated_h"]
     assert "carries a hydrogen here" in node["line"]
     assert false_hover_lines(t, nodes) == []
+
+
+# -- fix round 1: a recognised phrase does not excuse an extra claim ---------------------
+
+TETRALIN = _trace("C1CCc2ccccc2C1")
+NAPH_TRUE = ('"naphthalene" is naphthalene — two fused benzene rings. It is the core the rest of the name is '
+             'built around, and it holds 10 atoms.')
+
+
+@pytest.mark.parametrize("trace_, node, why", [
+    (TETRALIN, _node("parent", "naphthalene", owns=range(10),
+                     line='"naphthalene" is two fused aromatic benzene rings. It is the core the rest of the name '
+                          'is built around, and it holds 10 atoms.'), "an added benzene claim, the rings are not aromatic"),
+    (_trace("[2H]C([2H])([2H])O"), _node("token", "2H3", lights=[0],
+                                         line='"2H3" is an isotope label: it says which isotope the part named after it '
+                                              'carries in place of the usual one; the label gives no position number. '
+                                              'Its carbon carries no hydrogen.'), "an added hydrogen claim"),
+    (_trace("C1CCCCC1"), _node("hydro", "hexahydro", lights=range(6),
+                               line='"hexahydro" records that hydrogens were added here, which fixes where the double '
+                                    'bonds go. Each carbon now carries no hydrogen.'), "an added hydrogen claim"),
+])
+def test_a_recognised_phrase_does_not_excuse_an_extra_claim(trace_, node, why):
+    assert false_hover_lines(trace_, [node]), why
+
+
+def test_the_recognised_phrase_alone_still_passes():
+    assert not false_hover_lines(_trace("c1ccc2ccccc2c1"), [_node("parent", "naphthalene", owns=range(10),
+                                                                  line=NAPH_TRUE)])
+    assert not false_hover_lines(_trace("[2H]C([2H])([2H])O"), [_node(
+        "token", "2H3", lights=[0], line='"2H3" is an isotope label: it says which isotope the part named after it '
+        'carries in place of the usual one; the label gives no position number.')])
+    assert not false_hover_lines(_trace("C1CCCCC1"), [_node(
+        "hydro", "hexahydro", lights=range(6), line='"hexahydro" records that hydrogens were added here, which '
+        'fixes where the double bonds go.')])
+
+
+# -- fix round 1: raised spiro numbers, glycero, acid-addition parts ------------------------
+
+SPIRO_RAISED = ('"spiro[4.2.4^8.2^5]" names rings joined at single shared atoms (the counting word before it says '
+                "how many); its plain numbers count the atoms between them, in order along the system, and a raised "
+                "number is a position, not a count.")
+
+
+def test_a_raised_number_in_a_polyspiro_descriptor_is_a_position_not_a_count():
+    assert describe_token("spiro", "spiro[4.2.4^8.2^5]") == SPIRO_RAISED
+    assert "raised" not in describe_token("spiro", "spiro[4.1.5.3]")
+    t, nodes, node = _live_node("dispiro[4.2.4^8.2^5]tetradecane", "token", "spiro[4.2.4^8.2^5]")
+    assert node["line"] == SPIRO_RAISED
+    assert false_hover_lines(t, nodes) == []
+    assert _census_flags("dispiro[4.2.4^8.2^5]tetradecane", "token", "spiro[4.2.4^8.2^5]",
+                         SPIRO_RAISED.replace("its plain numbers count the atoms between them, in order along the "
+                                              "system, and a raised number is a position, not a count",
+                                              "its numbers count the atoms between them, in order along the system"))
+
+
+def test_glycero_covers_one_stereocentre():
+    assert describe_stereo("glycero") == ('"glycero" is a sugar configuration prefix: the stereocentre it covers is '
+                                          "arranged as in glyceraldehyde.")
+    assert "stereocentres it covers" in describe_stereo("erythro")
+    t, nodes, node = _live_node("D-glycero-D-gluco-heptose", "stereo", "glycero")
+    assert "the stereocentre it covers" in node["line"]
+    assert false_hover_lines(t, nodes) == []
+    assert _census_flags("D-glycero-D-gluco-heptose", "stereo", "glycero",
+                         describe_stereo("erythro").replace("erythro", "glycero"))
+
+
+@pytest.mark.parametrize("name,label,line", [
+    ("propan-2-amine hydrochloride", "hydrochloride",
+     '"hydrochloride" is hydrochloric acid (HCl) that comes with the compound as a salt.'),
+    ("propan-2-amine hydrobromide", "hydrobromide",
+     '"hydrobromide" is hydrobromic acid (HBr) that comes with the compound as a salt.'),
+    ("propan-2-amine dihydrochloride", "hydrochloride",
+     '"hydrochloride" is hydrochloric acid (HCl) that comes with the compound as a salt. The name writes it once '
+     "for 2 copies."),
+])
+def test_an_acid_addition_part_is_not_a_core(name, label, line):
+    t, nodes, node = _live_node(name, "parent", label)
+    assert node["line"] == line
+    (amine,) = [n for n in nodes if n["kind"] == "parent" and n["label"] == "propan"]
+    assert "the core the rest of the name is built around" in amine["line"]
+    assert false_hover_lines(t, nodes) == []
+    assert _census_flags(name, "parent", "propan",
+                         amine["line"].replace("the core the rest of the name is built around",
+                                               "one of the two cores this name is built from"))
+
+
+# -- fix round 1: multiplied hydrates, a set word's reach over the whole name ------------------
+
+HYDRATE_LINE = ('"monohydrate" is water of crystallisation: water molecules that come with the compound.')
+
+
+def test_a_multiplied_hydrate_is_not_a_core():
+    t, nodes, node = _live_node("caffeine monohydrate", "parent", "monohydrate")
+    assert node["line"] == HYDRATE_LINE
+    (caffeine,) = [n for n in nodes if n["label"] == "caffeine"]
+    assert "is the core skeleton the rest of the name is built around" in caffeine["line"]
+    assert false_hover_lines(t, nodes) == []
+    assert _census_flags("caffeine monohydrate", "parent", "caffeine",
+                         caffeine["line"].replace("is the core skeleton the rest of the name is built around",
+                                                  "is one of the two cores this name is built from"))
+
+
+@pytest.mark.parametrize("name,mark,word", [
+    ("rel-(R)-2-[(S)-1-hydroxyethyl]butan-1-ol", "S", "rel"),
+    ("rac-(R)-2-[(S)-1-hydroxyethyl]butan-1-ol", "S", "rac"),
+])
+def test_a_set_word_reaches_every_mark_of_its_word(name, mark, word):
+    t, nodes, node = _live_node(name, "stereo", mark)
+    assert ("relative arrangement" in node["line"]) == (word == "rel")
+    assert ("written inside a racemate mark" in node["line"]) == (word == "rac")
+    assert false_hover_lines(t, nodes) == []
+    assert _census_flags(name, "stereo", mark, OLD_BARE.format(mark))
+
+
+def test_a_set_word_reaches_a_mark_in_another_word_of_the_name():
+    # rel / rac say the whole compound's arrangement is relative / a mix (IUPAC P-93.1.3)
+    t, nodes, node = _live_node("rel-(R)-butan-2-yl (S)-2-methylbutanoate", "stereo", "S")
+    assert "relative arrangement" in node["line"]
+    assert false_hover_lines(t, nodes) == []

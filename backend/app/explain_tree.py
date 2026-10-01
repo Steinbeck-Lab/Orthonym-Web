@@ -59,7 +59,7 @@ from rdkit import Chem
 
 from .glossary import (
     describe_cage_multiplier, describe_functional, describe_locant, describe_part, describe_stereo,
-    describe_token, parent_claim_holds, suffix_claim_holds, token_line,
+    describe_token, parent_claim_holds, suffix_claim_holds, token_line, not_a_core,
 )
 from .label_rules import (
     BARE_DESCRIPTOR, CONTEXTUAL, ELEMENT_LOCANT, GLUE, LOCANT_KINDS, NUMBER_LOCANT, STEREO_MARK,
@@ -805,24 +805,26 @@ class _Builder:
         return None, None
 
     def set_word(self, tokens, idx: int) -> Optional[str]:
-        """"rel" or "rac" when the stereo token at `idx` is governed by one: written in its own
-        token in front of the marks ("rel-(1R,2S)-"), or as the stereo token touching it on
-        either side ("(1R,2S)-rel-", "(rac)-(2R)-", "(2R)-(rel)-")."""
+        """"rel" or "rac" when the stereo token at `idx` is governed by one. The word says the
+        whole compound is relative / a racemic mix (IUPAC P-93.1.3), so it reaches every mark
+        of the name. Nearest first: its own token ("rel-(1R,2S)-"), a stereo token touching it
+        ("(1R,2S)-rel-", "(rac)-(2R)-"), then the nearest word before it, then after it."""
         text, tok = self.t.text, tokens[idx]
         own = _SET_PREFIX.match(text[tok.span[0]:tok.span[1]])
         if own:
             return own.group(1).lower()
         if _SET_WORD.match(text[tok.span[0]:tok.span[1]]):
             return None
-        for other in (tokens[idx - 1] if idx > 0 else None, tokens[idx + 1] if idx + 1 < len(tokens) else None):
-            if other is None or other.kind != STEREO_KIND:
+        found = []
+        for j, other in enumerate(tokens):
+            if j == idx or other.kind != STEREO_KIND:
                 continue
-            if other.span[1] != tok.span[0] and other.span[0] != tok.span[1]:
-                continue
-            word = _SET_WORD.match(text[other.span[0]:other.span[1]])
+            piece = text[other.span[0]:other.span[1]]
+            word = _SET_PREFIX.match(piece) or _SET_WORD.match(piece)
             if word:
-                return word.group(1).lower()
-        return None
+                touching = other.span[1] == tok.span[0] or other.span[0] == tok.span[1]
+                found.append((0 if touching else 1 if j < idx else 2, abs(j - idx), word.group(1).lower()))
+        return min(found)[2] if found else None
 
     def stereo(self, owners: dict) -> None:
         tokens = self.t.tokens
@@ -904,7 +906,7 @@ class _Builder:
         """With more than one parent node ("sodium acetate", "X hydrochloride"), no parent
         is "the core the rest of the name is built around": each line says it is one of
         that many cores. Text only; what any node lights is unchanged."""
-        cores = sum(1 for n in self.nodes if n["kind"] == "parent" and n["label"].lower() != "hydrate")
+        cores = sum(1 for n in self.nodes if n["kind"] == "parent" and not not_a_core(n["label"]))
         if cores < 2:
             return
         for node, label, count, copies, holds in self.parent_lines:

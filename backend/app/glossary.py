@@ -101,7 +101,20 @@ _PARENT_ATOMS = {
 # Retained parents that are not a "skeleton" at all.
 _SPECIAL_PARENTS = {
     "hydrate": "water of crystallisation: water molecules that come with the compound",
+    "hydrochloride": "hydrochloric acid (HCl) that comes with the compound as a salt",
+    "hydrobromide": "hydrobromic acid (HBr) that comes with the compound as a salt",
+    "hydroiodide": "hydroiodic acid (HI) that comes with the compound as a salt",
+    "hydrofluoride": "hydrofluoric acid (HF) that comes with the compound as a salt",
 }
+# "monohydrate", "pentahydrate", "sesquihydrate": the hydrate with its count written in the same word.
+_MULTIPLIED_HYDRATE = re.compile(r"^(?:mono|di|tri|tetra|penta|hexa|hepta|octa|nona|deca|hemi|sesqui)hydrate$",
+                                 re.IGNORECASE)
+
+
+def not_a_core(label: str) -> bool:
+    """These come with the compound; none of them is a core the rest of the name is built around."""
+    low = label.lower()
+    return low in _SPECIAL_PARENTS or bool(_MULTIPLIED_HYDRATE.match(low))
 
 # "2-methylpropyl", "tert-butyl", "isopropyl": the text in front of a table key
 # is only branching, so the key still names the chain. Anything else in front
@@ -302,7 +315,8 @@ def describe_part(kind: str, text: str, atom_count: int, copies: int = 1, *, hol
             clause = _hydrogen_clause(_SUFFIX_HYDROGENS[key], mol, atoms, 1) if key in _SUFFIX_HYDROGENS else ""
             return f'The "{label}" ending means {_SUFFIXES[key]}.{clause}'
     elif kind == "parent":
-        special = _SPECIAL_PARENTS.get(label.lower())
+        special = _SPECIAL_PARENTS.get(label.lower()) or (
+            _SPECIAL_PARENTS["hydrate"] if _MULTIPLIED_HYDRATE.match(label) else None)
         if special:
             return f'"{label}" is {special}.{many}'
         claim = parent_claim(label)
@@ -656,6 +670,8 @@ def describe_stereo(text: str, within: str | None = None) -> str:
         return (f'"{mark}" fixes the arrangement at one double bond: its higher-ranked groups lie {side}. '
                 f"The mark itself carries no position number.")
     sugar = _SUGAR_PREFIX.get(mark.lower())
+    if sugar and mark.lower() == "glycero":
+        return f'"{mark}" is a sugar configuration prefix: the stereocentre it covers is arranged as in {sugar}.'
     if sugar:
         # 2-Carb-4.3, 2-Carb-8.4 (the centres it covers need not be next to each other)
         return f'"{mark}" is a sugar configuration prefix: the stereocentres it covers are arranged as in {sugar}.'
@@ -671,6 +687,11 @@ def _spiro_line(text: str) -> str:
     if len(numbers) == 2 and all(n.isdigit() for n in numbers):
         return (f'"{text}" names two rings that share one atom; {numbers[0]} and {numbers[1]} count '
                 f"the other atoms in each ring.")
+    if len(numbers) > 2 and "^" in text:
+        # "4^8": the raised number is a position on the system, not a count of atoms
+        return (f'"{text}" names rings joined at single shared atoms (the counting word before it says '
+                f"how many); its plain numbers count the atoms between them, in order along the system, "
+                f"and a raised number is a position, not a count.")
     if len(numbers) > 2:
         return (f'"{text}" names rings joined at single shared atoms (the counting word before it says '
                 f"how many); its numbers count the atoms between them, in order along the system.")
