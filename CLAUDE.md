@@ -32,7 +32,7 @@ REDIS_URL=redis://localhost:6379/0 .venv/bin/python -m celery -A app.celery_app 
 # ad hoc scripts importing app.*
 cd backend && PYTHONPATH="$(pwd)" REDIS_URL=redis://localhost:6379/0 .venv/bin/python <script.py>
 
-# explain coverage census -- 576 names, prints the per-axis table. Runs the
+# explain coverage census -- 665 names, prints the per-axis table. Runs the
 # interpreter directly (not via run-tests.sh, which is for pytest only); the
 # interpreter is backend/.venv/bin/python -- run-tests.sh itself now
 # auto-detects .venv-mac (macOS) or .venv (Linux) and picks whichever exists.
@@ -198,12 +198,19 @@ Things the repo does not tell you, or tells you only after they cost time.
   is a real stereocentre / stereo-double-bond atom (RDKit on the traced molecule), searched from its
   IUPAC scope; a bare R/S/E/Z lights the scope's main part's only stereocentre (or stereo double
   bond) when there is exactly one; a sugar's alpha/beta lights its one anomeric carbon, found by
-  structure; D/L and bare cis/trans light nothing. Names OPSIN reads in a reordered form (CAS index
-  names) are refused as `unplaced`. Known limitation: conjunctive names split the chain into the
-  suffix. Honesty is **per node**: nothing lights a guessed atom, and on the SMILES path a part
-  whose atoms cannot be agreed keeps its text with `atoms_unmapped`. Measured 2026-09-30 -- corpus
-  576 names: CLEAN 574, 2 OPSIN cannot read; ChEMBL 10k: CLEAN 9998, UNREADABLE 2, every failure
-  class 0. Gate: `tests/test_explain_coverage.py`; census: `backend/scripts/explain_census.py`
+  structure; D/L and bare cis/trans light nothing. A functional-class word ("ketone", "ether",
+  "anhydride", "oxime", "chloride") is a part of its own over the atoms OPSIN's build adds for it
+  (the trace takes them out of the alkyl written before it); a number beside an element symbol in
+  front of a substituent ("4-O-") lights the PARENT's oxygen and carbon, never the substituent's own
+  atoms. Suffix and parent lines state what the atoms are only when the atoms bear it out. Names
+  OPSIN reads in a reordered form (CAS index names) are refused as `unplaced`. Known limitation:
+  conjunctive names split the chain into the suffix. Honesty is **per node**: nothing lights a
+  guessed atom, and on the SMILES path a part whose atoms cannot be agreed keeps its text with
+  `atoms_unmapped`. Measured 2026-10-01 -- corpus 665 names: CLEAN 663, 2 OPSIN cannot read;
+  ChEMBL 10k (run in 30 shards): CLEAN 9998, UNREADABLE 2, every failure class 0 (the census
+  classes are listed in the header of `explain_census.py`). The gated sets are engine-named or
+  curated, so a class they hold no name of is invisible to them: add the names to `CURATED` with
+  the fix. Gate: `tests/test_explain_coverage.py`; census: `backend/scripts/explain_census.py`
   (`cd backend && ... scripts/explain_census.py --chembl tests/fixtures/explain_chembl_10k.tsv`).
 - The three legal pages describe **this deployment**, and every factual claim in `Privacy.jsx` was
   read out of the backend or measured against a running stack. Do not adapt wording from another
