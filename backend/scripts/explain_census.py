@@ -508,7 +508,8 @@ def _said_counts(text: str) -> list[int]:
     return [int(x) for x in re.findall(r"\d+", text)]
 
 
-_COUNT_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8}
+_COUNT_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
+                "nine": 9, "ten": 10}
 
 
 def _chain_problem(mol, node) -> Optional[str]:
@@ -811,8 +812,8 @@ def _parent_problem(mol, nodes, node) -> tuple[bool, Optional[str]]:
     m = re.search(r"one of the (\w+) cores this name is built from", line)
     if m:
         seen = True
-        words = {"two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
-        said = words.get(m.group(1), int(m.group(1)) if m.group(1).isdigit() else -1)
+        word = m.group(1)
+        said = -1 if word == "one" else _COUNT_WORDS.get(word, int(word) if word.isdigit() else -1)  # no "one of one"
         if said != cores:
             out = f"one of {m.group(1)} cores, the name has {cores}"
     need = (2 if "two fused benzene rings" in line else
