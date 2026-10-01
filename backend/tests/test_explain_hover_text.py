@@ -8,7 +8,7 @@ import pytest
 from rdkit import Chem
 
 from app.explain_tree import build_nodes
-from app.glossary import describe_locant, describe_part, describe_stereo, describe_token
+from app.glossary import describe_locant, describe_part, describe_stereo, describe_token, parent_claim_holds
 from app.opsin_trace import Trace, TraceAtom, trace
 from scripts.explain_census import false_hover_lines
 
@@ -334,5 +334,54 @@ def test_a_live_mark_line(name, kind, label, line):
     t = trace(name)
     (node,) = [n for n in build_nodes(t) if n["kind"] == kind and n["label"] == label]
     assert node["line"] == line
+
+
+# -- 5. a parent's prose and its place in the name ----------------------------------------
+
+def _live(name, kind, label):
+    """The line of the one node of `kind` and `label` in `name`, after checking that the
+    census finds no false line anywhere in the name (every other class is fixed by now)."""
+    t = trace(name)
+    nodes = build_nodes(t)
+    assert false_hover_lines(t, nodes) == []
+    (node,) = [n for n in nodes if n["kind"] == kind and n["label"] == label]
+    return node["line"]
+
+
+def test_a_benzene_ring_prose_needs_aromatic_benzene_rings():
+    assert parent_claim_holds("naphthalene", _mol("c1ccc2ccccc2c1"), range(10))
+    assert not parent_claim_holds("naphthalene", _mol("C1CCc2ccccc2C1"), range(10))   # tetrahydro
+    assert not parent_claim_holds("indol", _mol("O=C1CCCc2[nH]ccc21"), range(10))
+    assert parent_claim_holds("pyridin", None, range(6))                              # no ring claim
+    assert "two fused benzene rings" not in describe_part("parent", "naphthalene", 10, holds=False)
+
+
+def test_a_parent_among_several_is_one_of_that_many_cores():
+    assert describe_part("parent", "sodium", 1, cores=2) == \
+        '"sodium" is one of the two cores this name is built from. It has 1 atom.'
+    assert describe_part("parent", "acet", 2, cores=2) == (
+        '"acet" is a two-carbon acetyl skeleton. It is one of the two cores this name is built from, and it '
+        'holds 2 atoms.')
+    assert "built around" in describe_part("parent", "acet", 2)
+
+
+@pytest.mark.parametrize("name,kind,label,line", [
+    ("sodium acetate", "parent", "sodium", '"sodium" is one of the two cores this name is built from. It has 1 atom.'),
+    ("sodium acetate", "parent", "acet",
+     '"acet" is a two-carbon acetyl skeleton. It is one of the two cores this name is built from, and it holds '
+     '2 atoms.'),
+    ("1,2,3,4-tetrahydronaphthalene", "parent", "naphthalene",
+     '"naphthalene" is the core skeleton the rest of the name is built around. It has 10 atoms.'),
+    ("copper(II) sulfate pentahydrate", "parent", "copper",
+     '"copper" is one of the three cores this name is built from. It has 1 atom.'),
+    ("copper(II) sulfate pentahydrate", "parent", "hydrate",
+     '"hydrate" is water of crystallisation: water molecules that come with the compound. The name writes it '
+     'once for 5 copies.'),
+    ("naphthalene", "parent", "naphthalene",
+     '"naphthalene" is naphthalene — two fused benzene rings. It is the core the rest of the name is built '
+     'around, and it holds 10 atoms.'),
+])
+def test_a_live_parent_line(name, kind, label, line):
+    assert _live(name, kind, label) == line
 
 

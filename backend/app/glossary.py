@@ -187,6 +187,31 @@ def _atoms(count: int) -> str:
     return f"{count} atom" if count == 1 else f"{count} atoms"
 
 
+# A parent stem whose prose names benzene rings ("naphthalene -- two fused benzene
+# rings") is true of a node only when it holds that many aromatic six-carbon rings per
+# copy: 1,2,3,4-tetrahydronaphthalene keeps one, naphthalene-1,4-dione's quinone ring
+# is not one, and 1,5,6,7-tetrahydro-4H-indol-4-one has no benzene ring at all.
+_PARENT_BENZENE_RINGS = {"benzen": 1, "benz": 1, "indol": 1, "naphthalen": 2}
+
+
+def parent_claim_holds(label: str, mol, atoms, copies: int = 1) -> bool:
+    """True when the atoms a parent owns bear out the ring its prose names (counts are
+    checked in describe_part). With no ring claim, True; with one and no molecule to
+    check it on, False (the neutral line is always safe)."""
+    key = _parent_key(label)
+    need = _PARENT_BENZENE_RINGS.get(key) if key else None
+    if not need:
+        return True
+    if mol is None:
+        return False
+    owned = set(atoms)
+    benzene = [ring for ring in mol.GetRingInfo().AtomRings()
+               if len(ring) == 6 and set(ring) <= owned
+               and all(mol.GetAtomWithIdx(a).GetSymbol() == "C" and mol.GetAtomWithIdx(a).GetIsAromatic()
+                       for a in ring)]
+    return len(benzene) >= need * max(copies, 1)
+
+
 def _hydrogens(mol, atom: int) -> int:
     """Hydrogens on `atom`, an isotope written as its own atom ("(2H3)methyl") included."""
     return mol.GetAtomWithIdx(atom).GetTotalNumHs(includeNeighbors=True)
@@ -246,13 +271,19 @@ def _hydrogen_clause(spec, mol, atoms, copies: int) -> str:
     return f" {text}."
 
 
+def _cores(count: int) -> str:
+    return _NUMBER_WORDS.get(count, str(count))
+
+
 def describe_part(kind: str, text: str, atom_count: int, copies: int = 1, *, holds: bool = True,
-                  mol=None, atoms=()) -> str:
+                  mol=None, atoms=(), cores: int = 1) -> str:
     """One line for a part. `holds` is False when the caller found that the atoms the
-    part owns do not bear out its table line (a suffix: ``suffix_claim_holds``); the
-    neutral count line is then used. `mol` and `atoms` are the traced molecule and the
-    part's own atoms: a group whose table line names its bare formula ("methyl",
-    "amino", the "amine" ending) gets the hydrogens its atoms really carry, counted."""
+    part owns do not bear out its table line (a suffix: ``suffix_claim_holds``; a
+    parent: ``parent_claim_holds``); the neutral count line is then used. `mol` and
+    `atoms` are the traced molecule and the part's own atoms: a group whose table line
+    names its bare formula ("methyl", "amino", the "amine" ending) gets the hydrogens
+    its atoms really carry, counted. `cores` is the number of parent nodes in the name:
+    with more than one, no parent is "the core the rest of the name is built around"."""
     label = text.strip("-")
     many = f" The name writes it once for {copies} copies." if copies > 1 else ""
 
@@ -276,11 +307,12 @@ def describe_part(kind: str, text: str, atom_count: int, copies: int = 1, *, hol
             return f'"{label}" is {special}.{many}'
         claim = parent_claim(label)
         per_copy = atom_count // copies if copies > 1 and atom_count % copies == 0 else atom_count
-        if claim and claim[1][0] <= per_copy <= claim[1][1]:
-            return (
-                f'"{label}" is {claim[0]}. It is the core the rest of the name '
-                f"is built around, and it holds {_atoms(atom_count)}.{many}"
-            )
+        if claim and claim[1][0] <= per_copy <= claim[1][1] and holds:
+            role = ("It is the core the rest of the name is built around" if cores <= 1
+                    else f"It is one of the {_cores(cores)} cores this name is built from")
+            return f'"{label}" is {claim[0]}. {role}, and it holds {_atoms(atom_count)}.{many}'
+        if cores > 1:
+            return f'"{label}" is one of the {_cores(cores)} cores this name is built from. It has {_atoms(atom_count)}.{many}'
         return (
             f'"{label}" is the core skeleton the rest of the name is built '
             f"around. It has {_atoms(atom_count)}.{many}"

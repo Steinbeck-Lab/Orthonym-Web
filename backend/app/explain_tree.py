@@ -59,7 +59,7 @@ from rdkit import Chem
 
 from .glossary import (
     describe_cage_multiplier, describe_functional, describe_locant, describe_part, describe_stereo,
-    describe_token, suffix_claim_holds, token_line,
+    describe_token, parent_claim_holds, suffix_claim_holds, token_line,
 )
 from .label_rules import (
     BARE_DESCRIPTOR, CONTEXTUAL, ELEMENT_LOCANT, GLUE, LOCANT_KINDS, NUMBER_LOCANT, STEREO_MARK,
@@ -213,6 +213,9 @@ class _Builder:
         self.by_key = {w.key: w for w in parts if w.key is not None}
         self.part_of = {a: p for p in trace.parts for a in p.atoms}
         self.carbohydrate_atoms: Optional[list[int]] = None   # set while a sugar root's children are built
+        # (node, label, atom count, copies, holds) of every parent line: restated once the
+        # number of parent nodes is known (finish_parent_lines)
+        self.parent_lines: list[tuple[dict, str, int, int, bool]] = []
 
     def add(self, kind, label, span, *, line, parent=None, owns=(), lights=(), copies=1) -> str:
         node_id = f"n{len(self.nodes)}"
@@ -301,6 +304,8 @@ class _Builder:
         kind = "substituent" if w.kind == "substituent" else "parent"
         self.add(kind, w.kind, None, owns=owns, lights=owns, copies=len(w.copies),
                  line=describe_part(kind, w.kind, len(set(owns)), copies=len(w.copies)))
+        if kind == "parent":
+            self.parent_lines.append((self.nodes[-1], w.kind, len(set(owns)), len(w.copies), True))
 
     def foreign_replacement_locants(self, w: _WrittenPart, roles: list[str]) -> list[str]:
         """A locant written right before a heteroatom or alkane-stem token reads
@@ -366,9 +371,12 @@ class _Builder:
             suffix_atoms = []
         parent_span = spans.parent if has_suffix or spans.suffix is None else (spans.parent[0], spans.suffix[1])
         label = self.text(parent_span)
+        holds = parent_claim_holds(label, self.mol, parent_atoms, len(w.copies))
         parent = self.add("parent", label, parent_span, owns=parent_atoms, lights=parent_atoms,
                           copies=len(w.copies),
-                          line=describe_part("parent", label, len(set(parent_atoms)), copies=len(w.copies)))
+                          line=describe_part("parent", label, len(set(parent_atoms)), copies=len(w.copies),
+                                             holds=holds))
+        self.parent_lines.append((self.nodes[-1], label, len(set(parent_atoms)), len(w.copies), holds))
         self.part_node[w.key] = (parent, parent_atoms + suffix_atoms)
         run = spans.suffix_tokens if has_suffix else frozenset()
         head = [(t, r) for t, r in zip(w.tokens, roles) if t.index not in run]
@@ -868,6 +876,16 @@ class _Builder:
                 if lit:
                     bridge["lights"] = sorted(lit)
 
+    def finish_parent_lines(self) -> None:
+        """With more than one parent node ("sodium acetate", "X hydrochloride"), no parent
+        is "the core the rest of the name is built around": each line says it is one of
+        that many cores. Text only; what any node lights is unchanged."""
+        cores = sum(1 for n in self.nodes if n["kind"] == "parent")
+        if cores < 2:
+            return
+        for node, label, count, copies, holds in self.parent_lines:
+            node["line"] = describe_part("parent", label, count, copies=copies, holds=holds, cores=cores)
+
     def token_locant(self, loc: str, span: Span, head: Optional[_WrittenPart],
                      nxt: Optional[_WrittenPart] = None, bridge: Optional[dict] = None) -> None:
         if nxt is not None and nxt.kind == "substituent" and nxt.key in self.part_node:
@@ -953,4 +971,5 @@ def build_nodes(trace: Trace) -> list[dict]:
         else:
             b.orphan(tok)
     b.stereo(owners)
+    b.finish_parent_lines()
     return b.nodes
