@@ -16,8 +16,8 @@ from rdkit import Chem
 # Morpheme -> what it is, in plain words. Keys are OPSIN's own token values
 # (the raw stem, e.g. "meth" + "yl" -> looked up as "methyl").
 _SUBSTITUENTS = {
-    "methyl": "a CH3 group — one carbon with three hydrogens",
-    "ethyl": "a CH3-CH2- group — two carbons",
+    "methyl": "a one-carbon group (CH3 on its own)",
+    "ethyl": "a two-carbon group (CH3-CH2- on its own)",
     "propyl": "a three-carbon chain",
     "butyl": "a four-carbon chain",
     "phenyl": "a benzene ring attached by one of its carbons",
@@ -26,12 +26,12 @@ _SUBSTITUENTS = {
     "fluoro": "a fluorine atom",
     "iodo": "an iodine atom",
     "nitro": "an -NO2 group",
-    "amino": "an -NH2 group",
+    "amino": "a nitrogen group (-NH2 on its own)",
     "hydroxy": "an -OH group",
-    "acetyloxy": "an -O-C(=O)-CH3 group",
-    "methoxy": "an -O-CH3 group",
-    "ethoxy": "an -O-CH2CH3 group",
-    "acetyl": "a CH3-C(=O)- group",
+    "acetyloxy": "an acetyl group joined through an oxygen (-O-C(=O)-CH3 on its own)",
+    "methoxy": "a one-carbon group joined through an oxygen (-O-CH3 on its own)",
+    "ethoxy": "a two-carbon group joined through an oxygen (-O-CH2CH3 on its own)",
+    "acetyl": "a two-carbon group with a C=O (CH3-C(=O)- on its own)",
     "indolyl": "an indole ring system attached by one of its carbons",
     "oxy": "an -O- linkage joining two parts of the name",
 }
@@ -40,7 +40,7 @@ _SUFFIXES = {
     "one": "a C=O group (a carbonyl)",
     "ol": "an -OH group",
     "al": "a -CHO group",
-    "amine": "a nitrogen with free hydrogens",
+    "amine": "a nitrogen group (-NH2 on its own)",
     "amide": "a -C(=O)N- group",
     "nitrile": "a -C≡N triple bond",
     "onitrile": "a -C≡N triple bond",
@@ -129,11 +129,6 @@ def _lookup_key(table: dict, text: str, *, endings: bool = False) -> str | None:
     return None
 
 
-def _lookup(table: dict, text: str, *, endings: bool = False) -> str | None:
-    key = _lookup_key(table, text, endings=endings)
-    return None if key is None else table[key]
-
-
 def suffix_claim(label: str) -> str | None:
     """The kind of claim the suffix line for `label` makes about its atoms
     ("carbonyl", "acid", "carboxylate"), or None when it makes none."""
@@ -192,21 +187,89 @@ def _atoms(count: int) -> str:
     return f"{count} atom" if count == 1 else f"{count} atoms"
 
 
-def describe_part(kind: str, text: str, atom_count: int, copies: int = 1, *, holds: bool = True) -> str:
+def _hydrogens(mol, atom: int) -> int:
+    """Hydrogens on `atom`, an isotope written as its own atom ("(2H3)methyl") included."""
+    return mol.GetAtomWithIdx(atom).GetTotalNumHs(includeNeighbors=True)
+
+
+# What a group's table line leaves to be counted on the real atoms. The table line names
+# the bare group "on its own"; when the atoms in this molecule carry a different number
+# of hydrogens ("hydroxymethyl": its carbon carries 2), the line says so, measured.
+# key -> (noun, possessive, which owned atoms, hydrogens of each in ONE bare copy).
+# "end carbon" is a carbon not bonded to the group's own oxygen: acetyl's CH3 end.
+_GROUP_HYDROGENS = {
+    "methyl": ("carbon", "its", "C", (3,)),
+    "ethyl": ("carbon", "its", "C", (3, 2)),
+    "methoxy": ("carbon", "its", "C", (3,)),
+    "ethoxy": ("carbon", "its", "C", (3, 2)),
+    "acetyl": ("end carbon", "its", "end C", (3,)),
+    "acetyloxy": ("end carbon", "its", "end C", (3,)),
+    "amino": ("nitrogen", "the", "N", (2,)),
+}
+_SUFFIX_HYDROGENS = {"amine": ("nitrogen", "the", "N", (2,))}
+
+
+def _counted(n: int) -> str:
+    return "no hydrogen" if n == 0 else "1 hydrogen" if n == 1 else f"{n} hydrogens"
+
+
+def _hydrogen_clause(spec, mol, atoms, copies: int) -> str:
+    """' Here its carbon carries 2 hydrogens; other groups take the rest.' -- or '' when
+    the atoms carry what the bare group does, or there is nothing to count them on."""
+    noun, whose, which, bare = spec
+    if mol is None or any(a >= mol.GetNumAtoms() for a in atoms):
+        return ""
+    element = which.split()[-1]
+    picked = [a for a in sorted(set(atoms)) if mol.GetAtomWithIdx(a).GetSymbol() == element]
+    if which.startswith("end"):
+        own = set(atoms)
+        picked = [a for a in picked
+                  if not any(n.GetSymbol() == "O" and n.GetIdx() in own for n in mol.GetAtomWithIdx(a).GetNeighbors())]
+    counts = sorted((_hydrogens(mol, a) for a in picked), reverse=True)
+    # One atom per bare group (methyl, amino, the amine ending): one count per atom found,
+    # so "diamine" expects two; a two-carbon group expects its pair once per copy.
+    expected = sorted(bare * (len(counts) if len(bare) == 1 else max(copies, 1)), reverse=True)
+    if not counts or counts == expected:
+        return ""
+    if len(counts) == 1:
+        text = f"Here {whose} {noun} carries {_counted(counts[0])}"
+    elif len(set(counts)) == 1:
+        text = f"Here each of {whose} {noun}s carries {_counted(counts[0])}"
+    else:
+        text = f"Here {whose} {noun}s carry {', '.join(map(str, counts[:-1]))} and {counts[-1]} hydrogens"
+    # "the rest" is taken by other groups only when no atom has more than the bare
+    # group's count and none is a radical or ion (a missing hydrogen is then a bond).
+    plain = all(mol.GetAtomWithIdx(a).GetNumRadicalElectrons() == 0 and mol.GetAtomWithIdx(a).GetFormalCharge() == 0
+                for a in picked)
+    if element == "C" and plain and len(counts) == len(expected) and all(c <= e for c, e in zip(counts, expected)):
+        text += "; other groups take the rest"
+    return f" {text}."
+
+
+def describe_part(kind: str, text: str, atom_count: int, copies: int = 1, *, holds: bool = True,
+                  mol=None, atoms=()) -> str:
     """One line for a part. `holds` is False when the caller found that the atoms the
     part owns do not bear out its table line (a suffix: ``suffix_claim_holds``); the
-    neutral count line is then used."""
+    neutral count line is then used. `mol` and `atoms` are the traced molecule and the
+    part's own atoms: a group whose table line names its bare formula ("methyl",
+    "amino", the "amine" ending) gets the hydrogens its atoms really carry, counted."""
     label = text.strip("-")
     many = f" The name writes it once for {copies} copies." if copies > 1 else ""
 
     if kind == "substituent":
-        known = _lookup(_SUBSTITUENTS, label, endings=True)
-        if known:
-            return f'"{label}" is {known}.{many}'
+        key = _lookup_key(_SUBSTITUENTS, label, endings=True)
+        # A line that names a carbon count or a formula is used only for the exact group:
+        # "methylethyl" ends in "ethyl" but has three carbons.
+        if key in _GROUP_HYDROGENS and key != label.lower():
+            key = None
+        if key:
+            clause = _hydrogen_clause(_GROUP_HYDROGENS[key], mol, atoms, copies) if key in _GROUP_HYDROGENS else ""
+            return f'"{label}" is {_SUBSTITUENTS[key]}.{clause}{many}'
     elif kind == "suffix":
-        known = _lookup(_SUFFIXES, label)
-        if known and holds:
-            return f'The "{label}" ending means {known}.'
+        key = _lookup_key(_SUFFIXES, label)
+        if key and holds:
+            clause = _hydrogen_clause(_SUFFIX_HYDROGENS[key], mol, atoms, 1) if key in _SUFFIX_HYDROGENS else ""
+            return f'The "{label}" ending means {_SUFFIXES[key]}.{clause}'
     elif kind == "parent":
         special = _SPECIAL_PARENTS.get(label.lower())
         if special:

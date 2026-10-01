@@ -7,7 +7,9 @@ never generated, so any change to a line is a change to this file."""
 import pytest
 from rdkit import Chem
 
-from app.opsin_trace import Trace, TraceAtom
+from app.explain_tree import build_nodes
+from app.glossary import describe_part
+from app.opsin_trace import Trace, TraceAtom, trace
 from scripts.explain_census import false_hover_lines
 
 
@@ -99,5 +101,85 @@ def test_the_census_checks_an_isotope_label_for_a_locant():
     old = '"2H3" is an isotope label: it says which isotope sits at the positions it names.'
     assert false_hover_lines(t, [_node("token", "2H3", lights=[0, 2, 3], line=old)])
     assert not false_hover_lines(t, [_node("token", "3-2H", line=old.replace("2H3", "3-2H"))])
+
+
+# -- 2. a group with a bare formula: the base line, plus the hydrogens its atoms carry -----
+
+def test_a_group_on_its_own_gets_the_base_line_only():
+    assert describe_part("substituent", "methyl", 1, mol=_mol("Cc1ccccc1"), atoms=[0]) == \
+        '"methyl" is a one-carbon group (CH3 on its own).'
+    assert describe_part("substituent", "methyl", 1) == '"methyl" is a one-carbon group (CH3 on its own).'
+
+
+def test_a_group_whose_atoms_carry_fewer_hydrogens_says_how_many():
+    assert describe_part("substituent", "methyl", 1, mol=_mol("OCc1ccccc1"), atoms=[1]) == (
+        '"methyl" is a one-carbon group (CH3 on its own). Here its carbon carries 2 hydrogens; '
+        'other groups take the rest.')
+    assert "Here its carbon carries no hydrogen; other groups take the rest." in \
+        describe_part("substituent", "methyl", 1, mol=_mol("FC(F)(F)c1ccccc1"), atoms=[1])
+
+
+def test_a_nitrogen_group_says_what_its_nitrogen_carries():
+    assert describe_part("substituent", "amino", 1, mol=_mol("CN(C)c1ccccc1"), atoms=[1]) == \
+        '"amino" is a nitrogen group (-NH2 on its own). Here the nitrogen carries no hydrogen.'
+    assert describe_part("suffix", "amine", 1, mol=_mol("CCN(CC)CC"), atoms=[2]) == \
+        'The "amine" ending means a nitrogen group (-NH2 on its own). Here the nitrogen carries no hydrogen.'
+    assert describe_part("suffix", "diamine", 2, mol=_mol("NCCN"), atoms=[0, 3]) == \
+        'The "diamine" ending means a nitrogen group (-NH2 on its own).'
+
+
+def test_two_carbon_groups_count_every_carbon():
+    assert describe_part("substituent", "ethyl", 2, mol=_mol("OCCN"), atoms=[1, 2]) == (
+        '"ethyl" is a two-carbon group (CH3-CH2- on its own). Here each of its carbons carries 2 hydrogens; '
+        'other groups take the rest.')
+    assert describe_part("substituent", "acetyl", 3, mol=_mol("c1ccccc1CC(=O)Cl"), atoms=[6, 7, 8]) == (
+        '"acetyl" is a two-carbon group with a C=O (CH3-C(=O)- on its own). Here its end carbon carries '
+        '2 hydrogens; other groups take the rest.')
+
+
+def test_an_isotopic_hydrogen_is_a_hydrogen():
+    cd3 = _mol("[2H]C([2H])([2H])Oc1ccccc1")
+    assert "Here" not in describe_part("substituent", "methyl", 4, mol=cd3, atoms=[0, 1, 2, 3])
+
+
+def test_a_label_that_only_ends_in_a_group_does_not_get_its_carbon_count():
+    assert "two-carbon" not in describe_part("substituent", "methylethyl", 3)
+
+
+@pytest.mark.parametrize("name,kind,label,line", [
+    ("2-(hydroxymethyl)phenol", "substituent", "methyl",
+     '"methyl" is a one-carbon group (CH3 on its own). Here its carbon carries 2 hydrogens; other groups take the rest.'),
+    ("(methylamino)acetic acid", "substituent", "amino",
+     '"amino" is a nitrogen group (-NH2 on its own). Here the nitrogen carries 1 hydrogen.'),
+    ("N,N-diethylethanamine", "suffix", "amine",
+     'The "amine" ending means a nitrogen group (-NH2 on its own). Here the nitrogen carries no hydrogen.'),
+    ("(2H3)methyl benzoate", "substituent", "methyl", '"methyl" is a one-carbon group (CH3 on its own).'),
+])
+def test_a_live_group_line(name, kind, label, line):
+    t = trace(name)
+    (node,) = [n for n in build_nodes(t) if n["kind"] == kind and n["label"] == label]
+    assert node["line"] == line
+
+
+def test_two_parts_with_one_label_are_counted_apart():
+    t = trace("1,3,5-tris(bromomethyl)-2,4,6-trimethylbenzene")
+    assert sorted(n["line"] for n in build_nodes(t) if n["label"] == "methyl") == [
+        '"methyl" is a one-carbon group (CH3 on its own). Here each of its carbons carries 2 hydrogens; other '
+        'groups take the rest. The name writes it once for 3 copies.',
+        '"methyl" is a one-carbon group (CH3 on its own). The name writes it once for 3 copies.',
+    ]
+
+
+def test_the_structure_path_shows_the_lines_of_its_name():
+    """explain_molecule keeps the line of every node of the name it traced, mapped or not:
+    the line is measured on OPSIN's molecule, which is the user's (same atom count)."""
+    from app.explain import explain_molecule
+    from app.orthonym_service import get_primary_namer
+    for smiles in ("OCc1ccccc1O", "CC(C)Cc1ccc(cc1)C(C)C(=O)O"):
+        r = explain_molecule(smiles, get_primary_namer())
+        named = {n["id"]: n["line"] for n in build_nodes(trace(r["name"]))}
+        assert [n["line"] for n in r["nodes"]] == [named[n["id"]] for n in r["nodes"]], smiles
+    r = explain_molecule("OCc1ccccc1O", get_primary_namer())
+    assert any("Here its carbon carries 2 hydrogens" in n["line"] for n in r["nodes"] if n["label"] == "methyl")
 
 

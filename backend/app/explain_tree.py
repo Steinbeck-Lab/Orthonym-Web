@@ -330,7 +330,8 @@ class _Builder:
         label = self.text(span)
         owns = self.atoms_of(w)
         node = self.add("substituent", label, span, owns=owns, lights=owns, copies=len(w.copies),
-                        line=describe_part("substituent", label, len(set(owns)), copies=len(w.copies)))
+                        line=describe_part("substituent", label, len(set(owns)), copies=len(w.copies),
+                                           mol=self.mol, atoms=owns))
         self.part_node[w.key] = (node, owns)
         # A glycosyl substituent ("alpha-D-mannopyranosyl|oxy") names its anomer
         # the same way a sugar root does.
@@ -377,7 +378,8 @@ class _Builder:
             lights = suffix_atoms + [i for i in parent_atoms if carrying & set(self.by_index[i].locants)]
             suffix = self.add("suffix", s_label, spans.suffix, owns=suffix_atoms, lights=lights,
                               line=describe_part("suffix", s_label, len(set(suffix_atoms)),
-                                                 holds=suffix_claim_holds(s_label, self.mol, suffix_atoms)))
+                                                 holds=suffix_claim_holds(s_label, self.mol, suffix_atoms),
+                                                 mol=self.mol, atoms=suffix_atoms))
             self.suffix_node[w.key] = (suffix, suffix_atoms, suffix_locants)
             tail = [(t, r) for t, r in zip(w.tokens, roles) if t.index in run]
             self.children(suffix, w, [t for t, _ in tail], [r for _, r in tail], parent_atoms, lights,
