@@ -7,7 +7,7 @@ from rdkit import Chem
 
 from app.explain_tree import PART_NODE_KINDS, _Builder, _written_parts, build_nodes, foreign_lights
 from app.opsin_trace import Trace, TraceAtom, TracePart
-from scripts.explain_census import _spiro_primes, wrong_locant_atoms
+from scripts.explain_census import _spiro_primes, contained_parts, wrong_locant_atoms
 from tests.fixtures.traces import load_traces
 
 TRACES = load_traces()
@@ -178,6 +178,8 @@ def test_corpus_invariants(name):
     assert foreign_lights(t, nodes) == [], name
     # ...and a locant inside its own part lights an atom that carries it (primed per spiro component)
     assert wrong_locant_atoms(t, nodes) == [], name
+    # ...and no part's label runs across another part's text
+    assert contained_parts(nodes) == [], name
 
 
 # -- C1: a locant lights only atoms it can name (the lit-atom gate) --------------

@@ -17,6 +17,8 @@ Outcomes, measured on the trace and the node list (a name may carry several):
   ATOM_OVERLAP        an atom is owned twice
   BAD_SPAN            a span outside the name or empty
   CROSSING            two spans overlap without nesting
+  PART_CONTAINS_PART  one part's span strictly contains another part's span (a parent
+                      label that swallows the substituents written inside it)
   LABEL_EDGE          a part label starts/ends with glue or leaves a bracket open
   ORPHAN_TOKEN        a written token no part and no bracket owns
   HYDRO_WRONG         a hydro / indicated-hydrogen locant lights nothing, or an
@@ -49,6 +51,21 @@ import sys
 PART_KINDS = ("substituent", "parent", "suffix")
 _STEREO_MARK = re.compile(r"^(\d+[a-z]?'*)([RSrs]\*?|[EZ]|alpha|beta)$")
 PASSING = {"CLEAN", "UNREADABLE"}
+
+
+def contained_parts(nodes) -> list:
+    """(outer label, inner label) for every substituent / parent / suffix whose span
+    strictly contains another such node's span. CROSSING sees only partial overlap and
+    LABEL_EDGE only the ends, so a root label that runs across a neighbour's text
+    ("epoxy-3-methoxy-17-methylmorphinan") passes both."""
+    parts = [n for n in nodes if n["kind"] in PART_KINDS and n["span"]]
+    out = []
+    for a in parts:
+        for b in parts:
+            if a is not b and tuple(a["span"]) != tuple(b["span"]) \
+                    and a["span"][0] <= b["span"][0] and b["span"][1] <= a["span"][1]:
+                out.append((a["label"], b["label"]))
+    return out
 
 
 def _spiro_primes(trace, node, loc: str) -> int:
@@ -160,6 +177,8 @@ def classify(trace, nodes, owners) -> list[str]:
         out.append("BAD_SPAN")
     if any(a[0] < b[0] < a[1] < b[1] for a in spans for b in spans):
         out.append("CROSSING")
+    if contained_parts(nodes):
+        out.append("PART_CONTAINS_PART")
     for n in parts:
         label = n["label"]
         if n["span"] and (not label or label[0] in "-,')]}" or label[-1] in "-,([{"
@@ -231,7 +250,7 @@ def _report(title: str, results: dict[str, list[str]]) -> int:
     counts = collections.Counter(o for outs in results.values() for o in outs)
     print(f"\n== {title}: {len(results)} names")
     for outcome in ("CLEAN", "UNREADABLE", "UNAVAILABLE", "MISMATCH", "UNPLACED", "NODE_ERROR", "PART_UNPLACED",
-                    "ATOM_GAP", "ATOM_OVERLAP", "BAD_SPAN", "CROSSING", "LABEL_EDGE", "ORPHAN_TOKEN",
+                    "ATOM_GAP", "ATOM_OVERLAP", "BAD_SPAN", "CROSSING", "PART_CONTAINS_PART", "LABEL_EDGE", "ORPHAN_TOKEN",
                     "HYDRO_WRONG", "STEREO_NO_PARENT", "STEREO_WRONG_ATOM", "LOCANT_UNLIT",
                     "LIT_ATOM_FOREIGN", "LOCANT_WRONG_ATOM"):
         print(f"  {outcome:18s} {counts.get(outcome, 0)}")

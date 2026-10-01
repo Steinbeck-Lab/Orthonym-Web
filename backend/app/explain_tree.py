@@ -61,7 +61,8 @@ _NODE_KIND = {
     "multiplier": "multiplier", "ringAssemblyMultiplier": "multiplier",
     "hydro": "hydro", "indicatedHydrogen": "indicated_h", STEREO_KIND: "stereo",
 }
-_LINE_KINDS = frozenset({"multiplier", "ringAssemblyMultiplier", "hydro", "fusion", "vonBaeyer", "spiro"})
+_LINE_KINDS = frozenset({"multiplier", "ringAssemblyMultiplier", "hydro", "fusion", "vonBaeyer", "spiro",
+                         "fusedRingBridge"})
 # "2S", "4aR", "9Z", relative "1S*", steroid "3beta" -> (locant, descriptor).
 _STEREO_MARK = re.compile(r"^(\d+[a-z]?'*)([RSrs]\*?|[EZ]|alpha|beta)$")
 # A descriptor with no locant ("(S)-oxolan-3-yl", "(E)-...").

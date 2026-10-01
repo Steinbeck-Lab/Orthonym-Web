@@ -715,3 +715,46 @@ def test_a_bridge_prefix_belongs_to_the_ring_it_bridges_not_the_substituent_writ
     (seventeen,) = [x for x in nodes if x["kind"] == "locant" and x["label"] == "17"]
     assert seventeen["parent"] == methyl["id"]
     assert classify(t, nodes, assign_owners(t.tokens)) == ["CLEAN"]
+
+
+# -- Phase C fix round 2 ------------------------------------------------------------------
+CODEINE = "(5alpha,6alpha)-7,8-didehydro-4,5-epoxy-3-methoxy-17-methylmorphinan-6-ol"
+
+
+@pytest.mark.parametrize("name", [
+    CODEINE,
+    "4,5alpha-epoxy-3-methoxy-17-methylmorphinan-6-one",
+    "(5S,9R,13S,14R)-4,5-epoxy-17-methylmorphinane",
+])
+def test_the_parent_label_stays_on_the_stem_and_the_bridge_prefix_is_its_own_child(name):
+    """N1: the bridge prefix moved to the root dragged the root's label across the methoxy and
+    methyl written between 'epoxy' and the stem ('epoxy-3-methoxy-17-methylmorphinan')."""
+    from scripts.explain_census import contained_parts
+    t, nodes = _nodes(name)
+    (root,) = [n for n in nodes if n["kind"] == "parent"]
+    assert root["label"].startswith("morphin") and "epoxy" not in root["label"] and "methyl" not in root["label"]
+    epoxy = _one(nodes, kind="token", label="epoxy")
+    assert epoxy["parent"] == root["id"] and "bridge" in epoxy["line"]
+    assert contained_parts(nodes) == []
+    assert classify(t, nodes, assign_owners(t.tokens)) == ["CLEAN"]
+
+
+def test_the_bridge_prefix_lights_the_positions_it_bridges():
+    t, nodes = _nodes(CODEINE)
+    epoxy = _one(nodes, kind="token", label="epoxy")
+    assert sorted(("4" in t.atoms[a].locants, "5" in t.atoms[a].locants) for a in epoxy["lights"]) \
+        == [(False, True), (True, False)]
+    for label in ("4", "5"):
+        node = next(n for n in nodes if n["kind"] == "locant" and n["label"] == label
+                    and n["parent"] == epoxy["parent"])
+        (atom,) = node["lights"]
+        assert label in t.atoms[atom].locants and atom in epoxy["lights"]
+
+
+def test_part_contains_part_catches_a_label_that_swallows_a_neighbour():
+    """Not vacuous: widen the root's span back to the round-1 'epoxy-3-methoxy-17-methylmorphinan'."""
+    t, nodes = _nodes(CODEINE)
+    (root,) = [n for n in nodes if n["kind"] == "parent"]
+    root["span"] = [t.text.index("epoxy"), root["span"][1]]
+    root["label"] = t.text[root["span"][0]:root["span"][1]]
+    assert "PART_CONTAINS_PART" in classify(t, nodes, assign_owners(t.tokens))

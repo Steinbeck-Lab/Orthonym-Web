@@ -122,6 +122,9 @@ CURATED: list[tuple[str, str]] = [
     ("real-drug-names", "(5S,9R,13S,14R)-4,5-epoxy-17-methylmorphinane"),
     # M2: von Baeyer rings in BOTH spiro components
     ("von-baeyer-spiro", "(1S,1'S,2'R,4S,5'S,6R,8R,9R,10'S,11'S)-5'-hydroxy-2',4,6,9,15'-pentamethylspiro[7-oxa-2-azabicyclo[4.3.0]nonane-8,14'-tetracyclo[8.7.0.0^2,7.0^11,16]heptadeca-7,15-diene]"),
+    # Phase C round 2: bridge prefix before substituents (codeine, hydrocodone)
+    ("real-drug-names", "(5alpha,6alpha)-7,8-didehydro-4,5-epoxy-3-methoxy-17-methylmorphinan-6-ol"),
+    ("real-drug-names", "4,5alpha-epoxy-3-methoxy-17-methylmorphinan-6-one"),
 ]
 
 # Names OPSIN 2.9.0 itself genuinely cannot parse. Verified against

@@ -77,6 +77,10 @@ def resolve_roles(tokens: Sequence[WrittenToken], part_kind: str, copies: int) -
     In a copy group, a leading multiplier whose count equals the number of
     copies is that group's own count ("tri|octadecanoate") -> prefix."""
     roles = [_base(t.kind) for t in tokens]
+    # A ring-bridge prefix ("4,5-epoxy-17-methylmorphinan") is written before the
+    # substituents that follow it, so it can never share the parent's label: it is
+    # its own child node.
+    roles = ["prefix" if t.kind == "fusedRingBridge" else r for t, r in zip(tokens, roles)]
     nxt: Optional[tuple[str, str]] = None
     for i in range(len(tokens) - 1, -1, -1):
         if roles[i] == "glue":
