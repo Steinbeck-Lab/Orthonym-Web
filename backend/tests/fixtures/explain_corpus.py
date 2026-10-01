@@ -93,6 +93,35 @@ CURATED: list[tuple[str, str]] = [
     ("von-baeyer-spiro", "3-(4-fluorophenyl)-1'-[(2-fluorophenyl)methyl]-2',4-dioxospiro[1,3-thiazolidine-2,3'-2,3-dihydro-1H-indole]"),
     # Task 9: two spiro systems in one name; the primes restart at each
     ("von-baeyer-spiro", "3-hydroxy-7,7-dimethyl-1'-[4'-oxospiro[2,3-dihydro-1H-indene-2,5'-4,5-dihydro-1,3-oxazole]-2'-yl]spiro[6H,7H-furo[3,4-b]pyridine-5,4'-piperidine]"),
+
+    # Phase C fix round 1: user-style spiro (locants after the bracket), position locants before a ring chain,
+    # a number before a long alkane stem, a bridge prefix before a substituent
+    ("von-baeyer-spiro", "(2-oxospiro[indole-3,4'-piperidin]-1(2H)-yl)acetic acid"),
+    ("von-baeyer-spiro", "1-oxidospiro[2,3-dihydro-1-benzothiophene-3,4'-piperidine]-1-ium"),
+    ("von-baeyer-spiro", "spiro[2,3-dihydro-1-benzothiophene-3,4'-piperidine]-1-ium"),
+    ("von-baeyer-spiro", "spiro[indole-3,4'-piperidin]-1-ium"),
+    ("von-baeyer-spiro", "spiro[indole-3,4'-piperidin]-2(1H)-one"),
+    ("von-baeyer-spiro", "1'-methylspiro[indole-3,4'-piperidin]-2(1H)-one"),
+    ("von-baeyer-spiro", "spiro[indene-1,4'-piperidin]-3(2H)-one"),
+    ("von-baeyer-spiro", "spiro[4H-3,1-benzoxazine-4,4'-piperidin]-2(1H)-one"),
+    ("von-baeyer-spiro", "1H-spiro[indene-2,4'-piperidine]-1,3(2H)-dione"),
+    ("von-baeyer-spiro", "spiro[cyclohexane-1,3'-indol]-2'(1'H)-one"),
+    ("von-baeyer-spiro", "spiro[1,3-benzodioxole-2,1'-cyclohexane]-5-carboxylic acid"),
+    ("von-baeyer-spiro", "spiro[chromane-2,4'-piperidin]-4-one"),
+    ("von-baeyer-spiro", "spiro[indole-3,4'-piperidin]-1(2H)-yl acetate"),
+    ("real-drug-names", "1-oxiranylpropan-2-one"),
+    ("real-drug-names", "1-oxiranylethanone"),
+    ("real-drug-names", "1-thiiranylethanone"),
+    ("real-drug-names", "1-aziridinylpropan-2-ol"),
+    ("real-drug-names", "1-piperidinylethanone"),
+    ("real-drug-names", "2-piperidinoethanol"),
+    ("real-drug-names", "3-pyrrolidin-1-ylpropan-1-ol"),
+    ("real-drug-names", "2-morpholin-4-ylethanol"),
+    ("real-drug-names", "1-azetidinylbutan-2-one"),
+    ("real-drug-names", "N-hexadecylnaphthalen-1-amine"),
+    ("real-drug-names", "(5S,9R,13S,14R)-4,5-epoxy-17-methylmorphinane"),
+    # M2: von Baeyer rings in BOTH spiro components
+    ("von-baeyer-spiro", "(1S,1'S,2'R,4S,5'S,6R,8R,9R,10'S,11'S)-5'-hydroxy-2',4,6,9,15'-pentamethylspiro[7-oxa-2-azabicyclo[4.3.0]nonane-8,14'-tetracyclo[8.7.0.0^2,7.0^11,16]heptadeca-7,15-diene]"),
 ]
 
 # Names OPSIN 2.9.0 itself genuinely cannot parse. Verified against

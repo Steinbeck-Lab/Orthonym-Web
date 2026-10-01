@@ -29,6 +29,10 @@ Outcomes, measured on the trace and the node list (a name may carry several):
   LOCANT_UNLIT        a locant node lights nothing (a sugar's alpha/beta, whose
                       anomeric carbon the structure cannot prove, lights nothing
                       by design and is not counted)
+  LOCANT_WRONG_ATOM   a locant node inside its own part (not a substituent's leading
+                      position, not hydro / anomer, which have their own checks) lights
+                      an atom that does not carry that locant, primed per spiro
+                      component (suffix-owned atoms excepted); see wrong_locant_atoms
   LIT_ATOM_FOREIGN    a locant node lights an atom it has no claim on: not in its
                       own part, not a copy OPSIN placed at that locant, and not
                       the atom carrying that locant that the part's substituent
@@ -49,21 +53,93 @@ PASSING = {"CLEAN", "UNREADABLE"}
 
 def _spiro_primes(trace, node, loc: str) -> int:
     """How many primes OPSIN puts on the atom a locant names. In
-    spiro[A-x,y'-B] every locant written after the spiro locants of THAT spiro
-    system is a position of a later component, and OPSIN numbers those atoms
-    1', 2', ... (a second spiro locant makes the third component ''). A name
-    may hold several spiro systems; only the one the node is written in counts.
-    The gate still demands an EXACT locant: an atom carrying the bare number in a
-    later component is wrong."""
+    spiro[A-x,y'-B] every locant written INSIDE the brackets after the spiro
+    locants of THAT spiro system is a position of a later component, and OPSIN
+    numbers those atoms 1', 2', ... (a second spiro locant makes the third
+    component ''). A locant after the closing bracket ("spiro[...]-2(1H)-one",
+    "-1-ium") is the first component's or the whole's, as written. A name may
+    hold several spiro systems; only the one the node is written in counts.
+    The gate demands an EXACT locant: a bare number in a later component, or a
+    primed one after the bracket, is the wrong atom."""
     if loc.endswith("'") or not node["span"]:
         return 0
     start = node["span"][0]
-    heads = [t for t in trace.tokens if t.kind == "polyCyclicSpiro" and t.span[1] <= start]
-    if not heads:
-        return 0
-    head = heads[-1]
-    return sum(1 for t in trace.tokens if t.kind == "spiroLocant" and head.span[1] <= t.span[0]
-               and t.span[1] <= start)
+    primes = 0
+    for head in (t for t in trace.tokens if t.kind == "polyCyclicSpiro" and t.span[1] <= start):
+        end = _close_of(trace.text, head.span[1])
+        if end is not None and start < end:
+            primes = sum(1 for t in trace.tokens if t.kind == "spiroLocant"
+                         and head.span[1] <= t.span[0] and t.span[1] <= start)
+    return primes
+
+
+def _close_of(text: str, pos: int):
+    """Index just past the bracket opening at text[pos], else None."""
+    if pos >= len(text) or text[pos] not in "[({":
+        return None
+    depth = 0
+    for k in range(pos, len(text)):
+        if text[k] in "[({":
+            depth += 1
+        elif text[k] in "])}":
+            depth -= 1
+            if depth == 0:
+                return k + 1
+    return None
+
+
+def _is_part_position_in_front(trace, node, parent) -> bool:
+    """True when OPSIN placed the part at this very number (TracePart.locant) and
+    the number is written in front of the part's group token: it is the position
+    the part hangs on, not the part's own numbering, so a node that treats it as
+    the part's own ("1-oxiranylpropan-2-one" lighting oxirane's O1, which also
+    carries a 1) lights the wrong atom whatever that atom carries."""
+    owns = set(parent["owns"])
+    keys = {p.span for p in trace.parts if p.kind == "substituent" and p.atoms and set(p.atoms) <= owns}
+    for key in keys:
+        placed = {p.locant for p in trace.parts if p.span == key and p.locant}
+        group = next((t for t in trace.tokens if t.owner == key and t.kind == "group"), None)
+        if group is None or node["label"] not in placed or not node["span"] or node["span"][1] > group.span[0]:
+            continue
+        # Only where a replacement locant could be mistaken for it: the number
+        # sits right before a heteroatom or an alkane stem ("1-oxiranyl",
+        # "N-hexadecyl"); "[1,1'-biphenyl]" and "1,3-dioxolane" are the name's own.
+        tok = next((t for t in trace.tokens if t.span[0] <= node["span"][0] and node["span"][1] <= t.span[1]), None)
+        after = next((t for t in trace.tokens[tok.index + 1:]
+                      if t.kind not in ("locant", "multiplier", "hyphen")), None) if tok is not None else None
+        if after is not None and after.kind in ("heteroatom", "alkaneStemComponent"):
+            return True
+    return False
+
+
+def wrong_locant_atoms(trace, nodes) -> list:
+    """(label, atoms) for every locant node inside its own part that lights an
+    atom not carrying that exact locant. LIT_ATOM_FOREIGN only asks whether the
+    atom belongs to the part's family, so it cannot see a wrong atom of the right
+    part. Exempt, each judged elsewhere: a substituent's leading position (its
+    claim is the parent's or the copy's: LIT_ATOM_FOREIGN), hydro and
+    indicated-hydrogen locants (HYDRO_WRONG), an anomer mark (proven from the
+    molecule by the gate), a locant that lights nothing (LOCANT_UNLIT), a
+    bracket's own locant (no part). The atoms a suffix owns carry no number."""
+    by_id = {n["id"]: n for n in nodes}
+    bad = []
+    for n in nodes:
+        if n["kind"] != "locant" or n["parent"] is None or not n["lights"]:
+            continue
+        line, parent = n["line"], by_id[n["parent"]]
+        if "hydrogen" in line or "anomer" in line:
+            continue
+        if parent["kind"] == "substituent" and "this group is attached at position" in line:
+            continue
+        if parent["kind"] == "substituent" and _is_part_position_in_front(trace, n, parent):
+            bad.append((n["label"], sorted(n["lights"])))      # the parent's position, read as the part's own
+            continue
+        want = n["label"] + "'" * _spiro_primes(trace, n, n["label"])
+        free = set(parent["owns"]) if parent["kind"] == "suffix" else set()
+        wrong = [a for a in n["lights"] if want not in trace.atoms[a].locants and a not in free]
+        if wrong:
+            bad.append((n["label"], sorted(n["lights"])))
+    return bad
 
 
 def classify(trace, nodes, owners) -> list[str]:
@@ -126,6 +202,8 @@ def classify(trace, nodes, owners) -> list[str]:
         out.append("LOCANT_UNLIT")
     if foreign_lights(trace, nodes):
         out.append("LIT_ATOM_FOREIGN")
+    if wrong_locant_atoms(trace, nodes):
+        out.append("LOCANT_WRONG_ATOM")
     return out or ["CLEAN"]
 
 
@@ -155,7 +233,7 @@ def _report(title: str, results: dict[str, list[str]]) -> int:
     for outcome in ("CLEAN", "UNREADABLE", "UNAVAILABLE", "MISMATCH", "UNPLACED", "NODE_ERROR", "PART_UNPLACED",
                     "ATOM_GAP", "ATOM_OVERLAP", "BAD_SPAN", "CROSSING", "LABEL_EDGE", "ORPHAN_TOKEN",
                     "HYDRO_WRONG", "STEREO_NO_PARENT", "STEREO_WRONG_ATOM", "LOCANT_UNLIT",
-                    "LIT_ATOM_FOREIGN"):
+                    "LIT_ATOM_FOREIGN", "LOCANT_WRONG_ATOM"):
         print(f"  {outcome:18s} {counts.get(outcome, 0)}")
     print("  residue:")
     for name, outs in results.items():

@@ -163,6 +163,22 @@ def _chain_is_bracketed(trace: Trace, key: Optional[Span]) -> bool:
     return False
 
 
+def _bracket_end(text: str, pos: int) -> Optional[int]:
+    """The index just past the bracket that opens at text[pos] (the "[" after
+    "spiro"), or None when none opens there."""
+    if pos >= len(text) or text[pos] not in "[({":
+        return None
+    depth = 0
+    for k in range(pos, len(text)):
+        if text[k] in "[({":
+            depth += 1
+        elif text[k] in "])}":
+            depth -= 1
+            if depth == 0:
+                return k + 1
+    return None
+
+
 def _joined_to_next_substituent(trace: Trace, key: Optional[Span]) -> bool:
     """True when a substituent is followed directly (hyphens skipped) by
     another substituent's group token it is joined to ("acetyl|oxy",
@@ -211,18 +227,27 @@ class _Builder:
     def with_locant(self, atoms, locant) -> list[int]:
         return [i for i in atoms if locant in self.by_index[i].locants]
 
-    def spiro_lookup(self, tokens, i: int, atoms, loc: str) -> str:
-        """The locant as OPSIN numbers it. In spiro[A-x,y'-B] every locant
-        written after the spiro locants belongs to a later component, and
-        OPSIN primes those atoms ("6-oxa" in the second component is 6'): the
-        bare number would light the first component's atom."""
-        if not any(t.kind == "polyCyclicSpiro" for t in tokens) or loc.endswith("'"):
+    def spiro_lookup(self, tokens, i: int, atoms, loc: str) -> Optional[str]:
+        """The locant as OPSIN numbers it, or None when it names no atom. In
+        spiro[A-x,y'-B] every locant written INSIDE the brackets after the
+        spiro locants belongs to a later component, and OPSIN primes those
+        atoms ("6-oxa" in the second component is 6'): the bare number would
+        light the first component's atom. A locant written after the closing
+        bracket ("spiro[...]-1(2H)-yl", "-1-ium") is the whole part's own and
+        stays as written. A primed number no atom carries lights nothing."""
+        if loc.endswith("'") or tokens[i].kind == "spiroLocant":
             return loc
-        primes = sum(1 for t in tokens[:i] if t.kind == "spiroLocant")
-        if tokens[i].kind == "spiroLocant" or not primes:
+        pos = tokens[i].span[0]
+        primes = 0
+        for head in (t for t in tokens[:i] if t.kind == "polyCyclicSpiro"):
+            end = _bracket_end(self.t.text, head.span[1])
+            if end is not None and pos < end:
+                primes = sum(1 for t in tokens[:i] if t.kind == "spiroLocant"
+                             and head.span[1] <= t.span[0] and t.span[1] <= pos)
+        if not primes:
             return loc
         primed = loc + "'" * primes
-        return primed if self.with_locant(atoms, primed) else loc
+        return primed if self.with_locant(atoms, primed) else None
 
     def word(self, pos: int) -> int:
         return self.t.text.count(" ", 0, pos)
@@ -240,20 +265,28 @@ class _Builder:
                  line=describe_part(kind, w.kind, None, len(set(owns)), copies=len(w.copies)))
 
     def foreign_replacement_locants(self, w: _WrittenPart, roles: list[str]) -> list[str]:
-        """A locant written right before a heteroatom token reads as part of the
-        name ("1,3-|dioxolanyl", "4-|oxa-1-aza..."): the heteroatoms sit at those
-        numbers. "3-oxiranylmethoxy" is not that: oxirane's oxygen is O1, so the 3
-        is the position the whole chain hangs on, in front of the substituent."""
+        """A locant written right before a heteroatom or alkane-stem token reads
+        as part of the name ("1,3-|dioxolanyl", "4-|oxa-1-aza..."). It is a
+        POSITION, in front of the substituent, when either
+          * OPSIN itself placed the part at that number (TracePart.locant:
+            "1-oxiranylpropan-2-one", "N-hexadecylnaphthalen-1-amine" -- the
+            number is the parent's position the whole substituent hangs on), or
+          * the token is a heteroatom and none of the part's heteroatoms carries
+            the number ("3-oxiranylmethoxy": oxirane's oxygen is O1)."""
         own_hetero = [self.by_index[a] for a in self.atoms_of(w) if self.by_index[a].element != "C"]
+        placed = {c.locant for c in w.copies if c.locant}
         out = list(roles)
         for i, tok in enumerate(w.tokens):
             if tok.kind not in LOCANT_KINDS or roles[i] != "core":
                 continue
             after = next((t for t in w.tokens[i + 1:] if t.kind not in CONTEXTUAL and t.kind not in GLUE), None)
-            if after is None or after.kind != "heteroatom":
+            if after is None or after.kind not in ("heteroatom", "alkaneStemComponent"):
                 continue
             items = [loc for loc, _ in locant_items(self.t.text, tok.span)]
-            if not any(loc in atom.locants for loc in items for atom in own_hetero):
+            if placed & set(items):
+                out[i] = "prefix"
+            elif after.kind == "heteroatom" and not any(
+                    loc in atom.locants for loc in items for atom in own_hetero):
                 out[i] = "prefix"
         return out
 
@@ -338,24 +371,34 @@ class _Builder:
                     if added:
                         # "2(1H)": hydrogen added at position 1 of the parent.
                         at = self.spiro_lookup(tokens, i, atoms, added.group(1))
-                        hit = self.with_locant(atoms, at)
+                        hit = self.with_locant(atoms, at) if at is not None else []
                         element = self.by_index[hit[0]].element if len(hit) == 1 else None
                         self.add("indicated_h", loc, sub, parent=owner, lights=hit,
-                                 line=describe_locant("modifier", at, element))
+                                 line=describe_locant("modifier", at or added.group(1), element))
                         continue
-                    lights, line = self.locant(self.spiro_lookup(tokens, i, atoms, loc), i < first_core,
+                    at = self.spiro_lookup(tokens, i, atoms, loc)
+                    if at is None:
+                        self.add("locant", loc, sub, parent=owner, lights=[],
+                                 line=describe_locant("position", loc))
+                        continue
+                    lights, line = self.locant(at, i < first_core,
                                                target, mode, atoms, w.copies,
                                                used_copies, suffix_atoms, suffix_locants or {},
                                                written[loc], w, [x for x, _ in items])
                     counted.update(lights)
                     self.add("locant", loc, sub, parent=owner, lights=lights, line=line)
+                if tok.kind == "spiroLocant":
+                    # The spiro locants name the shared atom, not what the next
+                    # component's counting words and ring tokens refer to: those
+                    # light the skeleton, as the first component's do.
+                    counted = set()
             elif tok.kind == "indicatedHydrogen":
                 for loc, sub in indicated_h_items(self.t.text, tok.span):
-                    loc = self.spiro_lookup(tokens, i, atoms, loc)
-                    hit = self.with_locant(atoms, loc)
+                    at = self.spiro_lookup(tokens, i, atoms, loc)
+                    hit = self.with_locant(atoms, at) if at is not None else []
                     element = self.by_index[hit[0]].element if len(hit) == 1 else None
                     self.add("indicated_h", self.text(sub), sub, parent=owner, lights=hit,
-                             line=describe_locant("modifier", loc, element))
+                             line=describe_locant("modifier", at or loc, element))
             elif tok.kind in _LINE_KINDS:
                 span = self.trim(tok.span)
                 self.add(_NODE_KIND.get(tok.kind, "token"), self.text(span), span, parent=owner,
@@ -683,12 +726,37 @@ class _Builder:
                  line=describe_locant("position", loc))
 
 
+def _bridge_prefixes_to_the_root(trace: Trace, owners: dict) -> None:
+    """A ring-bridge prefix OPSIN used up ("4,5-epoxy" in "4,5-epoxy-17-methyl|
+    morphinane") modifies the parent ring system it is written before. The
+    written-neighbour rule hands it to the next KEPT token, which is the
+    substituent in between ("methyl"). Move it, and the locants written right
+    before it, to the next root part."""
+    roots = {p.span for p in trace.parts if p.kind == "root" and p.span is not None}
+    for tok in trace.tokens:
+        if tok.kind != "fusedRingBridge" or tok.owner is not None or owners.get(tok.index) is None:
+            continue
+        current = owners[tok.index]
+        target = next((owners[t.index] for t in trace.tokens[tok.index + 1:]
+                       if owners.get(t.index) is not None and owners[t.index].kind == "part"
+                       and owners[t.index].span in roots), None)
+        if target is None or target == current:
+            continue
+        owners[tok.index] = target
+        j = tok.index - 1
+        while j >= 0 and trace.tokens[j].kind in LOCANT_KINDS | {"hyphen"}:
+            if owners.get(trace.tokens[j].index) == current:
+                owners[trace.tokens[j].index] = target
+            j -= 1
+
+
 def build_nodes(trace: Trace) -> list[dict]:
     trace = adopt_orphan_tokens(trace)
     parts = _written_parts(trace)
     b = _Builder(trace, parts)
     by_key = {w.key: w for w in parts if w.key is not None}
     owners = assign_owners(trace.tokens)
+    _bridge_prefixes_to_the_root(trace, owners)
     loose: list[tuple[WrittenToken, Optional[Span]]] = []
     for tok in trace.tokens:
         if tok.index not in owners or tok.kind == STEREO_KIND:

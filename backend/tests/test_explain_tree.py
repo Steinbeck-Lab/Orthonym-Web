@@ -7,7 +7,7 @@ from rdkit import Chem
 
 from app.explain_tree import PART_NODE_KINDS, _Builder, _written_parts, build_nodes, foreign_lights
 from app.opsin_trace import Trace, TraceAtom, TracePart
-from scripts.explain_census import _spiro_primes
+from scripts.explain_census import _spiro_primes, wrong_locant_atoms
 from tests.fixtures.traces import load_traces
 
 TRACES = load_traces()
@@ -176,6 +176,8 @@ def test_corpus_invariants(name):
                 assert n["lights"] and all(m.group(1) in t.atoms[a].locants for a in n["lights"]), (name, n)
     # the lit-atom gate: no locant lights an atom it has no claim on
     assert foreign_lights(t, nodes) == [], name
+    # ...and a locant inside its own part lights an atom that carries it (primed per spiro component)
+    assert wrong_locant_atoms(t, nodes) == [], name
 
 
 # -- C1: a locant lights only atoms it can name (the lit-atom gate) --------------
@@ -394,3 +396,33 @@ def test_the_gate_still_calls_a_wrong_atom_foreign_for_a_glycosyl_anomer_mark(na
         assert foreign_lights(t, nodes) == [(mark, sorted(wrong))]
     node["lights"] = right
     assert foreign_lights(t, nodes) == []
+
+
+# -- Phase C fix round 1 --------------------------------------------------------------
+def test_a_primed_locant_no_atom_carries_lights_nothing_never_the_first_components_atom():
+    """M1: spiro_lookup used to fall back to the bare locant, the FIRST component's atom."""
+    t = TRACES[SPIRO_INDOLE]
+    b = _Builder(t, _written_parts(t))
+    root_atoms = next(p.atoms for p in t.parts if p.kind == "root")
+    six = next(i for i, tok in enumerate(t.tokens) if t.text[tok.span[0]:tok.span[1]] == "6-"
+               and tok.span[0] > t.text.index("5'"))
+    assert b.spiro_lookup(t.tokens, six, root_atoms, "6") == "6'"
+    assert b.spiro_lookup(t.tokens, six, root_atoms, "99") is None          # carried by no atom, bare or primed
+    # inside the first component nothing is primed
+    two = next(i for i, tok in enumerate(t.tokens) if t.text[tok.span[0]:tok.span[1]] == "2,3-")
+    assert b.spiro_lookup(t.tokens, two, root_atoms, "2") == "2"
+
+
+TWO_RINGS = ("(1S,1'S,2'R,4S,5'S,6R,8R,9R,10'S,11'S)-5'-hydroxy-2',4,6,9,15'-pentamethylspiro"
+             "[7-oxa-2-azabicyclo[4.3.0]nonane-8,14'-tetracyclo[8.7.0.0^2,7.0^11,16]heptadeca-7,15-diene]")
+
+
+def test_a_ring_token_of_a_later_spiro_component_lights_what_the_first_components_does():
+    """M2: after the spiro locants "8,14'-", "tetra" and "cyclo[...]" took the spiro atom from the
+    locant run, while the first component's "cyclo[4.3.0]" lit the skeleton."""
+    t, nodes = _nodes(TWO_RINGS)
+    (root,) = [n for n in nodes if n["kind"] == "parent"]
+    first = next(n for n in nodes if n["label"] == "cyclo[4.3.0]")
+    later = next(n for n in nodes if n["label"].startswith("cyclo[8.7.0"))
+    tetra = next(n for n in nodes if n["label"] == "tetra")
+    assert first["lights"] == later["lights"] == tetra["lights"] == sorted(root["owns"])

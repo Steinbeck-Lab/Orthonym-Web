@@ -589,3 +589,129 @@ def test_the_primes_of_a_spiro_system_restart_at_the_next_spiro_system():
     four = next(n for n in nodes if n["kind"] == "locant" and n["span"] == [four_five, four_five + 1])
     (atom,) = four["lights"]
     assert "4'" in t.atoms[atom].locants                      # the first system's second component
+
+
+# -- Phase C fix round 1 ------------------------------------------------------------------
+def _spiro_kids(nodes, label, after):
+    return [n for n in nodes if n["kind"] in ("locant", "indicated_h") and n["label"] == label
+            and n["span"] and n["span"][0] >= after]
+
+
+I1_ACID = "(2-oxospiro[indole-3,4'-piperidin]-1(2H)-yl)acetic acid"
+I1_IUM = "1-oxidospiro[2,3-dihydro-1-benzothiophene-3,4'-piperidine]-1-ium"
+
+
+def _chembl_name(fragment):
+    from pathlib import Path
+    path = Path(__file__).with_name("fixtures") / "explain_chembl_10k.tsv"
+    (name,) = [line.split("\t", 1)[1].rstrip("\n") for line in path.open() if fragment in line]
+    return name
+
+
+# I1. a locant written AFTER the spiro bracket is the whole part's own number, never a later
+# component's: the -1(2H)-yl of an N-substituted spiro-oxindole is the INDOLE nitrogen
+def test_a_locant_after_the_spiro_bracket_is_not_primed():
+    t, nodes = _nodes(I1_ACID)
+    close = t.text.index("]")
+    (one,) = _spiro_kids(nodes, "1", close)
+    (atom,) = one["lights"]
+    assert t.atoms[atom].element == "N" and "1" in t.atoms[atom].locants and "1'" not in t.atoms[atom].locants
+    (h,) = _spiro_kids(nodes, "2H", close)
+    (atom,) = h["lights"]
+    assert t.atoms[atom].element == "C" and "2" in t.atoms[atom].locants
+    assert classify(t, nodes, assign_owners(t.tokens)) == ["CLEAN"]
+
+
+@pytest.mark.parametrize("name", [I1_IUM, "CHEMBL90291"])
+def test_a_charge_locant_after_the_spiro_bracket_names_the_charged_sulfur(name):
+    if name == "CHEMBL90291":
+        name = _chembl_name("CHEMBL90291")
+    t, nodes = _nodes(name)
+    close = t.text.rindex("]")
+    (one,) = _spiro_kids(nodes, "1", close)
+    (atom,) = one["lights"]
+    assert t.atoms[atom].element == "S" and "1" in t.atoms[atom].locants
+    assert classify(t, nodes, assign_owners(t.tokens)) == ["CLEAN"]
+
+
+# I2. the hydro gate bounds its primes at the bracket too
+def test_the_hydro_gate_accepts_a_bare_locant_after_the_spiro_bracket_and_refuses_a_primed_one():
+    name = "spiro[indole-3,4'-piperidin]-2(1H)-one"
+    t, nodes = _nodes(name)
+    assert classify(t, nodes, assign_owners(t.tokens)) == ["CLEAN"]
+    h = _one(nodes, kind="indicated_h", label="1H")
+    (atom,) = h["lights"]
+    assert t.atoms[atom].element == "N" and "1" in t.atoms[atom].locants
+    primed = next(a.index for a in t.atoms if "1'" in a.locants)
+    h["lights"] = [primed]
+    assert "HYDRO_WRONG" in classify(t, nodes, assign_owners(t.tokens))
+    # and the I1 wrong atom (the pre-fix builder output) is no longer waved through
+    t, nodes = _nodes(I1_ACID)
+    h = _spiro_kids(nodes, "2H", t.text.index("]"))[0]
+    h["lights"] = [next(a.index for a in t.atoms if "2'" in a.locants)]
+    assert "HYDRO_WRONG" in classify(t, nodes, assign_owners(t.tokens))
+
+
+# I3. the census class that sees a wrong atom of the right part
+def test_locant_wrong_atom_catches_the_round_0_wrong_atoms(monkeypatch):
+    """Not vacuous: the I1 charge locant lit on the piperidine N1', and an I4 position lit on
+    the ring heteroatom that also carries a 1, are both LOCANT_WRONG_ATOM (and census CLEAN
+    before this class existed)."""
+    t, nodes = _nodes(I1_IUM)
+    (one,) = _spiro_kids(nodes, "1", t.text.rindex("]"))
+    one["lights"] = [next(a.index for a in t.atoms if "1'" in a.locants and a.element == "N")]
+    assert "LOCANT_WRONG_ATOM" in classify(t, nodes, assign_owners(t.tokens))
+    t, nodes = _nodes(I1_ACID)
+    one = _spiro_kids(nodes, "1", t.text.index("]"))[0]
+    one["lights"] = [next(a.index for a in t.atoms if "1'" in a.locants and a.element == "N")]
+    assert "LOCANT_WRONG_ATOM" in classify(t, nodes, assign_owners(t.tokens))
+    t, nodes = _nodes("1-oxiranylpropan-2-one")
+    p, leading = _leading(nodes, "oxiranyl")
+    ring_o = next(a.index for a in t.atoms if a.element == "O" and "1" in a.locants and a.index in p["owns"])
+    leading["lights"] = [ring_o]
+    leading["line"] = "Position 1."                  # what the round-0 builder said: the part's own number
+    assert "LOCANT_WRONG_ATOM" in classify(t, nodes, assign_owners(t.tokens))
+    # a primed locant after the bracket is wrong, a bare one inside a later component is wrong
+    t, nodes = _nodes("spiro[indole-3,4'-piperidin]-2(1H)-one")
+    two = next(n for n in nodes if n["kind"] == "locant" and n["label"] == "2" and n["span"][0] > t.text.index("]"))
+    assert classify(t, nodes, assign_owners(t.tokens)) == ["CLEAN"]
+    two["lights"] = [a.index for a in t.atoms if "2'" in a.locants]
+    assert "LOCANT_WRONG_ATOM" in classify(t, nodes, assign_owners(t.tokens))
+
+
+# I4. OPSIN placed the ring at the written leading number: it is the parent chain's position
+@pytest.mark.parametrize("name,part,root", [
+    ("1-oxiranylpropan-2-one", "oxiranyl", "propan"),
+    ("1-oxiranylethanone", "oxiranyl", "ethan"),
+    ("1-thiiranylethanone", "thiiranyl", "ethan"),
+    ("1-aziridinylpropan-2-ol", "aziridinyl", "propan"),
+])
+def test_a_leading_number_opsin_placed_the_ring_at_is_the_parent_chains_position(name, part, root):
+    """The 1 is where OPSIN put the ring on the parent chain, like any placed substituent
+    ("4-chloro"): it lights what sits at that position, with the "attached at position" line,
+    and the label no longer swallows it. Round 0 lit the ring heteroatom ("Position 1.")."""
+    t, nodes = _nodes(name)
+    p, leading = _leading(nodes, part)                 # the label is "oxiranyl", not "1-oxiranyl"
+    assert sorted(leading["lights"]) == sorted(p["owns"])
+    assert "attached at position 1" in leading["line"]
+    assert classify(t, nodes, assign_owners(t.tokens)) == ["CLEAN"]
+
+
+def test_a_number_before_a_long_alkane_stem_is_a_position_when_opsin_placed_the_part_there():
+    t, nodes = _nodes("N-hexadecylnaphthalen-1-amine")
+    p, leading = _leading(nodes, "hexadecyl")          # round 0: label "N-hexadecyl", "Position N." lit the whole chain
+    assert sorted(leading["lights"]) == sorted(p["owns"]) and "attached at position N" in leading["line"]
+    assert classify(t, nodes, assign_owners(t.tokens)) == ["CLEAN"]
+
+
+def test_a_bridge_prefix_belongs_to_the_ring_it_bridges_not_the_substituent_written_after_it():
+    t, nodes = _nodes("(5S,9R,13S,14R)-4,5-epoxy-17-methylmorphinane")
+    (root,) = [n for n in nodes if n["kind"] == "parent"]
+    methyl = _one(nodes, kind="substituent", label="methyl")
+    for label in ("4", "5"):
+        (n,) = [x for x in nodes if x["kind"] == "locant" and x["label"] == label and x["parent"] == root["id"]]
+        (atom,) = n["lights"]
+        assert label in t.atoms[atom].locants and atom in root["owns"]
+    (seventeen,) = [x for x in nodes if x["kind"] == "locant" and x["label"] == "17"]
+    assert seventeen["parent"] == methyl["id"]
+    assert classify(t, nodes, assign_owners(t.tokens)) == ["CLEAN"]
