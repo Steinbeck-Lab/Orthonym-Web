@@ -157,6 +157,11 @@ CURATED: list[tuple[str, str]] = [
     ("sugar-o-locants", "4-O-methyl-D-glucuronic acid"),
     ("sugar-o-locants", "2-O-methyl-D-ribose"),
     ("sugar-o-locants", "2,3,4-tri-O-acetyl-D-glucose"),
+    ("sugar-o-locants", "6-O-(alpha-L-rhamnopyranosyl)-D-glucopyranose"),
+    ("sugar-o-locants", "2,3-di-O-(beta-D-glucopyranosyl)-D-glucose"),
+    ("sugar-o-locants", "3-O-(4-methylphenyl)-D-glucose"),
+    ("sugar-o-locants", "6-S-methyl-6-thio-D-glucose"),
+    ("sugar-o-locants", "3-O-acetyl-4-O-methyl-D-glucose"),
     # Final review I2: functional-class names (the functional word owns its own atoms)
     ("functional-class", "methyl ethyl ketone"),
     ("functional-class", "ethyl methyl ketone"),

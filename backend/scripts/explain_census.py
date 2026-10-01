@@ -265,13 +265,15 @@ def wrong_locant_atoms(trace, nodes) -> list:
     carbohydrate = any(t.kind == "carbohydrateRingSize" for t in trace.tokens)
     bad = []
     for n in nodes:
-        if n["kind"] != "locant" or n["parent"] is None:
+        if n["kind"] != "locant":
             continue
-        parent = by_id[n["parent"]]
-        pair = oxy_pair_allowed(trace, n, parent)
+        parent = by_id[n["parent"]] if n["parent"] is not None else None
+        pair = oxy_pair_allowed(trace, n, parent, nodes)
         if pair is not None:
             if not set(n["lights"]) <= pair:
                 bad.append((n["label"], sorted(n["lights"])))
+            continue
+        if parent is None:
             continue
         tok = _locant_token(trace, n)
         comp = _component_for(trace, n)

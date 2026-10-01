@@ -53,7 +53,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Sequence
 
 from rdkit import Chem
 
@@ -437,7 +437,7 @@ class _Builder:
                         self.add("locant", loc, sub, parent=owner, lights=lit,
                                  line=describe_locant("position", loc))
                         continue
-                    pair = (self.oxy_pair(tokens, roles, i, items, item_at, w)
+                    pair = (self.oxy_pair(tokens, i, items, item_at, set(self.atoms_of(w)))
                             if mode == "substituent" and i < first_core else None)
                     if pair is not None:
                         # "4-O-": the O names the PARENT's oxygen of that element, the number
@@ -579,16 +579,16 @@ class _Builder:
                 found.append(a)
         return found if len(found) == 1 else []
 
-    def oxy_pair(self, tokens, roles, i: int, items, k: int, w: _WrittenPart):
+    def oxy_pair(self, tokens, i: int, items, k: int, own: set[int]):
         """(role, element, atoms) when item k of locant token i is half of a "4-O-" pair,
         else None. "4-O-beta-D-galactopyranosyl-D-glucopyranose", "6-O-acetyl",
-        "2,3,4-tri-O-acetyl": a number and an element symbol written one after the
-        other in front of a substituent say the substituent is joined through the
-        PARENT's atom of that element, on the parent carbon with that number. So the
-        number lights that parent carbon and the symbol that parent atom -- both found
-        by the bonds of the substituent chain, outside the substituent's own atoms --
-        and when the bonds do not prove exactly one, nothing is lit.
-        role is "number" or "element"."""
+        "2,3,4-tri-O-acetyl", "6-O-(alpha-L-rhamnopyranosyl)": a number and an element
+        symbol written one after the other in front of a substituent say the substituent
+        is joined through the PARENT's atom of that element, on the parent carbon with
+        that number. So the number lights that parent carbon and the symbol that parent
+        atom -- both found by the bonds of the substituent chain (`own` is its atoms),
+        outside the substituent's own atoms -- and when the bonds do not prove exactly
+        one, nothing is lit. role is "number" or "element"."""
         text = self.t.text
         number = lambda x: bool(_BARE_LOCANT.match(x))
         element = lambda x: bool(_ELEMENT_LOCANT.match(x))
@@ -602,7 +602,7 @@ class _Builder:
         else:
             def run_past(j: int, step: int):
                 j += step
-                while 0 <= j < len(tokens) and (roles[j] == "glue" or tokens[j].kind in ("hyphen", "multiplier")):
+                while 0 <= j < len(tokens) and tokens[j].kind in ("hyphen", "multiplier"):
                     j += step
                 return j if 0 <= j < len(tokens) else None
             if element(loc) and len(items) == 1:
@@ -620,7 +620,6 @@ class _Builder:
         if found is None:
             return None
         role, symbol, numbers = found
-        own = set(self.atoms_of(w))
         comp = self.component(own)
         joined = [y for y in self.edge(comp) if self.by_index[y].element == symbol.rstrip("'")]
         carbon: dict[str, set[int]] = {}
@@ -763,7 +762,16 @@ class _Builder:
         atoms = [a for w in inside for a in self.atoms_of(w)]
         if tok.kind in LOCANT_KINDS:
             roots, bridge = self.root_edge(self.component(atoms)) if atoms else (set(), False)
-            for loc, sub in locant_items(self.t.text, tok.span):
+            items = locant_items(self.t.text, tok.span)
+            for k, (loc, sub) in enumerate(items):
+                pair = self.oxy_pair(self.t.tokens, tok.index, items, k, set(atoms)) if atoms else None
+                if pair is not None:
+                    role, element, lit = pair
+                    line = (describe_locant("substituent", loc) if not lit else
+                            describe_locant("oxy_element", loc) if role == "element"
+                            else describe_locant("oxy_number", loc, element))
+                    self.add("locant", loc, sub, lights=lit, line=line)
+                    continue
                 lights = atoms
                 if bridge:
                     lights = self.carrying(roots, loc) or atoms
@@ -1011,17 +1019,33 @@ def _holds_anomeric_bonds(mol, atom: int, pool: set[int]) -> bool:
 _PAIR_IN_ONE_TOKEN = re.compile(r"(\d+[a-z]?'*)-([A-Z][a-z]?'*)(?=-|$)")
 
 
-def oxy_pair_allowed(trace: Trace, node: dict, parent: dict) -> Optional[set[int]]:
+def oxy_pair_allowed(trace: Trace, node: dict, parent: Optional[dict],
+                     nodes: Sequence[dict] = ()) -> Optional[set[int]]:
     """For a locant node that is half of an "n-O-" pair ("4-O-beta-D-galactopyranosyl",
-    "6-O-acetyl", "2,3,4-tri-O-acetyl") in front of the substituent `parent`: the
-    atoms it may light, else None (not such a node). A pair names the PARENT's atom of
-    that element, bonded to the substituent chain, and the parent carbon carrying the
-    number that atom is bonded to; neither may be an atom of the substituent itself.
-    Read from the written tokens and the bonds, not from the builder."""
-    if parent["kind"] != "substituent" or not node["span"] or not parent["span"] \
-            or node["span"][1] > parent["span"][0]:
+    "6-O-acetyl", "2,3,4-tri-O-acetyl", "6-O-(alpha-L-rhamnopyranosyl)") in front of the
+    substituent `parent` -- or, for a bracket's own locant (`parent` None), in front of
+    the bracket, whose parts are read from `nodes` -- the atoms it may light, else None
+    (not such a node). A pair names the PARENT's atom of that element, bonded to the
+    substituent chain, and the parent carbon carrying the number that atom is bonded
+    to; neither may be an atom of the substituent itself. Read from the written tokens
+    and the bonds, not from the builder."""
+    if not node["span"]:
         return None
     text, tokens = trace.text, trace.tokens
+    if parent is not None:
+        if parent["kind"] != "substituent" or not parent["span"] or node["span"][1] > parent["span"][0]:
+            return None
+        inside = set(parent["owns"])
+    else:
+        # a bracket's own locant: the bracket opens right after the written token
+        at = next((t.span[1] for t in tokens if t.kind in LOCANT_KINDS and t.span[0] <= node["span"][0] < t.span[1]), None)
+        while at is not None and at < len(text) and text[at] in "-":
+            at += 1
+        end = _bracket_end(text, at) if at is not None else None
+        if end is None:
+            return None
+        inside = {a for m in nodes if m["kind"] in PART_NODE_KINDS and m["span"]
+                  and at < m["span"][0] and m["span"][1] <= end for a in m["owns"]}
     tok = next((t for t in tokens if t.kind in LOCANT_KINDS and t.span[0] <= node["span"][0] < t.span[1]), None)
     if tok is None:
         return None
@@ -1060,7 +1084,7 @@ def oxy_pair_allowed(trace: Trace, node: dict, parent: dict) -> Optional[set[int
     if mol is None:
         return set()
     part_of = {a: p for p in trace.parts for a in p.atoms}
-    chain = set(parent["owns"])
+    chain = set(inside)
     stack = list(chain)
     while stack:
         for x in mol.GetAtomWithIdx(stack.pop()).GetNeighbors():
@@ -1108,12 +1132,11 @@ def foreign_lights(trace: Trace, nodes: list[dict]) -> list[tuple[str, list[int]
         if n["kind"] != "locant" or not n["lights"]:
             continue
         label, lit = n["label"], set(n["lights"])
-        if n["parent"] is not None:
-            pair = oxy_pair_allowed(trace, n, by_id[n["parent"]])
-            if pair is not None:
-                if not lit <= pair:
-                    bad.append((label, sorted(lit)))
-                continue
+        pair = oxy_pair_allowed(trace, n, by_id[n["parent"]] if n["parent"] is not None else None, nodes)
+        if pair is not None:
+            if not lit <= pair:
+                bad.append((label, sorted(lit)))
+            continue
         if n["parent"] is None:
             after = n["span"][0] if n["span"] else 0
             ok = all(label in by_atom[a].locants or (

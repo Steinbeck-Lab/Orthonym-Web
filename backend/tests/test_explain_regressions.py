@@ -972,6 +972,32 @@ def test_a_counted_n_o_pair_lights_each_parent_oxygen():
     assert set(_one(nodes, kind="multiplier", label="tri")["lights"]) == set(acetyl["owns"])
 
 
+@pytest.mark.parametrize("name,number,root,oxygens", [
+    ("6-O-(alpha-L-rhamnopyranosyl)-D-glucopyranose", "6", "glucopyranose", 1),
+    ("3-O-(4-methylphenyl)-D-glucose", "3", "glucose", 1),
+    ("2,3-di-O-(beta-D-glucopyranosyl)-D-glucose", "2", "glucose", 2),
+])
+def test_a_bracketed_n_o_pair_names_the_parents_oxygen_and_carbon_too(name, number, root, oxygens):
+    """The bracket's own locant ("6-O-(...)") used to light the whole group in the bracket,
+    and its O the same group; it now lights the parent carbon and the parent oxygen."""
+    t, nodes = _nodes(name)
+    top = [n for n in nodes if n["kind"] == "locant" and n["parent"] is None]
+    num = next(n for n in top if n["label"] == number)
+    oxy = next(n for n in top if n["label"] == "O")
+    (carbon,) = num["lights"]
+    assert number in t.atoms[carbon].locants and _owner(nodes, carbon)["label"] == root
+    assert len(oxy["lights"]) == oxygens and all(t.atoms[a].element == "O" and _owner(nodes, a)["label"] == root
+                                                  for a in oxy["lights"])
+    assert "joined through" in oxy["line"] and "attached through" in num["line"]
+    assert _clean(t, nodes) == ["CLEAN"]
+    # the gate: the old reading (the whole group in the bracket) is reported
+    group = max((n for n in nodes if n["kind"] == "substituent"), key=lambda n: len(n["owns"]))
+    for n in (num, oxy):
+        n["lights"] = list(group["owns"])
+    out = _clean(t, nodes)
+    assert "LIT_ATOM_FOREIGN" in out and "LOCANT_WRONG_ATOM" in out
+
+
 @pytest.mark.parametrize("name", [
     "4-O-beta-D-galactopyranosyl-D-glucopyranose", "6-O-acetyl-D-glucopyranose", "3-O-methyl-D-glucose",
     "2,3,4-tri-O-acetyl-D-glucose",
