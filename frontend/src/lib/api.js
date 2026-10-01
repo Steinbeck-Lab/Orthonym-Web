@@ -146,6 +146,16 @@ export async function fetchStructureFromName(name) {
   return res.json()
 }
 
+// One GET that answers JSON; a non-2xx rejects with httpError (status and the backend's
+// detail). fetchStructureFromName keeps its own error: its message and shape differ.
+async function getJson(url, label) {
+  const res = await fetch(url)
+  if (!res.ok) {
+    throw await httpError(res, label)
+  }
+  return res.json()
+}
+
 /**
  * Names `smiles` (the same way /api/translate would) and explains that
  * name as a flat list of nodes (`parent` links), each with the RDKit atom
@@ -161,11 +171,7 @@ export async function fetchStructureFromName(name) {
  * @returns {Promise<{smiles:string, name:string|null, svg:string|null, atom_points:number[][], total_atoms:number, nodes:Array<{id:string,parent:string|null,kind:string,label:string,span:[number,number]|null,copies:number,owns:number[],lights:number[],atoms_unmapped:boolean,line:string}>, error:string|null}>}
  */
 export async function explainMolecule(smiles) {
-  const res = await fetch(`/api/explain?smiles=${encodeURIComponent(smiles)}`)
-  if (!res.ok) {
-    throw await httpError(res, 'GET /api/explain')
-  }
-  return res.json()
+  return getJson(`/api/explain?smiles=${encodeURIComponent(smiles)}`, 'GET /api/explain')
 }
 
 /**
@@ -176,11 +182,7 @@ export async function explainMolecule(smiles) {
  * @returns {Promise<object>}
  */
 export async function explainName(name) {
-  const res = await fetch(`/api/explain-name?name=${encodeURIComponent(name)}`)
-  if (!res.ok) {
-    throw await httpError(res, 'GET /api/explain-name')
-  }
-  return res.json()
+  return getJson(`/api/explain-name?name=${encodeURIComponent(name)}`, 'GET /api/explain-name')
 }
 
 /* ------------------------------------------------------------------ *

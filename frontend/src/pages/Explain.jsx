@@ -1,9 +1,9 @@
-import { Fragment, useRef, useState } from 'react'
+import { Fragment, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ConfidenceReport from '../components/ConfidenceReport'
 import { verdictKindFor } from '../lib/explainVerdict'
 import { explainMolecule, explainName, translateBatch } from '../lib/api'
-import { isPart, nodeById, partOf, sliceName, unplacedNodes } from '../lib/nameTargets'
+import { isPart, partOf, sliceName, unplacedNodes } from '../lib/nameTargets'
 import { detailNotes, explainPhase, pieceMark, tabStops } from '../lib/explainView'
 import { nameRuns, applyRuns } from '../lib/nameTypography'
 import ChemName, { Pieces } from '../components/Typeset'
@@ -64,15 +64,11 @@ function Explain() {
   // runExplain. Null in 'name' mode on purpose: the user supplied the name,
   // so there is no Orthonym verdict on it to report.
   const [tierRow, setTierRow] = useState(null)
-  // The mode the DISPLAYED result was fetched with, which is not the same thing
-  // as the tab currently selected. The tier disclosure below used to branch on
-  // `mode` itself, so switching tabs after a result had landed rewrote the
-  // verdict without re-running anything: explain a SMILES, then click the
-  // IUPAC name tab, and a real "verified PIN" was replaced by "there is no
-  // Orthonym confidence tier for it" -- a false statement about a name Orthonym
-  // produced, and a tier hidden that PRODUCT.md principle 3 requires wherever
-  // a name appears. The reverse lost the honest disclosure instead. Set by
-  // runExplain alongside the request it describes.
+  // The mode the DISPLAYED result was fetched with, not the tab currently
+  // selected: the tier disclosure below must not rewrite its verdict when the
+  // tab changes after a result has landed (PRODUCT.md principle 3 requires the
+  // tier wherever a name appears). Set by runExplain alongside the request it
+  // describes.
   const [resultMode, setResultMode] = useState(null)
   // Which runExplain is current. The tier fetch below settles on its own
   // clock, after the explain request has already released the form, so a
@@ -119,13 +115,23 @@ function Explain() {
     setPinnedId((current) => (current === id ? null : id))
   }
 
+  // The handlers a name piece and an unplaced-part button share: hover or focus
+  // previews a node, click pins it.
+  function hoverProps(id) {
+    return {
+      onMouseEnter: () => setHoveredId(id),
+      onMouseLeave: () => setHoveredId(null),
+      onFocus: () => setHoveredId(id),
+      onBlur: () => setHoveredId(null),
+      onClick: () => toggleId(id),
+    }
+  }
+
   // requestMode defaults to the current tab, but a caller whose tab does not
-  // NAME an endpoint must pass one explicitly. `handleDraw` is that caller and
-  // now the only one: a drawing is a structure once Ketcher hands back its
+  // NAME an endpoint must pass one explicitly. `handleDraw` is that caller: a drawing is a structure once Ketcher hands back its
   // SMILES, so it asks for 'smiles' while `mode` still reads 'draw'.
-  // (It also matters for any caller that sets the tab in the same tick --
-  // setMode() is not visible to this function's `mode` closure until the next
-  // render. handleExamplePick used to be that caller and no longer is.)
+  // (setMode() is not visible to this function's `mode` closure until the next
+  // render, so a caller that sets the tab in the same tick must pass one too.)
   function runExplain(value, requestMode = mode) {
     setFetchError(null)
     setPhase('loading')
@@ -136,9 +142,8 @@ function Explain() {
 
     // A drawn or typed STRUCTURE is something Orthonym names itself, so its
     // confidence tier is a real verdict and PRODUCT.md principle 3 requires it
-    // wherever that name appears. /api/explain carries no tier -- Teach.jsx
-    // used to note exactly that and simply show nothing -- so fetch it
-    // alongside rather than dropping it.
+    // wherever that name appears. /api/explain carries no tier, so fetch it
+    // alongside.
     //
     // Fired in parallel, not chained: the breakdown is the point of this page
     // and must not wait on a second request. A tier that fails to arrive
@@ -197,12 +202,9 @@ function Explain() {
     runExplain(trimmed)
   }
 
-  // The chips FOLLOW the current tab rather than forcing one. They used to be
-  // SMILES-only and called setMode('smiles') on click, so clicking "ethanol"
-  // while on the default IUPAC name tab flipped the tab out from under you --
-  // the same "one control silently moved another" confusion the Learn/Expert
-  // switch was removed for. The chip row is hidden on the Draw tab, so `mode`
-  // here is only ever 'name' or 'smiles'.
+  // The chips FOLLOW the current tab rather than forcing one: clicking "ethanol"
+  // on the IUPAC name tab must not flip the tab. The chip row is hidden on the
+  // Draw tab, so `mode` here is only ever 'name' or 'smiles'.
   function handleExamplePick(example) {
     if (phase === 'loading') return
     const value = mode === 'name' ? example.name : example.smiles
@@ -215,13 +217,14 @@ function Explain() {
 
   const isLoading = phase === 'loading'
   const name = data?.name
-  const nodes = data?.nodes || []
+  const nodes = useMemo(() => data?.nodes || [], [data])
+  const byId = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes])
   // Every part node has a span (the corpus gate proves it), so the name is
   // always the hover surface. Nodes OPSIN gave no position are listed under
   // it instead of blanking anything (per-node honesty).
   const unplaced = unplacedNodes(nodes)
   const nameStyle = name ? nameRuns(name) : []
-  const activeNode = nodeById(nodes, activeId)
+  const activeNode = byId.get(activeId) ?? null
   const activePart = partOf(nodes, activeId)
   const notes = detailNotes(nodes, activeId)
   const pieces = name ? sliceName(name, nodes) : []
@@ -235,11 +238,9 @@ function Explain() {
           it does on Home rather than a second white rectangle stacked under
           it. It self-insets, so it takes no `page-shell`.
 
-          The lede is ONE sentence, which is all a hero wants. The
-          instruction that used to run on after it ("...then hover any part
-          of the decomposed name...") is not lost: it moved down into the
-          idle empty note, which is the thing a reader is actually looking at
-          while there is nothing to point at yet. */}
+          The lede is ONE sentence, which is all a hero wants; the hover
+          instruction lives in the idle empty note, which is what a reader is
+          looking at while there is nothing to point at yet. */}
       <section className="page-hero" aria-label="Introduction">
         <h1 className="page-hero__title">Show the working</h1>
         <p className="page-hero__lede">
@@ -260,10 +261,8 @@ function Explain() {
         <form onSubmit={handleSubmit} noValidate>
           <fieldset className="explain-mode">
             <legend className="explain-mode__legend">Input</legend>
-            {/* All three, always. The SMILES tab used to disappear in Learn
-                mode, which meant a control in the RESULTS card could delete an
-                input tab in this one -- and bump you off it mid-edit. Owner
-                instruction: the three inputs apply permanently. */}
+            {/* All three inputs, always: a control in the results card must not
+                delete an input tab (owner instruction). */}
             {[
               { value: 'name', label: 'IUPAC name' },
               { value: 'smiles', label: 'SMILES' },
@@ -288,9 +287,8 @@ function Explain() {
               than an underline. The Draw tab keeps the PLAIN `.field`: the
               editor is a bordered iframe already and a frame around a frame is
               a card in a card (DESIGN.md).
-              The action row used to live INSIDE this field, which put the
-              submit button inside the frame the moment the frame appeared. It
-              is a sibling now, spaced by the form's own column gap. */}
+              The action row is a sibling of the field, not inside the frame,
+              spaced by the form's own column gap. */}
           {mode === 'draw' ? (
             <div className="field">
               <span className="field__label">Draw a molecule</span>
@@ -440,7 +438,7 @@ function Explain() {
                   {name && (
                     <p className="explain-result__name explain-name" aria-live="polite">
                       {pieces.map((piece, index) => {
-                        const node = nodeById(nodes, piece.nodeId)
+                        const node = byId.get(piece.nodeId) ?? null
                         const mark = pieceMark(piece, activeId, activePart)
                         return (
                           <Fragment key={index}>
@@ -453,11 +451,7 @@ function Explain() {
                                 className={`explain-name__part${isPart(node) ? '' : ' explain-name__part--ref'}${
                                   mark ? ` explain-name__part--${mark}` : ''
                                 }`}
-                                onMouseEnter={() => setHoveredId(node.id)}
-                                onMouseLeave={() => setHoveredId(null)}
-                                onFocus={() => setHoveredId(node.id)}
-                                onBlur={() => setHoveredId(null)}
-                                onClick={() => toggleId(node.id)}
+                                {...hoverProps(node.id)}
                                 onKeyDown={(event) => {
                                   if (event.key === 'Enter' || event.key === ' ') {
                                     event.preventDefault()
@@ -484,11 +478,7 @@ function Explain() {
                           <button
                             type="button"
                             className={`explain-unplaced__item${activeId === node.id ? ' explain-unplaced__item--active' : ''}`}
-                            onMouseEnter={() => setHoveredId(node.id)}
-                            onMouseLeave={() => setHoveredId(null)}
-                            onFocus={() => setHoveredId(node.id)}
-                            onBlur={() => setHoveredId(null)}
-                            onClick={() => toggleId(node.id)}
+                            {...hoverProps(node.id)}
                             aria-pressed={pinnedId === node.id}
                           >
                             {node.label} <span className="explain-unplaced__note">— not placed in the name</span>
@@ -524,14 +514,11 @@ function Explain() {
                   )}
                 </div>
 
-                {/* A partial result is a real case (see runExplain): the
-                    backend can name and draw a molecule and still fail to
-                    decompose that name, and it then carries `error` alongside
-                    `name`/`svg`. `apiError` used to render only in the
-                    phase === 'error' branch, so for TNT the user got a drawn,
-                    named structure with an empty part list and NO reason at
-                    all. Shown here as a notice rather than a blocking error,
-                    so nothing that WAS drawn gets hidden. */}
+                {/* A partial result is a real case (see runExplain): the backend
+                    can name and draw a molecule and still fail to decompose that
+                    name, and it then carries `error` alongside `name`/`svg`.
+                    Shown as a notice rather than a blocking error, so nothing
+                    that WAS drawn gets hidden. */}
                 {apiError && (
                   <p className="notice" role="status">
                     {apiError}

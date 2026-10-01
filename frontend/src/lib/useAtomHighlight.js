@@ -34,12 +34,9 @@ export function shouldHighlight(classAttr, targetSet) {
 /**
  * Render a decomposition's SVG and highlight the atoms of the active node.
  *
- * Extracted from Explain.jsx and Teach.jsx, which carried 113 byte-identical
- * lines of this each -- including all three of the browser workarounds below,
- * every one of which was found by looking at a real browser rather than by
- * reading. Two copies meant fixing any of them twice, with no frontend test
- * runner to catch the miss. CLAUDE.md already claimed these two files shared
- * everything; this is what makes that true.
+ * Shared by Explain.jsx and Teach.jsx so the three browser workarounds below,
+ * each found by looking at a real browser rather than by reading, are fixed in
+ * one place.
  *
  * Returns the ref to attach to the (childless) wrapper div.
  *
