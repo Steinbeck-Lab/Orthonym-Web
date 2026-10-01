@@ -48,7 +48,7 @@ from rdkit import Chem
 
 from .glossary import GENERIC_TOKEN_LINE, describe_locant, describe_part, describe_token
 from .label_rules import (
-    CONTEXTUAL, GLUE, LOCANT_KINDS, covered_positions, indicated_h_items,
+    CONTEXTUAL, GLUE, LOCANT_KINDS, covered_positions, fusion_component_elements, indicated_h_items,
     label_span, locant_items, resolve_roles, root_spans, stereo_items,
 )
 from .opsin_trace import STEREO_KIND, Span, Trace, TracePart, WrittenToken
@@ -228,6 +228,28 @@ class _Builder:
     def with_locant(self, atoms, locant) -> list[int]:
         return [i for i in atoms if locant in self.by_index[i].locants]
 
+    def component_atom(self, elements: list, k: Optional[int], atoms) -> list[int]:
+        """The ONE atom of `atoms` that the k-th number of a fusion component names,
+        when it is proven, else []. Proven means: the atoms of that element in the
+        fused system are exactly as many as the component puts there (so any of them
+        is the component's, and with one it is THE atom), or, among several, exactly
+        one shares a ring with an atom proven by the first rule. Which of several
+        equal heteroatoms a number names is not provable, so it lights nothing."""
+        if k is None or elements[k] is None or self.mol is None:
+            return []
+        pool = [a for a in atoms if a < self.mol.GetNumAtoms()]
+        by_element = lambda e: [a for a in pool if self.by_index[a].element == e]
+        sole = {e: by_element(e)[0] for e in set(elements)
+                if e is not None and elements.count(e) == 1 and len(by_element(e)) == 1}
+        if elements[k] in sole:
+            return [sole[elements[k]]]
+        if elements.count(elements[k]) != 1:
+            return []
+        rings = [set(r) for r in self.mol.GetRingInfo().AtomRings()]
+        near = [a for a in by_element(elements[k])
+                if sole and all(any({a, s} <= r for r in rings) for s in sole.values())]
+        return near if len(near) == 1 else []
+
     def spiro_lookup(self, tokens, i: int, atoms, loc: str) -> Optional[str]:
         """The locant as OPSIN numbers it, or None when it names no atom. In
         spiro[A-x,y'-B] every locant written INSIDE the brackets after the
@@ -376,6 +398,18 @@ class _Builder:
                         element = self.by_index[hit[0]].element if len(hit) == 1 else None
                         self.add("indicated_h", loc, sub, parent=owner, lights=hit,
                                  line=describe_locant("modifier", at or added.group(1), element))
+                        continue
+                    component = (None if any(t.kind == "polyCyclicSpiro" for t in tokens)
+                                 else fusion_component_elements(tokens, i))
+                    if component is not None:
+                        # A number of a fusion component's own numbering ("[1,3]thiazolo"):
+                        # the fused system's atoms carry other numbers, so light only
+                        # what the element and the rings prove, else nothing.
+                        k = [x for x, _ in items].index(loc) if len(items) == len(component) else None
+                        lit = self.component_atom(component, k, atoms)
+                        counted.update(lit)
+                        self.add("locant", loc, sub, parent=owner, lights=lit,
+                                 line=describe_locant("position", loc))
                         continue
                     at = self.spiro_lookup(tokens, i, atoms, loc)
                     if at is None:

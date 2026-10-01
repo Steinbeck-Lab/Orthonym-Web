@@ -29,9 +29,13 @@ Outcomes, measured on the trace and the node list (a name may carry several):
                       alpha/beta) or not on a stereo double bond (E/Z), or
                       more than one atom
   LOCANT_UNLIT        a locant node lights nothing (a sugar's alpha/beta, whose
-                      anomeric carbon the structure cannot prove, lights nothing
-                      by design and is not counted)
-  LOCANT_WRONG_ATOM   a locant node inside its own part (not a substituent's leading
+                      anomeric carbon the structure cannot prove, and a number of a
+                      fusion component's own numbering that no element / ring
+                      evidence pins to one atom, light nothing by design and are
+                      not counted)
+  LOCANT_WRONG_ATOM   (a fusion component's number must light an atom of the element it
+                      puts in the ring, and, among several, one sharing a ring with its
+                      siblings' atoms) a locant node inside its own part (not a substituent's leading
                       position, not hydro / anomer, which have their own checks) lights
                       an atom that does not carry that locant, primed per spiro
                       component (suffix-owned atoms excepted); see wrong_locant_atoms
@@ -129,6 +133,53 @@ def _is_part_position_in_front(trace, node, parent) -> bool:
     return False
 
 
+def _component_for(trace, node):
+    """(elements, k) when the node is a number of a fusion PREFIX component's own
+    numbering ("[1,3]thiazolo[5,4-b]pyridine"): the elements the component's numbers
+    put in the ring, in order, and this number's index (None when they cannot be
+    paired). Read from the written tokens alone. None otherwise (also inside spiro
+    brackets, whose primed numbering has its own rule)."""
+    from app.label_rules import LOCANT_KINDS, fusion_component_elements, locant_items
+    if node["kind"] != "locant" or not node["span"]:
+        return None
+    start = node["span"][0]
+    tok = next((t for t in trace.tokens if t.kind in LOCANT_KINDS and t.span[0] <= start < t.span[1]), None)
+    if tok is None:
+        return None
+    for head in (t for t in trace.tokens if t.kind == "polyCyclicSpiro" and t.span[1] <= start):
+        end = _close_of(trace.text, head.span[1])
+        if end is not None and start < end:
+            return None
+    elements = fusion_component_elements(trace.tokens, tok.index)
+    if elements is None:
+        return None
+    labels = [x for x, _ in locant_items(trace.text, tok.span)]
+    return elements, (labels.index(node["label"]) if len(labels) == len(elements) and node["label"] in labels
+                      else None), tok.span
+
+
+def _component_wrong(trace, nodes, node, comp) -> bool:
+    """True when a fusion-component number lights an atom the component cannot
+    have: the wrong element, or (several atoms of that element in the part) an atom
+    that shares no ring with the atoms its sibling numbers light."""
+    from rdkit import Chem
+    elements, k, token = comp
+    want = elements[k] if k is not None else None
+    if not node["lights"]:
+        return False
+    if want is None or any(trace.atoms[a].element != want for a in node["lights"]):
+        return True
+    part = [a for n in nodes if n["id"] == node["parent"] for a in n["owns"]]
+    if len([a for a in part if trace.atoms[a].element == want]) <= 1:
+        return False
+    mol = Chem.MolFromSmiles(trace.smiles)
+    rings = [set(r) for r in mol.GetRingInfo().AtomRings()] if mol is not None else []
+    siblings = [a for n in nodes if n is not node and n["parent"] == node["parent"] and n["kind"] == "locant"
+                and n["span"] and token[0] <= n["span"][0] < token[1] and n["lights"]
+                for a in n["lights"]]
+    return not all(any(a in r and s in r for r in rings) for a in node["lights"] for s in siblings)
+
+
 def wrong_locant_atoms(trace, nodes) -> list:
     """(label, atoms) for every locant node inside its own part that lights an
     atom not carrying that exact locant. LIT_ATOM_FOREIGN only asks whether the
@@ -145,6 +196,12 @@ def wrong_locant_atoms(trace, nodes) -> list:
             continue
         line, parent = n["line"], by_id[n["parent"]]
         if "hydrogen" in line or "anomer" in line:
+            continue
+        comp = _component_for(trace, n)
+        if comp is not None:
+            # a fusion component's own numbering: the fused locants on the atoms say nothing
+            if _component_wrong(trace, nodes, n, comp):
+                bad.append((n["label"], sorted(n["lights"])))
             continue
         if parent["kind"] == "substituent" and "this group is attached at position" in line:
             continue
@@ -217,7 +274,7 @@ def classify(trace, nodes, owners) -> list[str]:
                 out.append("STEREO_WRONG_ATOM")
                 break
     if any(n["kind"] == "locant" and not n["lights"] and n["label"].lower() not in ("alpha", "beta")
-           for n in nodes):
+           and _component_for(trace, n) is None for n in nodes):
         out.append("LOCANT_UNLIT")
     if foreign_lights(trace, nodes):
         out.append("LIT_ATOM_FOREIGN")

@@ -237,3 +237,42 @@ def stereo_items(text: str, span: Span) -> list[tuple[str, Span]]:
             out.append((piece, (pos, pos + len(piece))))
         pos += len(piece) + 1
     return out
+
+
+# Hantzsch-Widman / replacement prefixes -> the element they put in the ring.
+HETERO_ELEMENT = {
+    "az": "N", "aza": "N", "ox": "O", "oxa": "O", "thi": "S", "thia": "S",
+    "phosph": "P", "phospha": "P", "sil": "Si", "sila": "Si", "bor": "B", "bora": "B",
+    "selen": "Se", "selena": "Se", "tellur": "Te", "tellura": "Te", "arsen": "As", "arsa": "As",
+    "stib": "Sb", "stiba": "Sb", "germ": "Ge", "germa": "Ge", "stann": "Sn", "stanna": "Sn",
+}
+
+
+def fusion_component_elements(tokens: Sequence[WrittenToken], i: int) -> Optional[list]:
+    """For a locant token written at the front of a fusion PREFIX component
+    ("[1,3]thiazolo[5,4-b]pyridine": locant, heteroatoms, the ring group, then the
+    fusion token), the element each of its numbers puts in the ring, in written
+    order ("1,3" + thi,az -> S, N; a counting word repeats its heteroatom:
+    "1,2,4" + tri,az -> N, N, N); an unknown prefix gives None for that number.
+    None when the locant is not such a component's.
+
+    These numbers belong to the component's OWN numbering. The atoms of the fused
+    system carry other numbers, so a fused locant must never be looked up for them."""
+    if tokens[i].kind not in LOCANT_KINDS:
+        return None
+    j = i + 1
+    while j < len(tokens) and (tokens[j].kind in CONTEXTUAL or tokens[j].kind == "hyphen"):
+        j += 1                                   # a bracket in between ends the component: "2-[(oxazolo..." is the bracket's number
+    elements: list = []
+    count = 1
+    while j < len(tokens) and tokens[j].kind in ("heteroatom", "multiplier"):
+        if tokens[j].kind == "multiplier":
+            count = MULTIPLIER_COUNTS.get(tokens[j].value.lower(), 1)
+        else:
+            elements += [HETERO_ELEMENT.get(tokens[j].value.lower())] * count
+            count = 1
+        j += 1
+    if not elements or j >= len(tokens) or tokens[j].kind != "group":
+        return None
+    after = next((t for t in tokens[j + 1:] if t.kind not in GLUE and t.kind != "hyphen"), None)
+    return elements if after is not None and after.kind == "fusion" else None

@@ -758,3 +758,62 @@ def test_part_contains_part_catches_a_label_that_swallows_a_neighbour():
     root["span"] = [t.text.index("epoxy"), root["span"][1]]
     root["label"] = t.text[root["span"][0]:root["span"][1]]
     assert "PART_CONTAINS_PART" in classify(t, nodes, assign_owners(t.tokens))
+
+
+# N2. numbers inside a fusion component's own brackets are the COMPONENT's numbering
+def _ring_mates(t, a, b):
+    mol = Chem.MolFromSmiles(t.smiles)             # keep the Mol alive while its RingInfo is read
+    return any(a in r and b in r for r in mol.GetRingInfo().AtomRings())
+
+
+def test_a_fusion_components_numbers_light_the_atoms_the_element_and_ring_prove():
+    """"[1,3]thiazolo[5,4-b]pyridine": thiazole's 1 is S and its 3 is N. The fused system's own
+    N1 / S3 carry the swapped numbers, which is what round 1 lit."""
+    t, nodes = _nodes("[1,3]thiazolo[5,4-b]pyridine")
+    one = _one(nodes, kind="locant", label="1")
+    three = _one(nodes, kind="locant", label="3")
+    (s_atom,) = one["lights"]
+    (n_atom,) = three["lights"]
+    assert t.atoms[s_atom].element == "S" and t.atoms[n_atom].element == "N"
+    assert _ring_mates(t, s_atom, n_atom)                  # the thiazole N, not the pyridine N
+    assert classify(t, nodes, assign_owners(t.tokens)) == ["CLEAN"]
+
+
+@pytest.mark.parametrize("name", [
+    "[1,2,4]triazolo[1,5-a]pyrimidine", "[1,2,4]triazolo[1,5-a]pyridine", "[1,2,4]triazolo[4,3-a]pyridine",
+    "6-chloro-[1,2,4]triazolo[1,5-a]pyrimidin-2-amine",
+])
+def test_a_fusion_number_no_evidence_pins_to_one_atom_lights_nothing_and_is_not_a_failure(name):
+    t, nodes = _nodes(name)
+    kids = [n for n in nodes if n["kind"] == "locant" and n["span"][1] < t.text.index("triazolo")]
+    assert [n["label"] for n in kids if n["span"][0] > t.text.index("[1,2,4]") - 1][:3] == ["1", "2", "4"]
+    assert all(n["lights"] == [] for n in kids if n["label"] in ("1", "2", "4") and n["span"][0] < t.text.index("triazolo"))
+    assert classify(t, nodes, assign_owners(t.tokens)) == ["CLEAN"]        # not LOCANT_UNLIT
+
+
+def test_a_fusion_component_number_lights_only_what_is_proven_when_some_are_not():
+    t, nodes = _nodes("[1,2,5]oxadiazolo[3,4-b]pyrazine")
+    by = {n["label"]: n for n in nodes if n["kind"] == "locant"}
+    (o_atom,) = by["1"]["lights"]
+    assert t.atoms[o_atom].element == "O"                  # the only oxygen
+    assert by["2"]["lights"] == [] and by["5"]["lights"] == []     # two equal nitrogens: not provable
+
+
+def test_locant_wrong_atom_catches_the_round_1_fusion_component_atoms():
+    """Not vacuous: round 1 lit the fused system's atom with the same NUMBER."""
+    t, nodes = _nodes("[1,3]thiazolo[5,4-b]pyridine")
+    one = _one(nodes, kind="locant", label="1")
+    three = _one(nodes, kind="locant", label="3")
+    good1, good3 = list(one["lights"]), list(three["lights"])
+    one["lights"] = [next(a.index for a in t.atoms if "1" in a.locants)]          # fused N1
+    assert t.atoms[one["lights"][0]].element == "N"
+    assert "LOCANT_WRONG_ATOM" in classify(t, nodes, assign_owners(t.tokens))
+    one["lights"] = good1
+    three["lights"] = [next(a.index for a in t.atoms if a.element == "N" and a.index != good3[0])]   # pyridine N
+    assert "LOCANT_WRONG_ATOM" in classify(t, nodes, assign_owners(t.tokens))
+    three["lights"] = good3
+    t, nodes = _nodes("[1,2,4]triazolo[1,5-a]pyrimidine")
+    two = _one(nodes, kind="locant", label="2")
+    two["lights"] = [next(a.index for a in t.atoms if "2" in a.locants)]           # fused C2, a carbon
+    assert t.atoms[two["lights"][0]].element == "C"
+    assert "LOCANT_WRONG_ATOM" in classify(t, nodes, assign_owners(t.tokens))

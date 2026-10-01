@@ -125,6 +125,18 @@ CURATED: list[tuple[str, str]] = [
     # Phase C round 2: bridge prefix before substituents (codeine, hydrocodone)
     ("real-drug-names", "(5alpha,6alpha)-7,8-didehydro-4,5-epoxy-3-methoxy-17-methylmorphinan-6-ol"),
     ("real-drug-names", "4,5alpha-epoxy-3-methoxy-17-methylmorphinan-6-one"),
+    # Phase C round 2: numbers of a fusion component's own numbering
+    ("fusion-bracket", "[1,3]thiazolo[5,4-b]pyridine"),
+    ("fusion-bracket", "[1,3]thiazolo[4,5-b]pyridine"),
+    ("fusion-bracket", "[1,2,4]triazolo[1,5-a]pyrimidine"),
+    ("fusion-bracket", "[1,2,4]triazolo[1,5-a]pyridine"),
+    ("fusion-bracket", "[1,2,4]triazolo[4,3-a]pyridine"),
+    ("fusion-bracket", "[1,3]oxazolo[4,5-b]pyridine"),
+    ("fusion-bracket", "[1,3]thiazolo[3,2-a]benzimidazole"),
+    ("fusion-bracket", "imidazo[1,2-a]pyridine"),
+    ("fusion-bracket", "[1,2,5]oxadiazolo[3,4-b]pyrazine"),
+    ("fusion-bracket", "2-methyl-[1,3]thiazolo[5,4-b]pyridine"),
+    ("fusion-bracket", "6-chloro-[1,2,4]triazolo[1,5-a]pyrimidin-2-amine"),
 ]
 
 # Names OPSIN 2.9.0 itself genuinely cannot parse. Verified against
