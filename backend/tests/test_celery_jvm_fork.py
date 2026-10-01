@@ -23,11 +23,11 @@ from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
-# The fused-polycyclic Home example. With a live OPSIN round trip the engine
-# ships a verified systematic name (tier systematic_verified, status
-# "fallback"); without OPSIN it abstains, so the status proves the child's
-# JVM really ran the gate.
-FUSED_POLYCYCLIC = "COC1C2=C(C)C(=O)OC2CC2CCC(O)C(C)C21C"
+# The fused-polycyclic Home example (ellipticine). With a live OPSIN round
+# trip the engine ships a verified systematic name (tier systematic_verified,
+# status "fallback"); without a round trip the status can only be best_effort,
+# so "fallback" proves the child's JVM really ran the gate.
+FUSED_POLYCYCLIC = "CC1=C2C=CN=CC2=C(C3=C1NC4=CC=CC=C43)C"
 
 # os._exit(0) at the end of both probes is deliberate: a started JVM refuses
 # to let the interpreter exit, which would turn a clean assertion failure
@@ -45,7 +45,7 @@ _IMPORT_PROBE = (
 _FORK_PROBE = r'''
 import json, multiprocessing as mp, os, sys
 
-FUSED_POLYCYCLIC = "COC1C2=C(C)C(=O)OC2CC2CCC(O)C(C)C21C"
+FUSED_POLYCYCLIC = "CC1=C2C=CN=CC2=C(C3=C1NC4=CC=CC=C43)C"
 
 
 def _child(queue):
@@ -148,8 +148,8 @@ def test_forked_child_starts_and_owns_its_own_jvm():
     assert payload["opsin_available"] is True, payload
     assert payload["started_pid"] == payload["pid"], payload
 
-    # And the tier is right. "pin" here would mean SELF-01 could not suppress
-    # the bogus candidate, i.e. OPSIN was unreachable by any route.
+    # And the tier is right. Anything but "fallback" here means the round
+    # trip did not run, i.e. OPSIN was unreachable by any route.
     assert payload["status"] == "fallback", payload
     assert payload["roundtrip_smiles"] is not None, payload
     # "fallback" (systematic_verified) is RT-VERIFIED. True is correct here.

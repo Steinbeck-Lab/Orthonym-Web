@@ -50,12 +50,16 @@ EXAMPLES = [
         "expected_status": "pin",
     },
     {
-        # Replaced 2026-09-28: the engine at 68f50d1 names the old example,
-        # C1CC2CCC1(CC2)C3CCC4(CCC5(CCCC5C4C3)C)C, as best_effort. This one is
-        # systematic_verified with OPSIN and abstains without it, so it also
-        # serves verify_opsin_live.py as proof that the round trip ran.
-        "label": "A fused polycyclic — verified name, preferred status not certified",
-        "smiles": "COC1C2=C(C)C(=O)OC2CC2CCC(O)C(C)C21C",
+        # Ellipticine (PubChem CID 3213). Replaced 2026-10-01: engine 1.0.2
+        # (6cab387) names the previous example,
+        # COC1C2=C(C)C(=O)OC2CC2CCC(O)C(C)C21C, as a verified PIN. Ellipticine
+        # is systematic_verified (a von Baeyer name, not the fused
+        # pyrido[4,3-b]carbazole PIN) on both 1.0.2 and the engine before it,
+        # and only a live OPSIN round trip makes it "fallback": without one it
+        # is best_effort. So it also serves verify_opsin_live.py as proof that
+        # the round trip ran.
+        "label": "Ellipticine, a fused polycyclic — verified name, preferred status not certified",
+        "smiles": "CC1=C2C=CN=CC2=C(C3=C1NC4=CC=CC=C43)C",
         "expected_status": "fallback",
     },
     {
