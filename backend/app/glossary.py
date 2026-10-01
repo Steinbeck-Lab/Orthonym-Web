@@ -272,6 +272,16 @@ def _hydrogens(mol, atom: int) -> int:
     return mol.GetAtomWithIdx(atom).GetTotalNumHs(includeNeighbors=True)
 
 
+def _heavy_degree(atom) -> int:
+    """Neighbours of an RDKit atom that are not hydrogens."""
+    return sum(1 for n in atom.GetNeighbors() if n.GetAtomicNum() > 1)
+
+
+def _plain_atom(atom) -> bool:
+    """An RDKit atom with no radical and no charge."""
+    return atom.GetNumRadicalElectrons() == 0 and atom.GetFormalCharge() == 0
+
+
 # What a group's table line leaves to be counted on the real atoms. The table line names
 # the bare group "on its own"; when the atoms in this molecule carry a different number
 # of hydrogens ("hydroxymethyl": its carbon carries 2), the line says so, measured.
@@ -319,8 +329,7 @@ def _hydrogen_clause(spec, mol, atoms, copies: int) -> str:
         text = f"Here {whose} {noun}s carry {', '.join(map(str, counts[:-1]))} and {counts[-1]} hydrogens"
     # "the rest" is taken by other groups only when no atom has more than the bare
     # group's count and none is a radical or ion (a missing hydrogen is then a bond).
-    plain = all(mol.GetAtomWithIdx(a).GetNumRadicalElectrons() == 0 and mol.GetAtomWithIdx(a).GetFormalCharge() == 0
-                for a in picked)
+    plain = all(_plain_atom(mol.GetAtomWithIdx(a)) for a in picked)
     if element == "C" and plain and len(counts) == len(expected) and all(c <= e for c, e in zip(counts, expected)):
         text += "; other groups take the rest"
     return f" {text}."
@@ -420,11 +429,10 @@ def _hydrogen_taken(mol, atom: int) -> bool:
     writes elsewhere: a third heavy neighbour (a substituent, a spiro or fusion bond, an
     attachment) or a double / triple bond (an "=O", an "-ylidene")."""
     a = mol.GetAtomWithIdx(atom)
-    if a.GetFormalCharge() or a.GetNumRadicalElectrons():
+    if not _plain_atom(a):
         return False                  # an ylium / ide / radical ending removed the hydrogen itself
-    heavy = sum(1 for n in a.GetNeighbors() if n.GetAtomicNum() > 1)
     multiple = any(b.GetBondType() in (Chem.BondType.DOUBLE, Chem.BondType.TRIPLE) for b in a.GetBonds())
-    return heavy >= 3 or multiple
+    return _heavy_degree(a) >= 3 or multiple
 
 
 def _modifier_line(locant: str, element: str | None, mol, atom: int | None) -> str:
@@ -454,15 +462,15 @@ def _anomeric_group(mol, atom: int | None) -> str | None:
     oxygens = [n for n in outside if n.GetSymbol() == "O"]
     if len(oxygens) == 1:
         o = oxygens[0]
-        heavy = sum(1 for n in o.GetNeighbors() if n.GetAtomicNum() > 1)
-        if heavy == 1 and o.GetTotalNumHs(includeNeighbors=True) >= 1:
+        heavy = _heavy_degree(o)
+        if heavy == 1 and _hydrogens(mol, o.GetIdx()) >= 1:
             return "an OH"
         if heavy >= 2:
             return "the O that joins the sugar to the rest of the name"
         return None
     if not oxygens and len(outside) == 1:
         other = outside[0]
-        if sum(1 for n in other.GetNeighbors() if n.GetAtomicNum() > 1) == 1:
+        if _heavy_degree(other) == 1:
             # a halogen, a thiol sulfur: it joins nothing, it is just there
             article = "an" if other.GetSymbol()[0] in "AEFHILMNORSX" else "a"
             return f"{article} {other.GetSymbol()} atom"

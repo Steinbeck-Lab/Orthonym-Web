@@ -487,6 +487,21 @@ def _heavy_degree(mol, i: int) -> int:
     return sum(1 for n in mol.GetAtomWithIdx(i).GetNeighbors() if n.GetAtomicNum() > 1)
 
 
+def _plain(atom) -> bool:
+    """An atom with no radical and no charge."""
+    return atom.GetNumRadicalElectrons() == 0 and atom.GetFormalCharge() == 0
+
+
+def _anomeric_neighbours(mol, i: int):
+    """(ring, outside): the heavy neighbours of atom `i` joined to it by a ring bond / by a bond
+    outside every ring, each in the atom's neighbour order."""
+    ring, outside = [], []
+    for n in mol.GetAtomWithIdx(i).GetNeighbors():
+        if n.GetAtomicNum() > 1:
+            (ring if mol.GetBondBetweenAtoms(i, n.GetIdx()).IsInRing() else outside).append(n)
+    return ring, outside
+
+
 def _said_counts(text: str) -> list[int]:
     if text == "no hydrogen":
         return [0]
@@ -552,8 +567,7 @@ def _group_line_problem(mol, node, element, which, bare) -> Optional[str]:
         if (each and any(x != counts[0] for x in actual)) or (not each and counts != actual):
             return f"says {said.group(2)}, atoms carry {actual}"
         if said.group(3):
-            plain = all(mol.GetAtomWithIdx(a).GetNumRadicalElectrons() == 0 and mol.GetAtomWithIdx(a).GetFormalCharge() == 0
-                        for a in atoms)
+            plain = all(_plain(mol.GetAtomWithIdx(a)) for a in atoms)
             if not (plain and len(actual) == len(expected) and all(x <= e for x, e in zip(actual, expected))):
                 return "other groups take the rest, but an atom carries more or is charged"
     elif "on its own" in body:
@@ -595,8 +609,7 @@ def _h_locant_problem(mol, node) -> tuple[bool, Optional[str]]:
         if says == "has" and _h(mol, a) < 1:
             return True, "carries a hydrogen here, it carries none"
         atom = mol.GetAtomWithIdx(a)
-        charged = bool(atom.GetFormalCharge() or atom.GetNumRadicalElectrons())
-        if says == "taken" and (charged or _h(mol, a) != 0 or not (_heavy_degree(mol, a) >= 3 or bond)):
+        if says == "taken" and (not _plain(atom) or _h(mol, a) != 0 or not (_heavy_degree(mol, a) >= 3 or bond)):
             return True, "something takes the hydrogen's place, nothing does"
         if says == "none" and _h(mol, a) != 0:
             return True, "carries none, it carries one"
@@ -646,9 +659,7 @@ def _ring_hetero_problem(mol, nodes, node) -> Optional[str]:
     want = said.get(m.group(1), m.group(2))
     lit = node["lights"]
     if len(lit) == 1:
-        c = mol.GetAtomWithIdx(lit[0])
-        ring = {n.GetSymbol() for n in c.GetNeighbors() if n.GetAtomicNum() > 1
-                and mol.GetBondBetweenAtoms(lit[0], n.GetIdx()).IsInRing() and n.GetSymbol() != "C"}
+        ring = {n.GetSymbol() for n in _anomeric_neighbours(mol, lit[0])[0] if n.GetSymbol() != "C"}
     else:
         owner = next((n for n in nodes if n["id"] == node["parent"]), None)
         pool = set(owner["owns"]) if owner else set(range(mol.GetNumAtoms()))
@@ -671,16 +682,13 @@ def _anomer_problem(mol, node, nodes=()) -> tuple[bool, Optional[str]]:
     lit = node["lights"]
     outside = []
     if len(lit) == 1:
-        c = mol.GetAtomWithIdx(lit[0])
-        outside = [n for n in c.GetNeighbors() if n.GetAtomicNum() > 1
-                   and not mol.GetBondBetweenAtoms(lit[0], n.GetIdx()).IsInRing()]
+        outside = _anomeric_neighbours(mol, lit[0])[1]
     o = [n for n in outside if n.GetSymbol() == "O"]
+    hydroxyl = len(o) == 1 and _h(mol, o[0].GetIdx()) >= 1 and _heavy_degree(mol, o[0].GetIdx()) == 1
     if "the OH on the ring carbon" in line:
-        ok = len(o) == 1 and _h(mol, o[0].GetIdx()) >= 1 and _heavy_degree(mol, o[0].GetIdx()) == 1
-        return True, None if ok else "an OH at the anomeric carbon, there is none"
+        return True, None if hydroxyl else "an OH at the anomeric carbon, there is none"
     if "Here that group is an OH." in line:
-        ok = len(o) == 1 and _h(mol, o[0].GetIdx()) >= 1 and _heavy_degree(mol, o[0].GetIdx()) == 1
-        return True, None if ok else "an OH, there is none"
+        return True, None if hydroxyl else "an OH, there is none"
     joins = re.search(r"Here that group is the (\w+) that joins the sugar to the rest of the name\.", line)
     if joins:
         if joins.group(1) == "O":
