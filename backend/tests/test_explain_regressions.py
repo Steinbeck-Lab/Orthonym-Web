@@ -1,4 +1,4 @@
-"""Named regressions from the Fable 5.1 review of plan v2 (JVM + engine).
+"""Named regressions from the plan review (JVM + engine).
 Each class once lit a wrong atom or showed a false line while every gate
 stayed green; each test pins the corrected behaviour on a live trace."""
 
@@ -922,7 +922,7 @@ def test_the_gate_does_not_depend_on_the_wording_of_a_line(name):
 
 
 # ======================================================================================
-# Final whole-branch review (Fable 5.1): I1, I2, I3, I5, M1, M4, M5, M8
+# Whole-branch review findings: I1, I2, I3, I5, M1, M4, M5, M8
 # ======================================================================================
 
 def _owner(nodes, atom):
