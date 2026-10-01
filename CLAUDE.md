@@ -202,11 +202,14 @@ Things the repo does not tell you, or tells you only after they cost time.
   "anhydride", "oxime", "chloride") is a part of its own over the atoms OPSIN's build adds for it
   (the trace takes them out of the alkyl written before it); a number beside an element symbol in
   front of a substituent ("4-O-") lights the PARENT's oxygen and carbon, never the substituent's own
-  atoms. Suffix and parent lines state what the atoms are only when the atoms bear it out. Names
+  atoms. Every hover line is true of the molecule on screen: suffix and parent lines state what the
+  atoms are only when the atoms bear it out, a group's line names the bare group "on its own" and
+  adds the hydrogens its atoms carry, counted (`app/glossary.py`), and the census class
+  `HOVER_LINE_FALSE` reads each line's claim and measures it by rules of its own. Names
   OPSIN reads in a reordered form (CAS index names) are refused as `unplaced`. Known limitation:
   conjunctive names split the chain into the suffix. Honesty is **per node**: nothing lights a
   guessed atom, and on the SMILES path a part whose atoms cannot be agreed keeps its text with
-  `atoms_unmapped`. Measured 2026-10-01 -- corpus 670 names: CLEAN 668, 2 OPSIN cannot read;
+  `atoms_unmapped`. Measured 2026-10-01 -- corpus 698 names: CLEAN 696, 2 OPSIN cannot read;
   ChEMBL 10k (run in 30 shards): CLEAN 9998, UNREADABLE 2, every failure class 0 (the census
   classes are listed in the header of `explain_census.py`). The gated sets are engine-named or
   curated, so a class they hold no name of is invisible to them: add the names to `CURATED` with
