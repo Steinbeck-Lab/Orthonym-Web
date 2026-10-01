@@ -257,7 +257,7 @@ HETERO_ELEMENT = {
 }
 
 
-def fusion_component_elements(tokens: Sequence[WrittenToken], i: int, text: Optional[str] = None) -> Optional[list]:
+def fusion_component_elements(tokens: Sequence[WrittenToken], i: int, text: str) -> Optional[list]:
     """For a BRACKETED locant run that opens a fusion component ("[1,3]thiazolo[5,4-b]
     pyridine", the prefix; "imidazo[2,1-b][1,3]thiazole", the base), the element each
     of its numbers puts in the ring, in written order ("1,3" + thi,az -> S, N; a
@@ -272,7 +272,7 @@ def fusion_component_elements(tokens: Sequence[WrittenToken], i: int, text: Opti
     system carry other numbers, so a fused locant must never be looked up for them."""
     if tokens[i].kind not in LOCANT_KINDS:
         return None
-    if text is not None and text[max(tokens[i].span[0] - 1, 0)] != "[":
+    if text[max(tokens[i].span[0] - 1, 0)] != "[":
         return None
     j = i + 1
     while j < len(tokens) and (tokens[j].kind in CONTEXTUAL or tokens[j].kind == "hyphen"):

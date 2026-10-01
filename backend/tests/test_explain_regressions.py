@@ -1153,7 +1153,7 @@ def test_the_gate_sees_a_false_suffix_claim(monkeypatch):
     from app import glossary
     t, nodes = _nodes("benzoic acid methyl ester")
     suffix = _one(nodes, kind="suffix", label="oic acid")
-    suffix["line"] = glossary.describe_part("suffix", "oic acid", None, len(suffix["owns"]))   # the claim, asserted
+    suffix["line"] = glossary.describe_part("suffix", "oic acid", len(suffix["owns"]))   # the claim, asserted
     assert "LINE_CLAIM_FALSE" in _clean(t, nodes)
     # the review's salt: an ester claim on the -C(=O)O- of a carboxylate
     t, nodes = _nodes("sodium acetate")

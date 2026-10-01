@@ -2,31 +2,29 @@ from app.glossary import GENERIC_TOKEN_LINE, describe_locant, describe_part, des
 
 
 def test_known_substituent_gets_its_own_words():
-    text = describe_part("substituent", "methyl", "1", 1)
-    assert "CH3" in text
-    assert "1" in text
+    assert "CH3" in describe_part("substituent", "methyl", 1)
 
 
 def test_unknown_part_gets_a_neutral_factual_line_not_invented_prose():
-    text = describe_part("substituent", "zzzql", None, 3)
+    text = describe_part("substituent", "zzzql", 3)
     assert "zzzql" in text
     assert "3 atoms" in text
 
 
 def test_suffix_describes_the_group():
-    assert "C=O" in describe_part("suffix", "one", None, 2)
+    assert "C=O" in describe_part("suffix", "one", 2)
 
 
 def test_known_parent_stem_gets_a_real_explanation():
     # OPSIN's <group> token for caffeine's core is the stem "purin", not
     # "purine". The glossary must still explain it in plain words.
-    text = describe_part("parent", "purin", None, 9)
+    text = describe_part("parent", "purin", 9)
     assert "purine" in text
     assert "9 atoms" in text or "9" in text
 
 
 def test_unknown_parent_stem_still_gets_a_neutral_line():
-    text = describe_part("parent", "zzzql", None, 4)
+    text = describe_part("parent", "zzzql", 4)
     assert "zzzql" in text
     assert "4 atoms" in text
 
@@ -65,7 +63,7 @@ def test_carbonyl_suffix_does_not_claim_it_is_a_ketone():
     # Caffeine's -dione carbonyls sit between ring nitrogens: amide-like,
     # not ketones. The glossary cannot tell from the suffix alone, so it
     # must not claim the stronger fact.
-    text = describe_part("suffix", "dione", None, 2)
+    text = describe_part("suffix", "dione", 2)
     assert "C=O" in text
     assert "ketone" not in text.lower()
 
@@ -116,7 +114,7 @@ def test_every_listed_token_category_gets_its_own_line():
 
 
 def test_a_single_atom_part_is_not_pluralised():
-    text = describe_part("substituent", "zzzql", None, 1)
+    text = describe_part("substituent", "zzzql", 1)
     assert "1 atom " in text or text.rstrip(".").endswith("1 atom"), text
     assert "atoms" not in text
 
@@ -149,18 +147,18 @@ def test_old_tokenizer_category_names_are_gone():
 
 
 def test_copies_are_counted_in_the_line():
-    assert "3 copies" in describe_part("substituent", "methyl", None, 3, copies=3)
-    assert "copies" not in describe_part("substituent", "methyl", None, 1)
+    assert "3 copies" in describe_part("substituent", "methyl", 3, copies=3)
+    assert "copies" not in describe_part("substituent", "methyl", 1)
 
 
 def test_a_written_parent_label_finds_its_stem():
-    assert "two fused rings" in describe_part("parent", "purine", None, 9)
-    assert "two-carbon" in describe_part("parent", "ethan", None, 2)
+    assert "two fused rings" in describe_part("parent", "purine", 9)
+    assert "two-carbon" in describe_part("parent", "ethan", 2)
 
 
 def test_a_ring_is_never_described_as_a_chain():
-    assert "chain" not in describe_part("substituent", "cyclopropyl", None, 3)
-    assert "chain" in describe_part("substituent", "2-methylpropyl", None, 4)
+    assert "chain" not in describe_part("substituent", "cyclopropyl", 3)
+    assert "chain" in describe_part("substituent", "2-methylpropyl", 4)
 
 
 def test_an_anomeric_locant_has_its_own_line_only_for_a_sugar():
@@ -189,23 +187,23 @@ WRONG = [
 
 def test_an_ending_that_merely_looks_like_a_known_one_gets_a_neutral_line():
     for kind, label, claim in WRONG:
-        line = describe_part(kind, label, None, 3)
+        line = describe_part(kind, label, 3)
         assert claim not in line, (label, line)
         assert f'"{label}" covers 3 atoms' in line, (label, line)
 
 
 def test_known_endings_and_counted_endings_still_say_what_they_are():
-    assert "C=O" in describe_part("suffix", "dione", None, 2)
-    assert "-OH" in describe_part("suffix", "triol", None, 3)
-    assert "nitrogen" in describe_part("suffix", "diamine", None, 2)
-    assert "-C(=O)OH" in describe_part("suffix", "oic acid", None, 3)
-    assert "-C(=O)OH" in describe_part("suffix", "dicarboxylic acid", None, 4)
-    assert "C≡N" in describe_part("suffix", "onitrile", None, 2)
-    assert "-C(=O)N-" in describe_part("suffix", "dicarboxamide", None, 6)
-    assert "ester" in describe_part("suffix", "dicarboxylate", None, 6)
-    assert "four-carbon" in describe_part("substituent", "tert-butyl", None, 4)
-    assert "three-carbon" in describe_part("substituent", "isopropyl", None, 3)
-    assert "-O-CH3" in describe_part("substituent", "methoxy", None, 2)
+    assert "C=O" in describe_part("suffix", "dione", 2)
+    assert "-OH" in describe_part("suffix", "triol", 3)
+    assert "nitrogen" in describe_part("suffix", "diamine", 2)
+    assert "-C(=O)OH" in describe_part("suffix", "oic acid", 3)
+    assert "-C(=O)OH" in describe_part("suffix", "dicarboxylic acid", 4)
+    assert "C≡N" in describe_part("suffix", "onitrile", 2)
+    assert "-C(=O)N-" in describe_part("suffix", "dicarboxamide", 6)
+    assert "ester" in describe_part("suffix", "dicarboxylate", 6)
+    assert "four-carbon" in describe_part("substituent", "tert-butyl", 4)
+    assert "three-carbon" in describe_part("substituent", "isopropyl", 3)
+    assert "-O-CH3" in describe_part("substituent", "methoxy", 2)
 
 
 def test_generic_token_line_names_the_text():
@@ -216,18 +214,18 @@ def test_generic_token_line_names_the_text():
 
 def test_one_atom_is_not_one_atoms():
     from app.glossary import describe_functional
-    assert "1 atom." in describe_part("parent", "zzzql", None, 1)
-    assert "1 atom." in describe_part("parent", "purin", None, 1)
-    assert "1 atoms" not in describe_part("substituent", "zzzql", None, 1)
+    assert "1 atom." in describe_part("parent", "zzzql", 1)
+    assert "1 atom." in describe_part("parent", "purin", 1)
+    assert "1 atoms" not in describe_part("substituent", "zzzql", 1)
     assert "1 atoms" not in describe_functional("zzz", 1)
 
 
 def test_the_parent_prose_is_used_only_when_the_atom_count_fits_the_stem():
-    assert "two-carbon" in describe_part("parent", "acet", None, 2)
-    assert "two-carbon" not in describe_part("parent", "acet", None, 8)      # acetophenone
-    assert "benzene ring" not in describe_part("parent", "benz", None, 12)    # benzophenone
-    assert "benzene ring" in describe_part("parent", "benz", None, 12, copies=2)   # two benzene rings
-    assert "core skeleton" in describe_part("parent", "acet", None, 8)
+    assert "two-carbon" in describe_part("parent", "acet", 2)
+    assert "two-carbon" not in describe_part("parent", "acet", 8)      # acetophenone
+    assert "benzene ring" not in describe_part("parent", "benz", 12)    # benzophenone
+    assert "benzene ring" in describe_part("parent", "benz", 12, copies=2)   # two benzene rings
+    assert "core skeleton" in describe_part("parent", "acet", 8)
 
 
 def test_a_suffix_line_needs_atoms_that_bear_it_out():
@@ -247,7 +245,7 @@ def test_a_suffix_line_needs_atoms_that_bear_it_out():
     assert not suffix_claim_holds("one", Chem.MolFromSmiles("CC(=NO)C"), [4, 5])
     assert not suffix_claim_holds("oic acid", None, [2])              # no molecule: neutral, never a guess
     assert suffix_claim_holds("ol", None, [0])                         # no claim to check
-    assert "covers 2 atoms" in describe_part("suffix", "oic acid", None, 2, holds=False)
+    assert "covers 2 atoms" in describe_part("suffix", "oic acid", 2, holds=False)
 
 
 def test_a_functional_word_line_is_used_only_for_the_atoms_the_word_adds():
@@ -261,4 +259,4 @@ def test_a_functional_word_line_is_used_only_for_the_atoms_the_word_adds():
 def test_the_glossary_has_no_branch_nothing_can_reach():
     # describe_locant("unmapped") and describe_part("modifier") were unreachable in v2
     assert describe_locant("unmapped", "7") == "Position 7."
-    assert "does not add atoms" not in describe_part("modifier", "7", None, 1)
+    assert "does not add atoms" not in describe_part("modifier", "7", 1)

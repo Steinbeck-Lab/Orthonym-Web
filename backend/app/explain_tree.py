@@ -281,7 +281,7 @@ class _Builder:
         owns = self.atoms_of(w)
         kind = "substituent" if w.kind == "substituent" else "parent"
         self.add(kind, w.kind, None, owns=owns, lights=owns, copies=len(w.copies),
-                 line=describe_part(kind, w.kind, None, len(set(owns)), copies=len(w.copies)))
+                 line=describe_part(kind, w.kind, len(set(owns)), copies=len(w.copies)))
 
     def foreign_replacement_locants(self, w: _WrittenPart, roles: list[str]) -> list[str]:
         """A locant written right before a heteroatom or alkane-stem token reads
@@ -315,7 +315,7 @@ class _Builder:
         label = self.text(span)
         owns = self.atoms_of(w)
         node = self.add("substituent", label, span, owns=owns, lights=owns, copies=len(w.copies),
-                        line=describe_part("substituent", label, None, len(set(owns)), copies=len(w.copies)))
+                        line=describe_part("substituent", label, len(set(owns)), copies=len(w.copies)))
         self.part_node[w.key] = (node, owns)
         # A glycosyl substituent ("alpha-D-mannopyranosyl|oxy") names its anomer
         # the same way a sugar root does.
@@ -348,7 +348,7 @@ class _Builder:
         label = self.text(parent_span)
         parent = self.add("parent", label, parent_span, owns=parent_atoms, lights=parent_atoms,
                           copies=len(w.copies),
-                          line=describe_part("parent", label, None, len(set(parent_atoms)), copies=len(w.copies)))
+                          line=describe_part("parent", label, len(set(parent_atoms)), copies=len(w.copies)))
         self.part_node[w.key] = (parent, parent_atoms + suffix_atoms)
         run = spans.suffix_tokens if has_suffix else frozenset()
         head = [(t, r) for t, r in zip(w.tokens, roles) if t.index not in run]
@@ -361,7 +361,7 @@ class _Builder:
             carrying = set(suffix_locants.values())
             lights = suffix_atoms + [i for i in parent_atoms if carrying & set(self.by_index[i].locants)]
             suffix = self.add("suffix", s_label, spans.suffix, owns=suffix_atoms, lights=lights,
-                              line=describe_part("suffix", s_label, None, len(set(suffix_atoms)),
+                              line=describe_part("suffix", s_label, len(set(suffix_atoms)),
                                                  holds=suffix_claim_holds(s_label, self.mol, suffix_atoms)))
             self.suffix_node[w.key] = (suffix, suffix_atoms, suffix_locants)
             tail = [(t, r) for t, r in zip(w.tokens, roles) if t.index in run]
@@ -438,7 +438,7 @@ class _Builder:
                                  line=describe_locant("position", loc))
                         continue
                     lights, line = self.locant(at, i < first_core,
-                                               target, mode, atoms, w.copies,
+                                               target, mode, atoms,
                                                used_copies, suffix_atoms, suffix_locants or {},
                                                written[loc], w, [x for x, _ in items])
                     counted.update(lights)
@@ -699,7 +699,7 @@ class _Builder:
             seen.add(part.key)
             atoms |= set(self.atoms_of(part))
 
-    def locant(self, loc, leading, target, mode, atoms, copies, used, suffix_atoms, suffix_locants,
+    def locant(self, loc, leading, target, mode, atoms, used, suffix_atoms, suffix_locants,
                written, w, token_locs):
         if target is not None and target.kind == "hydro":
             hit = self.with_locant(atoms, loc)
@@ -710,7 +710,7 @@ class _Builder:
             return (self.anomeric_carbon(self.carbohydrate_atoms, attached=True),
                     describe_locant("position", loc, anomer=True))
         if mode == "substituent" and leading:
-            at_loc = [c for c in copies if c.locant == loc]
+            at_loc = [c for c in w.copies if c.locant == loc]
             if len(at_loc) > written:
                 # Written once for several copies ("bis(4-chlorophenyl)"): the
                 # locant names all of them.

@@ -368,7 +368,7 @@ def false_line_claims(trace, nodes) -> list:
     for n in nodes:
         if n["kind"] == "suffix" and mol is not None:
             claim = glossary.suffix_claim(n["label"])
-            asserted = n["line"] == glossary.describe_part("suffix", n["label"], None, len(set(n["owns"])))
+            asserted = n["line"] == glossary.describe_part("suffix", n["label"], len(set(n["owns"])))
             if claim and asserted and not _claim_true(claim, mol, n["owns"]):
                 out.append((n["label"], n["line"]))
         elif n["kind"] == "parent":

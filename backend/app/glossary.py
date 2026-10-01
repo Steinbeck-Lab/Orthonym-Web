@@ -181,12 +181,6 @@ def _parent_key(label: str) -> str | None:
     return None
 
 
-def _parent_known(label: str) -> str | None:
-    """Written parent labels ("purine", "ethan") against the stem table."""
-    key = _parent_key(label)
-    return None if key is None else _PARENTS[key]
-
-
 def parent_claim(label: str) -> tuple[str, tuple[int, int]] | None:
     """(the prose a parent line gives for `label`, the per-copy atom counts it is true
     of), or None when the label has no prose."""
@@ -198,23 +192,21 @@ def _atoms(count: int) -> str:
     return f"{count} atom" if count == 1 else f"{count} atoms"
 
 
-def describe_part(kind: str, text: str, locant: str | None, atom_count: int,
-                  copies: int = 1, *, holds: bool = True) -> str:
+def describe_part(kind: str, text: str, atom_count: int, copies: int = 1, *, holds: bool = True) -> str:
     """One line for a part. `holds` is False when the caller found that the atoms the
     part owns do not bear out its table line (a suffix: ``suffix_claim_holds``); the
     neutral count line is then used."""
     label = text.strip("-")
-    where = f" It sits at position {locant}." if locant else ""
     many = f" The name writes it once for {copies} copies." if copies > 1 else ""
 
     if kind == "substituent":
         known = _lookup(_SUBSTITUENTS, label, endings=True)
         if known:
-            return f'"{label}" is {known}.{where}{many}'
+            return f'"{label}" is {known}.{many}'
     elif kind == "suffix":
         known = _lookup(_SUFFIXES, label)
         if known and holds:
-            return f'The "{label}" ending means {known}.{where}'
+            return f'The "{label}" ending means {known}.'
     elif kind == "parent":
         special = _SPECIAL_PARENTS.get(label.lower())
         if special:
@@ -231,7 +223,7 @@ def describe_part(kind: str, text: str, locant: str | None, atom_count: int,
             f"around. It has {_atoms(atom_count)}.{many}"
         )
 
-    return f'"{label}" covers {_atoms(atom_count)} of this structure.{where}{many}'
+    return f'"{label}" covers {_atoms(atom_count)} of this structure.{many}'
 
 
 # A functional-class word ("ketone" in "methyl ethyl ketone") owns the atoms the word
