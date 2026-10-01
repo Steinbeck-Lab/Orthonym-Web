@@ -92,6 +92,12 @@ _SET_PREFIX = re.compile(r"^\s*\(?(rel|rac)\)?-?\(", re.IGNORECASE)
 _SET_WORD = re.compile(r"^\s*\(?(rel|rac)\)?-?\s*$", re.IGNORECASE)
 
 
+def _set_word_of(piece: str) -> Optional[str]:
+    """The set word ("rel" or "rac") a stereo token's text is or starts with, else None."""
+    m = _SET_PREFIX.match(piece) or _SET_WORD.match(piece)
+    return m.group(1).lower() if m else None
+
+
 @dataclass
 class _WrittenPart:
     kind: str
@@ -806,36 +812,48 @@ class _Builder:
                     return hits[0][0], sorted(atoms)[0]
         return None, None
 
-    def set_word(self, tokens, idx: int, brackets=()) -> Optional[str]:
-        """"rel" or "rac" when the stereo token at `idx` is governed by one. The word says the
-        whole compound is relative / a racemic mix (IUPAC P-93.1.3), so it reaches every mark
-        of the name, except that a word written inside a bracket reaches only that bracket. Nearest first: its own token ("rel-(1R,2S)-"), a stereo token touching it
-        ("(1R,2S)-rel-", "(rac)-(2R)-"), then the nearest word before it, then after it."""
-        text, tok = self.t.text, tokens[idx]
-        own = _SET_PREFIX.match(text[tok.span[0]:tok.span[1]])
+    def set_word(self, words, idx: int, brackets=()) -> Optional[str]:
+        """"rel" or "rac" when the stereo token at `idx` is governed by one. The word says
+        the whole compound is relative / a racemic mix (IUPAC P-93.1.3), so it reaches every
+        mark of the name, except that a word written inside a bracket reaches only that
+        bracket. Nearest first: its own token ("rel-(1R,2S)-"), a stereo token touching it
+        ("(1R,2S)-rel-", "(rac)-(2R)-"), then the nearest word before it, then after it.
+        `words` lists (token index, token, word, innermost bracket) of every stereo token
+        that carries a set word (``set_words``)."""
+        if not words:
+            return None
+        tok = self.t.tokens[idx]
+        piece = self.t.text[tok.span[0]:tok.span[1]]
+        own = _SET_PREFIX.match(piece)
         if own:
             return own.group(1).lower()
-        if _SET_WORD.match(text[tok.span[0]:tok.span[1]]):
+        if _SET_WORD.match(piece):
             return None
+        here = innermost_bracket(brackets, tok.span[0])
         found = []
-        for j, other in enumerate(tokens):
-            if j == idx or other.kind != STEREO_KIND:
-                continue
-            piece = text[other.span[0]:other.span[1]]
-            word = _SET_PREFIX.match(piece) or _SET_WORD.match(piece)
-            if word:
-                reach = innermost_bracket(brackets, other.span[0])
-                here = innermost_bracket(brackets, tok.span[0])
-                if reach is not None and not (here is not None and reach[0] <= here[0] and here[1] <= reach[1]):
-                    continue                  # a word inside a bracket keeps to that bracket
-                touching = other.span[1] == tok.span[0] or other.span[0] == tok.span[1]
-                found.append((0 if touching else 1 if j < idx else 2, abs(j - idx), word.group(1).lower()))
+        for j, other, word, reach in words:
+            if reach is not None and not (here is not None and reach[0] <= here[0] and here[1] <= reach[1]):
+                continue                      # a word inside a bracket keeps to that bracket
+            touching = other.span[1] == tok.span[0] or other.span[0] == tok.span[1]
+            found.append((0 if touching else 1 if j < idx else 2, abs(j - idx), word))
         return min(found)[2] if found else None
+
+    def set_words(self, brackets) -> list:
+        """(token index, token, word, innermost bracket) of every stereo token that carries a
+        set word, in token order; built once per name for ``set_word``."""
+        text, out = self.t.text, []
+        for j, tok in enumerate(self.t.tokens):
+            if tok.kind == STEREO_KIND:
+                word = _set_word_of(text[tok.span[0]:tok.span[1]])
+                if word:
+                    out.append((j, tok, word, innermost_bracket(brackets, tok.span[0])))
+        return out
 
     def stereo(self, owners: dict) -> None:
         tokens = self.t.tokens
         brackets = written_brackets(tokens)
         by_key = self.by_key
+        words = self.set_words(brackets)
         for idx, tok in enumerate(tokens):
             if tok.kind != STEREO_KIND:
                 continue
@@ -860,7 +878,7 @@ class _Builder:
                 bridge = next((n for n in self.nodes if n["kind"] == "token"
                                and n["span"] == list(self.trim(written.span))), None)
             first_new = len(self.nodes)
-            within = self.set_word(tokens, idx, brackets)
+            within = self.set_word(words, idx, brackets)
             for label, span in stereo_items(self.t.text, tok.span):
                 m = STEREO_MARK.match(label)
                 if m:
