@@ -357,6 +357,16 @@
   color: var(--ink);
 }
 
+/* The error caption holds a whole sentence: body type, sentence case, a readable measure. */
+.explain-patch__state-label--sentence {
+  max-width: 46ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-md);
+  line-height: 1.5;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
 .explain-patch__pending-cloth {
   display: flex;
   flex-direction: column;

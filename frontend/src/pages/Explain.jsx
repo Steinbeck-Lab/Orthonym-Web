@@ -414,7 +414,10 @@ function Explain() {
 
           {phase === 'error' && (
             <div className="explain-patch" role="alert">
-              <span className="explain-patch__state-label">
+              {/* A failure is a sentence ("OPSIN reads this name in a reordered form ..."),
+                  so it is set in sentence case; the uppercase caption style is for the
+                  one-word pending label above. */}
+              <span className="explain-patch__state-label explain-patch__state-label--sentence">
                 {apiError || 'Could not explain this molecule'}
               </span>
               <div className="explain-patch__snip-wrap" aria-hidden="true">
