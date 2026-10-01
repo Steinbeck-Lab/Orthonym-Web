@@ -58,8 +58,8 @@ from typing import Optional, Sequence
 from rdkit import Chem
 
 from .glossary import (
-    GENERIC_TOKEN_LINE, describe_cage_multiplier, describe_functional, describe_locant, describe_part,
-    describe_token, suffix_claim_holds,
+    describe_cage_multiplier, describe_functional, describe_locant, describe_part, describe_token,
+    suffix_claim_holds, token_line,
 )
 from .label_rules import (
     BARE_DESCRIPTOR, CONTEXTUAL, ELEMENT_LOCANT, GLUE, LOCANT_KINDS, NUMBER_LOCANT, STEREO_MARK,
@@ -186,6 +186,14 @@ def _joined_to_next_substituent(trace: Trace, key: Optional[Span]) -> bool:
             and any(p.span == nxt.owner and p.kind == "substituent" for p in trace.parts))
 
 
+def pair_line(role: str, element: str, loc: str, lit) -> str:
+    """The line of half of a "4-O-" pair: what it lit, or the plain position when it
+    lit nothing."""
+    if not lit:
+        return describe_locant("substituent", loc)
+    return describe_locant("oxy_element", loc) if role == "element" else describe_locant("oxy_number", loc, element)
+
+
 class _Builder:
     def __init__(self, trace: Trace, parts: list[_WrittenPart]):
         self.t = trace
@@ -224,6 +232,13 @@ class _Builder:
 
     def with_locant(self, atoms, locant) -> list[int]:
         return [i for i in atoms if locant in self.by_index[i].locants]
+
+    def modifier(self, atoms, at: Optional[str], written: str) -> tuple[list[int], str]:
+        """(atoms, line) of a hydro / indicated-hydrogen locant: `at` is the locant as
+        OPSIN numbers it (None when it names no atom), `written` the text to show then."""
+        hit = self.with_locant(atoms, at) if at is not None else []
+        element = self.by_index[hit[0]].element if len(hit) == 1 else None
+        return hit, describe_locant("modifier", at or written, element)
 
     def component_atom(self, elements: list, k: Optional[int], atoms) -> list[int]:
         """The ONE atom of `atoms` that the k-th number of a fusion component names,
@@ -401,11 +416,9 @@ class _Builder:
                     added = _ADDED_H.match(loc)
                     if added:
                         # "2(1H)": hydrogen added at position 1 of the parent.
-                        at = self.spiro_lookup(tokens, i, atoms, added.group(1))
-                        hit = self.with_locant(atoms, at) if at is not None else []
-                        element = self.by_index[hit[0]].element if len(hit) == 1 else None
-                        self.add("indicated_h", loc, sub, parent=owner, lights=hit,
-                                 line=describe_locant("modifier", at or added.group(1), element))
+                        hit, line = self.modifier(atoms, self.spiro_lookup(tokens, i, atoms, added.group(1)),
+                                                  added.group(1))
+                        self.add("indicated_h", loc, sub, parent=owner, lights=hit, line=line)
                         continue
                     component = (None if any(t.kind == "polyCyclicSpiro" for t in tokens)
                                  else fusion_component_elements(tokens, i, self.t.text))
@@ -425,12 +438,7 @@ class _Builder:
                         # "4-O-": the O names the PARENT's oxygen of that element, the number
                         # the parent carbon it is bonded to -- never the substituent's own atoms.
                         role, element, lit = pair
-                        if lit:
-                            line = (describe_locant("oxy_element", loc) if role == "element"
-                                    else describe_locant("oxy_number", loc, element))
-                        else:
-                            line = describe_locant("substituent", loc)
-                        self.add("locant", loc, sub, parent=owner, lights=lit, line=line)
+                        self.add("locant", loc, sub, parent=owner, lights=lit, line=pair_line(role, element, loc, lit))
                         continue
                     at = self.spiro_lookup(tokens, i, atoms, loc)
                     if at is None:
@@ -450,11 +458,8 @@ class _Builder:
                     counted = set()
             elif tok.kind == "indicatedHydrogen":
                 for loc, sub in indicated_h_items(self.t.text, tok.span):
-                    at = self.spiro_lookup(tokens, i, atoms, loc)
-                    hit = self.with_locant(atoms, at) if at is not None else []
-                    element = self.by_index[hit[0]].element if len(hit) == 1 else None
-                    self.add("indicated_h", self.text(sub), sub, parent=owner, lights=hit,
-                             line=describe_locant("modifier", at or loc, element))
+                    hit, line = self.modifier(atoms, self.spiro_lookup(tokens, i, atoms, loc), loc)
+                    self.add("indicated_h", self.text(sub), sub, parent=owner, lights=hit, line=line)
             elif tok.kind == "isotopeSpecification":
                 # "(2H3)", "(125I)": it lights the atoms of the isotope's element in
                 # the part, and nothing when it names no element it can read.
@@ -472,9 +477,8 @@ class _Builder:
                          lights=counted or token_lights, line=line)
             elif roles[i] == "prefix":
                 span = self.trim(tok.span)
-                line = describe_token(tok.kind, self.text(span)) or GENERIC_TOKEN_LINE.format(text=self.text(span))
                 self.add(_NODE_KIND.get(tok.kind, "token"), self.text(span), span, parent=owner,
-                         lights=token_lights, line=line)
+                         lights=token_lights, line=token_line(tok.kind, self.text(span)))
             elif roles[i] == "core":
                 counted = set()
 
@@ -702,9 +706,7 @@ class _Builder:
     def locant(self, loc, leading, target, mode, atoms, used, suffix_atoms, suffix_locants,
                written, w, token_locs):
         if target is not None and target.kind == "hydro":
-            hit = self.with_locant(atoms, loc)
-            element = self.by_index[hit[0]].element if len(hit) == 1 else None
-            return hit, describe_locant("modifier", loc, element)
+            return self.modifier(atoms, loc, loc)
         if (mode == "substituent" and self.carbohydrate_atoms is not None
                 and loc.lower() in ("alpha", "beta")):
             return (self.anomeric_carbon(self.carbohydrate_atoms, attached=True),
@@ -748,10 +750,7 @@ class _Builder:
                 pair = self.oxy_pair(self.t.tokens, tok.index, items, k, set(atoms)) if atoms else None
                 if pair is not None:
                     role, element, lit = pair
-                    line = (describe_locant("substituent", loc) if not lit else
-                            describe_locant("oxy_element", loc) if role == "element"
-                            else describe_locant("oxy_number", loc, element))
-                    self.add("locant", loc, sub, lights=lit, line=line)
+                    self.add("locant", loc, sub, lights=lit, line=pair_line(role, element, loc, lit))
                     continue
                 lights = atoms
                 if bridge:
@@ -760,14 +759,13 @@ class _Builder:
             return
         span = self.trim(tok.span)
         label = self.text(span)
-        line = describe_token(tok.kind, label) or GENERIC_TOKEN_LINE.format(text=label)
-        self.add(_NODE_KIND.get(tok.kind, "token"), label, span, lights=atoms, line=line)
+        self.add(_NODE_KIND.get(tok.kind, "token"), label, span, lights=atoms, line=token_line(tok.kind, label))
 
     def orphan(self, tok: WrittenToken) -> None:
         span = self.trim(tok.span)
         label = self.text(span)
         self.add(_NODE_KIND.get(tok.kind, "token"), label, span,
-                 line=describe_token(tok.kind, label) or GENERIC_TOKEN_LINE.format(text=label))
+                 line=token_line(tok.kind, label))
 
     def stereo_atom(self, locant: str, descriptor: str, scope_parts: list[_WrittenPart],
                     head: Optional[_WrittenPart]):

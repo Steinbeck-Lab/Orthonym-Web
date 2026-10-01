@@ -422,6 +422,11 @@ def describe_token(category: str, text: str) -> str | None:
     return template.format(text=text)
 
 
+def token_line(category: str, text: str) -> str:
+    """describe_token's line, or the generic one for a kind the table does not cover."""
+    return describe_token(category, text) or GENERIC_TOKEN_LINE.format(text=text)
+
+
 # "bi" in "bicyclo[2.2.2]octane" counts the RINGS of the cage; it is not a count of
 # copies, which is what the line for a multiplier says.
 _CAGE_RINGS = {"bi": 2, "tri": 3, "tetra": 4, "penta": 5, "hexa": 6, "hepta": 7, "octa": 8, "nona": 9, "deca": 10}

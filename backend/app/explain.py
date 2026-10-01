@@ -59,6 +59,19 @@ def _inline_svg(mol: Chem.Mol) -> tuple[str, list[list[float]]]:
     return drawer.GetDrawingText(), points
 
 
+def _safe_svg(mol: Chem.Mol, what: str) -> Optional[tuple[str, list[list[float]]]]:
+    """`_inline_svg`, or None when the drawer raises. No spec row covers a drawing
+    defect: it is a defect in our own work on a name that parsed, which section 7
+    reports as "Could not explain this name." A soft time limit is never swallowed."""
+    try:
+        return _inline_svg(mol)
+    except SoftTimeLimitExceeded:
+        raise
+    except Exception:
+        logger.exception("explain: drawing failed for %r", what)
+        return None
+
+
 def _response(smiles, name, *, svg=None, atom_points=(), total_atoms=0, nodes=(), error=None) -> dict:
     return {
         "smiles": smiles, "name": name, "svg": svg, "atom_points": list(atom_points),
@@ -97,6 +110,12 @@ def _align_spans(nodes: list[dict], read_text: str, shown_text: str) -> list[dic
 
 
 def explain_name(name: str) -> dict:
+    return _explain_name(name, draw=True)
+
+
+def _explain_name(name: str, *, draw: bool) -> dict:
+    """`draw` False skips the SVG (explain_molecule draws the user's molecule
+    and never uses OPSIN's)."""
     result = trace(name)
     if isinstance(result, TraceFailure):
         return _response("", name, error=_FAILURE_MESSAGES[result.reason])
@@ -113,13 +132,12 @@ def explain_name(name: str) -> dict:
         # with no reason; it is logged loudly and reported as one message.
         logger.exception("explain: building nodes failed for %r", name)
         return _response(result.smiles, name, error=_FAILURE_MESSAGES["mismatch"])
-    try:
-        svg, atom_points = _inline_svg(mol)
-    except SoftTimeLimitExceeded:
-        raise
-    except Exception:
-        logger.exception("explain: drawing failed for %r", name)
-        return _response(result.smiles, name, error=_FAILURE_MESSAGES["mismatch"])
+    svg, atom_points = None, ()
+    if draw:
+        drawn = _safe_svg(mol, name)
+        if drawn is None:
+            return _response(result.smiles, name, error=_FAILURE_MESSAGES["mismatch"])
+        svg, atom_points = drawn
     return _response(result.smiles, name, svg=svg, atom_points=atom_points,
                      total_atoms=mol.GetNumAtoms(), nodes=nodes)
 
@@ -167,18 +185,12 @@ def explain_molecule(smiles: str, namer: Orthonym) -> dict:
         name = None
     if name is None or is_failure_name(name):
         return _response(smiles, None, total_atoms=mol.GetNumAtoms(), error=_NOT_NAMED)
-    try:
-        svg, atom_points = _inline_svg(mol)
-    except SoftTimeLimitExceeded:
-        raise
-    except Exception:
-        # No spec row covers a drawing defect; it is a defect in our own work on a
-        # name that did parse, which section 7 reports as "Could not explain this name."
-        logger.exception("explain: drawing failed for %r", smiles)
-        return _response(smiles, name, total_atoms=mol.GetNumAtoms(),
-                         error=_FAILURE_MESSAGES["mismatch"])
     total_atoms = mol.GetNumAtoms()
-    named = explain_name(name)
+    drawn = _safe_svg(mol, smiles)
+    if drawn is None:
+        return _response(smiles, name, total_atoms=total_atoms, error=_FAILURE_MESSAGES["mismatch"])
+    svg, atom_points = drawn
+    named = _explain_name(name, draw=False)
     if named["error"] is not None:
         return _response(smiles, name, svg=svg, atom_points=atom_points,
                          total_atoms=total_atoms, error=named["error"])
