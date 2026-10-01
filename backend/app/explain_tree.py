@@ -58,8 +58,8 @@ from typing import Optional
 from rdkit import Chem
 
 from .glossary import (
-    describe_cage_multiplier, describe_functional, describe_locant, describe_part, describe_token,
-    suffix_claim_holds, token_line,
+    describe_cage_multiplier, describe_functional, describe_locant, describe_part, describe_stereo,
+    describe_token, suffix_claim_holds, token_line,
 )
 from .label_rules import (
     BARE_DESCRIPTOR, CONTEXTUAL, ELEMENT_LOCANT, GLUE, LOCANT_KINDS, NUMBER_LOCANT, STEREO_MARK,
@@ -84,6 +84,9 @@ _LINE_KINDS = frozenset({"multiplier", "ringAssemblyMultiplier", "hydro", "fusio
 _ADDED_H = re.compile(r"^(\d+[a-z]?'*)H$")
 # Fischer D/L always prefix the part written right after them ("L-alanyl").
 _FISCHER = frozenset({"D", "L", "DL"})
+# A stereo set written "rel-(1R,2S)-" or "rac-(1R,2S)-": the word in front changes what
+# every mark inside says (IUPAC P-93.1.2.1, P-93.1.3).
+_SET_PREFIX = re.compile(r"^\s*(rel|rac)-?\(", re.IGNORECASE)
 
 
 @dataclass
@@ -816,6 +819,8 @@ class _Builder:
                 bridge = next((n for n in self.nodes if n["kind"] == "token"
                                and n["span"] == list(self.trim(written.span))), None)
             first_new = len(self.nodes)
+            written_set = _SET_PREFIX.match(self.t.text[tok.span[0]:tok.span[1]])
+            within = written_set.group(1).lower() if written_set else None
             for label, span in stereo_items(self.t.text, tok.span):
                 m = STEREO_MARK.match(label)
                 if m:
@@ -824,7 +829,7 @@ class _Builder:
                     parent = self.part_node.get(owner_key, (None, []))[0]
                     self.add("stereo", label, span, parent=parent,
                              lights=[atom] if atom is not None else [],
-                             line=describe_token(STEREO_KIND, label))
+                             line=describe_stereo(label, within))
                 elif BARE_DESCRIPTOR.match(label) and head is not None:
                     # No locant: light the stereocentre (or stereo double
                     # bond) of the scope's main part only if it has exactly one.
@@ -832,7 +837,7 @@ class _Builder:
                     hits = sorted(a for a in self.atoms_of(head) if a in pool)
                     single = hits[:1] if (len(hits) == 1 or (label in ("E", "Z") and len(hits) == 2)) else []
                     self.add("stereo", label, span, parent=self.part_node.get(head.key, (None, []))[0],
-                             lights=single, line=describe_token(STEREO_KIND, label))
+                             lights=single, line=describe_stereo(label, within))
                 elif NUMBER_LOCANT.match(label):
                     # A locant listed with a mark: "3,17beta-diol" (it is the
                     # suffix's own locant) or "11beta,17,21-trihydroxy" (it is
@@ -855,7 +860,7 @@ class _Builder:
                             target = by_key.get(owner.span, head)
                     parent = self.part_node.get(target.key, (None, []))[0] if target else None
                     self.add("stereo", label, span, parent=parent, lights=[],
-                             line=describe_token(STEREO_KIND, label))
+                             line=describe_stereo(label, within))
             if bridge is not None:
                 # "4,5alpha-epoxy": the marks written right before a bridge name the
                 # positions it bridges.

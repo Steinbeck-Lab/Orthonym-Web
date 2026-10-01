@@ -8,7 +8,7 @@ import pytest
 from rdkit import Chem
 
 from app.explain_tree import build_nodes
-from app.glossary import describe_locant, describe_part
+from app.glossary import describe_locant, describe_part, describe_stereo, describe_token
 from app.opsin_trace import Trace, TraceAtom, trace
 from scripts.explain_census import false_hover_lines
 
@@ -242,5 +242,97 @@ def test_a_hydro_locant_on_the_spiro_atom_gives_way_to_the_spiro_bond():
     assert hydro == ["Position 2 — the C2 atom carries a hydrogen here.",
                      "Position 3 — the name puts a hydrogen on the C3 atom; here a group or bond named elsewhere "
                      "takes its place."]
+
+
+# -- 4. spiro descriptors, isotope labels and stereo marks -------------------------------
+
+@pytest.mark.parametrize("text,line", [
+    ("spiro[4.5]", '"spiro[4.5]" names two rings that share one atom; 4 and 5 count the other atoms in each ring.'),
+    ("spiro[4.1.5.3]", '"spiro[4.1.5.3]" names rings joined at single shared atoms (the counting word before it '
+                       'says how many); its numbers count the atoms between them, in order along the system.'),
+    ("x", '"x" names rings that share single atoms.'),
+])
+def test_a_spiro_descriptor_says_what_its_numbers_count(text, line):
+    assert describe_token("spiro", text) == line
+
+
+def test_an_isotope_label_names_positions_only_when_it_has_a_locant():
+    assert describe_token("isotopeSpecification", "3-2H") == \
+        '"3-2H" is an isotope label: it says which isotope sits at the positions it names.'
+    assert describe_token("isotopeSpecification", "2H3") == (
+        '"2H3" is an isotope label: it says which isotope the part named after it carries in place of the '
+        'usual one; the label gives no position number.')
+
+
+STEREO = [
+    ("2S", None, '"2S" fixes the three-dimensional arrangement at the positions it names.'),
+    ("NE", None, '"NE" fixes the three-dimensional arrangement at the positions it names.'),
+    ("rac", None, '"rac" marks a racemate: an equal mix of the two mirror-image forms.'),
+    ("+-", None, '"+-" marks a racemate: an equal mix of the two mirror-image forms.'),
+    ("RS", None, '"RS" marks a racemate: an equal mix of the two mirror-image forms.'),
+    ("DL", None, '"DL" marks a racemate: an equal mix of the two mirror-image forms.'),
+    ("2RS", None, '"2RS" marks a racemate: an equal mix of the two mirror-image forms, R at position 2 in one '
+                  'and S in the other.'),
+    ("rel", None, '"rel" says the marks after it give only a relative arrangement; it does not say which of the '
+                  'two mirror-image forms is meant.'),
+    ("1R*", None, '"1R*" gives the arrangement at the position it names only relative to the other marks of its '
+                  'set; it does not say which of the two mirror-image forms is meant.'),
+    ("1R", "rel", '"1R" gives the arrangement at the position it names only relative to the other marks of its '
+                  'set; it does not say which of the two mirror-image forms is meant.'),
+    ("1R", "rac", '"1R" is written inside a racemate mark (rac): the name means an equal mix of this form and '
+                  'its mirror image.'),
+    ("+", None, '"+" gives the sign of optical rotation: this form turns polarised light to the right. It does '
+                'not by itself say how the atoms are arranged.'),
+    ("-", None, '"-" gives the sign of optical rotation: this form turns polarised light to the left. It does '
+                'not by itself say how the atoms are arranged.'),
+    ("D", None, '"D" is a Fischer label: it puts the part named after it in the D series, by comparing one of '
+                'its stereocentres with D-glyceraldehyde.'),
+    ("L", None, '"L" is a Fischer label: it puts the part named after it in the L series, by comparing one of '
+                'its stereocentres with L-glyceraldehyde.'),
+    ("cis", None, '"cis" says two groups lie on the same side of the ring or double bond they are on.'),
+    ("trans", None, '"trans" says two groups lie on opposite sides of the ring or double bond they are on.'),
+    ("R", None, '"R" fixes the three-dimensional arrangement at one stereocentre; the mark itself carries no '
+                'position number.'),
+    ("E", None, '"E" fixes the arrangement at one double bond: its higher-ranked groups lie on opposite sides. '
+                'The mark itself carries no position number.'),
+    ("Z", None, '"Z" fixes the arrangement at one double bond: its higher-ranked groups lie on the same side. '
+                'The mark itself carries no position number.'),
+    ("erythro", None, '"erythro" is a sugar configuration prefix: the stereocentres it covers are arranged as in '
+                      'erythrose.'),
+    ("endo", None, '"endo" is a stereo descriptor: part of how the name gives the three-dimensional arrangement.'),
+]
+
+
+@pytest.mark.parametrize("label,within,line", STEREO)
+def test_each_kind_of_stereo_mark_says_what_it_means(label, within, line):
+    assert describe_stereo(label, within) == line
+
+
+def test_only_a_mark_with_a_locant_fixes_the_positions_it_names():
+    for label, within, line in STEREO:
+        assert ("positions it names" in line) == (label in ("2S", "NE") and within is None), label
+
+
+@pytest.mark.parametrize("name,kind,label,line", [
+    ("spiro[4.5]decane", "token", "spiro[4.5]",
+     '"spiro[4.5]" names two rings that share one atom; 4 and 5 count the other atoms in each ring.'),
+    ("(2H3)methyl benzoate", "token", "2H3",
+     '"2H3" is an isotope label: it says which isotope the part named after it carries in place of the usual one; '
+     'the label gives no position number.'),
+    ("rac-(1R,2S)-2-aminocyclohexan-1-ol", "stereo", "1R",
+     '"1R" is written inside a racemate mark (rac): the name means an equal mix of this form and its mirror image.'),
+    ("rel-(1R,2S)-2-aminocyclohexan-1-ol", "stereo", "2S",
+     '"2S" gives the arrangement at the position it names only relative to the other marks of its set; it does '
+     'not say which of the two mirror-image forms is meant.'),
+    ("D-threose", "stereo", "D",
+     '"D" is a Fischer label: it puts the part named after it in the D series, by comparing one of its '
+     "stereocentres with D-glyceraldehyde."),
+    ("(+-)-trans-4-methylcyclohexan-1-ol", "stereo", "+-",
+     '"+-" marks a racemate: an equal mix of the two mirror-image forms.'),
+])
+def test_a_live_mark_line(name, kind, label, line):
+    t = trace(name)
+    (node,) = [n for n in build_nodes(t) if n["kind"] == kind and n["label"] == label]
+    assert node["line"] == line
 
 

@@ -106,7 +106,7 @@ def test_every_listed_token_category_gets_its_own_line():
         "indicatedHydrogen": "carries a hydrogen",
         "stereoChemistry": "three-dimensional",
         "vonBaeyer": "bridge",
-        "spiro": "shared between two rings",
+        "spiro": "share",
     }
     for category, phrase in expect.items():
         line = describe_token(category, "x")

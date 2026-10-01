@@ -467,15 +467,9 @@ _TOKEN_LINES = {
         '"{text}" pins which ring atom carries a hydrogen. Without it the '
         "ring could be drawn more than one way."
     ),
-    "stereoChemistry": (
-        '"{text}" fixes the three-dimensional arrangement at the '
-        "positions it names."
-    ),
     "vonBaeyer": '"{text}" counts the atoms in each bridge of the ring cage.',
-    "spiro": '"{text}" marks one atom shared between two rings.',
     "fusedRingBridge": '"{text}" is a bridge across two positions of the ring system named after it.',
     "lambdaConvention": '"{text}" gives the bonding number of the atom it names, when that differs from its usual one.',
-    "isotopeSpecification": '"{text}" is an isotope label: it says which isotope sits at the positions it names.',
     "oxidationNumberSpecifier": (
         'The Roman numeral in "{text}" is the oxidation number (charge state) of the '
         "metal written just before it."
@@ -521,6 +515,104 @@ def _ring_assembly_multiplier_line(text: str) -> str:
     )
 
 
+# Stereo marks, by what they say (IUPAC 2013 P-93, P-92.4, 2-Carb-4 and 2-Carb-8). Only a
+# mark that carries a locant ("2S", "9Z", "17beta", "NE") fixes the arrangement "at the
+# positions it names"; every other kind gets a line of its own.
+_STEREO_LOCANT = r"(\d+[a-z]?'*|[A-Z][a-z]?'*)"
+_LOCATED = re.compile(_STEREO_LOCANT + r"([RSrs]|[EZ]|alpha|beta)$")
+_LOCATED_STARRED = re.compile(_STEREO_LOCANT + r"([RS])\*$")
+_LOCATED_RACEMIC = re.compile(r"(\d+[a-z]?'*)(RS|SR)$")
+_RACEMATE = frozenset({"rac", "RS", "SR", "+-", "±", "DL"})
+_ROTATION = {"+": "to the right", "-": "to the left"}
+_SUGAR_PREFIX = {
+    "glycero": "glyceraldehyde", "erythro": "erythrose", "threo": "threose", "arabino": "arabinose",
+    "lyxo": "lyxose", "ribo": "ribose", "xylo": "xylose", "allo": "allose", "altro": "altrose",
+    "galacto": "galactose", "gluco": "glucose", "gulo": "gulose", "ido": "idose", "manno": "mannose",
+    "talo": "talose",
+}
+_RELATIVE = ("only relative to the other marks of its set; it does not say which of the two "
+             "mirror-image forms is meant")
+
+
+def describe_stereo(text: str, within: str | None = None) -> str:
+    """The line for one stereo mark. `within` is "rel" or "rac" when the mark is written
+    inside a "rel-(...)" / "rac-(...)" set, which changes what every mark in it says."""
+    # "+-" and "-" are marks of their own; any other mark loses a trailing hyphen.
+    mark = text if text in _RACEMATE or text in _ROTATION else text.strip("-")
+    located = _LOCATED.match(mark)
+    if mark in _RACEMATE:
+        # P-93.1.3; P-103.1.3.1 and 2-Carb-4.4 for "DL"
+        return f'"{mark}" marks a racemate: an equal mix of the two mirror-image forms.'
+    racemic = _LOCATED_RACEMIC.match(mark)
+    if racemic:
+        first, second = racemic.group(2)
+        return (f'"{mark}" marks a racemate: an equal mix of the two mirror-image forms, {first} at '
+                f"position {racemic.group(1)} in one and {second} in the other.")
+    if mark == "rel":
+        # P-93.1.2.1
+        return (f'"rel" says the marks after it give only a relative arrangement; it does not say '
+                f"which of the two mirror-image forms is meant.")
+    if mark in _ROTATION:
+        # 2-Carb-4.5: the sign of optical rotation, not a configuration
+        return (f'"{mark}" gives the sign of optical rotation: this form turns polarised light '
+                f"{_ROTATION[mark]}. It does not by itself say how the atoms are arranged.")
+    starred = _LOCATED_STARRED.match(mark)
+    if starred or (located and within == "rel"):
+        return f'"{mark}" gives the arrangement at the position it names {_RELATIVE}.'
+    if located and within == "rac":
+        return (f'"{mark}" is written inside a racemate mark (rac): the name means an equal mix of '
+                f"this form and its mirror image.")
+    if located:
+        return f'"{mark}" fixes the three-dimensional arrangement at the positions it names.'
+    if mark in ("D", "L"):
+        # 2-Carb-4.2; P-103.1.3.1 (amino acids)
+        return (f'"{mark}" is a Fischer label: it puts the part named after it in the {mark} series, '
+                f"by comparing one of its stereocentres with {mark}-glyceraldehyde.")
+    if mark in ("cis", "trans"):
+        # P-93.5.1.2 (rings), P-93.4.2.1.1 (double bonds)
+        side = "on the same side" if mark == "cis" else "on opposite sides"
+        return f'"{mark}" says two groups lie {side} of the ring or double bond they are on.'
+    if mark in ("R", "S"):
+        return (f'"{mark}" fixes the three-dimensional arrangement at one stereocentre; the mark '
+                f"itself carries no position number.")
+    if mark in ("R*", "S*"):
+        return f'"{mark}" gives the arrangement at one stereocentre {_RELATIVE}.'
+    if mark in ("E", "Z"):
+        # P-92.4.1; P-93.4.2.1.3: no locant when the name needs none
+        side = "on opposite sides" if mark == "E" else "on the same side"
+        return (f'"{mark}" fixes the arrangement at one double bond: its higher-ranked groups lie {side}. '
+                f"The mark itself carries no position number.")
+    sugar = _SUGAR_PREFIX.get(mark.lower())
+    if sugar:
+        # 2-Carb-4.3, 2-Carb-8.4 (the centres it covers need not be next to each other)
+        return f'"{mark}" is a sugar configuration prefix: the stereocentres it covers are arranged as in {sugar}.'
+    return f'"{mark}" is a stereo descriptor: part of how the name gives the three-dimensional arrangement.'
+
+
+def _spiro_line(text: str) -> str:
+    """P-24.2.1: "spiro[4.5]" -- two rings share one atom, and the numbers count the other
+    atoms of each ring. P-24.2.2: after "di", "tri" (a polyspiro system) the numbers count
+    the atoms that link the shared atoms, in order along the system."""
+    inside = re.fullmatch(r"spiro\[([^\]]*)\]", text.strip("-"))
+    numbers = inside.group(1).split(".") if inside else []
+    if len(numbers) == 2 and all(n.isdigit() for n in numbers):
+        return (f'"{text}" names two rings that share one atom; {numbers[0]} and {numbers[1]} count '
+                f"the other atoms in each ring.")
+    if len(numbers) > 2:
+        return (f'"{text}" names rings joined at single shared atoms (the counting word before it says '
+                f"how many); its numbers count the atoms between them, in order along the system.")
+    return f'"{text}" names rings that share single atoms.'
+
+
+def _isotope_line(text: str) -> str:
+    """P-82.2.1: a locant in front of the nuclide names the positions; with none, every
+    position of the part that can carry it is meant (P-82.6.1.3)."""
+    if "-" in text.strip("()-"):
+        return f'"{text}" is an isotope label: it says which isotope sits at the positions it names.'
+    return (f'"{text}" is an isotope label: it says which isotope the part named after it carries in '
+            f"place of the usual one; the label gives no position number.")
+
+
 def describe_token(category: str, text: str) -> str | None:
     """One line for a single raw name token, or None if the token teaches
     nothing. Elision vowels, hyphens and brackets fall in the second group.
@@ -531,6 +623,12 @@ def describe_token(category: str, text: str) -> str | None:
     """
     if category == "ringAssemblyMultiplier":
         return _ring_assembly_multiplier_line(text)
+    if category == "stereoChemistry":
+        return describe_stereo(text)
+    if category == "spiro":
+        return _spiro_line(text)
+    if category == "isotopeSpecification":
+        return _isotope_line(text)
     template = _TOKEN_LINES.get(category)
     if template is None:
         return None
