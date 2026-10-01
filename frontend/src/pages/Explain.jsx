@@ -560,7 +560,7 @@ function Explain() {
                             )}
                             {notes.nothingLights && (
                               <p className="explain-detail__note">
-                                It names no single atom, so nothing lights up.
+                                Nothing lights up: Orthonym points to no single atom for it.
                               </p>
                             )}
                             {notes.unmapped && (
