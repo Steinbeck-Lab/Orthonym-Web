@@ -149,3 +149,16 @@ def test_a_soft_time_limit_is_never_swallowed_by_the_new_guards(monkeypatch):
         explain_molecule("CCO", namer=get_primary_namer())
     with pytest.raises(SoftTimeLimitExceeded):
         explain_name("ethanol")
+
+
+def test_a_soft_time_limit_inside_build_nodes_is_never_swallowed(monkeypatch):
+    # The node-building guard is `except Exception`, and SoftTimeLimitExceeded is an
+    # Exception: without its own re-raise a soft limit that fires here became "Could
+    # not explain this name." and the task ran on into the hard limit (final review I4).
+    def boom(trace):
+        raise SoftTimeLimitExceeded()
+    monkeypatch.setattr(explain_module, "build_nodes", boom)
+    with pytest.raises(SoftTimeLimitExceeded):
+        explain_name("ethanol")
+    with pytest.raises(SoftTimeLimitExceeded):
+        explain_molecule("CCO", namer=get_primary_namer())

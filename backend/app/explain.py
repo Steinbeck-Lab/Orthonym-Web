@@ -106,6 +106,8 @@ def explain_name(name: str) -> dict:
                          error="OPSIN parsed this name but the structure could not be read.")
     try:
         nodes = _align_spans(build_nodes(result), result.text, name)
+    except SoftTimeLimitExceeded:
+        raise
     except Exception:
         # A node-building defect must never become a 500 or blank the page
         # with no reason; it is logged loudly and reported as one message.
