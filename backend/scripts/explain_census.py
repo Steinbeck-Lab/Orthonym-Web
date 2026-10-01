@@ -405,7 +405,7 @@ _NOT_CORES = re.compile(r"^(?:(?:mono|di|tri|tetra|penta|hexa|hepta|octa|nona|de
                         r"|hydrochloride|hydrobromide|hydroiodide|hydrofluoride)$", re.IGNORECASE)
 _QUOTED = re.compile(r'"[^"]*"')
 _VOCAB = re.compile(r"hydrogen|\bCH3\b|\bNH2\b|on its own|anomer|mirror-image|shared|share one|"
-                    r"positions it names|position number|built around|cores this name|benzene ring|"
+                    r"positions it names|position number|built around|cores this name|benzene ring|-carbon chain|"
                     r"stereocentre|double bond|optical rotation|Fischer|configuration prefix")
 # The bare group each checked label names: (element, which atoms, hydrogens per atom in
 # one copy). "end": a carbon not bonded to the group's own oxygen (acetyl's CH3 end).
@@ -439,6 +439,7 @@ _PHRASES = [re.compile(p) for p in (
     r"one of the \w+ cores this name is built from",
     r"two fused benzene rings", r"a benzene ring fused to", r"a benzene ring attached by one of its carbons",
     r"is a benzene ring\.", r"is a benzene ring attached", r"a benzene ring\b(?= *$)",
+    r"an? \w+-carbon chain",
     r"names two rings that share one atom", r"names rings that share single atoms",
     r"names rings joined at single shared atoms", r"marks one atom shared between two rings",
     r"fixes the three-dimensional arrangement at the positions it names",
@@ -447,7 +448,7 @@ _PHRASES = [re.compile(p) for p in (
     r"absolute one; it does not say which of the two mirror-image forms is meant",
     r"says the marks of its set give only a relative arrangement; it does not say which of the two "
     r"mirror-image forms is meant",
-    r"is written inside a racemate mark \(rac\): the name means an equal mix of this form and its mirror image",
+    r"is part of a racemate mark \(rac\): the name means an equal mix of this form and its mirror image",
     r"marks a racemate: an equal mix of the two mirror-image forms",
     r"gives the sign of optical rotation: this form turns polarised light to the (?:left|right)\. It does not by "
     r"itself say how the atoms are arranged",
@@ -490,6 +491,40 @@ def _said_counts(text: str) -> list[int]:
     if text == "no hydrogen":
         return [0]
     return [int(x) for x in re.findall(r"\d+", text)]
+
+
+_COUNT_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8}
+
+
+def _chain_problem(mol, node) -> Optional[str]:
+    """"a four-carbon chain" is a claim about the owned carbons: in each copy the longest run of
+    bonded, non-ring carbons must be that long (tert-butyl holds four carbons, its longest run is
+    three)."""
+    m = re.search(r"an? (\w+)-carbon chain", node["line"])
+    want = _COUNT_WORDS.get(m.group(1)) if m else None
+    if want is None:
+        return "a chain of a length this check cannot read"
+    carbons = {a for a in node["owns"] if mol.GetAtomWithIdx(a).GetSymbol() == "C"
+               and not mol.GetAtomWithIdx(a).IsInRing()}
+    if not carbons:
+        return "a carbon chain, no acyclic carbon is owned"
+    adj = {a: [n.GetIdx() for n in mol.GetAtomWithIdx(a).GetNeighbors() if n.GetIdx() in carbons] for a in carbons}
+
+    def longest(a, seen):
+        return 1 + max((longest(b, seen | {b}) for b in adj[a] if b not in seen), default=0)
+
+    pieces, left = [], set(carbons)
+    while left:
+        stack, comp = [next(iter(left))], set()
+        while stack:
+            a = stack.pop()
+            if a not in comp:
+                comp.add(a)
+                stack += adj[a]
+        left -= comp
+        pieces.append(max(longest(a, {a}) for a in comp))
+    bad = [p for p in pieces if p != want]
+    return f"a {want}-carbon chain, the longest run is {bad[0]}" if bad else None
 
 
 def _group_line_problem(mol, node, element, which, bare) -> Optional[str]:
@@ -687,12 +722,26 @@ def _stereo_set_word(trace, node) -> Optional[str]:
         return own.group(1).lower()
     if re.fullmatch(r"\s*\(?(rel|rac)\)?-?\s*", piece(here), re.IGNORECASE):
         return None
+    pairs, opened = [], []
+    for t in trace.tokens:                                  # the name's own brackets, by token kind
+        if t.kind in ("openbracket", "structuralOpenBracket"):
+            opened.append(t.span[0])
+        elif t.kind in ("closebracket", "structuralCloseBracket") and opened:
+            pairs.append((opened.pop(), t.span[1]))
+
+    def inner(pos):
+        inside = [b for b in pairs if b[0] < pos < b[1]]
+        return min(inside, key=lambda b: b[1] - b[0], default=None)
+
     found = []
     for j, other in enumerate(toks):
         if other is here:
             continue
         w = (re.match(r"^\s*\(?(rel|rac)\)?-?\(", piece(other), re.IGNORECASE)
              or re.fullmatch(r"\s*\(?(rel|rac)\)?-?\s*", piece(other), re.IGNORECASE))
+        reach, at = inner(other.span[0]), inner(here.span[0])
+        if w and reach is not None and not (at is not None and reach[0] <= at[0] and at[1] <= reach[1]):
+            continue                                        # a word inside a bracket keeps to it
         if w:
             touching = other.span[1] == here.span[0] or other.span[0] == here.span[1]
             k = toks.index(here)
@@ -722,7 +771,7 @@ def _stereo_problem(trace, node) -> tuple[bool, Optional[str]]:
         ("fixes the three-dimensional arrangement at the positions it names",
          located and not racemic and (word is None or absolute_in_rel)),
         ("marks a racemate: an equal mix of the two mirror-image forms", racemic),
-        ("written inside a racemate mark (rac)", word == "rac" and (located or bare)),
+        ("part of a racemate mark (rac)", word == "rac" and (located or bare)),
         ("sign of optical rotation", label in ("+", "-")),
         ("does not say which of the two mirror-image forms is meant", relative),
         ("is a Fischer label", label in ("D", "L")),
@@ -816,6 +865,8 @@ def false_hover_lines(trace, nodes) -> list:
         label = n["label"].strip("-").lower()
         if n["kind"] == "substituent" and label in _BARE_GROUP:
             known, why = True, _group_line_problem(mol, n, *_BARE_GROUP[label])
+        elif n["kind"] == "substituent" and re.search(r"-carbon chain", n["line"]):
+            known, why = True, _chain_problem(mol, n)
         elif n["kind"] == "suffix" and _AMINE_ENDING.match(label):
             known, why = True, _group_line_problem(mol, n, "N", "all", (2,))
         elif n["line"].startswith("Position ") and "hydrogen" in n["line"]:

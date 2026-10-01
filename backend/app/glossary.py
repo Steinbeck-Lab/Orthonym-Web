@@ -123,6 +123,48 @@ _BRANCHING = re.compile(r"^(?:[\d,']+-|tert-|sec-|iso|neo|n-|methyl|ethyl|propyl
 _COUNTING = re.compile(r"^(?:di|tri|tetra|penta|hexa|hepta|octa|bis|tris|tetrakis)")
 
 
+_CHAIN_LENGTH = {"propyl": 3, "butyl": 4}
+
+
+def _longest_chain(mol, atoms) -> list[int]:
+    """The longest run of bonded, non-ring carbons inside each connected piece of `atoms`
+    (one number per piece)."""
+    pool = {a for a in atoms if a < mol.GetNumAtoms() and mol.GetAtomWithIdx(a).GetSymbol() == "C"
+            and not mol.GetAtomWithIdx(a).IsInRing()}
+
+    def walk(a, seen):
+        best = 1
+        for n in mol.GetAtomWithIdx(a).GetNeighbors():
+            if n.GetIdx() in pool and n.GetIdx() not in seen:
+                best = max(best, 1 + walk(n.GetIdx(), seen | {n.GetIdx()}))
+        return best
+
+    out, left = [], set(pool)
+    while left:
+        start = next(iter(left))
+        piece, todo = set(), [start]
+        while todo:
+            a = todo.pop()
+            if a in piece:
+                continue
+            piece.add(a)
+            todo += [n.GetIdx() for n in mol.GetAtomWithIdx(a).GetNeighbors() if n.GetIdx() in pool]
+        left -= piece
+        out.append(max(walk(a, {a}) for a in piece))
+    return out
+
+
+def _chain_holds(key: str, mol, atoms) -> bool:
+    """A "three- / four-carbon chain" line is said only when the longest carbon chain of each
+    copy is that long: tert-butyl and isobutyl hold four carbons but no chain of four. With no
+    molecule to measure on, the old line stands."""
+    want = _CHAIN_LENGTH.get(key)
+    if want is None or mol is None:
+        return True
+    runs = _longest_chain(mol, atoms)
+    return bool(runs) and all(r == want for r in runs)
+
+
 def _lookup_key(table: dict, text: str, *, endings: bool = False) -> str | None:
     """The table key `text` stands for: the exact key, or a key with only branching
     written in front of it (substituents), or a counted key ("dione" -> "one"). Never
@@ -305,6 +347,8 @@ def describe_part(kind: str, text: str, atom_count: int, copies: int = 1, *, hol
         # A line that names a carbon count or a formula is used only for the exact group:
         # "methylethyl" ends in "ethyl" but has three carbons.
         if key in _GROUP_HYDROGENS and key != label.lower():
+            key = None
+        if key in _CHAIN_LENGTH and not _chain_holds(key, mol, atoms):
             key = None
         if key:
             clause = _hydrogen_clause(_GROUP_HYDROGENS[key], mol, atoms, copies) if key in _GROUP_HYDROGENS else ""
@@ -642,7 +686,7 @@ def describe_stereo(text: str, within: str | None = None) -> str:
     if starred or (located and within == "rel" and mark[-1] in "RS"):
         return f'"{mark}" gives the arrangement at the position it names {_RELATIVE}.'
     if located and within == "rac":
-        return (f'"{mark}" is written inside a racemate mark (rac): the name means an equal mix of '
+        return (f'"{mark}" is part of a racemate mark (rac): the name means an equal mix of '
                 f"this form and its mirror image.")
     if located:
         return f'"{mark}" fixes the three-dimensional arrangement at the positions it names.'
@@ -657,7 +701,7 @@ def describe_stereo(text: str, within: str | None = None) -> str:
     if mark in ("R", "S") and within == "rel":
         return f'"{mark}" gives the arrangement at one stereocentre {_RELATIVE}.'
     if mark in ("R", "S") and within == "rac":
-        return (f'"{mark}" is written inside a racemate mark (rac): the name means an equal mix of '
+        return (f'"{mark}" is part of a racemate mark (rac): the name means an equal mix of '
                 f"this form and its mirror image.")
     if mark in ("R", "S"):
         return (f'"{mark}" fixes the three-dimensional arrangement at one stereocentre; the mark '

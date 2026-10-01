@@ -804,10 +804,10 @@ class _Builder:
                     return hits[0][0], sorted(atoms)[0]
         return None, None
 
-    def set_word(self, tokens, idx: int) -> Optional[str]:
+    def set_word(self, tokens, idx: int, brackets=()) -> Optional[str]:
         """"rel" or "rac" when the stereo token at `idx` is governed by one. The word says the
         whole compound is relative / a racemic mix (IUPAC P-93.1.3), so it reaches every mark
-        of the name. Nearest first: its own token ("rel-(1R,2S)-"), a stereo token touching it
+        of the name, except that a word written inside a bracket reaches only that bracket. Nearest first: its own token ("rel-(1R,2S)-"), a stereo token touching it
         ("(1R,2S)-rel-", "(rac)-(2R)-"), then the nearest word before it, then after it."""
         text, tok = self.t.text, tokens[idx]
         own = _SET_PREFIX.match(text[tok.span[0]:tok.span[1]])
@@ -822,6 +822,10 @@ class _Builder:
             piece = text[other.span[0]:other.span[1]]
             word = _SET_PREFIX.match(piece) or _SET_WORD.match(piece)
             if word:
+                reach = innermost_bracket(brackets, other.span[0])
+                here = innermost_bracket(brackets, tok.span[0])
+                if reach is not None and not (here is not None and reach[0] <= here[0] and here[1] <= reach[1]):
+                    continue                  # a word inside a bracket keeps to that bracket
                 touching = other.span[1] == tok.span[0] or other.span[0] == tok.span[1]
                 found.append((0 if touching else 1 if j < idx else 2, abs(j - idx), word.group(1).lower()))
         return min(found)[2] if found else None
@@ -854,7 +858,7 @@ class _Builder:
                 bridge = next((n for n in self.nodes if n["kind"] == "token"
                                and n["span"] == list(self.trim(written.span))), None)
             first_new = len(self.nodes)
-            within = self.set_word(tokens, idx)
+            within = self.set_word(tokens, idx, brackets)
             for label, span in stereo_items(self.t.text, tok.span):
                 m = STEREO_MARK.match(label)
                 if m:

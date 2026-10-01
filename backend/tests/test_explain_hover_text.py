@@ -280,7 +280,7 @@ STEREO = [
                   'an absolute one; it does not say which of the two mirror-image forms is meant.'),
     ("1R", "rel", '"1R" gives the arrangement at the position it names only as a relative arrangement, not '
                   'an absolute one; it does not say which of the two mirror-image forms is meant.'),
-    ("1R", "rac", '"1R" is written inside a racemate mark (rac): the name means an equal mix of this form and '
+    ("1R", "rac", '"1R" is part of a racemate mark (rac): the name means an equal mix of this form and '
                   'its mirror image.'),
     ("+", None, '"+" gives the sign of optical rotation: this form turns polarised light to the right. It does '
                 'not by itself say how the atoms are arranged.'),
@@ -321,7 +321,7 @@ def test_only_a_mark_with_a_locant_fixes_the_positions_it_names():
      '"2H3" is an isotope label: it says which isotope the part named after it carries in place of the usual one; '
      'the label gives no position number.'),
     ("rac-(1R,2S)-2-aminocyclohexan-1-ol", "stereo", "1R",
-     '"1R" is written inside a racemate mark (rac): the name means an equal mix of this form and its mirror image.'),
+     '"1R" is part of a racemate mark (rac): the name means an equal mix of this form and its mirror image.'),
     ("rel-(1R,2S)-2-aminocyclohexan-1-ol", "stereo", "2S",
      '"2S" gives the arrangement at the position it names only as a relative arrangement, not an absolute one; it does '
      'not say which of the two mirror-image forms is meant.'),
@@ -433,7 +433,7 @@ OLD_REL = ('"rel" says the marks after it give only a relative arrangement; it d
 @pytest.mark.parametrize("label,within,line", [
     ("R", "rel", '"R" gives the arrangement at one stereocentre only as a relative arrangement, not an absolute one; it '
                  'does not say which of the two mirror-image forms is meant.'),
-    ("S", "rac", '"S" is written inside a racemate mark (rac): the name means an equal mix of this form and its '
+    ("S", "rac", '"S" is part of a racemate mark (rac): the name means an equal mix of this form and its '
                  'mirror image.'),
     ("rel", None, '"rel" says the marks of its set give only a relative arrangement; it does not say which of '
                   'the two mirror-image forms is meant.'),
@@ -461,7 +461,7 @@ def test_a_bare_mark_inside_a_racemate_or_relative_set_does_not_fix_the_arrangem
 def test_a_set_word_in_any_adjacent_stereo_token_governs_the_marks(name, mark, word):
     t, nodes, node = _live_node(name, "stereo", mark)
     assert ("only as a relative arrangement, not an absolute one" in node["line"]) == (word == "rel")
-    assert ("written inside a racemate mark" in node["line"]) == (word == "rac")
+    assert ("part of a racemate mark" in node["line"]) == (word == "rac")
     assert false_hover_lines(t, nodes) == []
     assert _census_flags(name, "stereo", mark, OLD_LOCATED.format(mark))
 
@@ -473,7 +473,7 @@ def test_a_set_word_written_after_the_marks_still_governs_them(name, word):
     t, nodes, node = _live_node(name, "stereo", "1R")
     assert "positions it names" not in node["line"] or "only relative" in node["line"]
     assert ("only as a relative arrangement, not an absolute one" in node["line"]) == (word == "rel")
-    assert ("written inside a racemate mark" in node["line"]) == (word == "rac")
+    assert ("part of a racemate mark" in node["line"]) == (word == "rac")
     (setword,) = [n for n in nodes if n["kind"] == "stereo" and n["label"] == word]
     assert "after it" not in setword["line"]
     assert false_hover_lines(t, nodes) == []
@@ -711,7 +711,7 @@ def test_a_multiplied_hydrate_is_not_a_core():
 def test_a_set_word_reaches_every_mark_of_its_word(name, mark, word):
     t, nodes, node = _live_node(name, "stereo", mark)
     assert ("relative arrangement" in node["line"]) == (word == "rel")
-    assert ("written inside a racemate mark" in node["line"]) == (word == "rac")
+    assert ("part of a racemate mark" in node["line"]) == (word == "rac")
     assert false_hover_lines(t, nodes) == []
     assert _census_flags(name, "stereo", mark, OLD_BARE.format(mark))
 
@@ -720,4 +720,66 @@ def test_a_set_word_reaches_a_mark_in_another_word_of_the_name():
     # rel / rac say the whole compound's arrangement is relative / a mix (IUPAC P-93.1.3)
     t, nodes, node = _live_node("rel-(R)-butan-2-yl (S)-2-methylbutanoate", "stereo", "S")
     assert "relative arrangement" in node["line"]
+    assert false_hover_lines(t, nodes) == []
+
+
+# -- final wave: a chain line is measured; a bracket scopes its own set word; "part of" a racemate mark ----
+
+def _chain_line(name, label):
+    t, nodes, node = _live_node(name, "substituent", label)
+    return t, nodes, node["line"]
+
+
+@pytest.mark.parametrize("name,label", [("4-tert-butylcyclohexan-1-ol", "tert-butyl"),
+                                        ("4-isobutylcyclohexan-1-ol", "isobutyl")])
+def test_a_branched_butyl_is_not_a_four_carbon_chain(name, label):
+    t, nodes, line = _chain_line(name, label)
+    assert "chain" not in line
+    assert line == f'"{label}" covers 4 atoms of this structure.'
+    assert false_hover_lines(t, nodes) == []
+    assert _census_flags(name, "substituent", label, f'"{label}" is a four-carbon chain.')
+
+
+@pytest.mark.parametrize("name,label,line", [
+    ("4-butylcyclohexan-1-ol", "butyl", '"butyl" is a four-carbon chain.'),
+    ("4-sec-butylcyclohexan-1-ol", "sec-butyl", '"sec-butyl" is a four-carbon chain.'),
+    ("1-propylcyclohexane", "propyl", '"propyl" is a three-carbon chain.'),
+])
+def test_a_chain_line_that_the_atoms_bear_out_is_kept(name, label, line):
+    t, nodes, said = _chain_line(name, label)
+    assert said == line
+    assert false_hover_lines(t, nodes) == []
+
+
+def test_the_census_measures_a_chain():
+    t = _trace("CC(C)(C)C1CCCCC1")
+    four = '"tert-butyl" is a four-carbon chain.'
+    assert false_hover_lines(t, [_node("substituent", "tert-butyl", owns=[0, 1, 2, 3], line=four)])
+    t2 = _trace("CCCCC1CCCCC1")
+    assert not false_hover_lines(t2, [_node("substituent", "butyl", owns=[0, 1, 2, 3], line='"butyl" is a four-carbon chain.')])
+
+
+def test_a_set_word_inside_a_bracket_keeps_to_that_bracket():
+    name = "(1R,2S)-2-[rel-(1R)-1-hydroxyethyl]cyclohexan-1-ol"
+    t = trace(name)
+    nodes = build_nodes(t)
+    marks = [n for n in nodes if n["kind"] == "stereo"]
+    outer1, outer2, inner = [n for n in marks if n["label"] in ("1R", "2S")][0], \
+        [n for n in marks if n["label"] == "2S"][0], [n for n in marks if n["label"] == "1R"][1]
+    assert "fixes the three-dimensional arrangement" in outer1["line"]
+    assert "fixes the three-dimensional arrangement" in outer2["line"]
+    assert "relative arrangement" in inner["line"]
+    assert false_hover_lines(t, nodes) == []
+    old = [dict(n, line=n["line"]) for n in nodes]
+    for n in old:
+        if n["id"] == outer1["id"]:
+            n["line"] = inner["line"]
+    assert false_hover_lines(t, old)
+
+
+def test_a_racemate_mark_is_part_of_it_on_whichever_side_it_is_written():
+    assert describe_stereo("1R", "rac") == ('"1R" is part of a racemate mark (rac): the name means an equal mix '
+                                            "of this form and its mirror image.")
+    t, nodes, node = _live_node("(S)-rac-butan-2-ol", "stereo", "S")
+    assert "written inside" not in node["line"] and "is part of a racemate mark (rac)" in node["line"]
     assert false_hover_lines(t, nodes) == []
