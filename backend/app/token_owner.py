@@ -54,6 +54,32 @@ def innermost_bracket(brackets: Sequence[Span], pos: int) -> Optional[Span]:
     return min(inside, key=lambda b: b[1] - b[0], default=None)
 
 
+def tokens_of(trace: Trace, key: Optional[Span]) -> list[WrittenToken]:
+    """The written tokens the part `key` owns."""
+    return [t for t in trace.tokens if t.owner == key]
+
+
+def next_nonhyphen(tokens: Sequence[WrittenToken], after_index: int) -> Optional[WrittenToken]:
+    """The first token after position `after_index` that is not a hyphen."""
+    return next((t for t in tokens[after_index + 1:] if t.kind != "hyphen"), None)
+
+
+def bracket_end(text: str, open_pos: int) -> Optional[int]:
+    """The index just past the bracket that opens at text[open_pos] (the "[" after
+    "spiro"), or None when none opens there."""
+    if open_pos >= len(text) or text[open_pos] not in "[({":
+        return None
+    depth = 0
+    for k in range(open_pos, len(text)):
+        if text[k] in "[({":
+            depth += 1
+        elif text[k] in "])}":
+            depth -= 1
+            if depth == 0:
+                return k + 1
+    return None
+
+
 # Used-up tokens that FOLLOW what they belong to.
 _ENDINGS = frozenset({
     "suffix", "unsaturator", "infix", "ine", "carbohydrateRingSize", "chargeSpecifier",

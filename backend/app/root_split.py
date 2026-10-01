@@ -24,10 +24,8 @@ from typing import NamedTuple, Sequence
 
 from rdkit import Chem
 
+from .label_rules import ELEMENT_LOCANT
 from .opsin_trace import Trace
-
-
-_ELEMENT_LOCANT = re.compile(r"^[A-Z][a-z]?'*$")
 
 
 class RootSplit(NamedTuple):
@@ -43,7 +41,7 @@ def _has_numeric_locant(locants) -> bool:
 def _has_element_locant(locants) -> bool:
     """"O", "O'", "N", "Cl": a capitalised element symbol, optionally primed.
     Not numeric, not Greek ("alpha", "omega")."""
-    return any(_ELEMENT_LOCANT.match(locant or "") for locant in locants)
+    return any(ELEMENT_LOCANT.match(locant or "") for locant in locants)
 
 
 _DIGITS = re.compile(r"\d+(?:[a-z](?![a-z]))?'*")

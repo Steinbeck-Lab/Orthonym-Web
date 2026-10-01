@@ -69,8 +69,17 @@ import os
 import re
 import sys
 
+from rdkit import Chem
+
+from app import glossary, opsin_trace
+from app.explain_tree import build_nodes, foreign_lights, oxy_pair_allowed, stereo_atoms
+from app.label_rules import (
+    BARE_DESCRIPTOR, BUILDS_NAME, LOCANT_KINDS, STEREO_MARK, fusion_component_elements, locant_items,
+)
+from app.opsin_trace import Trace
+from app.token_owner import assign_owners, bracket_end
+
 PART_KINDS = ("substituent", "parent", "suffix")
-_STEREO_MARK = re.compile(r"^(\d+[a-z]?'*)([RSrs]\*?|[EZ]|alpha|beta)$")
 PASSING = {"CLEAN", "UNREADABLE"}
 
 
@@ -104,26 +113,11 @@ def _spiro_primes(trace, node, loc: str) -> int:
     start = node["span"][0]
     primes = 0
     for head in (t for t in trace.tokens if t.kind == "polyCyclicSpiro" and t.span[1] <= start):
-        end = _close_of(trace.text, head.span[1])
+        end = bracket_end(trace.text, head.span[1])
         if end is not None and start < end:
             primes = sum(1 for t in trace.tokens if t.kind == "spiroLocant"
                          and head.span[1] <= t.span[0] and t.span[1] <= start)
     return primes
-
-
-def _close_of(text: str, pos: int):
-    """Index just past the bracket opening at text[pos], else None."""
-    if pos >= len(text) or text[pos] not in "[({":
-        return None
-    depth = 0
-    for k in range(pos, len(text)):
-        if text[k] in "[({":
-            depth += 1
-        elif text[k] in "])}":
-            depth -= 1
-            if depth == 0:
-                return k + 1
-    return None
 
 
 def _component_for(trace, node):
@@ -132,7 +126,6 @@ def _component_for(trace, node):
     put in the ring, in order, and this number's index (None when they cannot be
     paired). Read from the written tokens alone. None otherwise (also inside spiro
     brackets, whose primed numbering has its own rule)."""
-    from app.label_rules import LOCANT_KINDS, fusion_component_elements, locant_items
     if node["kind"] != "locant" or not node["span"]:
         return None
     start = node["span"][0]
@@ -140,7 +133,7 @@ def _component_for(trace, node):
     if tok is None:
         return None
     for head in (t for t in trace.tokens if t.kind == "polyCyclicSpiro" and t.span[1] <= start):
-        end = _close_of(trace.text, head.span[1])
+        end = bracket_end(trace.text, head.span[1])
         if end is not None and start < end:
             return None
     elements = fusion_component_elements(trace.tokens, tok.index, trace.text)
@@ -156,7 +149,6 @@ def _provable_atoms(trace, part, elements, k) -> list:
     rings prove it (else []): an element occurring once in the part is the
     component's; among several, the one atom of that element sharing a ring with the
     atoms proven that way. Written here, not shared with the builder."""
-    from rdkit import Chem
     if k is None or elements[k] is None:
         return []
     mol = Chem.MolFromSmiles(trace.smiles)
@@ -193,7 +185,6 @@ def _unproven_component_number(trace, nodes, node) -> bool:
 
 
 def _locant_token(trace, node):
-    from app.label_rules import LOCANT_KINDS
     if not node["span"]:
         return None
     # (a bare number can be split out of a stereo token: "3alpha,21-dihydroxy")
@@ -213,7 +204,6 @@ def _position_in_front(trace, node, parent):
     (resolve_roles' prefix role) and not name-building. A number before a heteroatom / ring token builds the name
     ("1,3-dioxolanyl") unless OPSIN placed the part at that very number
     (TracePart.locant: "1-oxiranylpropan-2-one"). Read from tokens and parts only."""
-    from app.label_rules import _BUILDS_NAME
     tok = _locant_token(trace, node)
     if tok is None:
         return None
@@ -223,7 +213,7 @@ def _position_in_front(trace, node, parent):
         placed = {p.locant for p in trace.parts if p.span == key and p.locant}
         if after is not None and after.kind in ("heteroatom", "alkaneStemComponent") and node["label"] in placed:
             return key, True                  # "1-oxiranyl", "N-hexadecyl": not a replacement locant
-        if after is None or after.kind not in _BUILDS_NAME:
+        if after is None or after.kind not in BUILDS_NAME:
             return key, node["label"] in placed
     return None
 
@@ -239,7 +229,6 @@ def _union_of_copies(trace, key, lights) -> bool:
 
 def _suffix_attachment_locants(trace, nodes, suffix) -> set:
     """The numbers a suffix may carry: those of the atoms its own atoms are bonded to."""
-    from rdkit import Chem
     mol = Chem.MolFromSmiles(trace.smiles)
     own = set(suffix["owns"])
     return {loc for a in own for nb in mol.GetAtomWithIdx(a).GetNeighbors() if nb.GetIdx() not in own
@@ -260,7 +249,6 @@ def wrong_locant_atoms(trace, nodes) -> list:
     number must be one of the numbers its atoms are bonded to. A fusion component's
     own number lights exactly the atom the element and rings prove, else nothing.
     The atoms a suffix owns carry no number."""
-    from app.explain_tree import oxy_pair_allowed
     by_id = {n["id"]: n for n in nodes}
     carbohydrate = any(t.kind == "carbohydrateRingSize" for t in trace.tokens)
     bad = []
@@ -351,7 +339,6 @@ def alkyl_owning_heteroatoms(trace, nodes) -> list:
 def _claim_true(claim, mol, owns) -> bool:
     """Whether the atoms a suffix owns are what its line says. Written here, not shared
     with the glossary: look at every carbon next to an owned oxygen."""
-    from rdkit import Chem
     owned_o = {a for a in owns if a < mol.GetNumAtoms() and mol.GetAtomWithIdx(a).GetSymbol() == "O"}
     carbons = {n.GetIdx() for o in owned_o for n in mol.GetAtomWithIdx(o).GetNeighbors() if n.GetSymbol() == "C"}
     for c in carbons:
@@ -376,8 +363,6 @@ def false_line_claims(trace, nodes) -> list:
     are not, and every parent line whose prose does not fit its atom count. Whether a
     node asserts the claim is read from the glossary's own output, never from wording
     typed here."""
-    from rdkit import Chem
-    from app import glossary
     mol = Chem.MolFromSmiles(trace.smiles)
     out = []
     for n in nodes:
@@ -413,7 +398,6 @@ def oxidation_numbers_misplaced(trace, nodes) -> list:
 def classify(trace, nodes, owners) -> list[str]:
     """`trace` is a Trace, `nodes` build_nodes(trace), `owners`
     assign_owners(trace.tokens)."""
-    from app.explain_tree import _stereo_atoms, foreign_lights
     out = []
     parts = [n for n in nodes if n["kind"] in PART_KINDS]
     if any(n["span"] is None for n in parts):
@@ -451,9 +435,9 @@ def classify(trace, nodes, owners) -> list[str]:
         if n["parent"] is None:
             out.append("STEREO_NO_PARENT")
             break
-    centres, double = _stereo_atoms(trace.smiles)
+    centres, double = stereo_atoms(trace.smiles)
     for n in nodes:
-        m = _STEREO_MARK.match(n["label"]) if n["kind"] == "stereo" else None
+        m = STEREO_MARK.match(n["label"]) if n["kind"] == "stereo" else None
         if not m or not n["lights"]:
             continue       # a mark that names no single atom lights nothing, by design
         pool = double if m.group(2) in ("E", "Z") else centres
@@ -462,7 +446,7 @@ def classify(trace, nodes, owners) -> list[str]:
             out.append("STEREO_WRONG_ATOM")
             break
     for n in nodes:
-        if n["kind"] == "stereo" and re.match(r"^([RSrs]\*?|[EZ])$", n["label"]) and n["lights"]:
+        if n["kind"] == "stereo" and BARE_DESCRIPTOR.match(n["label"]) and n["lights"]:
             pool = double if n["label"] in ("E", "Z") else centres
             if len(n["lights"]) != 1 or n["lights"][0] not in pool:
                 out.append("STEREO_WRONG_ATOM")
@@ -488,13 +472,10 @@ def classify(trace, nodes, owners) -> list[str]:
 
 
 def run(names: list[str]) -> dict[str, list[str]]:
-    from app.explain_tree import build_nodes
-    from app.opsin_trace import Trace, trace
-    from app.token_owner import assign_owners
 
     results = {}
     for name in names:
-        t = trace(name)
+        t = opsin_trace.trace(name)
         if not isinstance(t, Trace):
             results[name] = [t.reason.upper()]
             continue

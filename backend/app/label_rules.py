@@ -32,6 +32,14 @@ GLUE = frozenset({
 SUFFIX_KINDS = frozenset({"suffix", "suffixPrefix", "infix"})
 LOCANT_KINDS = frozenset({"locant", "colonOrSemiColonDelimitedLocant", "spiroLocant"})
 
+# The shapes a locant or stereo label takes (one definition, used by the builder, the
+# root split and the census): "4", "4a", "2'"; an element symbol "O", "N'"; "2S", "9Z",
+# "17beta"; a descriptor with no locant "S", "R*", "E".
+NUMBER_LOCANT = re.compile(r"^\d+[a-z]?'*$")
+ELEMENT_LOCANT = re.compile(r"^[A-Z][a-z]?'*$")
+STEREO_MARK = re.compile(r"^(\d+[a-z]?'*)([RSrs]\*?|[EZ]|alpha|beta)$")
+BARE_DESCRIPTOR = re.compile(r"^([RSrs]\*?|[EZ])$")
+
 # A copy group's own count ("tri" in trioctadecanoate): value -> count.
 MULTIPLIER_COUNTS = {
     "di": 2, "bi": 2, "bis": 2, "tri": 3, "ter": 3, "tris": 3,
@@ -57,7 +65,7 @@ def _base(kind: str) -> str:
 
 # A locant/multiplier written right before one of these is part of the NAME
 # ("1,3,5-tri|azine", "-2,6-di|one", "hepta-1,6-di|ene", "tri|cyclo[...]").
-_BUILDS_NAME = frozenset({
+BUILDS_NAME = frozenset({
     "heteroatom", "fusion", "ringAssemblyMultiplier", "vonBaeyer", "spiro",
     "polyCyclicSpiro", "unsaturator", "alkaneStemComponent",
     "hydrocarbonFusedRingSystem", "suffix", "suffixPrefix", "infix",
@@ -68,7 +76,7 @@ def resolve_roles(tokens: Sequence[WrittenToken], part_kind: str, copies: int) -
     """A locant/multiplier takes its role from the next non-glue token:
 
     * before a locant/multiplier -> that token's resolved role (a chain);
-    * before a name-building token (_BUILDS_NAME) -> core;
+    * before a name-building token (BUILDS_NAME) -> core;
     * a MULTIPLIER before a root's own group -> core ("di|benzo[b,d]furan");
     * anything else -> prefix: before a substituent's group ("4-|methyl"),
       any locant before a group ("alpha-|D-gluco", "1,4-|methano"), before a
@@ -93,7 +101,7 @@ def resolve_roles(tokens: Sequence[WrittenToken], part_kind: str, copies: int) -
                 kind, role = nxt
                 if kind in CONTEXTUAL:
                     roles[i] = role
-                elif kind in _BUILDS_NAME:
+                elif kind in BUILDS_NAME:
                     roles[i] = "core"
                 elif kind == "group" and part_kind == "root" and tokens[i].kind == "multiplier":
                     roles[i] = "core"
