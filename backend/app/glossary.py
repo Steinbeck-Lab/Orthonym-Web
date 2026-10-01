@@ -362,6 +362,8 @@ def _hydrogen_taken(mol, atom: int) -> bool:
     writes elsewhere: a third heavy neighbour (a substituent, a spiro or fusion bond, an
     attachment) or a double / triple bond (an "=O", an "-ylidene")."""
     a = mol.GetAtomWithIdx(atom)
+    if a.GetFormalCharge() or a.GetNumRadicalElectrons():
+        return False                  # an ylium / ide / radical ending removed the hydrogen itself
     heavy = sum(1 for n in a.GetNeighbors() if n.GetAtomicNum() > 1)
     multiple = any(b.GetBondType() in (Chem.BondType.DOUBLE, Chem.BondType.TRIPLE) for b in a.GetBonds())
     return heavy >= 3 or multiple
@@ -596,7 +598,7 @@ _SUGAR_PREFIX = {
     "galacto": "galactose", "gluco": "glucose", "gulo": "gulose", "ido": "idose", "manno": "mannose",
     "talo": "talose",
 }
-_RELATIVE = ("only relative to the other marks of its set; it does not say which of the two "
+_RELATIVE = ("only as a relative arrangement, not an absolute one; it does not say which of the two "
              "mirror-image forms is meant")
 
 
@@ -623,7 +625,7 @@ def describe_stereo(text: str, within: str | None = None) -> str:
         return (f'"{mark}" gives the sign of optical rotation: this form turns polarised light '
                 f"{_ROTATION[mark]}. It does not by itself say how the atoms are arranged.")
     starred = _LOCATED_STARRED.match(mark)
-    if starred or (located and within == "rel"):
+    if starred or (located and within == "rel" and mark[-1] in "RS"):
         return f'"{mark}" gives the arrangement at the position it names {_RELATIVE}.'
     if located and within == "rac":
         return (f'"{mark}" is written inside a racemate mark (rac): the name means an equal mix of '

@@ -500,7 +500,9 @@ def _h_locant_problem(mol, node) -> tuple[bool, Optional[str]]:
                    for b in mol.GetAtomWithIdx(a).GetBonds())
         if says == "has" and _h(mol, a) < 1:
             return True, "carries a hydrogen here, it carries none"
-        if says == "taken" and (_h(mol, a) != 0 or not (_heavy_degree(mol, a) >= 3 or bond)):
+        atom = mol.GetAtomWithIdx(a)
+        charged = bool(atom.GetFormalCharge() or atom.GetNumRadicalElectrons())
+        if says == "taken" and (charged or _h(mol, a) != 0 or not (_heavy_degree(mol, a) >= 3 or bond)):
             return True, "something takes the hydrogen's place, nothing does"
         if says == "none" and _h(mol, a) != 0:
             return True, "carries none, it carries one"
@@ -644,10 +646,11 @@ def _stereo_problem(trace, node) -> tuple[bool, Optional[str]]:
     located = bool(_LOCATED_MARK.match(label))
     bare = label in ("R", "S")
     racemic = label in ("rac", "RS", "SR", "+-", "±", "DL") or bool(re.fullmatch(r"\d+[a-z]?'*(?:RS|SR)", label))
-    relative = label == "rel" or label.endswith("*") or (word == "rel" and (located or bare))
+    absolute_in_rel = word == "rel" and located and label[-1] not in "RS"      # E, Z, r, s, alpha, beta
+    relative = label == "rel" or label.endswith("*") or (word == "rel" and (located or bare) and not absolute_in_rel)
     claims = [
         ("fixes the three-dimensional arrangement at the positions it names",
-         located and not racemic and word is None),
+         located and not racemic and (word is None or absolute_in_rel)),
         ("marks a racemate: an equal mix of the two mirror-image forms", racemic),
         ("written inside a racemate mark (rac)", word == "rac" and (located or bare)),
         ("sign of optical rotation", label in ("+", "-")),

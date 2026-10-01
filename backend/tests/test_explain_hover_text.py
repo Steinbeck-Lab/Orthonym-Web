@@ -276,10 +276,10 @@ STEREO = [
                   'and S in the other.'),
     ("rel", None, '"rel" says the marks of its set give only a relative arrangement; it does not say which of the '
                   'two mirror-image forms is meant.'),
-    ("1R*", None, '"1R*" gives the arrangement at the position it names only relative to the other marks of its '
-                  'set; it does not say which of the two mirror-image forms is meant.'),
-    ("1R", "rel", '"1R" gives the arrangement at the position it names only relative to the other marks of its '
-                  'set; it does not say which of the two mirror-image forms is meant.'),
+    ("1R*", None, '"1R*" gives the arrangement at the position it names only as a relative arrangement, not '
+                  'an absolute one; it does not say which of the two mirror-image forms is meant.'),
+    ("1R", "rel", '"1R" gives the arrangement at the position it names only as a relative arrangement, not '
+                  'an absolute one; it does not say which of the two mirror-image forms is meant.'),
     ("1R", "rac", '"1R" is written inside a racemate mark (rac): the name means an equal mix of this form and '
                   'its mirror image.'),
     ("+", None, '"+" gives the sign of optical rotation: this form turns polarised light to the right. It does '
@@ -323,7 +323,7 @@ def test_only_a_mark_with_a_locant_fixes_the_positions_it_names():
     ("rac-(1R,2S)-2-aminocyclohexan-1-ol", "stereo", "1R",
      '"1R" is written inside a racemate mark (rac): the name means an equal mix of this form and its mirror image.'),
     ("rel-(1R,2S)-2-aminocyclohexan-1-ol", "stereo", "2S",
-     '"2S" gives the arrangement at the position it names only relative to the other marks of its set; it does '
+     '"2S" gives the arrangement at the position it names only as a relative arrangement, not an absolute one; it does '
      'not say which of the two mirror-image forms is meant.'),
     ("D-threose", "stereo", "D",
      '"D" is a Fischer label: it puts the part named after it in the D series, by comparing one of its '
@@ -431,7 +431,7 @@ OLD_REL = ('"rel" says the marks after it give only a relative arrangement; it d
 
 
 @pytest.mark.parametrize("label,within,line", [
-    ("R", "rel", '"R" gives the arrangement at one stereocentre only relative to the other marks of its set; it '
+    ("R", "rel", '"R" gives the arrangement at one stereocentre only as a relative arrangement, not an absolute one; it '
                  'does not say which of the two mirror-image forms is meant.'),
     ("S", "rac", '"S" is written inside a racemate mark (rac): the name means an equal mix of this form and its '
                  'mirror image.'),
@@ -460,7 +460,7 @@ def test_a_bare_mark_inside_a_racemate_or_relative_set_does_not_fix_the_arrangem
 ])
 def test_a_set_word_in_any_adjacent_stereo_token_governs_the_marks(name, mark, word):
     t, nodes, node = _live_node(name, "stereo", mark)
-    assert ("only relative to the other marks of its set" in node["line"]) == (word == "rel")
+    assert ("only as a relative arrangement, not an absolute one" in node["line"]) == (word == "rel")
     assert ("written inside a racemate mark" in node["line"]) == (word == "rac")
     assert false_hover_lines(t, nodes) == []
     assert _census_flags(name, "stereo", mark, OLD_LOCATED.format(mark))
@@ -472,7 +472,7 @@ def test_a_set_word_in_any_adjacent_stereo_token_governs_the_marks(name, mark, w
 def test_a_set_word_written_after_the_marks_still_governs_them(name, word):
     t, nodes, node = _live_node(name, "stereo", "1R")
     assert "positions it names" not in node["line"] or "only relative" in node["line"]
-    assert ("only relative to the other marks of its set" in node["line"]) == (word == "rel")
+    assert ("only as a relative arrangement, not an absolute one" in node["line"]) == (word == "rel")
     assert ("written inside a racemate mark" in node["line"]) == (word == "rac")
     (setword,) = [n for n in nodes if n["kind"] == "stereo" and n["label"] == word]
     assert "after it" not in setword["line"]
@@ -484,7 +484,7 @@ def test_a_set_word_written_after_the_marks_still_governs_them(name, word):
 
 def test_a_set_word_written_in_front_of_its_marks_still_governs_them():
     t, nodes, node = _live_node("rel-(1R,2S)-2-aminocyclohexan-1-ol", "stereo", "1R")
-    assert "only relative to the other marks of its set" in node["line"]
+    assert "only as a relative arrangement, not an absolute one" in node["line"]
     assert false_hover_lines(t, nodes) == []
 
 
@@ -542,3 +542,63 @@ def test_a_hydrate_is_not_counted_among_the_cores():
                          '"copper" is one of the three cores this name is built from. It has 1 atom.')
     (hydrate,) = [n for n in nodes if n["label"] == "hydrate"]
     assert "cores" not in hydrate["line"]
+
+
+# the relative line is for R and S only; one mark in a set has no "other marks"
+
+@pytest.mark.parametrize("mark", ["2E", "4r", "4s", "2alpha", "3beta", "2Z"])
+def test_a_mark_that_a_relative_set_does_not_reverse_keeps_its_absolute_line(mark):
+    assert describe_stereo(mark, "rel") == describe_stereo(mark)
+    assert "relative" not in describe_stereo(mark, "rel")
+
+
+def test_a_one_mark_relative_set_does_not_speak_of_other_marks():
+    assert "other marks" not in describe_stereo("1R", "rel")
+    assert "other marks" not in describe_stereo("1R*")
+    t, nodes, node = _live_node("rel-(1R)-1-phenylethan-1-ol", "stereo", "1R")
+    assert "other marks" not in node["line"] and "relative arrangement" in node["line"]
+    assert false_hover_lines(t, nodes) == []
+
+
+@pytest.mark.parametrize("name,mark", [
+    ("rel-(2E,4R,5S)-5-chlorohept-2-en-4-ol", "2E"),
+    ("rel-(1R,2S,4r)-4-chloro-1,2-dimethylcyclohexane", "4r"),
+])
+def test_an_e_z_or_pseudoasymmetric_mark_in_a_relative_set_stays_absolute(name, mark):
+    t, nodes, node = _live_node(name, "stereo", mark)
+    assert "relative" not in node["line"]
+    assert false_hover_lines(t, nodes) == []
+    relative = (f'"{mark}" gives the arrangement at the position it names only as a relative arrangement, not an '
+                "absolute one; it does not say which of the two mirror-image forms is meant.")
+    assert _census_flags(name, "stereo", mark, relative)
+
+
+# -- a glycosylamine's NH2 joins nothing; an ylium / ide atom lost its hydrogen to the ending ----
+
+def test_an_anomeric_amine_is_a_lone_atom_too():
+    t, nodes, node = _live_node("beta-D-glucopyranosylamine", "locant", "beta")
+    assert node["line"] == _anomer("beta") + " Here that group is an N atom."
+    assert false_hover_lines(t, nodes) == []
+    assert _census_flags("beta-D-glucopyranosylamine", "locant", "beta",
+                         _anomer("beta") + " Here that group is the N that joins the sugar to the rest of the name.")
+
+
+@pytest.mark.parametrize("name", ["4aH-fluoren-4a-ylium", "4aH-fluoren-4a-ide", "3aH-indol-3a-ylium"])
+def test_a_charged_atom_lost_its_hydrogen_to_the_ending_not_to_a_group(name):
+    t = trace(name)
+    nodes = build_nodes(t)
+    (node,) = [n for n in nodes if n["kind"] == "indicated_h"]
+    assert "takes its place" not in node["line"]
+    assert node["line"].endswith("here that atom carries none.")
+    assert false_hover_lines(t, nodes) == []
+    old = [dict(n, line=n["line"].replace("here that atom carries none.",
+                                          "here a group or bond named elsewhere takes its place.")) for n in nodes]
+    assert false_hover_lines(t, old)
+
+
+def test_a_neutral_indicated_hydrogen_keeps_its_line():
+    t = trace("4aH-fluorene")
+    nodes = build_nodes(t)
+    (node,) = [n for n in nodes if n["kind"] == "indicated_h"]
+    assert "carries a hydrogen here" in node["line"]
+    assert false_hover_lines(t, nodes) == []
