@@ -10,7 +10,7 @@ from rdkit import Chem
 from app.explain_tree import build_nodes
 from app.glossary import describe_locant, describe_part, describe_stereo, describe_token, parent_claim_holds
 from app.opsin_trace import Trace, TraceAtom, trace
-from scripts.explain_census import false_hover_lines
+from scripts.explain_census import classify, false_hover_lines
 
 
 def _mol(smiles):
@@ -385,3 +385,22 @@ def test_a_live_parent_line(name, kind, label, line):
     assert _live(name, kind, label) == line
 
 
+# -- 6. the gate: a false hover line fails the census -------------------------------------
+
+def test_the_census_classifies_a_false_hover_line():
+    old = [_node("substituent", "methyl", owns=[1], lights=[1],
+                 line='"methyl" is a CH3 group — one carbon with three hydrogens.')]
+    assert "HOVER_LINE_FALSE" in classify(BENZYL_ALCOHOL, old, {})
+    true = [_node("substituent", "methyl", owns=[1], lights=[1],
+                  line='"methyl" is a one-carbon group (CH3 on its own). Here its carbon carries 2 hydrogens; '
+                       'other groups take the rest.')]
+    assert "HOVER_LINE_FALSE" not in classify(BENZYL_ALCOHOL, true, {})
+
+
+@pytest.mark.parametrize("name", [
+    "2-(hydroxymethyl)phenol", "N,N-diethylethanamine", "1-methyl-1H-indole", "spiro[4.5]decane",
+    "methyl beta-D-galactopyranoside", "DL-alanine", "sodium acetate", "1,2,3,4-tetrahydronaphthalene",
+])
+def test_a_name_from_every_false_class_is_clean(name):
+    t = trace(name)
+    assert false_hover_lines(t, build_nodes(t)) == []

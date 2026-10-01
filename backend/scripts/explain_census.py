@@ -60,6 +60,13 @@ Outcomes, measured on the trace and the node list (a name may carry several):
                       own part, not a copy OPSIN placed at that locant, and not
                       the atom carrying that locant that the part's substituent
                       chain is bonded to (app.explain_gate.foreign_lights)
+  HOVER_LINE_FALSE    a hover line that says something false about the molecule on screen:
+                      a group's hydrogens ("methyl" in hydroxymethyl), a hydro / indicated
+                      hydrogen on an atom with none, a spiro descriptor, an anomer's group,
+                      a stereo mark's meaning, a parent that is not the only core or not
+                      the benzene ring its prose names, an isotope label's positions; or a
+                      line using such a claim's words in a shape the check does not know
+                      (see false_hover_lines)
 Every outcome except CLEAN and UNREADABLE fails the run (exit 1).
 """
 
@@ -793,6 +800,8 @@ def classify(trace, nodes, owners) -> list[str]:
         out.append("SUFFIX_OWNS_H")
     if oxidation_numbers_misplaced(trace, nodes):
         out.append("OXIDATION_WRONG")
+    if false_hover_lines(trace, nodes):
+        out.append("HOVER_LINE_FALSE")
     return out or ["CLEAN"]
 
 
@@ -820,7 +829,7 @@ def _report(title: str, results: dict[str, list[str]]) -> int:
                     "ATOM_GAP", "ATOM_OVERLAP", "BAD_SPAN", "CROSSING", "PART_CONTAINS_PART", "LABEL_EDGE", "ORPHAN_TOKEN",
                     "HYDRO_WRONG", "STEREO_NO_PARENT", "STEREO_WRONG_ATOM", "LOCANT_UNLIT",
                     "LIT_ATOM_FOREIGN", "LOCANT_WRONG_ATOM", "FUNCTION_SWALLOWED", "ALKYL_HETERO",
-                    "LINE_CLAIM_FALSE", "SUFFIX_OWNS_H", "OXIDATION_WRONG"):
+                    "LINE_CLAIM_FALSE", "SUFFIX_OWNS_H", "OXIDATION_WRONG", "HOVER_LINE_FALSE"):
         print(f"  {outcome:18s} {counts.get(outcome, 0)}")
     print("  residue:")
     for name, outs in results.items():
