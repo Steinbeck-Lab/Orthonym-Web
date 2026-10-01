@@ -1,5 +1,80 @@
 # Changelog
 
+## [0.4.0](https://github.com/Steinbeck-Lab/Orthonym-Web/compare/v0.3.0...v0.4.0) (2026-10-01)
+
+
+### Features
+
+* **explain-ui:** node helpers and smallest-node hover map ([b06aaa9](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/b06aaa94801793208241e73c42f4019c3044ea25))
+* **explain-ui:** render the v2 node list ([5167f5e](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/5167f5e0aa49d93f03639061c8b7067009f6cd7d))
+* **explain:** build the flat node list; stereo by written scope, checked against real stereocentres ([58965ee](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/58965ee42ef99321433ac44da4d12b8269ed0937))
+* **explain:** explain every name OPSIN can read, from one OPSIN trace ([ef29535](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/ef29535c4f792b6648659df0cfb7f3cdc8f40476))
+* **explain:** token ownership from OPSIN placement and written brackets; token-kind table ([130eba9](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/130eba9838e6cf668324e42e26538011efad6a4a))
+* **explain:** trace OPSIN once for atoms, written tokens and owners ([5d7a10c](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/5d7a10c7e28302709eef668a8a9976d359e5e85c))
+* **explain:** v2 response with flat nodes, per-node honesty and span alignment ([edad59a](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/edad59aa17c9881609b1140dc32e027a0d91dcd2))
+
+
+### Bug Fixes
+
+* **about:** the fallback example is galantamine, a real molecule ([b42c267](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/b42c267c120d12ee813d925f8ee82192045bd3f8))
+* **about:** the fallback example is galantamine, a real molecule ([5fd244f](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/5fd244f0cb8379d851381b96b05f8fdd5c127cb4))
+* **about:** the refusal example is cisplatin ([4f78e50](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/4f78e5016ef475d06fd221b73396b84d200e7e89))
+* **about:** the refusal example is cisplatin ([e3b95fc](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/e3b95fcf9f1301b4ac8a9f01bfdb398afa506f46))
+* **batch:** nameless rows stay last on a Z-A name sort ([df97919](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/df979194f64543205294dc5492531441ce41d545))
+* **examples:** the fallback example is ellipticine ([9f519c0](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/9f519c066fb74b0c9eb020a3b563fb52b43dff47))
+* **explain-ui:** honest labels and notes, failure as one message, real-response tests ([8ee2254](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/8ee225442fc31c7d3ad009aec5bbe3aae2f5c356))
+* **explain-ui:** the failure sentence is set in sentence case, not the uppercase caption style ([6b8b2ad](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/6b8b2ad81de9677fe09479dc5da2cbcf5dd4519d))
+* **explain:** a bracketed "n-O-(...)" pair names the parent's oxygen and carbon too; an element symbol never pairs across a bracket ([ea26120](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/ea26120451413a35a8693fe6b1c36f2042296ee3))
+* **explain:** a bridge prefix is its own child of the root; census class PART_CONTAINS_PART ([13cc4ef](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/13cc4ef471432e68c0eb00b791ddd9bfc0e4883b))
+* **explain:** a chained substituent's leading locant names the parent position ([3f6c333](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/3f6c333d66639320642a592a0afc272414a1e299))
+* **explain:** a chained substituent's locant names the atom its chain hangs on ([ae117df](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/ae117dff9509e84b2f08c3c63a1495d1f7ada517))
+* **explain:** a fusion component's own numbers light only what the element and rings prove ([44a3088](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/44a3088765ffd9ff7e95a87435b6f9bc9e01288a))
+* **explain:** a glycosyl substituent's anomer mark lights its anomeric carbon ([781c329](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/781c32985f4e625a05845905f995fe28e3a93d69))
+* **explain:** a leading locant before a chain of substituents names the atom it hangs on; the gate accepts a later chain member's atom (N-5a) ([d76608c](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/d76608cdf537362a4a943ff291e707fc567976ae))
+* **explain:** a leading locant before an unbracketed chain names the parent position ([4ce5a2f](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/4ce5a2f58aeae32b04585d6013003d2dd24bcadd))
+* **explain:** a locant lights only atoms it can name; lit-atom gate ([3c65925](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/3c65925a268b515b961c69cbcf64b4d143b1cfba))
+* **explain:** a repeated suffix is labelled the way the name spells it ([04303f2](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/04303f25da60077267c330d1d27e36b6181aab7d))
+* **explain:** a repeated suffix is labelled the way the name spells it ([e3bf50c](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/e3bf50c823568556828e4c29c2ef4ca71798fd93))
+* **explain:** a soft time limit inside node building propagates instead of becoming a defect message ([3f5a8b9](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/3f5a8b9e2d8dd057c1450778fc7c11b22e2603bf))
+* **explain:** a spiro skeleton OPSIN keeps no token of owns its tokens, and its second component's locants are primed ([b143d22](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/b143d220e2f7b5cb2ca131115f99c8213efb90b1))
+* **explain:** an engine or drawing exception is one failure message, not a 500 ([d83e420](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/d83e420ba7b1ce1612aba0204d4920fd84d33e77))
+* **explain:** every fusion component's numbers are proven or dark; a split-out number follows the token it was written for; the gate reads tokens, not wording ([9d65478](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/9d65478ddd6c05737b7e76169ca394f386ee7301))
+* **explain:** final-review classes the gates were blind to (n-O- locants, functional-class words, false suffix lines, isotopic H, oxidation numbers) ([b039bad](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/b039bad5a694f9468ef5e56c13f1ca3506057c0d))
+* **explain:** glossary states no false chemistry ([7b801f8](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/7b801f8e5014bef2978a4599e10581d64cf35e65))
+* **explain:** oxalic keeps all four O, amino-acid esters keep alpha N/C, ring substituents keep their own locant ([517d457](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/517d457eb0a70fb3603eb2cd73e25ebb31a78a78))
+* **explain:** refuse a trace when any written token cannot be placed ([5cf6467](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/5cf6467a626ede134997e6f8f9b8c53475724965))
+* **explain:** refuse traces OPSIN reordered (CAS index names); stale-fixture guard ([00ed9f1](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/00ed9f15b5daf80da385f9b5f3fa219803b6be37))
+* **explain:** root split gives the suffix only its own atoms ([cc1afde](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/cc1afde4333619fb72c1c59cbc0e3a2cca180422))
+* **explain:** root split keeps side-chain groups and infix suffixes right ([a59451e](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/a59451e7b92bf4c7a9c162d151a01b912f8d34f4))
+* **explain:** root split takes suffix atoms from the group's own carbon ([45b3555](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/45b3555b6a8bf5e4ab4657738a6c9a466262202f))
+* **explain:** spiro primes restart at each spiro system in the hydro gate ([244a4a7](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/244a4a73673b967419f4127551736b692ca53fc2))
+* **explain:** spiro primes stop at the bracket; census sees a wrong atom of the right part; position numbers before ring chains ([c7b7356](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/c7b735619a124a9bfbecf6794393b136c0f21c9e))
+* **explain:** the hydro gate reads OPSIN's primed numbering of later spiro components ([2a070bf](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/2a070bf1e55852e91c03bae8aa6044258814d991))
+* **explain:** trace the candidate parse OPSIN itself returns (the first built without a warning) ([2abbf58](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/2abbf58bfb0209c0c56bc84dc38b4cc7e15bc07c))
+* the hero light no longer flashes black or overworks tablet GPUs ([2650d77](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/2650d77dab3af45684c5c5c7cbd0e0f4f95fdbed))
+
+
+### Refactoring
+
+* **explain-ui:** one hover-handler helper, one id map, one GET helper; comments state why, not history ([e05c21b](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/e05c21bae9e9fa497da8d3714c9baa4559ff0803))
+* **explain:** drop dead parameters and an unused glossary helper ([186e287](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/186e287c05f5d5c52b786200060c8ae97cc6c431))
+* **explain:** key glossary lines on OPSIN parse-tree kinds ([c34afe5](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/c34afe5875b87fd2a90e5b3f448b147b081fc5fd))
+* **explain:** one helper each for the hydro modifier, the oxy pair line, the generic token line and the guarded drawing; explain_molecule no longer draws OPSIN's molecule ([8bbe19b](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/8bbe19b74619738090f70db909f7a09002f40b41))
+* **explain:** one home for bracket_end, locant-shape regexes and token walkers; census imports at module top ([42c27a9](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/42c27a9a987da431df1b335d9a25b60b5e98cc23))
+* **explain:** parse the traced SMILES once, build the part and ring tables once, skip the second parse when OPSIN's two SMILES agree ([14c3e44](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/14c3e4452dc18ebaec744cfadc5ac88a65292e18))
+* **explain:** split root atoms from a Trace ([dc9518f](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/dc9518f4d2512e8cc0dd6995e9b77494a35211db))
+* **explain:** the test and census gate lives in app/explain_gate.py, apart from the builder it checks ([5377768](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/5377768b49fc61d2e56d3e86d5559bb1c4d62bc1))
+* one failure path for the hero light ([8638579](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/86385799c4cd240d3872fb7dbd4795adf65acbd0))
+* one failure path for the hero light ([f1f0add](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/f1f0adda43699d0ee6a68c78079251b431d0f856))
+
+
+### Documentation
+
+* cite Orthonym-Web through its Zenodo DOI ([9c0c8fa](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/9c0c8fa608ea1a3cd414892cf1629c726dc42cba))
+* **explain:** CLAUDE.md corpus numbers follow the CURATED additions (670 names, CLEAN 668) ([f54fff3](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/f54fff335e3d324d15e406a83d8147e4fcfacbc9))
+* **explain:** CLAUDE.md states the measured corpus and census numbers (665 / 663, ChEMBL 9998, 2026-10-01) ([2dc6e83](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/2dc6e8388368c6afd748c2af6aa700fb23ac329d))
+* **explain:** correct the stereo rule, add the anomer rule and trace details ([7e2bee1](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/7e2bee1f950efe42f7afdabf269e21f9da1cda2c))
+
 ## [0.3.0](https://github.com/Steinbeck-Lab/Orthonym-Web/compare/v0.2.0...v0.3.0) (2026-09-29)
 
 
