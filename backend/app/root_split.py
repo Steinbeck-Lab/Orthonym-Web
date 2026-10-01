@@ -20,7 +20,7 @@ can still hand chain atoms to the suffix.
 from __future__ import annotations
 
 import re
-from typing import NamedTuple, Sequence
+from typing import NamedTuple, Optional, Sequence
 
 from rdkit import Chem
 
@@ -83,10 +83,12 @@ def _group_locants(trace: Trace, indices) -> set[str]:
     return ends
 
 
-def split_root(trace: Trace, atoms: Sequence[int]) -> RootSplit:
+def split_root(trace: Trace, atoms: Sequence[int], mol: Optional[Chem.Mol] = None) -> RootSplit:
+    """`mol` is the parsed traced SMILES when the caller already holds it."""
     by_index = {atom.index: atom for atom in trace.atoms}
     indices = sorted(atoms)
-    mol = Chem.MolFromSmiles(trace.smiles)
+    if mol is None:
+        mol = Chem.MolFromSmiles(trace.smiles)
     if mol is None:
         return RootSplit(tuple(indices), (), {})
     pool = set(indices)

@@ -102,9 +102,8 @@ def _written_parts(trace: Trace) -> list[_WrittenPart]:
     return [_WrittenPart(kind=k[0], key=k[1], copies=v) for k, v in grouped.items()]
 
 
-def stereo_atoms(smiles: str) -> tuple[set, set]:
+def stereo_atoms(mol: Optional[Chem.Mol]) -> tuple[set, set]:
     """(stereocentres, atoms on a stereo double bond) of the traced molecule."""
-    mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return set(), set()
     centres = {i for i, _ in Chem.FindMolChiralCenters(
@@ -196,8 +195,11 @@ class _Builder:
         self.by_index = {a.index: a for a in trace.atoms}
         self.part_node: dict[Span, tuple[str, list[int]]] = {}   # key -> (node id, atoms)
         self.suffix_node: dict[Span, tuple[str, list[int], dict]] = {}  # root key -> (id, atoms, locants)
-        self.centres, self.double = stereo_atoms(trace.smiles)
         self.mol = Chem.MolFromSmiles(trace.smiles)
+        self.centres, self.double = stereo_atoms(self.mol)
+        self.rings = [frozenset(r) for r in self.mol.GetRingInfo().AtomRings()] if self.mol is not None else []
+        self.ring_atoms = frozenset(a for r in self.rings for a in r)
+        self.by_key = {w.key: w for w in parts if w.key is not None}
         self.part_of = {a: p for p in trace.parts for a in p.atoms}
         self.carbohydrate_atoms: Optional[list[int]] = None   # set while a sugar root's children are built
 
@@ -240,9 +242,8 @@ class _Builder:
             return [sole[elements[k]]]
         if elements.count(elements[k]) != 1:
             return []
-        rings = [set(r) for r in self.mol.GetRingInfo().AtomRings()]
         near = [a for a in by_element(elements[k])
-                if sole and all(any({a, s} <= r for r in rings) for s in sole.values())]
+                if sole and all(any({a, s} <= r for r in self.rings) for s in sole.values())]
         return near if len(near) == 1 else []
 
     def spiro_lookup(self, tokens, i: int, atoms, loc: str) -> Optional[str]:
@@ -329,7 +330,7 @@ class _Builder:
         suffix_atoms: list[int] = []
         suffix_locants: dict[int, str] = {}
         for c in w.copies:
-            split = split_root(self.t, c.atoms)
+            split = split_root(self.t, c.atoms, self.mol)
             parent_atoms += split.parent_atoms
             suffix_atoms += split.suffix_atoms
             suffix_locants.update(split.suffix_locants)
@@ -498,7 +499,8 @@ class _Builder:
             return False
         if any(self.by_index[a].element != "C" for a in own):
             return False
-        return len([r for r in self.mol.GetRingInfo().AtomRings() if set(r) <= set(own)]) == 1
+        own = set(own)
+        return len([r for r in self.rings if r <= own]) == 1
 
     def linker_atom(self, atom: int) -> bool:
         part = self.part_of.get(atom)
@@ -506,8 +508,7 @@ class _Builder:
                 and any(ELEMENT_LOCANT.match(loc) for loc in self.by_index[atom].locants))
 
     def in_ring(self, atom: int) -> bool:
-        return (self.mol is not None and atom < self.mol.GetNumAtoms()
-                and self.mol.GetAtomWithIdx(atom).IsInRing())
+        return atom in self.ring_atoms
 
     def component(self, start) -> set[int]:
         """`start` plus every substituent atom bonded to it, transitively: the
@@ -680,7 +681,6 @@ class _Builder:
         ("acetyl|oxy|ethyl"): the first prefix of that chain that is bonded to
         an atom carrying `loc` names it. "4-(2-acetyloxyethyl)phenol": acetyl
         alone is bonded to the O, acetyl+oxy to ethyl C2."""
-        by_key = {p.key: p for p in self.parts if p.key is not None}
         seen, atoms, part = {w.key}, set(self.atoms_of(w)), w
         while True:
             edge = self.edge(atoms)
@@ -693,7 +693,7 @@ class _Builder:
                 return hit
             last = max(t.index for t in part.tokens) if part.tokens else -1
             nxt = next_nonhyphen(self.t.tokens, last)
-            part = by_key.get(nxt.owner) if nxt is not None and nxt.kind == "group" else None
+            part = self.by_key.get(nxt.owner) if nxt is not None and nxt.kind == "group" else None
             if part is None or part.kind != "substituent" or part.key in seen:
                 return []
             seen.add(part.key)
@@ -789,7 +789,7 @@ class _Builder:
     def stereo(self, owners: dict) -> None:
         tokens = self.t.tokens
         brackets = written_brackets(tokens)
-        by_key = {w.key: w for w in self.parts if w.key is not None}
+        by_key = self.by_key
         for idx, tok in enumerate(tokens):
             if tok.kind != STEREO_KIND:
                 continue
@@ -917,7 +917,7 @@ def build_nodes(trace: Trace) -> list[dict]:
     trace = adopt_orphan_tokens(trace)
     parts = _written_parts(trace)
     b = _Builder(trace, parts)
-    by_key = {w.key: w for w in parts if w.key is not None}
+    by_key = b.by_key
     owners = assign_owners(trace.tokens)
     _bridge_prefixes_to_the_root(trace, owners)
     loose: list[tuple[WrittenToken, Optional[Span]]] = []

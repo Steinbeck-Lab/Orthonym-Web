@@ -345,7 +345,8 @@ def _owner_key(h, el) -> Optional[Span]:
     """Key of the nearest enclosing part that carries a part tag."""
     parent = h.get_parent.invoke(el)
     while parent is not None:
-        if _name(h, parent) in _PART_KINDS or _name(h, parent) == FUNCTIONAL_ELEMENT:
+        name = _name(h, parent)
+        if name in _PART_KINDS or name == FUNCTIONAL_ELEMENT:
             key = _read_span(h, parent, PART_TAG)
             if key is not None:
                 return key
@@ -575,6 +576,8 @@ def _same_molecule(h, name: str, smiles: str) -> bool:
         return False
     if public is None:
         return False
+    if str(public) == smiles:
+        return True
     a, b = Chem.MolFromSmiles(str(public)), Chem.MolFromSmiles(smiles)
     return a is not None and b is not None and Chem.MolToSmiles(a) == Chem.MolToSmiles(b)
 

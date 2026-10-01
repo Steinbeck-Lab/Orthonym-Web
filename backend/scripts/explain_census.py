@@ -435,7 +435,7 @@ def classify(trace, nodes, owners) -> list[str]:
         if n["parent"] is None:
             out.append("STEREO_NO_PARENT")
             break
-    centres, double = stereo_atoms(trace.smiles)
+    centres, double = stereo_atoms(Chem.MolFromSmiles(trace.smiles))
     for n in nodes:
         m = STEREO_MARK.match(n["label"]) if n["kind"] == "stereo" else None
         if not m or not n["lights"]:
