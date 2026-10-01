@@ -325,7 +325,56 @@ def describe_functional(label: str, atom_count: int) -> str:
     return f'"{label}" covers {_atoms(atom_count)} of this structure.'
 
 
-def describe_locant(kind: str, locant: str, element: str | None = None, *, anomer: bool = False) -> str:
+def _hydrogen_taken(mol, atom: int) -> bool:
+    """A named hydrogen the atom does not carry has given way to something the name
+    writes elsewhere: a third heavy neighbour (a substituent, a spiro or fusion bond, an
+    attachment) or a double / triple bond (an "=O", an "-ylidene")."""
+    a = mol.GetAtomWithIdx(atom)
+    heavy = sum(1 for n in a.GetNeighbors() if n.GetAtomicNum() > 1)
+    multiple = any(b.GetBondType() in (Chem.BondType.DOUBLE, Chem.BondType.TRIPLE) for b in a.GetBonds())
+    return heavy >= 3 or multiple
+
+
+def _modifier_line(locant: str, element: str | None, mol, atom: int | None) -> str:
+    """A hydro / indicated / added hydrogen locant. The name puts a hydrogen on that atom
+    (IUPAC P-31.2, P-14.7.1, P-14.7.2); whether the atom still carries one is measured."""
+    if not element:
+        return f"Position {locant} — the name puts a hydrogen at this position."
+    if mol is None or atom is None or atom >= mol.GetNumAtoms():
+        return f"Position {locant} — the name puts a hydrogen on the {element}{locant} atom."
+    if _hydrogens(mol, atom) >= 1:
+        return f"Position {locant} — the {element}{locant} atom carries a hydrogen here."
+    if _hydrogen_taken(mol, atom):
+        return (f"Position {locant} — the name puts a hydrogen on the {element}{locant} atom; "
+                f"here a group or bond named elsewhere takes its place.")
+    return f"Position {locant} — the name puts a hydrogen on the {element}{locant} atom; here that atom carries none."
+
+
+def _anomeric_group(mol, atom: int | None) -> str | None:
+    """What the anomeric carbon holds outside its ring, in words, when the bonds say:
+    an OH (a free sugar), the O of a glycoside, or the one atom a C- or N-glycosyl
+    group is joined through. None when it cannot be told."""
+    if mol is None or atom is None or atom >= mol.GetNumAtoms():
+        return None
+    a = mol.GetAtomWithIdx(atom)
+    outside = [n for n in a.GetNeighbors() if n.GetAtomicNum() > 1
+               and not mol.GetBondBetweenAtoms(atom, n.GetIdx()).IsInRing()]
+    oxygens = [n for n in outside if n.GetSymbol() == "O"]
+    if len(oxygens) == 1:
+        o = oxygens[0]
+        heavy = sum(1 for n in o.GetNeighbors() if n.GetAtomicNum() > 1)
+        if heavy == 1 and o.GetTotalNumHs(includeNeighbors=True) >= 1:
+            return "an OH"
+        if heavy >= 2:
+            return "the O that joins the sugar to the rest of the name"
+        return None
+    if not oxygens and len(outside) == 1:
+        return f"the {outside[0].GetSymbol()} that joins the sugar to the rest of the name"
+    return None
+
+
+def describe_locant(kind: str, locant: str, element: str | None = None, *, anomer: bool = False,
+                    mol=None, atom: int | None = None) -> str:
     """One line for a locant child, which is identified only by its locant.
 
     `element` names an atom in the sentence, so there is exactly one rule
@@ -362,15 +411,18 @@ def describe_locant(kind: str, locant: str, element: str | None = None, *, anome
     """
     if anomer and locant.lower() in ("alpha", "beta"):
         # Only a sugar's alpha/beta names an anomer. A Greek locant elsewhere
-        # ("alpha,alpha,alpha-trifluorotoluene") is just a position.
+        # ("alpha,alpha,alpha-trifluorotoluene") is just a position. 2-Carb-6.2: the
+        # anomeric group is compared with the anomeric reference atom; a glycoside
+        # holds an O-R there, not an OH (2-Carb-33.1), so what it holds is read off the
+        # bonds of `atom`, the lit anomeric carbon.
+        group = _anomeric_group(mol, atom)
+        here = f" Here that group is {group}." if group else ""
         return (
-            f'"{locant}" names the anomer: which way the OH on the ring carbon '
-            f"next to the ring oxygen points."
+            f'"{locant}" names the anomer: which way the group on the ring carbon '
+            f"next to the ring oxygen points, relative to the sugar's reference stereocentre.{here}"
         )
     if kind == "modifier":
-        if element:
-            return f"Position {locant} — the {element}{locant} atom carries a hydrogen here."
-        return f"Position {locant} — a hydrogen is fixed here."
+        return _modifier_line(locant, element, mol, atom)
     if kind == "suffix":
         return (
             f"Position {locant} — this group is attached at position {locant} "

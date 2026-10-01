@@ -8,7 +8,7 @@ import pytest
 from rdkit import Chem
 
 from app.explain_tree import build_nodes
-from app.glossary import describe_part
+from app.glossary import describe_locant, describe_part
 from app.opsin_trace import Trace, TraceAtom, trace
 from scripts.explain_census import false_hover_lines
 
@@ -181,5 +181,66 @@ def test_the_structure_path_shows_the_lines_of_its_name():
         assert [n["line"] for n in r["nodes"]] == [named[n["id"]] for n in r["nodes"]], smiles
     r = explain_molecule("OCc1ccccc1O", get_primary_namer())
     assert any("Here its carbon carries 2 hydrogens" in n["line"] for n in r["nodes"] if n["label"] == "methyl")
+
+
+# -- 3. a hydro / indicated / added hydrogen locant, and a sugar's anomer ----------------
+
+def test_a_hydrogen_locant_on_an_atom_with_a_hydrogen_keeps_its_line():
+    assert describe_locant("modifier", "1", "N", mol=_mol("c1ccc2[nH]ccc2c1"), atom=4) == \
+        "Position 1 — the N1 atom carries a hydrogen here."
+
+
+def test_a_hydrogen_locant_whose_hydrogen_was_replaced_says_so():
+    assert describe_locant("modifier", "1", "N", mol=_mol("Cn1ccc2ccccc21"), atom=1) == (
+        "Position 1 — the name puts a hydrogen on the N1 atom; here a group or bond named elsewhere "
+        "takes its place.")
+    assert "takes its place" in describe_locant("modifier", "4", "C", mol=_mol("O=C1C=COC=C1"), atom=1)
+
+
+def test_a_hydrogen_locant_on_an_atom_that_cannot_carry_one_claims_no_replacement():
+    assert describe_locant("modifier", "6", "O", mol=_mol("C1COCC1"), atom=2) == \
+        "Position 6 — the name puts a hydrogen on the O6 atom; here that atom carries none."
+
+
+def test_a_hydrogen_locant_with_no_one_atom_claims_nothing_about_it():
+    assert describe_locant("modifier", "2", None) == "Position 2 — the name puts a hydrogen at this position."
+    assert describe_locant("modifier", "2", "C") == "Position 2 — the name puts a hydrogen on the C2 atom."
+
+
+ANOMER = ('"beta" names the anomer: which way the group on the ring carbon next to the ring oxygen points, '
+          "relative to the sugar's reference stereocentre.")
+
+
+def test_an_anomer_line_says_what_the_anomeric_carbon_holds():
+    glycoside = _mol("COC1OC(CO)C(O)C(O)C1O")
+    assert describe_locant("position", "beta", anomer=True, mol=glycoside, atom=2) == \
+        ANOMER + " Here that group is the O that joins the sugar to the rest of the name."
+    assert describe_locant("position", "beta", anomer=True, mol=_mol("OC1OC(CO)C(O)C(O)C1O"), atom=1) == \
+        ANOMER + " Here that group is an OH."
+    assert describe_locant("position", "beta", anomer=True) == ANOMER
+
+
+@pytest.mark.parametrize("name,kind,label,line", [
+    ("1-methyl-1H-indole", "indicated_h", "1H",
+     "Position 1 — the name puts a hydrogen on the N1 atom; here a group or bond named elsewhere takes its place."),
+    ("1,2,3,4-tetrahydronaphthalene", "locant", "1", "Position 1 — the C1 atom carries a hydrogen here."),
+    ("methyl beta-D-galactopyranoside", "locant", "beta",
+     ANOMER + " Here that group is the O that joins the sugar to the rest of the name."),
+    ("beta-D-glucopyranose", "locant", "beta", ANOMER + " Here that group is an OH."),
+    ("1-(beta-D-ribofuranosyl)pyrimidine-2,4(1H,3H)-dione", "locant", "beta",
+     ANOMER + " Here that group is the N that joins the sugar to the rest of the name."),
+])
+def test_a_live_locant_line(name, kind, label, line):
+    t = trace(name)
+    (node,) = [n for n in build_nodes(t) if n["kind"] == kind and n["label"] == label]
+    assert node["line"] == line
+
+
+def test_a_hydro_locant_on_the_spiro_atom_gives_way_to_the_spiro_bond():
+    t = trace("spiro[2,3-dihydro-1-benzofuran-3,4'-piperidine]")
+    hydro = [n["line"] for n in build_nodes(t) if n["kind"] == "locant" and "hydrogen" in n["line"]]
+    assert hydro == ["Position 2 — the C2 atom carries a hydrogen here.",
+                     "Position 3 — the name puts a hydrogen on the C3 atom; here a group or bond named elsewhere "
+                     "takes its place."]
 
 

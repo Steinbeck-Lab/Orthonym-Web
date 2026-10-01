@@ -238,7 +238,8 @@ class _Builder:
         OPSIN numbers it (None when it names no atom), `written` the text to show then."""
         hit = self.with_locant(atoms, at) if at is not None else []
         element = self.by_index[hit[0]].element if len(hit) == 1 else None
-        return hit, describe_locant("modifier", at or written, element)
+        return hit, describe_locant("modifier", at or written, element, mol=self.mol,
+                                    atom=hit[0] if len(hit) == 1 else None)
 
     def component_atom(self, elements: list, k: Optional[int], atoms) -> list[int]:
         """The ONE atom of `atoms` that the k-th number of a fusion component names,
@@ -711,8 +712,8 @@ class _Builder:
             return self.modifier(atoms, loc, loc)
         if (mode == "substituent" and self.carbohydrate_atoms is not None
                 and loc.lower() in ("alpha", "beta")):
-            return (self.anomeric_carbon(self.carbohydrate_atoms, attached=True),
-                    describe_locant("position", loc, anomer=True))
+            lit = self.anomeric_carbon(self.carbohydrate_atoms, attached=True)
+            return lit, describe_locant("position", loc, anomer=True, mol=self.mol, atom=lit[0] if lit else None)
         if mode == "substituent" and leading:
             at_loc = [c for c in w.copies if c.locant == loc]
             if len(at_loc) > written:
@@ -733,7 +734,8 @@ class _Builder:
         if not hit and self.carbohydrate_atoms is not None and loc.lower() in ("alpha", "beta"):
             # A sugar's anomer mark names the anomeric carbon -- only when the
             # structure proves exactly one; otherwise it lights nothing.
-            return self.anomeric_carbon(self.carbohydrate_atoms), describe_locant("position", loc, anomer=True)
+            lit = self.anomeric_carbon(self.carbohydrate_atoms)
+            return lit, describe_locant("position", loc, anomer=True, mol=self.mol, atom=lit[0] if lit else None)
         return (hit or list(atoms)), describe_locant("position", loc)
 
     # -- brackets, orphans, stereo ----------------------------------------
