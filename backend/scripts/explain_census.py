@@ -86,7 +86,7 @@ from app.label_rules import (
     BARE_DESCRIPTOR, BUILDS_NAME, LOCANT_KINDS, STEREO_MARK, fusion_component_elements, locant_items,
 )
 from app.opsin_trace import Trace
-from app.token_owner import assign_owners, bracket_end
+from app.token_owner import assign_owners, bracket_end, innermost_bracket, written_brackets
 
 PART_KINDS = ("substituent", "parent", "suffix")
 PASSING = {"CLEAN", "UNREADABLE"}
@@ -705,6 +705,10 @@ _SUGAR_PREFIXES = {"glycero", "erythro", "threo", "arabino", "lyxo", "ribo", "xy
                    "gluco", "gulo", "ido", "manno", "talo"}
 
 
+_SET_PREFIX = re.compile(r"^\s*\(?(rel|rac)\)?-?\(", re.IGNORECASE)    # "rel-(1R,2S)-"
+_SET_WORD = re.compile(r"\s*\(?(rel|rac)\)?-?\s*", re.IGNORECASE)         # a lone "rel-" / "(rac)-"
+
+
 def _stereo_set_word(trace, node) -> Optional[str]:
     """"rel" or "rac" when the mark is governed by one. The word covers the whole compound
     (IUPAC P-93.1.3), so any stereo token of the name that is a "rel-(...)" / "rac-(...)" or a
@@ -717,35 +721,26 @@ def _stereo_set_word(trace, node) -> Optional[str]:
     if here is None:
         return None
     piece = lambda t: trace.text[t.span[0]:t.span[1]]
-    own = re.match(r"^\s*\(?(rel|rac)\)?-?\(", piece(here), re.IGNORECASE)
+    own = _SET_PREFIX.match(piece(here))
     if own:
         return own.group(1).lower()
-    if re.fullmatch(r"\s*\(?(rel|rac)\)?-?\s*", piece(here), re.IGNORECASE):
+    if _SET_WORD.fullmatch(piece(here)):
         return None
-    pairs, opened = [], []
-    for t in trace.tokens:                                  # the name's own brackets, by token kind
-        if t.kind in ("openbracket", "structuralOpenBracket"):
-            opened.append(t.span[0])
-        elif t.kind in ("closebracket", "structuralCloseBracket") and opened:
-            pairs.append((opened.pop(), t.span[1]))
-
-    def inner(pos):
-        inside = [b for b in pairs if b[0] < pos < b[1]]
-        return min(inside, key=lambda b: b[1] - b[0], default=None)
-
+    brackets = written_brackets(trace.tokens)               # the name's own brackets, by token kind
+    at = innermost_bracket(brackets, here.span[0])
+    k = toks.index(here)
     found = []
     for j, other in enumerate(toks):
         if other is here:
             continue
-        w = (re.match(r"^\s*\(?(rel|rac)\)?-?\(", piece(other), re.IGNORECASE)
-             or re.fullmatch(r"\s*\(?(rel|rac)\)?-?\s*", piece(other), re.IGNORECASE))
-        reach, at = inner(other.span[0]), inner(here.span[0])
-        if w and reach is not None and not (at is not None and reach[0] <= at[0] and at[1] <= reach[1]):
+        w = _SET_PREFIX.match(piece(other)) or _SET_WORD.fullmatch(piece(other))
+        if not w:
+            continue
+        reach = innermost_bracket(brackets, other.span[0])
+        if reach is not None and not (at is not None and reach[0] <= at[0] and at[1] <= reach[1]):
             continue                                        # a word inside a bracket keeps to it
-        if w:
-            touching = other.span[1] == here.span[0] or other.span[0] == here.span[1]
-            k = toks.index(here)
-            found.append((0 if touching else 1 if j < k else 2, abs(j - k), w.group(1).lower()))
+        touching = other.span[1] == here.span[0] or other.span[0] == here.span[1]
+        found.append((0 if touching else 1 if j < k else 2, abs(j - k), w.group(1).lower()))
     return min(found)[2] if found else None
 
 
