@@ -10,6 +10,7 @@ Two rules, both load-bearing:
 from __future__ import annotations
 
 import re
+from typing import NamedTuple
 
 from rdkit import Chem
 
@@ -285,18 +286,33 @@ def _plain_atom(atom) -> bool:
 # What a group's table line leaves to be counted on the real atoms. The table line names
 # the bare group "on its own"; when the atoms in this molecule carry a different number
 # of hydrogens ("hydroxymethyl": its carbon carries 2), the line says so, measured.
-# key -> (noun, possessive, which owned atoms, hydrogens of each in ONE bare copy).
-# "end carbon" is a carbon not bonded to the group's own oxygen: acetyl's CH3 end.
-_GROUP_HYDROGENS = {
-    "methyl": ("carbon", "its", "C", (3,)),
-    "ethyl": ("carbon", "its", "C", (3, 2)),
-    "methoxy": ("carbon", "its", "C", (3,)),
-    "ethoxy": ("carbon", "its", "C", (3, 2)),
-    "acetyl": ("end carbon", "its", "end C", (3,)),
-    "acetyloxy": ("end carbon", "its", "end C", (3,)),
-    "amino": ("nitrogen", "the", "N", (2,)),
+# key (a substituent or a suffix) -> the owned element, the hydrogens of each such atom in
+# ONE bare copy, and whether only an "end" atom counts: a carbon not bonded to the group's own
+# oxygen (acetyl's CH3 end).
+class _HydrogenSpec(NamedTuple):
+    element: str
+    bare: tuple
+    end_only: bool = False
+
+    @property
+    def noun(self) -> str:
+        return ("end " if self.end_only else "") + {"C": "carbon", "N": "nitrogen"}[self.element]
+
+    @property
+    def whose(self) -> str:
+        return "its" if self.element == "C" else "the"
+
+
+_HYDROGEN_SPECS = {
+    "methyl": _HydrogenSpec("C", (3,)),
+    "ethyl": _HydrogenSpec("C", (3, 2)),
+    "methoxy": _HydrogenSpec("C", (3,)),
+    "ethoxy": _HydrogenSpec("C", (3, 2)),
+    "acetyl": _HydrogenSpec("C", (3,), end_only=True),
+    "acetyloxy": _HydrogenSpec("C", (3,), end_only=True),
+    "amino": _HydrogenSpec("N", (2,)),
+    "amine": _HydrogenSpec("N", (2,)),
 }
-_SUFFIX_HYDROGENS = {"amine": ("nitrogen", "the", "N", (2,))}
 
 
 def _counted(n: int) -> str:
@@ -306,12 +322,12 @@ def _counted(n: int) -> str:
 def _hydrogen_clause(spec, mol, atoms, copies: int) -> str:
     """' Here its carbon carries 2 hydrogens; other groups take the rest.' -- or '' when
     the atoms carry what the bare group does, or there is nothing to count them on."""
-    noun, whose, which, bare = spec
+    element, bare, end_only = spec
+    noun, whose = spec.noun, spec.whose
     if mol is None or any(a >= mol.GetNumAtoms() for a in atoms):
         return ""
-    element = which.split()[-1]
     picked = [a for a in sorted(set(atoms)) if mol.GetAtomWithIdx(a).GetSymbol() == element]
-    if which.startswith("end"):
+    if end_only:
         own = set(atoms)
         picked = [a for a in picked
                   if not any(n.GetSymbol() == "O" and n.GetIdx() in own for n in mol.GetAtomWithIdx(a).GetNeighbors())]
@@ -355,17 +371,19 @@ def describe_part(kind: str, text: str, atom_count: int, copies: int = 1, *, hol
         key = _lookup_key(_SUBSTITUENTS, label, endings=True)
         # A line that names a carbon count or a formula is used only for the exact group:
         # "methylethyl" ends in "ethyl" but has three carbons.
-        if key in _GROUP_HYDROGENS and key != label.lower():
+        if key in _HYDROGEN_SPECS and key != label.lower():
             key = None
         if key in _CHAIN_LENGTH and not _chain_holds(key, mol, atoms):
             key = None
         if key:
-            clause = _hydrogen_clause(_GROUP_HYDROGENS[key], mol, atoms, copies) if key in _GROUP_HYDROGENS else ""
+            spec = _HYDROGEN_SPECS.get(key)
+            clause = _hydrogen_clause(spec, mol, atoms, copies) if spec else ""
             return f'"{label}" is {_SUBSTITUENTS[key]}.{clause}{many}'
     elif kind == "suffix":
         key = _lookup_key(_SUFFIXES, label)
         if key and holds:
-            clause = _hydrogen_clause(_SUFFIX_HYDROGENS[key], mol, atoms, 1) if key in _SUFFIX_HYDROGENS else ""
+            spec = _HYDROGEN_SPECS.get(key)
+            clause = _hydrogen_clause(spec, mol, atoms, 1) if spec else ""
             return f'The "{label}" ending means {_SUFFIXES[key]}.{clause}'
     elif kind == "parent":
         special = _SPECIAL_PARENTS.get(label.lower()) or (
