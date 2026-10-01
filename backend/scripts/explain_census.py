@@ -109,30 +109,6 @@ def _close_of(text: str, pos: int):
     return None
 
 
-def _is_part_position_in_front(trace, node, parent) -> bool:
-    """True when OPSIN placed the part at this very number (TracePart.locant) and
-    the number is written in front of the part's group token: it is the position
-    the part hangs on, not the part's own numbering, so a node that treats it as
-    the part's own ("1-oxiranylpropan-2-one" lighting oxirane's O1, which also
-    carries a 1) lights the wrong atom whatever that atom carries."""
-    owns = set(parent["owns"])
-    keys = {p.span for p in trace.parts if p.kind == "substituent" and p.atoms and set(p.atoms) <= owns}
-    for key in keys:
-        placed = {p.locant for p in trace.parts if p.span == key and p.locant}
-        group = next((t for t in trace.tokens if t.owner == key and t.kind == "group"), None)
-        if group is None or node["label"] not in placed or not node["span"] or node["span"][1] > group.span[0]:
-            continue
-        # Only where a replacement locant could be mistaken for it: the number
-        # sits right before a heteroatom or an alkane stem ("1-oxiranyl",
-        # "N-hexadecyl"); "[1,1'-biphenyl]" and "1,3-dioxolane" are the name's own.
-        tok = next((t for t in trace.tokens if t.span[0] <= node["span"][0] and node["span"][1] <= t.span[1]), None)
-        after = next((t for t in trace.tokens[tok.index + 1:]
-                      if t.kind not in ("locant", "multiplier", "hyphen")), None) if tok is not None else None
-        if after is not None and after.kind in ("heteroatom", "alkaneStemComponent"):
-            return True
-    return False
-
-
 def _component_for(trace, node):
     """(elements, k) when the node is a number of a fusion PREFIX component's own
     numbering ("[1,3]thiazolo[5,4-b]pyridine"): the elements the component's numbers
@@ -150,7 +126,7 @@ def _component_for(trace, node):
         end = _close_of(trace.text, head.span[1])
         if end is not None and start < end:
             return None
-    elements = fusion_component_elements(trace.tokens, tok.index)
+    elements = fusion_component_elements(trace.tokens, tok.index, trace.text)
     if elements is None:
         return None
     labels = [x for x, _ in locant_items(trace.text, tok.span)]
@@ -158,60 +134,153 @@ def _component_for(trace, node):
                       else None), tok.span
 
 
-def _component_wrong(trace, nodes, node, comp) -> bool:
-    """True when a fusion-component number lights an atom the component cannot
-    have: the wrong element, or (several atoms of that element in the part) an atom
-    that shares no ring with the atoms its sibling numbers light."""
+def _provable_atoms(trace, part, elements, k) -> list:
+    """The atom the k-th number of a fusion component names, when the element and the
+    rings prove it (else []): an element occurring once in the part is the
+    component's; among several, the one atom of that element sharing a ring with the
+    atoms proven that way. Written here, not shared with the builder."""
     from rdkit import Chem
-    elements, k, token = comp
-    want = elements[k] if k is not None else None
-    if not node["lights"]:
-        return False
-    if want is None or any(trace.atoms[a].element != want for a in node["lights"]):
-        return True
-    part = [a for n in nodes if n["id"] == node["parent"] for a in n["owns"]]
-    if len([a for a in part if trace.atoms[a].element == want]) <= 1:
-        return False
+    if k is None or elements[k] is None:
+        return []
     mol = Chem.MolFromSmiles(trace.smiles)
-    rings = [set(r) for r in mol.GetRingInfo().AtomRings()] if mol is not None else []
-    siblings = [a for n in nodes if n is not node and n["parent"] == node["parent"] and n["kind"] == "locant"
-                and n["span"] and token[0] <= n["span"][0] < token[1] and n["lights"]
-                for a in n["lights"]]
-    return not all(any(a in r and s in r for r in rings) for a in node["lights"] for s in siblings)
+    if mol is None:
+        return []
+    of = lambda e: [a for a in part if trace.atoms[a].element == e]
+    anchors = [of(e)[0] for e in set(elements) if e is not None and elements.count(e) == 1 and len(of(e)) == 1]
+    e = elements[k]
+    if elements.count(e) != 1:
+        return []
+    if len(of(e)) == 1:
+        return of(e)
+    rings = [set(r) for r in mol.GetRingInfo().AtomRings()]
+    near = [a for a in of(e) if anchors and all(any({a, s} <= r for r in rings) for s in anchors)]
+    return near if len(near) == 1 else []
+
+
+def _component_part(nodes, node) -> list:
+    return [a for n in nodes if n["id"] == node["parent"] for a in n["owns"]]
+
+
+def _component_wrong(trace, nodes, node, comp) -> bool:
+    """True when a fusion-component number lights anything but what is proven: the
+    one provable atom, or nothing when none is provable."""
+    elements, k, _ = comp
+    return sorted(node["lights"]) != sorted(_provable_atoms(trace, _component_part(nodes, node), elements, k))
+
+
+def _unproven_component_number(trace, nodes, node) -> bool:
+    """True for a number of a fusion component's own numbering that the element and
+    the rings cannot pin to one atom: lighting nothing is correct and not a LOCANT_UNLIT."""
+    comp = _component_for(trace, node)
+    return comp is not None and not _provable_atoms(trace, _component_part(nodes, node), comp[0], comp[1])
+
+
+def _locant_token(trace, node):
+    from app.label_rules import LOCANT_KINDS
+    if not node["span"]:
+        return None
+    # (a bare number can be split out of a stereo token: "3alpha,21-dihydroxy")
+    kinds = LOCANT_KINDS | {"stereoChemistry"}
+    return next((t for t in trace.tokens if t.kind in kinds and t.span[0] <= node["span"][0] < t.span[1]), None)
+
+
+def _written_next(trace, tok):
+    """The token the locant run before `tok` is written for: the next one that is not a
+    locant, counting word or hyphen."""
+    return next((t for t in trace.tokens[tok.index + 1:] if t.kind not in ("locant", "multiplier", "hyphen")), None)
+
+
+def _position_in_front(trace, node, parent):
+    """(part key, whether OPSIN placed the part at this number) when the node is a
+    substituent's leading position: written for the start of the part's name
+    (resolve_roles' prefix role) and not name-building. A number before a heteroatom / ring token builds the name
+    ("1,3-dioxolanyl") unless OPSIN placed the part at that very number
+    (TracePart.locant: "1-oxiranylpropan-2-one"). Read from tokens and parts only."""
+    from app.label_rules import _BUILDS_NAME
+    tok = _locant_token(trace, node)
+    if tok is None:
+        return None
+    owns = set(parent["owns"])
+    after = _written_next(trace, tok)
+    for key in {p.span for p in trace.parts if p.kind == "substituent" and p.atoms and set(p.atoms) <= owns}:
+        placed = {p.locant for p in trace.parts if p.span == key and p.locant}
+        if after is not None and after.kind in ("heteroatom", "alkaneStemComponent") and node["label"] in placed:
+            return key, True                  # "1-oxiranyl", "N-hexadecyl": not a replacement locant
+        if after is None or after.kind not in _BUILDS_NAME:
+            return key, node["label"] in placed
+    return None
+
+
+def _union_of_copies(trace, key, lights) -> bool:
+    copies = [set(p.atoms) for p in trace.parts if p.span == key]
+    lit, rest = set(lights), set(lights)
+    for c in copies:
+        if c <= lit:
+            rest -= c
+    return not rest
+
+
+def _suffix_attachment_locants(trace, nodes, suffix) -> set:
+    """The numbers a suffix may carry: those of the atoms its own atoms are bonded to."""
+    from rdkit import Chem
+    mol = Chem.MolFromSmiles(trace.smiles)
+    own = set(suffix["owns"])
+    return {loc for a in own for nb in mol.GetAtomWithIdx(a).GetNeighbors() if nb.GetIdx() not in own
+            for loc in trace.atoms[nb.GetIdx()].locants}
 
 
 def wrong_locant_atoms(trace, nodes) -> list:
     """(label, atoms) for every locant node inside its own part that lights an
     atom not carrying that exact locant. LIT_ATOM_FOREIGN only asks whether the
     atom belongs to the part's family, so it cannot see a wrong atom of the right
-    part. Exempt, each judged elsewhere: a substituent's leading position (its
-    claim is the parent's or the copy's: LIT_ATOM_FOREIGN), hydro and
-    indicated-hydrogen locants (HYDRO_WRONG), an anomer mark (proven from the
-    molecule by the gate), a locant that lights nothing (LOCANT_UNLIT), a
-    bracket's own locant (no part). The atoms a suffix owns carry no number."""
+    part. Exempt, each judged elsewhere and decided from tokens and parts, never from
+    a node's wording: a locant written for a hydro prefix (HYDRO_WRONG), an
+    alpha / beta mark of a carbohydrate (proven from the molecule by the gate), a
+    locant that lights nothing (LOCANT_UNLIT), a bracket's own locant (no part).
+    A substituent's leading position must light a whole copy of the part, or atoms
+    outside it (a part OPSIN placed at the number is never one of its own atoms),
+    or an own atom that carries the number (a ring's attachment). A suffix's
+    number must be one of the numbers its atoms are bonded to. A fusion component's
+    own number lights exactly the atom the element and rings prove, else nothing.
+    The atoms a suffix owns carry no number."""
     by_id = {n["id"]: n for n in nodes}
+    carbohydrate = any(t.kind == "carbohydrateRingSize" for t in trace.tokens)
     bad = []
     for n in nodes:
-        if n["kind"] != "locant" or n["parent"] is None or not n["lights"]:
+        if n["kind"] != "locant" or n["parent"] is None:
             continue
-        line, parent = n["line"], by_id[n["parent"]]
-        if "hydrogen" in line or "anomer" in line:
-            continue
+        parent = by_id[n["parent"]]
+        tok = _locant_token(trace, n)
         comp = _component_for(trace, n)
         if comp is not None:
-            # a fusion component's own numbering: the fused locants on the atoms say nothing
             if _component_wrong(trace, nodes, n, comp):
                 bad.append((n["label"], sorted(n["lights"])))
             continue
-        if parent["kind"] == "substituent" and "this group is attached at position" in line:
+        if not n["lights"]:
             continue
-        if parent["kind"] == "substituent" and _is_part_position_in_front(trace, n, parent):
-            bad.append((n["label"], sorted(n["lights"])))      # the parent's position, read as the part's own
+        target = _written_next(trace, tok) if tok is not None else None
+        if target is not None and target.kind == "hydro":
+            continue
+        if carbohydrate and n["label"].lower() in ("alpha", "beta"):
             continue
         want = n["label"] + "'" * _spiro_primes(trace, n, n["label"])
-        free = set(parent["owns"]) if parent["kind"] == "suffix" else set()
-        wrong = [a for a in n["lights"] if want not in trace.atoms[a].locants and a not in free]
-        if wrong:
+        carries = all(want in trace.atoms[a].locants for a in n["lights"])
+        if parent["kind"] == "substituent":
+            pos = _position_in_front(trace, n, parent)
+            if pos is not None:
+                key, placed = pos
+                outside = not set(n["lights"]) & set(parent["owns"])
+                ok = outside or _union_of_copies(trace, key, n["lights"]) or (carries and not placed)
+                if not ok:
+                    bad.append((n["label"], sorted(n["lights"])))
+                continue
+        if parent["kind"] == "suffix":
+            own = set(parent["owns"])
+            if n["label"] not in _suffix_attachment_locants(trace, nodes, parent) or not all(
+                    want in trace.atoms[a].locants or a in own for a in n["lights"]):
+                bad.append((n["label"], sorted(n["lights"])))
+            continue
+        if not carries:
             bad.append((n["label"], sorted(n["lights"])))
     return bad
 
@@ -274,7 +343,7 @@ def classify(trace, nodes, owners) -> list[str]:
                 out.append("STEREO_WRONG_ATOM")
                 break
     if any(n["kind"] == "locant" and not n["lights"] and n["label"].lower() not in ("alpha", "beta")
-           and _component_for(trace, n) is None for n in nodes):
+           and not _unproven_component_number(trace, nodes, n) for n in nodes):
         out.append("LOCANT_UNLIT")
     if foreign_lights(trace, nodes):
         out.append("LIT_ATOM_FOREIGN")

@@ -248,21 +248,30 @@ HETERO_ELEMENT = {
 }
 
 
-def fusion_component_elements(tokens: Sequence[WrittenToken], i: int) -> Optional[list]:
-    """For a locant token written at the front of a fusion PREFIX component
-    ("[1,3]thiazolo[5,4-b]pyridine": locant, heteroatoms, the ring group, then the
-    fusion token), the element each of its numbers puts in the ring, in written
-    order ("1,3" + thi,az -> S, N; a counting word repeats its heteroatom:
-    "1,2,4" + tri,az -> N, N, N); an unknown prefix gives None for that number.
-    None when the locant is not such a component's.
+def fusion_component_elements(tokens: Sequence[WrittenToken], i: int, text: Optional[str] = None) -> Optional[list]:
+    """For a BRACKETED locant run that opens a fusion component ("[1,3]thiazolo[5,4-b]
+    pyridine", the prefix; "imidazo[2,1-b][1,3]thiazole", the base), the element each
+    of its numbers puts in the ring, in written order ("1,3" + thi,az -> S, N; a
+    counting word repeats its heteroatom: "1,2,4" + tri,az -> N, N, N; a leading
+    "benzo" is skipped; an unknown prefix gives None for that number). The run is a
+    component's when its ring group is followed by a fusion token (prefix) or when it
+    follows one (base). A bare replacement locant ("4-azabenzo[a]pyrene") is in the
+    fused system's own numbering and is not one. None when the locant is not such a
+    component's.
 
     These numbers belong to the component's OWN numbering. The atoms of the fused
     system carry other numbers, so a fused locant must never be looked up for them."""
     if tokens[i].kind not in LOCANT_KINDS:
         return None
+    if text is not None and text[max(tokens[i].span[0] - 1, 0)] != "[":
+        return None
     j = i + 1
     while j < len(tokens) and (tokens[j].kind in CONTEXTUAL or tokens[j].kind == "hyphen"):
         j += 1                                   # a bracket in between ends the component: "2-[(oxazolo..." is the bracket's number
+    if j < len(tokens) and tokens[j].kind == "group" and tokens[j].value.lower() in ("benzo", "benz"):
+        j += 1
+        while j < len(tokens) and tokens[j].kind in CONTEXTUAL:
+            j += 1
     elements: list = []
     count = 1
     while j < len(tokens) and tokens[j].kind in ("heteroatom", "multiplier"):
@@ -275,4 +284,7 @@ def fusion_component_elements(tokens: Sequence[WrittenToken], i: int) -> Optiona
     if not elements or j >= len(tokens) or tokens[j].kind != "group":
         return None
     after = next((t for t in tokens[j + 1:] if t.kind not in GLUE and t.kind != "hyphen"), None)
-    return elements if after is not None and after.kind == "fusion" else None
+    before = next((t for t in reversed(tokens[:i]) if t.kind not in GLUE and t.kind != "hyphen"), None)
+    if (after is not None and after.kind == "fusion") or (before is not None and before.kind == "fusion"):
+        return elements
+    return None

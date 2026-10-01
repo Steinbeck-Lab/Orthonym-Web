@@ -817,3 +817,105 @@ def test_locant_wrong_atom_catches_the_round_1_fusion_component_atoms():
     two["lights"] = [next(a.index for a in t.atoms if "2" in a.locants)]           # fused C2, a carbon
     assert t.atoms[two["lights"][0]].element == "C"
     assert "LOCANT_WRONG_ATOM" in classify(t, nodes, assign_owners(t.tokens))
+
+
+# -- Phase C fix round 3 ------------------------------------------------------------------
+# R2-1. the BASE component's bracketed numbers, written after the fusion descriptor
+def test_a_fusion_base_components_numbers_light_the_atoms_the_element_and_ring_prove():
+    """"imidazo[2,1-b][1,3]thiazole": thiazole's 3 is a nitrogen; round 2 lit fused C3."""
+    t, nodes = _nodes("imidazo[2,1-b][1,3]thiazole")
+    one = _one(nodes, kind="locant", label="1")
+    three = _one(nodes, kind="locant", label="3")
+    (s_atom,) = one["lights"]
+    (n_atom,) = three["lights"]
+    assert t.atoms[s_atom].element == "S" and t.atoms[n_atom].element == "N" and _ring_mates(t, s_atom, n_atom)
+    assert classify(t, nodes, assign_owners(t.tokens)) == ["CLEAN"]
+
+
+def test_a_benzo_led_component_and_a_base_after_a_prefix_use_the_same_rule():
+    t, nodes = _nodes("pyrimido[2,1-b][1,3]benzothiazole")
+    one, three = _one(nodes, kind="locant", label="1"), _one(nodes, kind="locant", label="3")
+    assert [t.atoms[a].element for a in one["lights"] + three["lights"]] == ["S", "N"]
+    t, nodes = _nodes("[1,3]benzodioxolo[5,6-g]quinoline")           # two equal oxygens: not provable
+    assert [n["lights"] for n in nodes if n["kind"] == "locant" and n["label"] in ("1", "3")
+            and n["span"][0] < 6] == [[], []]
+    t, nodes = _nodes("pyrrolo[2,1-f][1,2,4]triazine")
+    assert [n["lights"] for n in nodes if n["kind"] == "locant" and n["label"] in ("1", "2", "4")] == [[], [], []]
+    assert classify(t, nodes, assign_owners(t.tokens)) == ["CLEAN"]
+
+
+@pytest.mark.parametrize("name", [
+    "imidazo[2,1-b][1,3]thiazole", "6-phenyl-2,3,5,6-tetrahydroimidazo[2,1-b][1,3]thiazole",
+    "pyrrolo[2,1-f][1,2,4]triazine", "pyrimido[2,1-b][1,3]benzothiazole",
+])
+def test_locant_wrong_atom_catches_the_round_2_base_component_atoms(name):
+    """Not vacuous: round 2 lit the fused system's atom carrying the same number."""
+    t, nodes = _nodes(name)
+    node = [n for n in nodes if n["kind"] == "locant" and n["label"] in ("1", "2", "3", "4")
+            and n["span"][0] > t.text.index("][")][-1]                  # the last: its fused atom differs
+    node["lights"] = [next(a.index for a in t.atoms if node["label"] in a.locants)]      # the fused atom
+    assert "LOCANT_WRONG_ATOM" in classify(t, nodes, assign_owners(t.tokens))
+
+
+def test_a_bare_replacement_locant_keeps_its_fused_lookup():
+    """Minor (b): "4-azabenzo[a]pyrene" is in the fused system's own numbering, not bracketed."""
+    t, nodes = _nodes("4-azabenzo[a]pyrene")
+    four = _one(nodes, kind="locant", label="4")
+    (atom,) = four["lights"]
+    assert t.atoms[atom].element == "N" and "4" in t.atoms[atom].locants
+
+
+# Minor (a). the LOCANT_UNLIT exemption covers only numbers the evidence cannot pin
+def test_a_provable_fusion_number_that_lights_nothing_is_a_failure():
+    t, nodes = _nodes("[1,3]thiazolo[5,4-b]pyridine")
+    _one(nodes, kind="locant", label="1")["lights"] = []
+    assert "LOCANT_UNLIT" in classify(t, nodes, assign_owners(t.tokens)) or \
+        "LOCANT_WRONG_ATOM" in classify(t, nodes, assign_owners(t.tokens))
+    t, nodes = _nodes("[1,2,4]triazolo[1,5-a]pyrimidine")            # unprovable: nothing is right
+    assert classify(t, nodes, assign_owners(t.tokens)) == ["CLEAN"]
+
+
+# R2-2. a bare number split out of a stereo token belongs to the suffix only if it is the suffix's
+@pytest.mark.parametrize("name", [
+    "4,5alpha-epoxy-3-methoxy-17-methylmorphinan-6-one",
+    "4,5alpha-epoxy-14-hydroxy-3-methoxy-17-methylmorphinan-6-one",
+])
+def test_the_four_of_four_five_alpha_epoxy_belongs_to_the_bridge_not_the_ketone(name):
+    t, nodes = _nodes(name)
+    epoxy = _one(nodes, kind="token", label="epoxy")
+    four = next(n for n in nodes if n["kind"] == "locant" and n["label"] == "4" and n["span"][0] == 0)
+    assert four["parent"] == epoxy["id"] and "attached at position" not in four["line"]
+    (atom,) = four["lights"]
+    assert "4" in t.atoms[atom].locants and atom in epoxy["lights"]
+    assert sorted(epoxy["lights"]) == sorted(a.index for a in t.atoms if {"4", "5"} & set(a.locants)
+                                             and a.element == "C" and a.index in four["lights"] + epoxy["lights"])
+    suffix = _one(nodes, kind="suffix", label="one")
+    assert [n["label"] for n in nodes if n["kind"] == "locant" and n["parent"] == suffix["id"]] == ["6"]
+    assert classify(t, nodes, assign_owners(t.tokens)) == ["CLEAN"]
+
+
+def test_a_locant_under_a_suffix_must_be_one_the_suffix_is_bonded_to():
+    """Not vacuous: the pre-fix tree, with the 4 under the ketone."""
+    t, nodes = _nodes("4,5alpha-epoxy-3-methoxy-17-methylmorphinan-6-one")
+    suffix = _one(nodes, kind="suffix", label="one")
+    four = next(n for n in nodes if n["kind"] == "locant" and n["label"] == "4" and n["span"][0] == 0)
+    four["parent"] = suffix["id"]
+    assert "LOCANT_WRONG_ATOM" in classify(t, nodes, assign_owners(t.tokens))
+    # "3,17beta-diol": the numbers the diol is bonded to stay fine
+    t, nodes = _nodes("estra-1,3,5(10)-triene-3,17beta-diol")
+    assert classify(t, nodes, assign_owners(t.tokens)) == ["CLEAN"]
+
+
+# Minor (c). the exemptions read tokens and parts, not the glossary's words
+@pytest.mark.parametrize("name", [
+    "4,5alpha-epoxy-3-methoxy-17-methylmorphinan-6-one", "3-(α-D-mannopyranosyloxy)benzoic acid",
+    "1-oxiranylpropan-2-one", "6-phenyl-2,3,5,6-tetrahydroimidazo[2,1-b][1,3]thiazole",
+    "3α,21-dihydroxy-5α-pregnan-20-one", "N-hexadecylnaphthalen-1-amine",
+    "2-(2-pyridylmethyl)benzoic acid", "(2R,3S)-2-(3,4-dihydroxyphenyl)-5,7-dihydroxy-3-(β-D-xylopyranosyloxy)-2,3-dihydro-4H-1-benzopyran-4-one",
+])
+def test_the_gate_does_not_depend_on_the_wording_of_a_line(name):
+    t, nodes = _nodes(name)
+    before = classify(t, nodes, assign_owners(t.tokens))
+    for n in nodes:
+        n["line"] = "reworded"
+    assert classify(t, nodes, assign_owners(t.tokens)) == before == ["CLEAN"]

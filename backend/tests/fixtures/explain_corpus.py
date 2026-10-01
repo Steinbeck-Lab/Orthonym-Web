@@ -137,6 +137,18 @@ CURATED: list[tuple[str, str]] = [
     ("fusion-bracket", "[1,2,5]oxadiazolo[3,4-b]pyrazine"),
     ("fusion-bracket", "2-methyl-[1,3]thiazolo[5,4-b]pyridine"),
     ("fusion-bracket", "6-chloro-[1,2,4]triazolo[1,5-a]pyrimidin-2-amine"),
+    # Phase C round 3: a fusion base component's numbers (after the descriptor), bare replacement locants
+    ("fusion-bracket", "6-phenyl-2,3,5,6-tetrahydroimidazo[2,1-b][1,3]thiazole"),
+    ("fusion-bracket", "pyrrolo[2,1-f][1,2,4]triazine"),
+    ("fusion-bracket", "pyrimido[2,1-b][1,3]benzothiazole"),
+    ("fusion-bracket", "[1,2,4]triazolo[3,4-b][1,3,4]thiadiazole"),
+    ("fusion-bracket", "imidazo[2,1-b][1,3,4]thiadiazole"),
+    ("fusion-bracket", "pyrazolo[1,5-a][1,3,5]triazine"),
+    ("fusion-bracket", "[1,3]benzodioxolo[5,6-g]quinoline"),
+    ("fusion-bracket", "4-azabenzo[a]pyrene"),
+    ("fusion-bracket", "1-azabenzo[a]anthracene"),
+    ("fusion-bracket", "2H-[1,3]dioxolo[4,5-g]quinoline"),
+    ("real-drug-names", "4,5alpha-epoxy-14-hydroxy-3-methoxy-17-methylmorphinan-6-one"),
 ]
 
 # Names OPSIN 2.9.0 itself genuinely cannot parse. Verified against

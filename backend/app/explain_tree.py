@@ -400,7 +400,7 @@ class _Builder:
                                  line=describe_locant("modifier", at or added.group(1), element))
                         continue
                     component = (None if any(t.kind == "polyCyclicSpiro" for t in tokens)
-                                 else fusion_component_elements(tokens, i))
+                                 else fusion_component_elements(tokens, i, self.t.text))
                     if component is not None:
                         # A number of a fusion component's own numbering ("[1,3]thiazolo"):
                         # the fused system's atoms carry other numbers, so light only
@@ -699,6 +699,12 @@ class _Builder:
                 head = roots[0] if roots else (scope_parts[-1] if scope_parts else None)
             leading = not any(p.kind not in GLUE and p.kind != STEREO_KIND
                               and self.word(p.span[0]) == self.word(tok.span[0]) for p in tokens[:idx])
+            written = next((t for t in tokens[idx + 1:] if owners.get(t.index) is not None), None)
+            bridge = None
+            if written is not None and written.kind == "fusedRingBridge":
+                bridge = next((n for n in self.nodes if n["kind"] == "token"
+                               and n["span"] == list(self.trim(written.span))), None)
+            first_new = len(self.nodes)
             for label, span in stereo_items(self.t.text, tok.span):
                 m = _STEREO_MARK.match(label)
                 if m:
@@ -724,7 +730,7 @@ class _Builder:
                     nxt = None
                     if after is not None and owners[after.index].kind == "part":
                         nxt = by_key.get(owners[after.index].span)
-                    self.token_locant(label, span, head, nxt)
+                    self.token_locant(label, span, head, nxt, bridge)
                 else:
                     # A bare mark (L, D, trans, E) names no atom. D/L, and any
                     # mark that does not start its word, describe the part
@@ -739,9 +745,15 @@ class _Builder:
                     parent = self.part_node.get(target.key, (None, []))[0] if target else None
                     self.add("stereo", label, span, parent=parent, lights=[],
                              line=describe_token(STEREO_KIND, label))
+            if bridge is not None:
+                # "4,5alpha-epoxy": the marks written right before a bridge name the
+                # positions it bridges.
+                lit = {a for n in self.nodes[first_new:] for a in n["lights"]}
+                if lit:
+                    bridge["lights"] = sorted(lit)
 
     def token_locant(self, loc: str, span: Span, head: Optional[_WrittenPart],
-                     nxt: Optional[_WrittenPart] = None) -> None:
+                     nxt: Optional[_WrittenPart] = None, bridge: Optional[dict] = None) -> None:
         if nxt is not None and nxt.kind == "substituent" and nxt.key in self.part_node:
             copies = [c for c in nxt.copies if c.locant == loc]
             if copies:
@@ -750,6 +762,13 @@ class _Builder:
                          line=describe_locant("substituent", loc))
                 return
         suffix = self.suffix_node.get(head.key) if head else None
+        # A split-out number goes to the suffix only when it is one of the suffix's own
+        # locants ("3,17beta-diol"); "4" of "4,5alpha-epoxy...-6-one" is the bridge's.
+        if suffix is not None and bridge is not None and loc not in set(suffix[2].values()):
+            atoms = self.part_node[head.key][1]
+            self.add("locant", loc, span, parent=bridge["id"], lights=self.with_locant(atoms, loc),
+                     line=describe_locant("position", loc))
+            return
         if suffix is not None:
             node, atoms, locants = suffix
             parent_atoms = [a for a in self.part_node[head.key][1] if a not in atoms]
