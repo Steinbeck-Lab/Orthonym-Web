@@ -401,12 +401,43 @@ def _anomeric_group(mol, atom: int | None) -> str | None:
             return "the O that joins the sugar to the rest of the name"
         return None
     if not oxygens and len(outside) == 1:
-        return f"the {outside[0].GetSymbol()} that joins the sugar to the rest of the name"
+        other = outside[0]
+        if sum(1 for n in other.GetNeighbors() if n.GetAtomicNum() > 1) == 1:
+            # a halogen, a thiol sulfur: it joins nothing, it is just there
+            article = "an" if other.GetSymbol()[0] in "AEFHILMNORSX" else "a"
+            return f"{article} {other.GetSymbol()} atom"
+        return f"the {other.GetSymbol()} that joins the sugar to the rest of the name"
     return None
 
 
+_RING_ELEMENTS = {"O": "oxygen", "S": "sulfur", "N": "nitrogen", "Se": "selenium"}
+
+
+def _sugar_ring_element(mol, atom: int | None, pool) -> str | None:
+    """The one element that closes the sugar's ring, when the bonds say: the ring atom
+    next to the anomeric carbon `atom`, else the single hetero atom of the five- or
+    six-membered rings inside `pool`. None when it is not one element."""
+    if mol is None:
+        return None
+    if atom is not None and atom < mol.GetNumAtoms():
+        a = mol.GetAtomWithIdx(atom)
+        found = {n.GetSymbol() for n in a.GetNeighbors()
+                 if n.GetAtomicNum() not in (1, 6) and mol.GetBondBetweenAtoms(atom, n.GetIdx()).IsInRing()}
+        return next(iter(found)) if len(found) == 1 else None
+    if pool is None:
+        return None
+    inside = set(pool)
+    found = set()
+    for ring in mol.GetRingInfo().AtomRings():
+        if len(ring) in (5, 6) and set(ring) <= inside:
+            hetero = [mol.GetAtomWithIdx(i).GetSymbol() for i in ring if mol.GetAtomWithIdx(i).GetAtomicNum() != 6]
+            if len(hetero) == 1:
+                found.add(hetero[0])
+    return next(iter(found)) if len(found) == 1 else None
+
+
 def describe_locant(kind: str, locant: str, element: str | None = None, *, anomer: bool = False,
-                    mol=None, atom: int | None = None) -> str:
+                    mol=None, atom: int | None = None, pool=None) -> str:
     """One line for a locant child, which is identified only by its locant.
 
     `element` names an atom in the sentence, so there is exactly one rule
@@ -449,9 +480,12 @@ def describe_locant(kind: str, locant: str, element: str | None = None, *, anome
         # bonds of `atom`, the lit anomeric carbon.
         group = _anomeric_group(mol, atom)
         here = f" Here that group is {group}." if group else ""
+        element = _sugar_ring_element(mol, atom, pool)
+        ring = (f"the ring {_RING_ELEMENTS[element]}" if element in _RING_ELEMENTS else
+                f"the ring {element} atom" if element else "the ring's heteroatom")
         return (
             f'"{locant}" names the anomer: which way the group on the ring carbon '
-            f"next to the ring oxygen points, relative to the sugar's reference stereocentre.{here}"
+            f"next to {ring} points, relative to the sugar's reference stereocentre.{here}"
         )
     if kind == "modifier":
         return _modifier_line(locant, element, mol, atom)
@@ -582,7 +616,7 @@ def describe_stereo(text: str, within: str | None = None) -> str:
                 f"position {racemic.group(1)} in one and {second} in the other.")
     if mark == "rel":
         # P-93.1.2.1
-        return (f'"rel" says the marks after it give only a relative arrangement; it does not say '
+        return (f'"rel" says the marks of its set give only a relative arrangement; it does not say '
                 f"which of the two mirror-image forms is meant.")
     if mark in _ROTATION:
         # 2-Carb-4.5: the sign of optical rotation, not a configuration
@@ -604,6 +638,11 @@ def describe_stereo(text: str, within: str | None = None) -> str:
         # P-93.5.1.2 (rings), P-93.4.2.1.1 (double bonds)
         side = "on the same side" if mark == "cis" else "on opposite sides"
         return f'"{mark}" says two groups lie {side} of the ring or double bond they are on.'
+    if mark in ("R", "S") and within == "rel":
+        return f'"{mark}" gives the arrangement at one stereocentre {_RELATIVE}.'
+    if mark in ("R", "S") and within == "rac":
+        return (f'"{mark}" is written inside a racemate mark (rac): the name means an equal mix of '
+                f"this form and its mirror image.")
     if mark in ("R", "S"):
         return (f'"{mark}" fixes the three-dimensional arrangement at one stereocentre; the mark '
                 f"itself carries no position number.")

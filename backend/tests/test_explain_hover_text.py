@@ -217,7 +217,8 @@ def test_an_anomer_line_says_what_the_anomeric_carbon_holds():
         ANOMER + " Here that group is the O that joins the sugar to the rest of the name."
     assert describe_locant("position", "beta", anomer=True, mol=_mol("OC1OC(CO)C(O)C(O)C1O"), atom=1) == \
         ANOMER + " Here that group is an OH."
-    assert describe_locant("position", "beta", anomer=True) == ANOMER
+    # with no molecule the ring is not known, so it is not called an oxygen ring
+    assert describe_locant("position", "beta", anomer=True) == ANOMER.replace("the ring oxygen", "the ring's heteroatom")
 
 
 @pytest.mark.parametrize("name,kind,label,line", [
@@ -273,7 +274,7 @@ STEREO = [
     ("DL", None, '"DL" marks a racemate: an equal mix of the two mirror-image forms.'),
     ("2RS", None, '"2RS" marks a racemate: an equal mix of the two mirror-image forms, R at position 2 in one '
                   'and S in the other.'),
-    ("rel", None, '"rel" says the marks after it give only a relative arrangement; it does not say which of the '
+    ("rel", None, '"rel" says the marks of its set give only a relative arrangement; it does not say which of the '
                   'two mirror-image forms is meant.'),
     ("1R*", None, '"1R*" gives the arrangement at the position it names only relative to the other marks of its '
                   'set; it does not say which of the two mirror-image forms is meant.'),
@@ -373,7 +374,7 @@ def test_a_parent_among_several_is_one_of_that_many_cores():
     ("1,2,3,4-tetrahydronaphthalene", "parent", "naphthalene",
      '"naphthalene" is the core skeleton the rest of the name is built around. It has 10 atoms.'),
     ("copper(II) sulfate pentahydrate", "parent", "copper",
-     '"copper" is one of the three cores this name is built from. It has 1 atom.'),
+     '"copper" is one of the two cores this name is built from. It has 1 atom.'),
     ("copper(II) sulfate pentahydrate", "parent", "hydrate",
      '"hydrate" is water of crystallisation: water molecules that come with the compound. The name writes it '
      'once for 5 copies.'),
@@ -404,3 +405,140 @@ def test_the_census_classifies_a_false_hover_line():
 def test_a_name_from_every_false_class_is_clean(name):
     t = trace(name)
     assert false_hover_lines(t, build_nodes(t)) == []
+
+
+# -- 7. whole-plan review: sets written either side, terminal anomer groups, thio sugars, hydrates ----
+
+def _live_node(name, kind, label):
+    t = trace(name)
+    nodes = build_nodes(t)
+    (node,) = [n for n in nodes if n["kind"] == kind and n["label"] == label]
+    return t, nodes, node
+
+
+def _census_flags(name, kind, label, old_line):
+    """The census, shown the line this name used to get, must call it false."""
+    t, nodes, node = _live_node(name, kind, label)
+    old = [dict(n, line=old_line) if n is node else n for n in nodes]
+    return false_hover_lines(t, old)
+
+
+OLD_BARE = ('"{}" fixes the three-dimensional arrangement at one stereocentre; the mark itself carries no '
+            'position number.')
+OLD_LOCATED = '"{}" fixes the three-dimensional arrangement at the positions it names.'
+OLD_REL = ('"rel" says the marks after it give only a relative arrangement; it does not say which of the two '
+           'mirror-image forms is meant.')
+
+
+@pytest.mark.parametrize("label,within,line", [
+    ("R", "rel", '"R" gives the arrangement at one stereocentre only relative to the other marks of its set; it '
+                 'does not say which of the two mirror-image forms is meant.'),
+    ("S", "rac", '"S" is written inside a racemate mark (rac): the name means an equal mix of this form and its '
+                 'mirror image.'),
+    ("rel", None, '"rel" says the marks of its set give only a relative arrangement; it does not say which of '
+                  'the two mirror-image forms is meant.'),
+])
+def test_a_bare_mark_in_a_set_and_the_set_word_say_what_they_mean(label, within, line):
+    assert describe_stereo(label, within) == line
+
+
+@pytest.mark.parametrize("name,word", [
+    ("rac-(R)-butan-2-ol", "rac"), ("rac-(S)-2-chlorobutane", "rac"), ("rel-(R)-butan-2-ol", "rel"),
+])
+def test_a_bare_mark_inside_a_racemate_or_relative_set_does_not_fix_the_arrangement(name, word):
+    mark = "S" if "(S)" in name else "R"
+    t, nodes, node = _live_node(name, "stereo", mark)
+    assert "fixes the three-dimensional arrangement" not in node["line"]
+    assert false_hover_lines(t, nodes) == []
+    assert _census_flags(name, "stereo", mark, OLD_BARE.format(mark))
+
+
+@pytest.mark.parametrize("name,mark,word", [
+    ("(1R,2S)-rel-2-aminocyclohexan-1-ol", "1R", "rel"), ("(1R,2S)-rac-2-aminocyclohexan-1-ol", "1R", "rac"),
+    ("(rac)-(2R)-butan-2-ol", "2R", "rac"), ("(rel)-(2R)-butan-2-ol", "2R", "rel"),
+    ("(2R)-rel-butan-2-ol", "2R", "rel"), ("(2R)-rac-butan-2-ol", "2R", "rac"),
+])
+def test_a_set_word_in_any_adjacent_stereo_token_governs_the_marks(name, mark, word):
+    t, nodes, node = _live_node(name, "stereo", mark)
+    assert ("only relative to the other marks of its set" in node["line"]) == (word == "rel")
+    assert ("written inside a racemate mark" in node["line"]) == (word == "rac")
+    assert false_hover_lines(t, nodes) == []
+    assert _census_flags(name, "stereo", mark, OLD_LOCATED.format(mark))
+
+
+@pytest.mark.parametrize("name,word", [
+    ("(1R,2S)-rel-2-aminocyclohexan-1-ol", "rel"), ("(1R,2S)-rac-2-aminocyclohexan-1-ol", "rac"),
+])
+def test_a_set_word_written_after_the_marks_still_governs_them(name, word):
+    t, nodes, node = _live_node(name, "stereo", "1R")
+    assert "positions it names" not in node["line"] or "only relative" in node["line"]
+    assert ("only relative to the other marks of its set" in node["line"]) == (word == "rel")
+    assert ("written inside a racemate mark" in node["line"]) == (word == "rac")
+    (setword,) = [n for n in nodes if n["kind"] == "stereo" and n["label"] == word]
+    assert "after it" not in setword["line"]
+    assert false_hover_lines(t, nodes) == []
+    assert _census_flags(name, "stereo", "1R", OLD_LOCATED.format("1R"))
+    if word == "rel":
+        assert _census_flags(name, "stereo", "rel", OLD_REL)
+
+
+def test_a_set_word_written_in_front_of_its_marks_still_governs_them():
+    t, nodes, node = _live_node("rel-(1R,2S)-2-aminocyclohexan-1-ol", "stereo", "1R")
+    assert "only relative to the other marks of its set" in node["line"]
+    assert false_hover_lines(t, nodes) == []
+
+
+def _anomer(locant, ring="the ring oxygen"):
+    return ANOMER.replace("beta", locant).replace("the ring oxygen", ring)
+
+
+def test_an_anomeric_group_that_is_one_atom_is_an_atom_not_a_join():
+    br = _mol("BrC1OC(CO)C(O)C(O)C1O")
+    assert describe_locant("position", "alpha", anomer=True, mol=br, atom=1).endswith(" Here that group is a Br atom.")
+    assert describe_locant("position", "alpha", anomer=True, mol=_mol("IC1OC(CO)C(O)C(O)C1O"),
+                           atom=1).endswith(" Here that group is an I atom.")
+    azide = _mol("[N-]=[N+]=NC1OC(CO)C(O)C(O)C1O")
+    assert describe_locant("position", "alpha", anomer=True, mol=azide, atom=3).endswith(
+        " Here that group is the N that joins the sugar to the rest of the name.")
+
+
+@pytest.mark.parametrize("name,sym", [
+    ("2,3,4,6-tetra-O-acetyl-alpha-D-glucopyranosyl bromide", "Br"),
+    ("2,3,4,6-tetra-O-acetyl-alpha-D-glucopyranosyl chloride", "Cl"),
+])
+def test_a_glycosyl_halide_names_the_halogen(name, sym):
+    t, nodes, node = _live_node(name, "locant", "alpha")
+    assert node["line"] == _anomer("alpha") + f" Here that group is a {sym} atom."
+    assert false_hover_lines(t, nodes) == []
+    assert _census_flags(name, "locant", "alpha",
+                         _anomer("alpha") + f" Here that group is the {sym} that joins the sugar to the rest of the name.")
+
+
+def test_a_glycosyl_azide_still_joins_the_sugar_to_the_rest():
+    t, nodes, node = _live_node("2,3,4,6-tetra-O-acetyl-alpha-D-glucopyranosyl azide", "locant", "alpha")
+    assert node["line"].endswith("Here that group is the N that joins the sugar to the rest of the name.")
+    assert false_hover_lines(t, nodes) == []
+
+
+def test_a_thio_sugar_does_not_get_a_ring_oxygen():
+    name = "methyl 5-thio-alpha-D-glucopyranoside"
+    t, nodes, node = _live_node(name, "locant", "alpha")
+    assert node["line"] == _anomer("alpha", "the ring sulfur")
+    assert false_hover_lines(t, nodes) == []
+    assert _census_flags(name, "locant", "alpha", _anomer("alpha"))
+    # what the builder cannot read off the sugar, it does not name
+    assert describe_locant("position", "alpha", anomer=True) == _anomer("alpha", "the ring's heteroatom")
+    assert describe_locant("position", "beta", anomer=True, mol=_mol("COC1OC(CO)C(O)C(O)C1O"), atom=2,
+                           pool=range(11)) == \
+        _anomer("beta") + " Here that group is the O that joins the sugar to the rest of the name."
+
+
+def test_a_hydrate_is_not_counted_among_the_cores():
+    name = "copper(II) sulfate pentahydrate"
+    t, nodes, node = _live_node(name, "parent", "copper")
+    assert node["line"] == '"copper" is one of the two cores this name is built from. It has 1 atom.'
+    assert false_hover_lines(t, nodes) == []
+    assert _census_flags(name, "parent", "copper",
+                         '"copper" is one of the three cores this name is built from. It has 1 atom.')
+    (hydrate,) = [n for n in nodes if n["label"] == "hydrate"]
+    assert "cores" not in hydrate["line"]

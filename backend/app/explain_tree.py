@@ -86,7 +86,10 @@ _ADDED_H = re.compile(r"^(\d+[a-z]?'*)H$")
 _FISCHER = frozenset({"D", "L", "DL"})
 # A stereo set written "rel-(1R,2S)-" or "rac-(1R,2S)-": the word in front changes what
 # every mark inside says (IUPAC P-93.1.2.1, P-93.1.3).
-_SET_PREFIX = re.compile(r"^\s*(rel|rac)-?\(", re.IGNORECASE)
+_SET_PREFIX = re.compile(r"^\s*\(?(rel|rac)\)?-?\(", re.IGNORECASE)
+# ... or the word on its own token next to the marks, bare or in parentheses: "(1R,2S)-rel-",
+# "(rac)-(2R)-".
+_SET_WORD = re.compile(r"^\s*\(?(rel|rac)\)?-?\s*$", re.IGNORECASE)
 
 
 @dataclass
@@ -724,7 +727,8 @@ class _Builder:
         if (mode == "substituent" and self.carbohydrate_atoms is not None
                 and loc.lower() in ("alpha", "beta")):
             lit = self.anomeric_carbon(self.carbohydrate_atoms, attached=True)
-            return lit, describe_locant("position", loc, anomer=True, mol=self.mol, atom=lit[0] if lit else None)
+            return lit, describe_locant("position", loc, anomer=True, mol=self.mol, atom=lit[0] if lit else None,
+                                          pool=self.carbohydrate_atoms)
         if mode == "substituent" and leading:
             at_loc = [c for c in w.copies if c.locant == loc]
             if len(at_loc) > written:
@@ -746,7 +750,8 @@ class _Builder:
             # A sugar's anomer mark names the anomeric carbon -- only when the
             # structure proves exactly one; otherwise it lights nothing.
             lit = self.anomeric_carbon(self.carbohydrate_atoms)
-            return lit, describe_locant("position", loc, anomer=True, mol=self.mol, atom=lit[0] if lit else None)
+            return lit, describe_locant("position", loc, anomer=True, mol=self.mol, atom=lit[0] if lit else None,
+                                          pool=self.carbohydrate_atoms)
         return (hit or list(atoms)), describe_locant("position", loc)
 
     # -- brackets, orphans, stereo ----------------------------------------
@@ -799,6 +804,26 @@ class _Builder:
                     return hits[0][0], sorted(atoms)[0]
         return None, None
 
+    def set_word(self, tokens, idx: int) -> Optional[str]:
+        """"rel" or "rac" when the stereo token at `idx` is governed by one: written in its own
+        token in front of the marks ("rel-(1R,2S)-"), or as the stereo token touching it on
+        either side ("(1R,2S)-rel-", "(rac)-(2R)-", "(2R)-(rel)-")."""
+        text, tok = self.t.text, tokens[idx]
+        own = _SET_PREFIX.match(text[tok.span[0]:tok.span[1]])
+        if own:
+            return own.group(1).lower()
+        if _SET_WORD.match(text[tok.span[0]:tok.span[1]]):
+            return None
+        for other in (tokens[idx - 1] if idx > 0 else None, tokens[idx + 1] if idx + 1 < len(tokens) else None):
+            if other is None or other.kind != STEREO_KIND:
+                continue
+            if other.span[1] != tok.span[0] and other.span[0] != tok.span[1]:
+                continue
+            word = _SET_WORD.match(text[other.span[0]:other.span[1]])
+            if word:
+                return word.group(1).lower()
+        return None
+
     def stereo(self, owners: dict) -> None:
         tokens = self.t.tokens
         brackets = written_brackets(tokens)
@@ -827,8 +852,7 @@ class _Builder:
                 bridge = next((n for n in self.nodes if n["kind"] == "token"
                                and n["span"] == list(self.trim(written.span))), None)
             first_new = len(self.nodes)
-            written_set = _SET_PREFIX.match(self.t.text[tok.span[0]:tok.span[1]])
-            within = written_set.group(1).lower() if written_set else None
+            within = self.set_word(tokens, idx)
             for label, span in stereo_items(self.t.text, tok.span):
                 m = STEREO_MARK.match(label)
                 if m:
@@ -880,7 +904,7 @@ class _Builder:
         """With more than one parent node ("sodium acetate", "X hydrochloride"), no parent
         is "the core the rest of the name is built around": each line says it is one of
         that many cores. Text only; what any node lights is unchanged."""
-        cores = sum(1 for n in self.nodes if n["kind"] == "parent")
+        cores = sum(1 for n in self.nodes if n["kind"] == "parent" and n["label"].lower() != "hydrate")
         if cores < 2:
             return
         for node, label, count, copies, holds in self.parent_lines:

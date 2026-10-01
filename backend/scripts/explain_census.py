@@ -534,10 +534,40 @@ def _spiro_problem(mol, node) -> tuple[bool, Optional[str]]:
     return False, None
 
 
-def _anomer_problem(mol, node) -> tuple[bool, Optional[str]]:
+def _ring_hetero_problem(mol, nodes, node) -> Optional[str]:
+    """The base anomer line says which atom closes the sugar's ring ("the ring oxygen",
+    "the ring sulfur"); the ring is read from the lit carbon, else from the rings inside the
+    part that owns the mark."""
+    line = node["line"]
+    said = {"oxygen": "O", "sulfur": "S", "nitrogen": "N", "selenium": "Se"}
+    m = re.search(r"next to the ring (oxygen|sulfur|nitrogen|selenium|(\w+) atom) points", line)
+    if not m:
+        return None
+    want = said.get(m.group(1), m.group(2))
+    lit = node["lights"]
+    if len(lit) == 1:
+        c = mol.GetAtomWithIdx(lit[0])
+        ring = {n.GetSymbol() for n in c.GetNeighbors() if n.GetAtomicNum() > 1
+                and mol.GetBondBetweenAtoms(lit[0], n.GetIdx()).IsInRing() and n.GetSymbol() != "C"}
+    else:
+        owner = next((n for n in nodes if n["id"] == node["parent"]), None)
+        pool = set(owner["owns"]) if owner else set(range(mol.GetNumAtoms()))
+        ring = set()
+        for r in mol.GetRingInfo().AtomRings():
+            if len(r) in (5, 6) and set(r) <= pool:
+                odd = [mol.GetAtomWithIdx(i).GetSymbol() for i in r if mol.GetAtomWithIdx(i).GetSymbol() != "C"]
+                if len(odd) == 1:
+                    ring.add(odd[0])
+    return None if want in ring else f"a ring {want} next to the anomeric carbon, the ring has {sorted(ring) or 'none'}"
+
+
+def _anomer_problem(mol, node, nodes=()) -> tuple[bool, Optional[str]]:
     line = node["line"]
     if "names the anomer" not in line:
         return False, None
+    ring_why = _ring_hetero_problem(mol, nodes, node)
+    if ring_why:
+        return True, ring_why
     lit = node["lights"]
     outside = []
     if len(lit) == 1:
@@ -556,8 +586,14 @@ def _anomer_problem(mol, node) -> tuple[bool, Optional[str]]:
         if joins.group(1) == "O":
             ok = len(o) == 1 and _heavy_degree(mol, o[0].GetIdx()) >= 2
         else:
-            ok = not o and len(outside) == 1 and outside[0].GetSymbol() == joins.group(1)
+            ok = (not o and len(outside) == 1 and outside[0].GetSymbol() == joins.group(1)
+                  and _heavy_degree(mol, outside[0].GetIdx()) >= 2)
         return True, None if ok else f"joined through {joins.group(1)}, it is not"
+    lone = re.search(r"Here that group is an? (\w+) atom\.", line)
+    if lone:
+        ok = (not o and len(outside) == 1 and outside[0].GetSymbol() == lone.group(1)
+              and _heavy_degree(mol, outside[0].GetIdx()) == 1)
+        return True, None if ok else f"a lone {lone.group(1)} atom, it is not"
     if "Here" in line:
         return False, None
     return True, None
@@ -570,14 +606,33 @@ _SUGAR_PREFIXES = {"glycero", "erythro", "threo", "arabino", "lyxo", "ribo", "xy
 
 
 def _stereo_set_word(trace, node) -> Optional[str]:
-    """"rel" or "rac" when the mark is written inside a "rel-(...)" / "rac-(...)" set."""
+    """"rel" or "rac" when the mark is governed by one: written inside a "rel-(...)" /
+    "rac-(...)" token, or standing in the stereo token next to a lone "rel-" / "rac-" /
+    "(rac)-" token on either side ("(1R,2S)-rel-", "(rac)-(2R)-")."""
     if not node["span"]:
         return None
-    for tok in trace.tokens:
-        if tok.kind == "stereoChemistry" and tok.span[0] <= node["span"][0] < tok.span[1]:
-            m = re.match(r"^\s*(rel|rac)-?\(", trace.text[tok.span[0]:tok.span[1]], re.IGNORECASE)
-            return m.group(1).lower() if m else None
+    toks = [t for t in trace.tokens if t.kind == "stereoChemistry"]
+    for tok in toks:
+        if tok.span[0] <= node["span"][0] < tok.span[1]:
+            m = re.match(r"^\s*\(?(rel|rac)\)?-?\(", trace.text[tok.span[0]:tok.span[1]], re.IGNORECASE)
+            if m:
+                return m.group(1).lower()
+            if re.fullmatch(r"\s*\(?(rel|rac)\)?-?\s*", trace.text[tok.span[0]:tok.span[1]], re.IGNORECASE):
+                return None
+            for other in toks:
+                if other.span[1] == tok.span[0] or other.span[0] == tok.span[1]:
+                    w = re.fullmatch(r"\s*\(?(rel|rac)\)?-?\s*", trace.text[other.span[0]:other.span[1]], re.IGNORECASE)
+                    if w:
+                        return w.group(1).lower()
+            return None
     return None
+
+
+def _marks_follow(trace, node) -> bool:
+    """Whether a stereo mark is written after `node` inside its own token ("rel-(1R,2S)-")."""
+    if not node["span"]:
+        return True
+    return bool(re.match(r"-?\s*\(", trace.text[node["span"][1]:]))
 
 
 def _stereo_problem(trace, node) -> tuple[bool, Optional[str]]:
@@ -587,13 +642,14 @@ def _stereo_problem(trace, node) -> tuple[bool, Optional[str]]:
     label, line = node["label"], node["line"]
     word = _stereo_set_word(trace, node)
     located = bool(_LOCATED_MARK.match(label))
+    bare = label in ("R", "S")
     racemic = label in ("rac", "RS", "SR", "+-", "±", "DL") or bool(re.fullmatch(r"\d+[a-z]?'*(?:RS|SR)", label))
-    relative = label == "rel" or label.endswith("*") or (word == "rel" and located)
+    relative = label == "rel" or label.endswith("*") or (word == "rel" and (located or bare))
     claims = [
         ("fixes the three-dimensional arrangement at the positions it names",
          located and not racemic and word is None),
         ("marks a racemate: an equal mix of the two mirror-image forms", racemic),
-        ("written inside a racemate mark (rac)", word == "rac" and located),
+        ("written inside a racemate mark (rac)", word == "rac" and (located or bare)),
         ("sign of optical rotation", label in ("+", "-")),
         ("does not say which of the two mirror-image forms is meant", relative),
         ("is a Fischer label", label in ("D", "L")),
@@ -601,6 +657,8 @@ def _stereo_problem(trace, node) -> tuple[bool, Optional[str]]:
         ("in the L series", label == "L"),
         ("lie on the same side of the ring or double bond", label == "cis"),
         ("lie on opposite sides of the ring or double bond", label == "trans"),
+        ("fixes the three-dimensional arrangement at one stereocentre", bare and word is None),
+        ("the marks after it", label == "rel" and _marks_follow(trace, node)),
         ("at one stereocentre", label in ("R", "S", "R*", "S*")),
         ("at one double bond: its higher-ranked groups lie on opposite sides", label == "E"),
         ("at one double bond: its higher-ranked groups lie on the same side", label == "Z"),
@@ -616,7 +674,7 @@ def _stereo_problem(trace, node) -> tuple[bool, Optional[str]]:
 
 def _parent_problem(mol, nodes, node) -> tuple[bool, Optional[str]]:
     line = node["line"]
-    cores = sum(1 for n in nodes if n["kind"] == "parent")
+    cores = sum(1 for n in nodes if n["kind"] == "parent" and n["label"].lower() != "hydrate")
     copies = max(node.get("copies") or 1, 1)
     seen, out = False, None
     if "the rest of the name is built around" in line:
@@ -690,7 +748,7 @@ def false_hover_lines(trace, nodes) -> list:
         elif n["kind"] == "token" and n["label"].startswith("spiro["):
             known, why = _spiro_problem(mol, n)
         elif "names the anomer" in n["line"]:
-            known, why = _anomer_problem(mol, n)
+            known, why = _anomer_problem(mol, n, nodes)
         elif n["kind"] == "stereo":
             known, why = _stereo_problem(trace, n)
         elif n["kind"] == "parent":
