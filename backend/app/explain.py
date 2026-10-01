@@ -14,6 +14,7 @@ import difflib
 import logging
 from typing import Optional
 
+from celery.exceptions import SoftTimeLimitExceeded
 from rdkit import Chem
 from rdkit.Chem.Draw import rdMolDraw2D
 
@@ -39,6 +40,10 @@ _FAILURE_MESSAGES = {
     "unplaced": "OPSIN reads this name in a reordered form (for example a CAS index name), "
                 "so its parts cannot be matched to the text. Try the IUPAC form.",
 }
+
+
+_NOT_NAMED = ("Orthonym could not confidently name this molecule, so "
+              "there is nothing to explain.")
 
 
 def _inline_svg(mol: Chem.Mol) -> tuple[str, list[list[float]]]:
@@ -106,7 +111,13 @@ def explain_name(name: str) -> dict:
         # with no reason; it is logged loudly and reported as one message.
         logger.exception("explain: building nodes failed for %r", name)
         return _response(result.smiles, name, error=_FAILURE_MESSAGES["mismatch"])
-    svg, atom_points = _inline_svg(mol)
+    try:
+        svg, atom_points = _inline_svg(mol)
+    except SoftTimeLimitExceeded:
+        raise
+    except Exception:
+        logger.exception("explain: drawing failed for %r", name)
+        return _response(result.smiles, name, error=_FAILURE_MESSAGES["mismatch"])
     return _response(result.smiles, name, svg=svg, atom_points=atom_points,
                      total_atoms=mol.GetNumAtoms(), nodes=nodes)
 
@@ -143,12 +154,27 @@ def explain_molecule(smiles: str, namer: Orthonym) -> dict:
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return _response(smiles, None, error="Could not parse this SMILES string")
-    name = namer.name_with_tree(smiles).name
-    if is_failure_name(name):
-        return _response(smiles, None, total_atoms=mol.GetNumAtoms(),
-                         error="Orthonym could not confidently name this molecule, so "
-                               "there is nothing to explain.")
-    svg, atom_points = _inline_svg(mol)
+    # The spec (section 7) gives an engine that produced no name one message; an engine
+    # that RAISES produced no name either, so it gets the same one, never a 500.
+    try:
+        name = namer.name_with_tree(smiles).name
+    except SoftTimeLimitExceeded:
+        raise
+    except Exception:
+        logger.exception("explain: the engine raised while naming %r", smiles)
+        name = None
+    if name is None or is_failure_name(name):
+        return _response(smiles, None, total_atoms=mol.GetNumAtoms(), error=_NOT_NAMED)
+    try:
+        svg, atom_points = _inline_svg(mol)
+    except SoftTimeLimitExceeded:
+        raise
+    except Exception:
+        # No spec row covers a drawing defect; it is a defect in our own work on a
+        # name that did parse, which section 7 reports as "Could not explain this name."
+        logger.exception("explain: drawing failed for %r", smiles)
+        return _response(smiles, name, total_atoms=mol.GetNumAtoms(),
+                         error=_FAILURE_MESSAGES["mismatch"])
     total_atoms = mol.GetNumAtoms()
     named = explain_name(name)
     if named["error"] is not None:

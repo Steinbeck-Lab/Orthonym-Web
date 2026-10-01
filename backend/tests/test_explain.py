@@ -104,3 +104,48 @@ def test_align_spans_maps_a_replaced_block_to_the_whole_original():
 
 def test_align_spans_drops_a_span_that_maps_to_nothing():
     assert _align_spans([{"span": [0, 3]}], "xyzabc", "abc")[0]["span"] is None
+
+
+# -- Phase C fix round 1 (M6): no exception becomes a 500 ----------------------------------
+import pytest
+from celery.exceptions import SoftTimeLimitExceeded
+
+NOT_NAMED = "Orthonym could not confidently name this molecule, so there is nothing to explain."
+
+
+class _Namer:
+    """A namer whose name_with_tree misbehaves."""
+    def __init__(self, exc):
+        self.exc = exc
+
+    def name_with_tree(self, smiles):
+        raise self.exc
+
+
+def test_an_engine_that_raises_gets_the_engine_failure_message_not_a_500():
+    body = explain_molecule("CCO", namer=_Namer(RuntimeError("engine defect")))
+    assert body["error"] == NOT_NAMED                      # section 7: no name from the engine
+    assert body["name"] is None and body["nodes"] == [] and body["svg"] is None and body["total_atoms"] == 3
+
+
+def test_a_drawing_defect_is_one_message_not_a_crash(monkeypatch):
+    def boom(mol):
+        raise RuntimeError("drawer defect")
+    monkeypatch.setattr(explain_module, "_inline_svg", boom)
+    body = explain_molecule("CCO", namer=get_primary_namer())
+    assert body["error"] == "Could not explain this name." and body["name"] == "ethanol" and body["nodes"] == []
+    body = explain_name("ethanol")
+    assert body["error"] == "Could not explain this name." and body["nodes"] == [] and body["svg"] is None
+
+
+def test_a_soft_time_limit_is_never_swallowed_by_the_new_guards(monkeypatch):
+    with pytest.raises(SoftTimeLimitExceeded):
+        explain_molecule("CCO", namer=_Namer(SoftTimeLimitExceeded()))
+
+    def slow(mol):
+        raise SoftTimeLimitExceeded()
+    monkeypatch.setattr(explain_module, "_inline_svg", slow)
+    with pytest.raises(SoftTimeLimitExceeded):
+        explain_molecule("CCO", namer=get_primary_namer())
+    with pytest.raises(SoftTimeLimitExceeded):
+        explain_name("ethanol")
