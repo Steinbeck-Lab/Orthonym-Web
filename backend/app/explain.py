@@ -189,7 +189,8 @@ def _first_faithful(mol, opsin_mol, matches):
 def _remap_nodes(mol, opsin_mol, nodes, name: str = "") -> list:
     """Remaps `nodes` (atom indices of `opsin_mol`, OPSIN's re-parse of the
     name) onto the user's `mol`. A molecule the name does not describe in
-    full, or one with too many matches to enumerate, maps no node. Every node
+    full maps no node, nor does one with too many matches to enumerate and none
+    of them faithful. Every node
     goes through the SAME faithful match, so equivalent atoms (ibuprofen's two
     end methyls) are shared out between the parts as on the name path; with
     no faithful match the all-matches-agree rule decides node by node."""
@@ -205,13 +206,14 @@ def _remap_nodes(mol, opsin_mol, nodes, name: str = "") -> list:
     else:
         matches = mol.GetSubstructMatches(opsin_mol, uniquify=False,
                                           maxMatches=_MAX_SUBSTRUCT_MATCHES)
-        if len(matches) >= _MAX_SUBSTRUCT_MATCHES:
+        faithful = _first_faithful(mol, opsin_mol, matches)
+        if faithful is not None:
+            # A truncated list still holds a true symmetry, so it is safe to use
+            # even when the cap was hit; only the agreement rule needs every match.
+            matches = (faithful,)
+        elif len(matches) >= _MAX_SUBSTRUCT_MATCHES:
             logger.warning("explain: match cap hit for %r -- inconclusive", name)
             matches = ()
-        else:
-            faithful = _first_faithful(mol, opsin_mol, matches)
-            if faithful is not None:
-                matches = (faithful,)
     return [_remap_node(node, matches) for node in nodes]
 
 

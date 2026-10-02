@@ -171,11 +171,19 @@ def test_remap_maps_nothing_when_the_atom_counts_differ():
     assert out[0]["atoms_unmapped"] and out[0]["owns"] == []
 
 
-def test_remap_maps_nothing_when_the_match_cap_is_hit(monkeypatch):
+def test_remap_uses_a_faithful_match_even_when_the_match_cap_is_hit(monkeypatch):
     monkeypatch.setattr(explain_module, "_MAX_SUBSTRUCT_MATCHES", 2)
-    mol = Chem.MolFromSmiles("CC(C)(C)C")
-    out = explain_module._remap_nodes(mol, mol, [_node("methyl", [0])])
-    assert out[0]["atoms_unmapped"]
+    mol = Chem.MolFromSmiles("CC(C)(C)C")        # 24 matches, all faithful
+    out = explain_module._remap_nodes(mol, mol, [_node("methyl", [0]), _node("rest", [1, 2, 3, 4])])
+    assert not [n for n in out if n["atoms_unmapped"]]
+    assert sorted(a for n in out for a in n["owns"]) == [0, 1, 2, 3, 4]
+
+
+def test_remap_maps_nothing_when_the_cap_is_hit_and_no_match_is_faithful(monkeypatch):
+    monkeypatch.setattr(explain_module, "_MAX_SUBSTRUCT_MATCHES", 2)
+    opsin, user = Chem.MolFromSmiles("CC(C)c1c[nH]cn1"), Chem.MolFromSmiles("CC(C)c1cnc[nH]1")
+    out = explain_module._remap_nodes(user, opsin, [_node("ring", [3, 4, 5, 6, 7])])
+    assert out[0]["atoms_unmapped"] and out[0]["owns"] == []
 
 
 @pytest.mark.parametrize("smiles", ["CC(C)(C)c1ccc(O)cc1", "CC(C)Oc1ccccc1"])
