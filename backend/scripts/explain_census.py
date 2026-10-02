@@ -71,7 +71,8 @@ Outcomes, measured on the trace and the node list (a name may carry several):
                       (explain_molecule: the molecule typed in another atom order, here
                       OPSIN's own SMILES with its atoms shuffled by a fixed seed) leaves
                       unmapped, or maps onto atoms of another element or hydrogen count;
-                      see smiles_path_lost
+                      see smiles_path_lost (a stereo mark must also light atoms of its own CIP / E-Z label,
+                      and nodes must overlap as on the name path)
 Every outcome except CLEAN and UNREADABLE fails the run (exit 1).
 """
 
@@ -943,17 +944,23 @@ def _atom_kinds(mol, indices) -> list:
     return sorted((mol.GetAtomWithIdx(i).GetSymbol(), mol.GetAtomWithIdx(i).GetTotalNumHs()) for i in indices)
 
 
-def smiles_path_lost(trace, nodes) -> list:
-    """Labels of the nodes the SMILES path loses. For each node that pins atoms on the name
-    path (owns or lights), explain_molecule's remap of the molecule typed in another atom
-    order must still pin as many atoms, and they must be atoms of the same elements with the
-    same hydrogen counts (equivalent by symmetry, never another kind of atom). The molecule
-    is built and every check made here, from the fixed seed of the name's text."""
-    mol, user = _typed_in_another_order(trace.smiles, zlib.crc32(trace.text.encode()))
-    if user is None:
-        return []
+def _stereo_labels(mol, indices) -> list:
+    """The CIP label of each atom (R / S, or E / Z of a stereo double bond it is in; "" for none)."""
     out = []
-    for before, after in zip(nodes, _remap_nodes(user, mol, nodes, trace.text)):
+    for i in indices:
+        atom = mol.GetAtomWithIdx(i)
+        label = atom.GetProp("_CIPCode") if atom.HasProp("_CIPCode") else ""
+        for bond in atom.GetBonds():
+            if not label and str(bond.GetStereo()) in ("STEREOE", "STEREOZ"):
+                label = str(bond.GetStereo())[-1]
+        out.append(label)
+    return sorted(out)
+
+
+def _lost_on_one_order(mol, user, nodes, text) -> list:
+    out = []
+    after_nodes = _remap_nodes(user, mol, nodes, text)
+    for before, after in zip(nodes, after_nodes):
         for key in ("owns", "lights"):
             if not before[key]:
                 continue
@@ -961,7 +968,42 @@ def smiles_path_lost(trace, nodes) -> list:
                     or _atom_kinds(user, after[key]) != _atom_kinds(mol, before[key]):
                 out.append(before["label"])
                 break
+        else:
+            if before["kind"] == "stereo" and before["lights"] \
+                    and _stereo_labels(user, after["lights"]) != _stereo_labels(mol, before["lights"]):
+                out.append(before["label"])
+    # nodes that overlap on the name path must overlap by as much on the SMILES path: a node
+    # mapped through another match than its neighbour overlaps wrongly
+    atoms = [set(n["owns"]) | set(n["lights"]) for n in nodes]
+    mapped = [set(n["owns"]) | set(n["lights"]) for n in after_nodes]
+    for i in range(len(nodes)):
+        for j in range(i + 1, len(nodes)):
+            if len(atoms[i] & atoms[j]) != len(mapped[i] & mapped[j]):
+                out.extend((nodes[i]["label"], nodes[j]["label"]))
     return out
+
+
+SHUFFLES = 4
+
+
+def smiles_path_lost(trace, nodes) -> list:
+    """Labels of the nodes the SMILES path loses, over SHUFFLES typed atom orders of OPSIN's
+    molecule (fixed seeds from the name's text). A node that pins atoms on the name path
+    (owns or lights) must still pin as many on the remap onto the typed molecule, of the same
+    elements and hydrogen counts (equivalent by symmetry, never another kind of atom); a stereo
+    mark must light atoms with the same CIP / E-Z labels on both molecules (RDKit's own labels
+    on each); and every two nodes must overlap by the same number of atoms on both. All of it
+    is measured here, not by explain.py; only the remap under test is imported."""
+    out = []
+    seed = zlib.crc32(trace.text.encode())
+    for k in range(SHUFFLES):
+        mol, user = _typed_in_another_order(trace.smiles, seed + k)
+        if user is None:
+            continue
+        for m in (mol, user):
+            Chem.AssignStereochemistry(m, cleanIt=True, force=True)
+        out.extend(_lost_on_one_order(mol, user, nodes, trace.text))
+    return list(dict.fromkeys(out))
 
 
 def classify(trace, nodes, owners) -> list[str]:

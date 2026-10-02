@@ -3,6 +3,8 @@ with, so it gets its own tests (synthetic traces, no JVM)."""
 
 from app.opsin_trace import Trace, TraceAtom, TracePart, WrittenToken
 from app.token_owner import Owner
+from rdkit import Chem
+
 from scripts import explain_census as census
 from scripts.explain_census import classify, smiles_path_lost
 
@@ -185,3 +187,37 @@ def test_a_part_the_smiles_path_puts_on_another_element_is_reported(monkeypatch)
         return [{**n, "owns": [carbon] * len(n["owns"]), "atoms_unmapped": False} for n in nodes]
     monkeypatch.setattr(census, "_remap_nodes", wrong_atom)
     assert smiles_path_lost(t, [_n("suffix", [0, 2], [2], label="ol")]) == ["ol"]
+
+
+TARTARIC = _words("tartaric", "O[C@@H](C(=O)O)[C@@H](C(=O)O)O", [TraceAtom(i, i + 1, "C", ()) for i in range(9)], [])
+
+
+def _twin_swap(mol, opsin_mol, nodes, name=""):
+    # every node through the identity, except that the two centres (atoms 1 and 5) are swapped
+    swap = {1: 5, 5: 1}
+    return [{**n, "owns": [swap.get(a, a) for a in n["owns"]], "lights": [swap.get(a, a) for a in n["lights"]],
+             "atoms_unmapped": False} for n in nodes]
+
+
+def test_a_stereo_mark_mapped_onto_the_mirror_twin_is_reported(monkeypatch):
+    monkeypatch.setattr(census, "SHUFFLES", 1)
+    nodes = [_n("stereo", [0, 2], label="2R", lights=[1])]
+    monkeypatch.setattr(census, "_typed_in_another_order",
+                        lambda smiles, seed: (Chem.MolFromSmiles(smiles), Chem.MolFromSmiles(smiles)))
+    monkeypatch.setattr(census, "_remap_nodes", _twin_swap)
+    assert smiles_path_lost(TARTARIC, nodes) == ["2R"]
+
+
+def test_nodes_mapped_through_different_matches_are_reported_by_their_overlap(monkeypatch):
+    monkeypatch.setattr(census, "SHUFFLES", 1)
+    monkeypatch.setattr(census, "_typed_in_another_order",
+                        lambda smiles, seed: (Chem.MolFromSmiles(smiles), Chem.MolFromSmiles(smiles)))
+
+    def split(mol, opsin_mol, nodes, name=""):     # the second node goes through the swapped match
+        swap = {2: 3, 3: 2}
+        return [nodes[0] | {"atoms_unmapped": False},
+                {**nodes[1], "owns": [swap.get(a, a) for a in nodes[1]["owns"]], "atoms_unmapped": False}]
+    monkeypatch.setattr(census, "_remap_nodes", split)
+    t = _words("ab", "CCCC", [TraceAtom(i, i + 1, "C", ()) for i in range(4)], [])
+    nodes = [_n("substituent", [0, 1], [0, 2]), _n("parent", [1, 2], [1, 3])]
+    assert set(smiles_path_lost(t, nodes)) == {"ab"}
