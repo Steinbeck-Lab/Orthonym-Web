@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.4.1](https://github.com/Steinbeck-Lab/Orthonym-Web/compare/v0.4.0...v0.4.1) (2026-10-02)
+
+
+### Bug Fixes
+
+* **explain-ui:** the nothing-lights note no longer says the part names no atom ([32ea091](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/32ea091af0e1f930f982eca8911446a11ee25baf))
+* **explain:** a chain line is measured; a bracket keeps its own set word; a racemate mark is 'part of' on either side ([ea56cf4](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/ea56cf49a7ab5fed1e8650804f0620edb9609629))
+* **explain:** a group's line names the bare group and counts the hydrogens its atoms carry ([d22fd48](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/d22fd4857b8b45b5327b6f196579b7f079c0643e))
+* **explain:** a parent line claims a benzene ring, or the only core, only when it is one ([69a077a](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/69a077a6c9174b2a2b537773de0c4c5e41261a77))
+* **explain:** E, Z and pseudoasymmetric marks stay absolute in a relative set; a charged atom lost its hydrogen to the ending ([aae211f](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/aae211f2bf190d0bce1801942a7807b2a93e235c))
+* **explain:** every hover line is true of the molecule on screen ([170da8f](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/170da8f33fe74592a64260a099e246c2c7d7fd2b))
+* **explain:** hover lines for sets written beside their marks, lone anomeric atoms, thio sugars and hydrates ([6423c12](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/6423c12139a3d52d7ddfdaaff6aad67a79821e63))
+* **explain:** hydrogen-locant and anomer lines say what the lit atom really holds ([a10f110](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/a10f11005b4eabb257de0b4aa88179a1e21e148e))
+* **explain:** spiro, isotope and stereo lines say what each kind of mark means ([eec27e6](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/eec27e61530ef86f0700801b01e065beafb23780))
+* **explain:** the census reads every claim in a line; acid-addition parts and multiplied hydrates are not cores; a set word covers the whole name ([7011c3c](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/7011c3c972bfa9b406b02e7c31c33d7d5918f10f))
+
+
+### Refactoring
+
+* **census:** name the set-word patterns and reuse the token bracket utilities ([2a73924](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/2a73924199832cbfa4a9be8e7e8419d6af3b71e2))
+* **census:** one count-word table for the chain and parent checks ([c0a9d39](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/c0a9d391e5fc43c789d9db707bfb9d4ccb226f07))
+* **explain:** collect a name's stereo set words once and reuse them per mark ([ffc0118](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/ffc01183fc758c3f71bf6c5891cc47a654d61da1))
+* **explain:** create each parent node through one helper and restate its line from the node ([e1294cb](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/e1294cb3428fa86b9b657666939dc736b877beb6))
+* **explain:** one anomer line helper for the two sugar sites ([3392b22](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/3392b227de6a5993b86c12d31e2b1be12fdd691b))
+* **explain:** one hydrogen-count table with structured fields ([f38ddd1](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/f38ddd11b0f02aaa3ea39b5fb15bafca5e149849))
+* **explain:** share the atom degree, plain-atom and anomeric-neighbour helpers ([5a84f9d](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/5a84f9d370bdfcf5cc037e8bcaf8839683cef6f4))
+* **explain:** tidy the stereo, part, modifier and spiro line builders ([08a48f1](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/08a48f18ab579955ca982561b9d6ff0e2805998d))
+
+
+### Documentation
+
+* CLAUDE.md records the hover-line check and the 698-name corpus ([890b677](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/890b677c3e50e6dfd6876d496720407dc221fede))
+
 ## [0.4.0](https://github.com/Steinbeck-Lab/Orthonym-Web/compare/v0.3.0...v0.4.0) (2026-10-01)
 
 
