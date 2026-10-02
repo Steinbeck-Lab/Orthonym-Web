@@ -60,6 +60,13 @@ Outcomes, measured on the trace and the node list (a name may carry several):
                       own part, not a copy OPSIN placed at that locant, and not
                       the atom carrying that locant that the part's substituent
                       chain is bonded to (app.explain_gate.foreign_lights)
+  HOVER_LINE_FALSE    a hover line that says something false about the molecule on screen:
+                      a group's hydrogens ("methyl" in hydroxymethyl), a hydro / indicated
+                      hydrogen on an atom with none, a spiro descriptor, an anomer's group,
+                      a stereo mark's meaning, a parent that is not the only core or not
+                      the benzene ring its prose names, an isotope label's positions; or a
+                      line using such a claim's words in a shape the check does not know
+                      (see false_hover_lines)
 Every outcome except CLEAN and UNREADABLE fails the run (exit 1).
 """
 
@@ -68,6 +75,7 @@ import collections
 import os
 import re
 import sys
+from typing import Optional
 
 from rdkit import Chem
 
@@ -78,7 +86,7 @@ from app.label_rules import (
     BARE_DESCRIPTOR, BUILDS_NAME, LOCANT_KINDS, STEREO_MARK, fusion_component_elements, locant_items,
 )
 from app.opsin_trace import Trace
-from app.token_owner import assign_owners, bracket_end
+from app.token_owner import assign_owners, bracket_end, innermost_bracket, written_brackets
 
 PART_KINDS = ("substituent", "parent", "suffix")
 PASSING = {"CLEAN", "UNREADABLE"}
@@ -383,6 +391,517 @@ def false_line_claims(trace, nodes) -> list:
     return out
 
 
+# ---- HOVER_LINE_FALSE ----------------------------------------------------------------
+# What each hover sentence says about the molecule on screen, checked against that
+# molecule. Written here, not shared with app.glossary: the claims are read from the
+# sentence itself (a check of what a sentence says must read the sentence) and every
+# fact is measured with RDKit by this module's own rules, so a wrong rule in the
+# glossary cannot also hide here. A line that uses the vocabulary of a claim this
+# check knows ("hydrogen", "CH3", "on its own", "anomer", "mirror-image", ...) in a
+# shape it does not recognise is itself reported: a reworded table line cannot slip
+# past unchecked. A line with no such vocabulary claims nothing checkable and passes.
+
+_NOT_CORES = re.compile(r"^(?:(?:mono|di|tri|tetra|penta|hexa|hepta|octa|nona|deca|hemi|sesqui)?hydrate"
+                        r"|hydrochloride|hydrobromide|hydroiodide|hydrofluoride)$", re.IGNORECASE)
+_QUOTED = re.compile(r'"[^"]*"')
+_VOCAB = re.compile(r"hydrogen|\bCH3\b|\bNH2\b|on its own|anomer|mirror-image|shared|share one|"
+                    r"positions it names|position number|built around|cores this name|benzene ring|-carbon chain|"
+                    r"stereocentre|double bond|optical rotation|Fischer|configuration prefix")
+# The bare group each checked label names: (element, which atoms, hydrogens per atom in
+# one copy). "end": a carbon not bonded to the group's own oxygen (acetyl's CH3 end).
+_BARE_GROUP = {
+    "methyl": ("C", "all", (3,)), "ethyl": ("C", "all", (3, 2)), "methoxy": ("C", "all", (3,)),
+    "ethoxy": ("C", "all", (3, 2)), "acetyl": ("C", "end", (3,)), "acetyloxy": ("C", "end", (3,)),
+    "amino": ("N", "all", (2,)), "hydroxy": ("O", "all", (1,)),
+}
+_AMINE_ENDING = re.compile(r"^(?:di|tri|tetra)?amine$")
+_OLD_FORMULA = re.compile(r"(?:\bCH3\b|-NH2|-OH|-O-CH3|-O-CH2CH3|CH3-CH2-|CH3-C\(=O\)-|-O-C\(=O\)-CH3) group"
+                          r"|three hydrogens")
+_CLAUSE = re.compile(r"Here (?:its|the|each of its|each of the) (?:end )?(carbon|nitrogen|oxygen)s? carr(?:y|ies) "
+                     r"(no hydrogen|1 hydrogen|\d+ hydrogens|[\d, ]+ and \d+ hydrogens)(; other groups take the rest)?\.")
+
+
+# The vocabulary-bearing phrases a true line may contain, written out here (not imported). A line
+# is checked twice: its recognised claim is measured, then these phrases are cut out and any claim
+# vocabulary still left over is a claim nothing checked.
+_PHRASES = [re.compile(p) for p in (
+    r"\((?:[^()]|\([^()]*\))*?on its own\)",                                  # a bare group's formula
+    _CLAUSE.pattern,                                                              # the hydrogens a group's atoms carry
+    r"an =N-NH(?:-C\(=O\)-NH2|2) group in place of the carbonyl oxygen",
+    r"Position \S+ — the \S+ atom carries a hydrogen here\.",
+    r"Position \S+ — the name puts a hydrogen (?:at this position|on the \S+ atom)"
+    r"(?:; here (?:a group or bond named elsewhere takes its place|that atom carries none))?\.",
+    r"Position \S+ — a hydrogen is fixed here\.",
+    r"records that hydrogens were added here, which fixes where the double bonds go",
+    r"pins which ring atom carries a hydrogen",
+    r"is the core skeleton the rest of the name is built around",
+    r"It is the core the rest of the name is built around",
+    r"one of the \w+ cores this name is built from",
+    r"two fused benzene rings", r"a benzene ring fused to", r"a benzene ring attached by one of its carbons",
+    r"is a benzene ring\.", r"is a benzene ring attached", r"a benzene ring\b(?= *$)",
+    r"an? \w+-carbon chain",
+    r"names two rings that share one atom", r"names rings that share single atoms",
+    r"names rings joined at single shared atoms", r"marks one atom shared between two rings",
+    r"fixes the three-dimensional arrangement at the positions it names",
+    r"fixes the three-dimensional arrangement at one stereocentre; the mark itself carries no position number",
+    r"the arrangement at (?:the positions? it names|one stereocentre) only as a relative arrangement, not an "
+    r"absolute one; it does not say which of the two mirror-image forms is meant",
+    r"says the marks of its set give only a relative arrangement; it does not say which of the two "
+    r"mirror-image forms is meant",
+    r"is part of a racemate mark \(rac\): the name means an equal mix of this form and its mirror image",
+    r"marks a racemate: an equal mix of the two mirror-image forms",
+    r"gives the sign of optical rotation: this form turns polarised light to the (?:left|right)\. It does not by "
+    r"itself say how the atoms are arranged",
+    r"is a Fischer label: it puts the part named after it in the [DL] series, by comparing one of its "
+    r"stereocentres with [DL]-glyceraldehyde",
+    r"says two groups lie on (?:the same side|opposite sides) of the ring or double bond they are on",
+    r"fixes the arrangement at one double bond: its higher-ranked groups lie on (?:the same side|opposite sides)"
+    r"\. The mark itself carries no position number",
+    r"is a sugar configuration prefix: the stereocentres? it covers (?:is|are) arranged as in \w+",
+    r"is a stereo descriptor: part of how the name gives the three-dimensional arrangement",
+    r"names the anomer: which way the group on the ring carbon next to the ring [^,]+? points, relative to the "
+    r"sugar's reference stereocentre",
+    r"is an isotope label: it says which isotope sits at the positions it names",
+    r"is an isotope label: it says which isotope the part named after it carries in place of the usual one; "
+    r"the label gives no position number",
+    r"its plain numbers count the atoms between them, in order along the system, and a raised number is a "
+    r"position, not a count",
+    r"hydrochloric acid \(HCl\)|hydrobromic acid \(HBr\)|hydroiodic acid \(HI\)|hydrofluoric acid \(HF\)",
+)]
+
+
+def _unchecked_claim(line: str) -> bool:
+    """True when claim vocabulary is left in `line` after the quoted text and every phrase this
+    module knows how to read has been cut out."""
+    rest = _QUOTED.sub("", line)
+    for phrase in _PHRASES:
+        rest = phrase.sub("", rest)
+    return bool(_VOCAB.search(rest))
+
+
+def _h(mol, i: int) -> int:
+    return mol.GetAtomWithIdx(i).GetTotalNumHs(includeNeighbors=True)
+
+
+def _heavy_degree(mol, i: int) -> int:
+    return sum(1 for n in mol.GetAtomWithIdx(i).GetNeighbors() if n.GetAtomicNum() > 1)
+
+
+def _plain(atom) -> bool:
+    """An atom with no radical and no charge."""
+    return atom.GetNumRadicalElectrons() == 0 and atom.GetFormalCharge() == 0
+
+
+def _anomeric_neighbours(mol, i: int):
+    """(ring, outside): the heavy neighbours of atom `i` joined to it by a ring bond / by a bond
+    outside every ring, each in the atom's neighbour order."""
+    ring, outside = [], []
+    for n in mol.GetAtomWithIdx(i).GetNeighbors():
+        if n.GetAtomicNum() > 1:
+            (ring if mol.GetBondBetweenAtoms(i, n.GetIdx()).IsInRing() else outside).append(n)
+    return ring, outside
+
+
+def _said_counts(text: str) -> list[int]:
+    if text == "no hydrogen":
+        return [0]
+    return [int(x) for x in re.findall(r"\d+", text)]
+
+
+_COUNT_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
+                "nine": 9, "ten": 10}
+
+
+def _chain_problem(mol, node) -> Optional[str]:
+    """"a four-carbon chain" is a claim about the owned carbons: in each copy the longest run of
+    bonded, non-ring carbons must be that long (tert-butyl holds four carbons, its longest run is
+    three)."""
+    m = re.search(r"an? (\w+)-carbon chain", node["line"])
+    want = _COUNT_WORDS.get(m.group(1)) if m else None
+    if want is None:
+        return "a chain of a length this check cannot read"
+    carbons = {a for a in node["owns"] if mol.GetAtomWithIdx(a).GetSymbol() == "C"
+               and not mol.GetAtomWithIdx(a).IsInRing()}
+    if not carbons:
+        return "a carbon chain, no acyclic carbon is owned"
+    adj = {a: [n.GetIdx() for n in mol.GetAtomWithIdx(a).GetNeighbors() if n.GetIdx() in carbons] for a in carbons}
+
+    def longest(a, seen):
+        return 1 + max((longest(b, seen | {b}) for b in adj[a] if b not in seen), default=0)
+
+    pieces, left = [], set(carbons)
+    while left:
+        stack, comp = [next(iter(left))], set()
+        while stack:
+            a = stack.pop()
+            if a not in comp:
+                comp.add(a)
+                stack += adj[a]
+        left -= comp
+        pieces.append(max(longest(a, {a}) for a in comp))
+    bad = [p for p in pieces if p != want]
+    return f"a {want}-carbon chain, the longest run is {bad[0]}" if bad else None
+
+
+def _group_line_problem(mol, node, element, which, bare) -> Optional[str]:
+    """A table line for a group with a bare formula: what it says the atoms carry must
+    be what they carry. The bare formula alone ("an -NH2 group", "three hydrogens") is a
+    claim about these atoms; "(-NH2 on its own)" promises a measured clause whenever the
+    atoms differ from the bare group."""
+    atoms = [a for a in sorted(set(node["owns"])) if mol.GetAtomWithIdx(a).GetSymbol() == element]
+    if which == "end":       # not the carbon bonded to the group's own oxygen(s)
+        own = set(node["owns"])
+        atoms = [a for a in atoms if not any(n.GetSymbol() == "O" and n.GetIdx() in own
+                                             for n in mol.GetAtomWithIdx(a).GetNeighbors())]
+    actual = sorted((_h(mol, a) for a in atoms), reverse=True)
+    per = len(actual) if len(bare) == 1 else max(node.get("copies") or 1, 1)
+    expected = sorted(bare * per, reverse=True)
+    body = _QUOTED.sub("", node["line"])
+    said = _CLAUSE.search(body)
+    if _OLD_FORMULA.search(body) and actual != expected:
+        return f"names the bare group, atoms carry {actual}"
+    if "free hydrogens" in body and not all(x >= 1 for x in actual):
+        return f"free hydrogens, atoms carry {actual}"
+    if said:
+        counts = _said_counts(said.group(2))
+        each = "each of" in said.group(0)
+        if (each and any(x != counts[0] for x in actual)) or (not each and counts != actual):
+            return f"says {said.group(2)}, atoms carry {actual}"
+        if said.group(3):
+            plain = all(_plain(mol.GetAtomWithIdx(a)) for a in atoms)
+            if not (plain and len(actual) == len(expected) and all(x <= e for x, e in zip(actual, expected))):
+                return "other groups take the rest, but an atom carries more or is charged"
+    elif "on its own" in body:
+        if actual != expected:
+            return f"bare group only, atoms carry {actual}"
+    elif not _OLD_FORMULA.search(body) and "free hydrogens" not in body and _VOCAB.search(body):
+        return "a claim this check does not recognise"
+    return None
+
+
+_H_LOCANT = [
+    (re.compile(r"^Position (\S+) — the ([A-Z][a-z]?)(\S+) atom carries a hydrogen here\.$"), "has"),
+    (re.compile(r"^Position (\S+) — the name puts a hydrogen on the ([A-Z][a-z]?)(\S+) atom; here a group or bond "
+                r"named elsewhere takes its place\.$"), "taken"),
+    (re.compile(r"^Position (\S+) — the name puts a hydrogen on the ([A-Z][a-z]?)(\S+) atom; here that atom "
+                r"carries none\.$"), "none"),
+    (re.compile(r"^Position (\S+) — the name puts a hydrogen on the ([A-Z][a-z]?)(\S+) atom\.$"), "said"),
+]
+
+
+def _h_locant_problem(mol, node) -> tuple[bool, Optional[str]]:
+    """(recognised, problem) for a hydro / indicated / added hydrogen locant line."""
+    line = node["line"]
+    if re.match(r"^Position \S+ — the name puts a hydrogen at this position\.$", line):
+        return True, None
+    if re.match(r"^Position \S+ — a hydrogen is fixed here\.$", line):
+        lit = node["lights"]
+        return True, (None if lit and all(_h(mol, a) >= 1 for a in lit) else "a hydrogen is fixed here, none is")
+    for shape, says in _H_LOCANT:
+        m = shape.match(line)
+        if not m:
+            continue
+        lit = node["lights"]
+        if len(lit) != 1 or mol.GetAtomWithIdx(lit[0]).GetSymbol() != m.group(2):
+            return True, f"names the {m.group(2)} atom, lights {len(lit)}"
+        a = lit[0]
+        bond = any(b.GetBondType() in (Chem.BondType.DOUBLE, Chem.BondType.TRIPLE)
+                   for b in mol.GetAtomWithIdx(a).GetBonds())
+        if says == "has" and _h(mol, a) < 1:
+            return True, "carries a hydrogen here, it carries none"
+        atom = mol.GetAtomWithIdx(a)
+        if says == "taken" and (not _plain(atom) or _h(mol, a) != 0 or not (_heavy_degree(mol, a) >= 3 or bond)):
+            return True, "something takes the hydrogen's place, nothing does"
+        if says == "none" and _h(mol, a) != 0:
+            return True, "carries none, it carries one"
+        return True, None
+    return False, None
+
+
+def _spiro_problem(mol, node) -> tuple[bool, Optional[str]]:
+    m = re.fullmatch(r"spiro\[([^\]]*)\]", node["label"])
+    if not m:
+        return False, None
+    numbers = m.group(1).split(".")
+    line = node["line"]
+    if "marks one atom shared between two rings" in line:
+        return True, (None if len(node["lights"]) == 1 and len(numbers) == 2 else
+                      f"one shared atom, lights {len(node['lights'])} ({len(numbers)} numbers)")
+    two = re.search(r"names two rings that share one atom; (\d+) and (\d+) count the other atoms in each ring", line)
+    if two:
+        if len(numbers) != 2 or [two.group(1), two.group(2)] != numbers:
+            return True, "monospiro line on another descriptor"
+        lit = set(node["lights"])
+        a, b = int(numbers[0]) + 1, int(numbers[1]) + 1
+        rings = [set(r) for r in mol.GetRingInfo().AtomRings() if set(r) <= lit]
+        if not any(len(r) == a and len(s) == b and len(r & s) == 1 for r in rings for s in rings if r is not s):
+            return True, "no two lit rings of those sizes share one atom"
+        return True, None
+    if "names rings joined at single shared atoms" in line:
+        if len(numbers) <= 2:
+            return True, "polyspiro line on a two-number descriptor"
+        if ("a raised number is a position" in line) != ("^" in node["label"]):
+            return True, "raised numbers are positions, not counts, and only when the descriptor has them"
+        return True, None
+    if "names rings that share single atoms" in line:
+        return True, None
+    return False, None
+
+
+def _ring_hetero_problem(mol, nodes, node) -> Optional[str]:
+    """The base anomer line says which atom closes the sugar's ring ("the ring oxygen",
+    "the ring sulfur"); the ring is read from the lit carbon, else from the rings inside the
+    part that owns the mark."""
+    line = node["line"]
+    said = {"oxygen": "O", "sulfur": "S", "nitrogen": "N", "selenium": "Se"}
+    m = re.search(r"next to the ring (oxygen|sulfur|nitrogen|selenium|(\w+) atom) points", line)
+    if not m:
+        return None
+    want = said.get(m.group(1), m.group(2))
+    lit = node["lights"]
+    if len(lit) == 1:
+        ring = {n.GetSymbol() for n in _anomeric_neighbours(mol, lit[0])[0] if n.GetSymbol() != "C"}
+    else:
+        owner = next((n for n in nodes if n["id"] == node["parent"]), None)
+        pool = set(owner["owns"]) if owner else set(range(mol.GetNumAtoms()))
+        ring = set()
+        for r in mol.GetRingInfo().AtomRings():
+            if len(r) in (5, 6) and set(r) <= pool:
+                odd = [mol.GetAtomWithIdx(i).GetSymbol() for i in r if mol.GetAtomWithIdx(i).GetSymbol() != "C"]
+                if len(odd) == 1:
+                    ring.add(odd[0])
+    return None if want in ring else f"a ring {want} next to the anomeric carbon, the ring has {sorted(ring) or 'none'}"
+
+
+def _anomer_problem(mol, node, nodes=()) -> tuple[bool, Optional[str]]:
+    line = node["line"]
+    if "names the anomer" not in line:
+        return False, None
+    ring_why = _ring_hetero_problem(mol, nodes, node)
+    if ring_why:
+        return True, ring_why
+    lit = node["lights"]
+    outside = []
+    if len(lit) == 1:
+        outside = _anomeric_neighbours(mol, lit[0])[1]
+    o = [n for n in outside if n.GetSymbol() == "O"]
+    hydroxyl = len(o) == 1 and _h(mol, o[0].GetIdx()) >= 1 and _heavy_degree(mol, o[0].GetIdx()) == 1
+    if "the OH on the ring carbon" in line:
+        return True, None if hydroxyl else "an OH at the anomeric carbon, there is none"
+    if "Here that group is an OH." in line:
+        return True, None if hydroxyl else "an OH, there is none"
+    joins = re.search(r"Here that group is the (\w+) that joins the sugar to the rest of the name\.", line)
+    if joins:
+        if joins.group(1) == "O":
+            ok = len(o) == 1 and _heavy_degree(mol, o[0].GetIdx()) >= 2
+        else:
+            ok = (not o and len(outside) == 1 and outside[0].GetSymbol() == joins.group(1)
+                  and _heavy_degree(mol, outside[0].GetIdx()) >= 2)
+        return True, None if ok else f"joined through {joins.group(1)}, it is not"
+    lone = re.search(r"Here that group is an? (\w+) atom\.", line)
+    if lone:
+        ok = (not o and len(outside) == 1 and outside[0].GetSymbol() == lone.group(1)
+              and _heavy_degree(mol, outside[0].GetIdx()) == 1)
+        return True, None if ok else f"a lone {lone.group(1)} atom, it is not"
+    if "Here" in line:
+        return False, None
+    return True, None
+
+
+_STEREO_LOC = r"(?:\d+[a-z]?'*|[A-Z][a-z]?'*)"
+_LOCATED_MARK = re.compile(rf"^{_STEREO_LOC}(?:[RSrs]|[EZ]|alpha|beta)$")
+_SUGAR_PREFIXES = {"glycero", "erythro", "threo", "arabino", "lyxo", "ribo", "xylo", "allo", "altro", "galacto",
+                   "gluco", "gulo", "ido", "manno", "talo"}
+
+
+_SET_PREFIX = re.compile(r"^\s*\(?(rel|rac)\)?-?\(", re.IGNORECASE)    # "rel-(1R,2S)-"
+_SET_WORD = re.compile(r"\s*\(?(rel|rac)\)?-?\s*", re.IGNORECASE)         # a lone "rel-" / "(rac)-"
+
+
+def _stereo_set_word(trace, node) -> Optional[str]:
+    """"rel" or "rac" when the mark is governed by one. The word covers the whole compound
+    (IUPAC P-93.1.3), so any stereo token of the name that is a "rel-(...)" / "rac-(...)" or a
+    lone "rel-" / "(rac)-" counts; the nearest one wins (the mark's own token, a touching one,
+    then the nearest before, then after)."""
+    if not node["span"]:
+        return None
+    toks = [t for t in trace.tokens if t.kind == "stereoChemistry"]
+    here = next((t for t in toks if t.span[0] <= node["span"][0] < t.span[1]), None)
+    if here is None:
+        return None
+    piece = lambda t: trace.text[t.span[0]:t.span[1]]
+    own = _SET_PREFIX.match(piece(here))
+    if own:
+        return own.group(1).lower()
+    if _SET_WORD.fullmatch(piece(here)):
+        return None
+    brackets = written_brackets(trace.tokens)               # the name's own brackets, by token kind
+    at = innermost_bracket(brackets, here.span[0])
+    k = toks.index(here)
+    found = []
+    for j, other in enumerate(toks):
+        if other is here:
+            continue
+        w = _SET_PREFIX.match(piece(other)) or _SET_WORD.fullmatch(piece(other))
+        if not w:
+            continue
+        reach = innermost_bracket(brackets, other.span[0])
+        if reach is not None and not (at is not None and reach[0] <= at[0] and at[1] <= reach[1]):
+            continue                                        # a word inside a bracket keeps to it
+        touching = other.span[1] == here.span[0] or other.span[0] == here.span[1]
+        found.append((0 if touching else 1 if j < k else 2, abs(j - k), w.group(1).lower()))
+    return min(found)[2] if found else None
+
+
+def _marks_follow(trace, node) -> bool:
+    """Whether a stereo mark is written after `node` inside its own token ("rel-(1R,2S)-")."""
+    if not node["span"]:
+        return True
+    return bool(re.match(r"-?\s*\(", trace.text[node["span"][1]:]))
+
+
+def _stereo_problem(trace, node) -> tuple[bool, Optional[str]]:
+    """(recognised, problem) for a stereo mark's line. Each phrase below is a claim about
+    the mark; the claim must fit the kind of mark the label is, read here from the label
+    and the set it is written in."""
+    label, line = node["label"], node["line"]
+    word = _stereo_set_word(trace, node)
+    located = bool(_LOCATED_MARK.match(label))
+    bare = label in ("R", "S")
+    racemic = label in ("rac", "RS", "SR", "+-", "±", "DL") or bool(re.fullmatch(r"\d+[a-z]?'*(?:RS|SR)", label))
+    absolute_in_rel = word == "rel" and located and label[-1] not in "RS"      # E, Z, r, s, alpha, beta
+    relative = label == "rel" or label.endswith("*") or (word == "rel" and (located or bare) and not absolute_in_rel)
+    claims = [
+        ("fixes the three-dimensional arrangement at the positions it names",
+         located and not racemic and (word is None or absolute_in_rel)),
+        ("marks a racemate: an equal mix of the two mirror-image forms", racemic),
+        ("part of a racemate mark (rac)", word == "rac" and (located or bare)),
+        ("sign of optical rotation", label in ("+", "-")),
+        ("does not say which of the two mirror-image forms is meant", relative),
+        ("is a Fischer label", label in ("D", "L")),
+        ("in the D series", label == "D"),
+        ("in the L series", label == "L"),
+        ("lie on the same side of the ring or double bond", label == "cis"),
+        ("lie on opposite sides of the ring or double bond", label == "trans"),
+        ("fixes the three-dimensional arrangement at one stereocentre", bare and word is None),
+        ("the marks after it", label == "rel" and _marks_follow(trace, node)),
+        ("at one stereocentre", label in ("R", "S", "R*", "S*")),
+        ("at one double bond: its higher-ranked groups lie on opposite sides", label == "E"),
+        ("at one double bond: its higher-ranked groups lie on the same side", label == "Z"),
+        ("is a sugar configuration prefix", label.lower() in _SUGAR_PREFIXES),
+        ("the stereocentres it covers", label.lower() != "glycero"),
+        ("the stereocentre it covers is", label.lower() == "glycero"),
+        ("is a stereo descriptor: part of how the name gives", True),
+    ]
+    made = [(phrase, fits) for phrase, fits in claims if phrase in line]
+    for phrase, fits in made:
+        if not fits:
+            return True, f"{label}: '{phrase}' does not fit this mark"
+    return bool(made), None
+
+
+def _parent_problem(mol, nodes, node) -> tuple[bool, Optional[str]]:
+    line = node["line"]
+    cores = sum(1 for n in nodes if n["kind"] == "parent" and not _NOT_CORES.match(n["label"]))
+    copies = max(node.get("copies") or 1, 1)
+    seen, out = False, None
+    if "the rest of the name is built around" in line:
+        seen = True
+        if cores > 1:
+            out = f"the core of the rest, but the name has {cores} parent parts"
+    m = re.search(r"one of the (\w+) cores this name is built from", line)
+    if m:
+        seen = True
+        word = m.group(1)
+        said = -1 if word == "one" else _COUNT_WORDS.get(word, int(word) if word.isdigit() else -1)  # no "one of one"
+        if said != cores:
+            out = f"one of {m.group(1)} cores, the name has {cores}"
+    need = (2 if "two fused benzene rings" in line else
+            1 if ("benzene —" in line or "is a benzene ring." in line or "a benzene ring fused" in line) else 0)
+    if need:
+        seen = True
+        owned = set(node["owns"])
+        held = _benzene_rings(mol, owned)
+        if held < need * copies:
+            out = f"{need * copies} benzene ring(s), the part holds {held}"
+    return seen, out
+
+
+def _benzene_rings(mol, atoms) -> int:
+    owned = set(atoms)
+    return sum(1 for r in mol.GetRingInfo().AtomRings() if len(r) == 6 and set(r) <= owned
+               and all(mol.GetAtomWithIdx(a).GetIsAromatic() and mol.GetAtomWithIdx(a).GetSymbol() == "C" for a in r))
+
+
+def _phenyl_problem(mol, node) -> Optional[str]:
+    """"a benzene ring attached by one of its carbons": an aromatic six-carbon ring per
+    copy, bonded out of the part through a carbon."""
+    owned = set(node["owns"])
+    copies = max(node.get("copies") or 1, 1)
+    if _benzene_rings(mol, owned) < copies:
+        return "no benzene ring"
+    out = [a for a in owned for n in mol.GetAtomWithIdx(a).GetNeighbors() if n.GetIdx() not in owned]
+    if not out or any(mol.GetAtomWithIdx(a).GetSymbol() != "C" for a in out):
+        return "not attached by a carbon"
+    return None
+
+
+def _functional_nh2_problem(mol, node) -> Optional[str]:
+    """A functional-class word whose line names an -NH2 ("hydrazone", "semicarbazone"):
+    one of its nitrogens carries two hydrogens."""
+    if any(mol.GetAtomWithIdx(a).GetSymbol() == "N" and _h(mol, a) == 2 for a in node["owns"]):
+        return None
+    return "an NH2, no nitrogen carries two hydrogens"
+
+
+def false_hover_lines(trace, nodes) -> list:
+    """(label, line, why) for every hover line that says something false about the
+    molecule on screen, or that uses a claim's vocabulary in a shape this check does not
+    know."""
+    mol = Chem.MolFromSmiles(trace.smiles)
+    if mol is None:
+        return []
+    out = []
+    for n in nodes:
+        if any(a >= mol.GetNumAtoms() for a in n["owns"] + n["lights"]):
+            continue                                  # an index problem is another class's
+        known, why = False, None
+        label = n["label"].strip("-").lower()
+        if n["kind"] == "substituent" and label in _BARE_GROUP:
+            known, why = True, _group_line_problem(mol, n, *_BARE_GROUP[label])
+        elif n["kind"] == "substituent" and re.search(r"-carbon chain", n["line"]):
+            known, why = True, _chain_problem(mol, n)
+        elif n["kind"] == "suffix" and _AMINE_ENDING.match(label):
+            known, why = True, _group_line_problem(mol, n, "N", "all", (2,))
+        elif n["line"].startswith("Position ") and "hydrogen" in n["line"]:
+            known, why = _h_locant_problem(mol, n)
+        elif n["kind"] == "token" and n["label"].startswith("spiro["):
+            known, why = _spiro_problem(mol, n)
+        elif "names the anomer" in n["line"]:
+            known, why = _anomer_problem(mol, n, nodes)
+        elif n["kind"] == "stereo":
+            known, why = _stereo_problem(trace, n)
+        elif n["kind"] == "parent":
+            known, why = _parent_problem(mol, nodes, n)
+        elif n["kind"] == "token" and "isotope label" in n["line"]:
+            known = True
+            if "at the positions it names" in n["line"] and "-" not in n["label"].strip("()-"):
+                why = "an isotope label with no locant names no position"
+        elif n["kind"] == "hydro" and "records that hydrogens were added here" in n["line"]:
+            known = True
+        elif n["kind"] == "substituent" and "is a benzene ring attached by one of its carbons" in n["line"]:
+            known, why = True, _phenyl_problem(mol, n)
+        elif n["kind"] == "suffix" and "NH2 group in place of the carbonyl oxygen" in n["line"]:
+            known, why = True, _functional_nh2_problem(mol, n)
+        if why is not None:
+            out.append((n["label"], n["line"], why))
+        elif not known and _VOCAB.search(_QUOTED.sub("", n["line"])):
+            out.append((n["label"], n["line"], "a claim this check does not recognise"))
+        elif _unchecked_claim(n["line"]):
+            out.append((n["label"], n["line"], "a claim beyond the one this check measured"))
+    return out
+
+
 def oxidation_numbers_misplaced(trace, nodes) -> list:
     """Oxidation-number tokens ("(II)") whose node lights atoms other than the part
     written right before them."""
@@ -471,6 +990,8 @@ def classify(trace, nodes, owners) -> list[str]:
         out.append("SUFFIX_OWNS_H")
     if oxidation_numbers_misplaced(trace, nodes):
         out.append("OXIDATION_WRONG")
+    if false_hover_lines(trace, nodes):
+        out.append("HOVER_LINE_FALSE")
     return out or ["CLEAN"]
 
 
@@ -498,7 +1019,7 @@ def _report(title: str, results: dict[str, list[str]]) -> int:
                     "ATOM_GAP", "ATOM_OVERLAP", "BAD_SPAN", "CROSSING", "PART_CONTAINS_PART", "LABEL_EDGE", "ORPHAN_TOKEN",
                     "HYDRO_WRONG", "STEREO_NO_PARENT", "STEREO_WRONG_ATOM", "LOCANT_UNLIT",
                     "LIT_ATOM_FOREIGN", "LOCANT_WRONG_ATOM", "FUNCTION_SWALLOWED", "ALKYL_HETERO",
-                    "LINE_CLAIM_FALSE", "SUFFIX_OWNS_H", "OXIDATION_WRONG"):
+                    "LINE_CLAIM_FALSE", "SUFFIX_OWNS_H", "OXIDATION_WRONG", "HOVER_LINE_FALSE"):
         print(f"  {outcome:18s} {counts.get(outcome, 0)}")
     print("  residue:")
     for name, outs in results.items():

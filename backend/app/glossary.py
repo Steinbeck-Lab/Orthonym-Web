@@ -10,14 +10,15 @@ Two rules, both load-bearing:
 from __future__ import annotations
 
 import re
+from typing import NamedTuple
 
 from rdkit import Chem
 
 # Morpheme -> what it is, in plain words. Keys are OPSIN's own token values
 # (the raw stem, e.g. "meth" + "yl" -> looked up as "methyl").
 _SUBSTITUENTS = {
-    "methyl": "a CH3 group — one carbon with three hydrogens",
-    "ethyl": "a CH3-CH2- group — two carbons",
+    "methyl": "a one-carbon group (CH3 on its own)",
+    "ethyl": "a two-carbon group (CH3-CH2- on its own)",
     "propyl": "a three-carbon chain",
     "butyl": "a four-carbon chain",
     "phenyl": "a benzene ring attached by one of its carbons",
@@ -26,12 +27,12 @@ _SUBSTITUENTS = {
     "fluoro": "a fluorine atom",
     "iodo": "an iodine atom",
     "nitro": "an -NO2 group",
-    "amino": "an -NH2 group",
+    "amino": "a nitrogen group (-NH2 on its own)",
     "hydroxy": "an -OH group",
-    "acetyloxy": "an -O-C(=O)-CH3 group",
-    "methoxy": "an -O-CH3 group",
-    "ethoxy": "an -O-CH2CH3 group",
-    "acetyl": "a CH3-C(=O)- group",
+    "acetyloxy": "an acetyl group joined through an oxygen (-O-C(=O)-CH3 on its own)",
+    "methoxy": "a one-carbon group joined through an oxygen (-O-CH3 on its own)",
+    "ethoxy": "a two-carbon group joined through an oxygen (-O-CH2CH3 on its own)",
+    "acetyl": "a two-carbon group with a C=O (CH3-C(=O)- on its own)",
     "indolyl": "an indole ring system attached by one of its carbons",
     "oxy": "an -O- linkage joining two parts of the name",
 }
@@ -40,7 +41,7 @@ _SUFFIXES = {
     "one": "a C=O group (a carbonyl)",
     "ol": "an -OH group",
     "al": "a -CHO group",
-    "amine": "a nitrogen with free hydrogens",
+    "amine": "a nitrogen group (-NH2 on its own)",
     "amide": "a -C(=O)N- group",
     "nitrile": "a -C≡N triple bond",
     "onitrile": "a -C≡N triple bond",
@@ -101,13 +102,74 @@ _PARENT_ATOMS = {
 # Retained parents that are not a "skeleton" at all.
 _SPECIAL_PARENTS = {
     "hydrate": "water of crystallisation: water molecules that come with the compound",
+    "hydrochloride": "hydrochloric acid (HCl) that comes with the compound as a salt",
+    "hydrobromide": "hydrobromic acid (HBr) that comes with the compound as a salt",
+    "hydroiodide": "hydroiodic acid (HI) that comes with the compound as a salt",
+    "hydrofluoride": "hydrofluoric acid (HF) that comes with the compound as a salt",
 }
+# "monohydrate", "pentahydrate", "sesquihydrate": the hydrate with its count written in the same word.
+_MULTIPLIED_HYDRATE = re.compile(r"^(?:mono|di|tri|tetra|penta|hexa|hepta|octa|nona|deca|hemi|sesqui)hydrate$",
+                                 re.IGNORECASE)
+
+
+def _special_parent(label: str) -> str | None:
+    """The line for a retained parent that comes with the compound ("hydrate", "hydrochloride",
+    and a hydrate with its count written in: "monohydrate"), else None."""
+    return _SPECIAL_PARENTS.get(label.lower()) or (
+        _SPECIAL_PARENTS["hydrate"] if _MULTIPLIED_HYDRATE.match(label) else None)
+
+
+def not_a_core(label: str) -> bool:
+    """These come with the compound; none of them is a core the rest of the name is built around."""
+    return _special_parent(label) is not None
 
 # "2-methylpropyl", "tert-butyl", "isopropyl": the text in front of a table key
 # is only branching, so the key still names the chain. Anything else in front
 # ("cyclo", "phen", "thio", "sulfon") changes what the ending means.
 _BRANCHING = re.compile(r"^(?:[\d,']+-|tert-|sec-|iso|neo|n-|methyl|ethyl|propyl|butyl|-)*$")
 _COUNTING = re.compile(r"^(?:di|tri|tetra|penta|hexa|hepta|octa|bis|tris|tetrakis)")
+
+
+_CHAIN_LENGTH = {"propyl": 3, "butyl": 4}
+
+
+def _longest_chain(mol, atoms) -> list[int]:
+    """The longest run of bonded, non-ring carbons inside each connected piece of `atoms`
+    (one number per piece)."""
+    pool = {a for a in atoms if a < mol.GetNumAtoms() and mol.GetAtomWithIdx(a).GetSymbol() == "C"
+            and not mol.GetAtomWithIdx(a).IsInRing()}
+
+    def walk(a, seen):
+        best = 1
+        for n in mol.GetAtomWithIdx(a).GetNeighbors():
+            if n.GetIdx() in pool and n.GetIdx() not in seen:
+                best = max(best, 1 + walk(n.GetIdx(), seen | {n.GetIdx()}))
+        return best
+
+    out, left = [], set(pool)
+    while left:
+        start = next(iter(left))
+        piece, todo = set(), [start]
+        while todo:
+            a = todo.pop()
+            if a in piece:
+                continue
+            piece.add(a)
+            todo += [n.GetIdx() for n in mol.GetAtomWithIdx(a).GetNeighbors() if n.GetIdx() in pool]
+        left -= piece
+        out.append(max(walk(a, {a}) for a in piece))
+    return out
+
+
+def _chain_holds(key: str, mol, atoms) -> bool:
+    """A "three- / four-carbon chain" line is said only when the longest carbon chain of each
+    copy is that long: tert-butyl and isobutyl hold four carbons but no chain of four. With no
+    molecule to measure on, the old line stands."""
+    want = _CHAIN_LENGTH.get(key)
+    if want is None or mol is None:
+        return True
+    runs = _longest_chain(mol, atoms)
+    return bool(runs) and all(r == want for r in runs)
 
 
 def _lookup_key(table: dict, text: str, *, endings: bool = False) -> str | None:
@@ -127,11 +189,6 @@ def _lookup_key(table: dict, text: str, *, endings: bool = False) -> str | None:
             if key.endswith(name) and _BRANCHING.match(key[: -len(name)]):
                 return name
     return None
-
-
-def _lookup(table: dict, text: str, *, endings: bool = False) -> str | None:
-    key = _lookup_key(table, text, endings=endings)
-    return None if key is None else table[key]
 
 
 def suffix_claim(label: str) -> str | None:
@@ -192,32 +249,156 @@ def _atoms(count: int) -> str:
     return f"{count} atom" if count == 1 else f"{count} atoms"
 
 
-def describe_part(kind: str, text: str, atom_count: int, copies: int = 1, *, holds: bool = True) -> str:
+# A parent stem whose prose names benzene rings ("naphthalene -- two fused benzene
+# rings") is true of a node only when it holds that many aromatic six-carbon rings per
+# copy: 1,2,3,4-tetrahydronaphthalene keeps one, naphthalene-1,4-dione's quinone ring
+# is not one, and 1,5,6,7-tetrahydro-4H-indol-4-one has no benzene ring at all.
+_PARENT_BENZENE_RINGS = {"benzen": 1, "benz": 1, "indol": 1, "naphthalen": 2}
+
+
+def parent_claim_holds(label: str, mol, atoms, copies: int = 1) -> bool:
+    """True when the atoms a parent owns bear out the ring its prose names (counts are
+    checked in describe_part). With no ring claim, True; with one and no molecule to
+    check it on, False (the neutral line is always safe)."""
+    key = _parent_key(label)
+    need = _PARENT_BENZENE_RINGS.get(key) if key else None
+    if not need:
+        return True
+    if mol is None:
+        return False
+    owned = set(atoms)
+    benzene = [ring for ring in mol.GetRingInfo().AtomRings()
+               if len(ring) == 6 and set(ring) <= owned
+               and all(mol.GetAtomWithIdx(a).GetSymbol() == "C" and mol.GetAtomWithIdx(a).GetIsAromatic()
+                       for a in ring)]
+    return len(benzene) >= need * max(copies, 1)
+
+
+def _hydrogens(mol, atom: int) -> int:
+    """Hydrogens on `atom`, an isotope written as its own atom ("(2H3)methyl") included."""
+    return mol.GetAtomWithIdx(atom).GetTotalNumHs(includeNeighbors=True)
+
+
+def _heavy_degree(atom) -> int:
+    """Neighbours of an RDKit atom that are not hydrogens."""
+    return sum(1 for n in atom.GetNeighbors() if n.GetAtomicNum() > 1)
+
+
+def _plain_atom(atom) -> bool:
+    """An RDKit atom with no radical and no charge."""
+    return atom.GetNumRadicalElectrons() == 0 and atom.GetFormalCharge() == 0
+
+
+# What a group's table line leaves to be counted on the real atoms. The table line names
+# the bare group "on its own"; when the atoms in this molecule carry a different number
+# of hydrogens ("hydroxymethyl": its carbon carries 2), the line says so, measured.
+# key (a substituent or a suffix) -> the owned element, the hydrogens of each such atom in
+# ONE bare copy, and whether only an "end" atom counts: a carbon not bonded to the group's own
+# oxygen (acetyl's CH3 end).
+class _HydrogenSpec(NamedTuple):
+    element: str
+    bare: tuple
+    end_only: bool = False
+
+    @property
+    def noun(self) -> str:
+        return ("end " if self.end_only else "") + {"C": "carbon", "N": "nitrogen"}[self.element]
+
+    @property
+    def whose(self) -> str:
+        return "its" if self.element == "C" else "the"
+
+
+_HYDROGEN_SPECS = {
+    "methyl": _HydrogenSpec("C", (3,)),
+    "ethyl": _HydrogenSpec("C", (3, 2)),
+    "methoxy": _HydrogenSpec("C", (3,)),
+    "ethoxy": _HydrogenSpec("C", (3, 2)),
+    "acetyl": _HydrogenSpec("C", (3,), end_only=True),
+    "acetyloxy": _HydrogenSpec("C", (3,), end_only=True),
+    "amino": _HydrogenSpec("N", (2,)),
+    "amine": _HydrogenSpec("N", (2,)),
+}
+
+
+def _counted(n: int) -> str:
+    return "no hydrogen" if n == 0 else "1 hydrogen" if n == 1 else f"{n} hydrogens"
+
+
+def _hydrogen_clause(spec, mol, atoms, copies: int) -> str:
+    """' Here its carbon carries 2 hydrogens; other groups take the rest.' -- or '' when
+    the atoms carry what the bare group does, or there is nothing to count them on."""
+    element, bare, end_only = spec
+    noun, whose = spec.noun, spec.whose
+    if mol is None or any(a >= mol.GetNumAtoms() for a in atoms):
+        return ""
+    picked = [a for a in sorted(set(atoms)) if mol.GetAtomWithIdx(a).GetSymbol() == element]
+    if end_only:
+        own = set(atoms)
+        picked = [a for a in picked
+                  if not any(n.GetSymbol() == "O" and n.GetIdx() in own for n in mol.GetAtomWithIdx(a).GetNeighbors())]
+    counts = sorted((_hydrogens(mol, a) for a in picked), reverse=True)
+    # One atom per bare group (methyl, amino, the amine ending): one count per atom found,
+    # so "diamine" expects two; a two-carbon group expects its pair once per copy.
+    expected = sorted(bare * (len(counts) if len(bare) == 1 else max(copies, 1)), reverse=True)
+    if not counts or counts == expected:
+        return ""
+    if len(counts) == 1:
+        text = f"Here {whose} {noun} carries {_counted(counts[0])}"
+    elif len(set(counts)) == 1:
+        text = f"Here each of {whose} {noun}s carries {_counted(counts[0])}"
+    else:
+        text = f"Here {whose} {noun}s carry {', '.join(map(str, counts[:-1]))} and {counts[-1]} hydrogens"
+    # "the rest" is taken by other groups only when no atom has more than the bare
+    # group's count and none is a radical or ion (a missing hydrogen is then a bond).
+    plain = all(_plain_atom(mol.GetAtomWithIdx(a)) for a in picked)
+    if element == "C" and plain and len(counts) == len(expected) and all(c <= e for c, e in zip(counts, expected)):
+        text += "; other groups take the rest"
+    return f" {text}."
+
+
+def describe_part(kind: str, text: str, atom_count: int, copies: int = 1, *, holds: bool = True,
+                  mol=None, atoms=(), cores: int = 1) -> str:
     """One line for a part. `holds` is False when the caller found that the atoms the
-    part owns do not bear out its table line (a suffix: ``suffix_claim_holds``); the
-    neutral count line is then used."""
+    part owns do not bear out its table line (a suffix: ``suffix_claim_holds``; a
+    parent: ``parent_claim_holds``); the neutral count line is then used. `mol` and
+    `atoms` are the traced molecule and the part's own atoms: a group whose table line
+    names its bare formula ("methyl", "amino", the "amine" ending) gets the hydrogens
+    its atoms really carry, counted. `cores` is the number of parent nodes in the name:
+    with more than one, no parent is "the core the rest of the name is built around"."""
     label = text.strip("-")
     many = f" The name writes it once for {copies} copies." if copies > 1 else ""
 
     if kind == "substituent":
-        known = _lookup(_SUBSTITUENTS, label, endings=True)
-        if known:
-            return f'"{label}" is {known}.{many}'
+        key = _lookup_key(_SUBSTITUENTS, label, endings=True)
+        # A line that names a carbon count or a formula is used only for the exact group:
+        # "methylethyl" ends in "ethyl" but has three carbons.
+        if key in _HYDROGEN_SPECS and key != label.lower():
+            key = None
+        if not _chain_holds(key, mol, atoms):
+            key = None
+        if key:
+            spec = _HYDROGEN_SPECS.get(key)
+            clause = _hydrogen_clause(spec, mol, atoms, copies) if spec else ""
+            return f'"{label}" is {_SUBSTITUENTS[key]}.{clause}{many}'
     elif kind == "suffix":
-        known = _lookup(_SUFFIXES, label)
-        if known and holds:
-            return f'The "{label}" ending means {known}.'
+        key = _lookup_key(_SUFFIXES, label)
+        if key and holds:
+            spec = _HYDROGEN_SPECS.get(key)
+            clause = _hydrogen_clause(spec, mol, atoms, 1) if spec else ""
+            return f'The "{label}" ending means {_SUFFIXES[key]}.{clause}'
     elif kind == "parent":
-        special = _SPECIAL_PARENTS.get(label.lower())
+        special = _special_parent(label)
         if special:
             return f'"{label}" is {special}.{many}'
+        one_of = f"one of the {_NUMBER_WORDS.get(cores, str(cores))} cores this name is built from"
         claim = parent_claim(label)
         per_copy = atom_count // copies if copies > 1 and atom_count % copies == 0 else atom_count
-        if claim and claim[1][0] <= per_copy <= claim[1][1]:
-            return (
-                f'"{label}" is {claim[0]}. It is the core the rest of the name '
-                f"is built around, and it holds {_atoms(atom_count)}.{many}"
-            )
+        if claim and claim[1][0] <= per_copy <= claim[1][1] and holds:
+            role = "It is the core the rest of the name is built around" if cores <= 1 else f"It is {one_of}"
+            return f'"{label}" is {claim[0]}. {role}, and it holds {_atoms(atom_count)}.{many}'
+        if cores > 1:
+            return f'"{label}" is {one_of}. It has {_atoms(atom_count)}.{many}'
         return (
             f'"{label}" is the core skeleton the rest of the name is built '
             f"around. It has {_atoms(atom_count)}.{many}"
@@ -262,7 +443,90 @@ def describe_functional(label: str, atom_count: int) -> str:
     return f'"{label}" covers {_atoms(atom_count)} of this structure.'
 
 
-def describe_locant(kind: str, locant: str, element: str | None = None, *, anomer: bool = False) -> str:
+def _hydrogen_taken(mol, atom: int) -> bool:
+    """A named hydrogen the atom does not carry has given way to something the name
+    writes elsewhere: a third heavy neighbour (a substituent, a spiro or fusion bond, an
+    attachment) or a double / triple bond (an "=O", an "-ylidene")."""
+    a = mol.GetAtomWithIdx(atom)
+    if not _plain_atom(a):
+        return False                  # an ylium / ide / radical ending removed the hydrogen itself
+    multiple = any(b.GetBondType() in (Chem.BondType.DOUBLE, Chem.BondType.TRIPLE) for b in a.GetBonds())
+    return _heavy_degree(a) >= 3 or multiple
+
+
+def _modifier_line(locant: str, element: str | None, mol, atom: int | None) -> str:
+    """A hydro / indicated / added hydrogen locant. The name puts a hydrogen on that atom
+    (IUPAC P-31.2, P-14.7.1, P-14.7.2); whether the atom still carries one is measured."""
+    head = f"Position {locant} — "
+    if not element:
+        return f"{head}the name puts a hydrogen at this position."
+    on_atom = f"the {element}{locant} atom"
+    if mol is None or atom is None or atom >= mol.GetNumAtoms():
+        return f"{head}the name puts a hydrogen on {on_atom}."
+    if _hydrogens(mol, atom) >= 1:
+        return f"{head}{on_atom} carries a hydrogen here."
+    puts = f"{head}the name puts a hydrogen on {on_atom}"
+    if _hydrogen_taken(mol, atom):
+        return f"{puts}; here a group or bond named elsewhere takes its place."
+    return f"{puts}; here that atom carries none."
+
+
+def _anomeric_group(mol, atom: int | None) -> str | None:
+    """What the anomeric carbon holds outside its ring, in words, when the bonds say:
+    an OH (a free sugar), the O of a glycoside, or the one atom a C- or N-glycosyl
+    group is joined through. None when it cannot be told."""
+    if mol is None or atom is None or atom >= mol.GetNumAtoms():
+        return None
+    a = mol.GetAtomWithIdx(atom)
+    outside = [n for n in a.GetNeighbors() if n.GetAtomicNum() > 1
+               and not mol.GetBondBetweenAtoms(atom, n.GetIdx()).IsInRing()]
+    oxygens = [n for n in outside if n.GetSymbol() == "O"]
+    if len(oxygens) == 1:
+        o = oxygens[0]
+        heavy = _heavy_degree(o)
+        if heavy == 1 and _hydrogens(mol, o.GetIdx()) >= 1:
+            return "an OH"
+        if heavy >= 2:
+            return "the O that joins the sugar to the rest of the name"
+        return None
+    if not oxygens and len(outside) == 1:
+        other = outside[0]
+        if _heavy_degree(other) == 1:
+            # a halogen, a thiol sulfur: it joins nothing, it is just there
+            article = "an" if other.GetSymbol()[0] in "AEFHILMNORSX" else "a"
+            return f"{article} {other.GetSymbol()} atom"
+        return f"the {other.GetSymbol()} that joins the sugar to the rest of the name"
+    return None
+
+
+_RING_ELEMENTS = {"O": "oxygen", "S": "sulfur", "N": "nitrogen", "Se": "selenium"}
+
+
+def _sugar_ring_element(mol, atom: int | None, pool) -> str | None:
+    """The one element that closes the sugar's ring, when the bonds say: the ring atom
+    next to the anomeric carbon `atom`, else the single hetero atom of the five- or
+    six-membered rings inside `pool`. None when it is not one element."""
+    if mol is None:
+        return None
+    if atom is not None and atom < mol.GetNumAtoms():
+        a = mol.GetAtomWithIdx(atom)
+        found = {n.GetSymbol() for n in a.GetNeighbors()
+                 if n.GetAtomicNum() not in (1, 6) and mol.GetBondBetweenAtoms(atom, n.GetIdx()).IsInRing()}
+        return next(iter(found)) if len(found) == 1 else None
+    if pool is None:
+        return None
+    inside = set(pool)
+    found = set()
+    for ring in mol.GetRingInfo().AtomRings():
+        if len(ring) in (5, 6) and set(ring) <= inside:
+            hetero = [mol.GetAtomWithIdx(i).GetSymbol() for i in ring if mol.GetAtomWithIdx(i).GetAtomicNum() != 6]
+            if len(hetero) == 1:
+                found.add(hetero[0])
+    return next(iter(found)) if len(found) == 1 else None
+
+
+def describe_locant(kind: str, locant: str, element: str | None = None, *, anomer: bool = False,
+                    mol=None, atom: int | None = None, pool=None) -> str:
     """One line for a locant child, which is identified only by its locant.
 
     `element` names an atom in the sentence, so there is exactly one rule
@@ -299,15 +563,21 @@ def describe_locant(kind: str, locant: str, element: str | None = None, *, anome
     """
     if anomer and locant.lower() in ("alpha", "beta"):
         # Only a sugar's alpha/beta names an anomer. A Greek locant elsewhere
-        # ("alpha,alpha,alpha-trifluorotoluene") is just a position.
+        # ("alpha,alpha,alpha-trifluorotoluene") is just a position. 2-Carb-6.2: the
+        # anomeric group is compared with the anomeric reference atom; a glycoside
+        # holds an O-R there, not an OH (2-Carb-33.1), so what it holds is read off the
+        # bonds of `atom`, the lit anomeric carbon.
+        group = _anomeric_group(mol, atom)
+        here = f" Here that group is {group}." if group else ""
+        ring_element = _sugar_ring_element(mol, atom, pool)
+        ring = (f"the ring {_RING_ELEMENTS[ring_element]}" if ring_element in _RING_ELEMENTS else
+                f"the ring {ring_element} atom" if ring_element else "the ring's heteroatom")
         return (
-            f'"{locant}" names the anomer: which way the OH on the ring carbon '
-            f"next to the ring oxygen points."
+            f'"{locant}" names the anomer: which way the group on the ring carbon '
+            f"next to {ring} points, relative to the sugar's reference stereocentre.{here}"
         )
     if kind == "modifier":
-        if element:
-            return f"Position {locant} — the {element}{locant} atom carries a hydrogen here."
-        return f"Position {locant} — a hydrogen is fixed here."
+        return _modifier_line(locant, element, mol, atom)
     if kind == "suffix":
         return (
             f"Position {locant} — this group is attached at position {locant} "
@@ -352,15 +622,9 @@ _TOKEN_LINES = {
         '"{text}" pins which ring atom carries a hydrogen. Without it the '
         "ring could be drawn more than one way."
     ),
-    "stereoChemistry": (
-        '"{text}" fixes the three-dimensional arrangement at the '
-        "positions it names."
-    ),
     "vonBaeyer": '"{text}" counts the atoms in each bridge of the ring cage.',
-    "spiro": '"{text}" marks one atom shared between two rings.',
     "fusedRingBridge": '"{text}" is a bridge across two positions of the ring system named after it.',
     "lambdaConvention": '"{text}" gives the bonding number of the atom it names, when that differs from its usual one.',
-    "isotopeSpecification": '"{text}" is an isotope label: it says which isotope sits at the positions it names.',
     "oxidationNumberSpecifier": (
         'The Roman numeral in "{text}" is the oxidation number (charge state) of the '
         "metal written just before it."
@@ -406,6 +670,113 @@ def _ring_assembly_multiplier_line(text: str) -> str:
     )
 
 
+# Stereo marks, by what they say (IUPAC 2013 P-93, P-92.4, 2-Carb-4 and 2-Carb-8). Only a
+# mark that carries a locant ("2S", "9Z", "17beta", "NE") fixes the arrangement "at the
+# positions it names"; every other kind gets a line of its own.
+_STEREO_LOCANT = r"(\d+[a-z]?'*|[A-Z][a-z]?'*)"
+_LOCATED = re.compile(_STEREO_LOCANT + r"([RSrs]|[EZ]|alpha|beta)$")
+_LOCATED_STARRED = re.compile(_STEREO_LOCANT + r"([RS])\*$")
+_LOCATED_RACEMIC = re.compile(r"(\d+[a-z]?'*)(RS|SR)$")
+_RACEMATE = frozenset({"rac", "RS", "SR", "+-", "±", "DL"})
+_ROTATION = {"+": "to the right", "-": "to the left"}
+_SUGAR_PREFIX = {
+    "glycero": "glyceraldehyde", "erythro": "erythrose", "threo": "threose", "arabino": "arabinose",
+    "lyxo": "lyxose", "ribo": "ribose", "xylo": "xylose", "allo": "allose", "altro": "altrose",
+    "galacto": "galactose", "gluco": "glucose", "gulo": "gulose", "ido": "idose", "manno": "mannose",
+    "talo": "talose",
+}
+_RELATIVE = ("only as a relative arrangement, not an absolute one; it does not say which of the two "
+             "mirror-image forms is meant")
+
+
+def describe_stereo(text: str, within: str | None = None) -> str:
+    """The line for one stereo mark. `within` is "rel" or "rac" when the mark is written
+    inside a "rel-(...)" / "rac-(...)" set, which changes what every mark in it says."""
+    # "+-" and "-" are marks of their own; any other mark loses a trailing hyphen.
+    mark = text if text in _RACEMATE or text in _ROTATION else text.strip("-")
+    located = _LOCATED.match(mark)
+    if mark in _RACEMATE:
+        # P-93.1.3; P-103.1.3.1 and 2-Carb-4.4 for "DL"
+        return f'"{mark}" marks a racemate: an equal mix of the two mirror-image forms.'
+    racemic = _LOCATED_RACEMIC.match(mark)
+    if racemic:
+        first, second = racemic.group(2)
+        return (f'"{mark}" marks a racemate: an equal mix of the two mirror-image forms, {first} at '
+                f"position {racemic.group(1)} in one and {second} in the other.")
+    if mark == "rel":
+        # P-93.1.2.1
+        return ('"rel" says the marks of its set give only a relative arrangement; it does not say '
+                "which of the two mirror-image forms is meant.")
+    if mark in _ROTATION:
+        # 2-Carb-4.5: the sign of optical rotation, not a configuration
+        return (f'"{mark}" gives the sign of optical rotation: this form turns polarised light '
+                f"{_ROTATION[mark]}. It does not by itself say how the atoms are arranged.")
+    starred = _LOCATED_STARRED.match(mark)
+    if starred or (located and within == "rel" and mark[-1] in "RS"):
+        return f'"{mark}" gives the arrangement at the position it names {_RELATIVE}.'
+    if within == "rac" and (located or mark in ("R", "S")):
+        return (f'"{mark}" is part of a racemate mark (rac): the name means an equal mix of '
+                f"this form and its mirror image.")
+    if located:
+        return f'"{mark}" fixes the three-dimensional arrangement at the positions it names.'
+    if mark in ("D", "L"):
+        # 2-Carb-4.2; P-103.1.3.1 (amino acids)
+        return (f'"{mark}" is a Fischer label: it puts the part named after it in the {mark} series, '
+                f"by comparing one of its stereocentres with {mark}-glyceraldehyde.")
+    if mark in ("cis", "trans"):
+        # P-93.5.1.2 (rings), P-93.4.2.1.1 (double bonds)
+        side = "on the same side" if mark == "cis" else "on opposite sides"
+        return f'"{mark}" says two groups lie {side} of the ring or double bond they are on.'
+    if mark in ("R", "S") and within == "rel":
+        return f'"{mark}" gives the arrangement at one stereocentre {_RELATIVE}.'
+    if mark in ("R", "S"):
+        return (f'"{mark}" fixes the three-dimensional arrangement at one stereocentre; the mark '
+                f"itself carries no position number.")
+    if mark in ("R*", "S*"):
+        return f'"{mark}" gives the arrangement at one stereocentre {_RELATIVE}.'
+    if mark in ("E", "Z"):
+        # P-92.4.1; P-93.4.2.1.3: no locant when the name needs none
+        side = "on opposite sides" if mark == "E" else "on the same side"
+        return (f'"{mark}" fixes the arrangement at one double bond: its higher-ranked groups lie {side}. '
+                f"The mark itself carries no position number.")
+    sugar = _SUGAR_PREFIX.get(mark.lower())
+    if sugar:
+        # 2-Carb-4.3, 2-Carb-8.4 (the centres it covers need not be next to each other);
+        # glycero covers the one centre of glyceraldehyde
+        covers = "stereocentre it covers is" if mark.lower() == "glycero" else "stereocentres it covers are"
+        return f'"{mark}" is a sugar configuration prefix: the {covers} arranged as in {sugar}.'
+    return f'"{mark}" is a stereo descriptor: part of how the name gives the three-dimensional arrangement.'
+
+
+def _spiro_line(text: str) -> str:
+    """P-24.2.1: "spiro[4.5]" -- two rings share one atom, and the numbers count the other
+    atoms of each ring. P-24.2.2: after "di", "tri" (a polyspiro system) the numbers count
+    the atoms that link the shared atoms, in order along the system."""
+    inside = re.fullmatch(r"spiro\[([^\]]*)\]", text.strip("-"))
+    numbers = inside.group(1).split(".") if inside else []
+    if len(numbers) == 2 and all(n.isdigit() for n in numbers):
+        return (f'"{text}" names two rings that share one atom; {numbers[0]} and {numbers[1]} count '
+                f"the other atoms in each ring.")
+    if len(numbers) > 2:
+        joined = (f'"{text}" names rings joined at single shared atoms (the counting word before it says '
+                  f"how many); its ")
+        if "^" in text:
+            # "4^8": the raised number is a position on the system, not a count of atoms
+            return (joined + "plain numbers count the atoms between them, in order along the system, "
+                    "and a raised number is a position, not a count.")
+        return joined + "numbers count the atoms between them, in order along the system."
+    return f'"{text}" names rings that share single atoms.'
+
+
+def _isotope_line(text: str) -> str:
+    """P-82.2.1: a locant in front of the nuclide names the positions; with none, every
+    position of the part that can carry it is meant (P-82.6.1.3)."""
+    if "-" in text.strip("()-"):
+        return f'"{text}" is an isotope label: it says which isotope sits at the positions it names.'
+    return (f'"{text}" is an isotope label: it says which isotope the part named after it carries in '
+            f"place of the usual one; the label gives no position number.")
+
+
 def describe_token(category: str, text: str) -> str | None:
     """One line for a single raw name token, or None if the token teaches
     nothing. Elision vowels, hyphens and brackets fall in the second group.
@@ -416,6 +787,12 @@ def describe_token(category: str, text: str) -> str | None:
     """
     if category == "ringAssemblyMultiplier":
         return _ring_assembly_multiplier_line(text)
+    if category == "stereoChemistry":
+        return describe_stereo(text)
+    if category == "spiro":
+        return _spiro_line(text)
+    if category == "isotopeSpecification":
+        return _isotope_line(text)
     template = _TOKEN_LINES.get(category)
     if template is None:
         return None

@@ -14,8 +14,9 @@ export function explainPhase(result) {
 // What the detail panel says about a node, besides its own line.
 //   partLabel     the part a notation node belongs to, else null
 //   unmapped      the structure-in path could not pin it to atoms
-//   nothingLights it has no atoms by design (a stereo word, a locant with no
-//                 single stereocentre), which is not the same as unmapped
+//   nothingLights it points to no single atom (a stereo word, a locant with no
+//                 single stereocentre to name), which is not the same as unmapped;
+//                 the panel says Orthonym points to no single atom for it
 //   notation      it owns no atoms itself but lights its parent's
 export function detailNotes(nodes, id) {
   const node = nodeById(nodes, id)

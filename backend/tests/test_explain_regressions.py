@@ -1190,12 +1190,19 @@ def test_the_gate_sees_a_hydrogen_in_a_suffix():
 
 
 # M1. one atom is not "1 atoms"
-@pytest.mark.parametrize("name", ["sodium", "triethylamine", "hydroxylamine hydrochloride", "methane"])
+@pytest.mark.parametrize("name", ["sodium", "triethylamine", "methane"])
 def test_a_single_atom_parent_says_atom_not_atoms(name):
     t, nodes = _nodes(name)
     for n in nodes:
         assert "1 atoms" not in n["line"], (name, n["line"])
     assert any("1 atom." in n["line"] for n in nodes if n["kind"] == "parent")
+
+
+def test_an_acid_addition_part_states_no_atom_count():
+    # "hydrochloride" has a line of its own now (it is not a core), which counts no atoms
+    t, nodes = _nodes("hydroxylamine hydrochloride")
+    assert all("1 atoms" not in n["line"] for n in nodes)
+    assert "atom" not in _one(nodes, kind="parent", label="hydrochloride")["line"].replace("the compound", "")
 
 
 # M4. an oxidation number belongs to the metal written before it

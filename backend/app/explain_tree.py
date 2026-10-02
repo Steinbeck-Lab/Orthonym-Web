@@ -58,8 +58,8 @@ from typing import Optional
 from rdkit import Chem
 
 from .glossary import (
-    describe_cage_multiplier, describe_functional, describe_locant, describe_part, describe_token,
-    suffix_claim_holds, token_line,
+    describe_cage_multiplier, describe_functional, describe_locant, describe_part, describe_stereo,
+    describe_token, parent_claim_holds, suffix_claim_holds, token_line, not_a_core,
 )
 from .label_rules import (
     BARE_DESCRIPTOR, CONTEXTUAL, ELEMENT_LOCANT, GLUE, LOCANT_KINDS, NUMBER_LOCANT, STEREO_MARK,
@@ -84,6 +84,18 @@ _LINE_KINDS = frozenset({"multiplier", "ringAssemblyMultiplier", "hydro", "fusio
 _ADDED_H = re.compile(r"^(\d+[a-z]?'*)H$")
 # Fischer D/L always prefix the part written right after them ("L-alanyl").
 _FISCHER = frozenset({"D", "L", "DL"})
+# A stereo set written "rel-(1R,2S)-" or "rac-(1R,2S)-": the word in front changes what
+# every mark inside says (IUPAC P-93.1.2.1, P-93.1.3).
+_SET_PREFIX = re.compile(r"^\s*\(?(rel|rac)\)?-?\(", re.IGNORECASE)
+# ... or the word on its own token next to the marks, bare or in parentheses: "(1R,2S)-rel-",
+# "(rac)-(2R)-".
+_SET_WORD = re.compile(r"^\s*\(?(rel|rac)\)?-?\s*$", re.IGNORECASE)
+
+
+def _set_word_of(piece: str) -> Optional[str]:
+    """The set word ("rel" or "rac") a stereo token's text is or starts with, else None."""
+    m = _SET_PREFIX.match(piece) or _SET_WORD.match(piece)
+    return m.group(1).lower() if m else None
 
 
 @dataclass
@@ -210,6 +222,9 @@ class _Builder:
         self.by_key = {w.key: w for w in parts if w.key is not None}
         self.part_of = {a: p for p in trace.parts for a in p.atoms}
         self.carbohydrate_atoms: Optional[list[int]] = None   # set while a sugar root's children are built
+        # parent node id -> holds: a parent line is restated once the number of cores is known
+        # (finish_parent_lines)
+        self.parent_holds: dict[str, bool] = {}
 
     def add(self, kind, label, span, *, line, parent=None, owns=(), lights=(), copies=1) -> str:
         node_id = f"n{len(self.nodes)}"
@@ -219,6 +234,12 @@ class _Builder:
             "owns": sorted(set(owns)), "lights": sorted(set(lights)),
             "atoms_unmapped": False, "line": line,
         })
+        return node_id
+
+    def add_parent(self, label, span, owns, copies, holds=True) -> str:
+        node_id = self.add("parent", label, span, owns=owns, lights=owns, copies=copies,
+                           line=describe_part("parent", label, len(set(owns)), copies=copies, holds=holds))
+        self.parent_holds[node_id] = holds
         return node_id
 
     def text(self, span: Span) -> str:
@@ -237,8 +258,9 @@ class _Builder:
         """(atoms, line) of a hydro / indicated-hydrogen locant: `at` is the locant as
         OPSIN numbers it (None when it names no atom), `written` the text to show then."""
         hit = self.with_locant(atoms, at) if at is not None else []
-        element = self.by_index[hit[0]].element if len(hit) == 1 else None
-        return hit, describe_locant("modifier", at or written, element)
+        atom = hit[0] if len(hit) == 1 else None
+        element = self.by_index[atom].element if atom is not None else None
+        return hit, describe_locant("modifier", at or written, element, mol=self.mol, atom=atom)
 
     def component_atom(self, elements: list, k: Optional[int], atoms) -> list[int]:
         """The ONE atom of `atoms` that the k-th number of a fusion component names,
@@ -294,9 +316,11 @@ class _Builder:
         """A part OPSIN gave no key: still owns its atoms, listed as not
         placed in the name. Never raises."""
         owns = self.atoms_of(w)
-        kind = "substituent" if w.kind == "substituent" else "parent"
-        self.add(kind, w.kind, None, owns=owns, lights=owns, copies=len(w.copies),
-                 line=describe_part(kind, w.kind, len(set(owns)), copies=len(w.copies)))
+        if w.kind == "substituent":
+            self.add("substituent", w.kind, None, owns=owns, lights=owns, copies=len(w.copies),
+                     line=describe_part("substituent", w.kind, len(set(owns)), copies=len(w.copies)))
+        else:
+            self.add_parent(w.kind, None, owns, len(w.copies))
 
     def foreign_replacement_locants(self, w: _WrittenPart, roles: list[str]) -> list[str]:
         """A locant written right before a heteroatom or alkane-stem token reads
@@ -330,7 +354,8 @@ class _Builder:
         label = self.text(span)
         owns = self.atoms_of(w)
         node = self.add("substituent", label, span, owns=owns, lights=owns, copies=len(w.copies),
-                        line=describe_part("substituent", label, len(set(owns)), copies=len(w.copies)))
+                        line=describe_part("substituent", label, len(set(owns)), copies=len(w.copies),
+                                           mol=self.mol, atoms=owns))
         self.part_node[w.key] = (node, owns)
         # A glycosyl substituent ("alpha-D-mannopyranosyl|oxy") names its anomer
         # the same way a sugar root does.
@@ -361,9 +386,8 @@ class _Builder:
             suffix_atoms = []
         parent_span = spans.parent if has_suffix or spans.suffix is None else (spans.parent[0], spans.suffix[1])
         label = self.text(parent_span)
-        parent = self.add("parent", label, parent_span, owns=parent_atoms, lights=parent_atoms,
-                          copies=len(w.copies),
-                          line=describe_part("parent", label, len(set(parent_atoms)), copies=len(w.copies)))
+        holds = parent_claim_holds(label, self.mol, parent_atoms, len(w.copies))
+        parent = self.add_parent(label, parent_span, parent_atoms, len(w.copies), holds)
         self.part_node[w.key] = (parent, parent_atoms + suffix_atoms)
         run = spans.suffix_tokens if has_suffix else frozenset()
         head = [(t, r) for t, r in zip(w.tokens, roles) if t.index not in run]
@@ -377,7 +401,8 @@ class _Builder:
             lights = suffix_atoms + [i for i in parent_atoms if carrying & set(self.by_index[i].locants)]
             suffix = self.add("suffix", s_label, spans.suffix, owns=suffix_atoms, lights=lights,
                               line=describe_part("suffix", s_label, len(set(suffix_atoms)),
-                                                 holds=suffix_claim_holds(s_label, self.mol, suffix_atoms)))
+                                                 holds=suffix_claim_holds(s_label, self.mol, suffix_atoms),
+                                                 mol=self.mol, atoms=suffix_atoms))
             self.suffix_node[w.key] = (suffix, suffix_atoms, suffix_locants)
             tail = [(t, r) for t, r in zip(w.tokens, roles) if t.index in run]
             self.children(suffix, w, [t for t, _ in tail], [r for _, r in tail], parent_atoms, lights,
@@ -565,6 +590,13 @@ class _Builder:
                 found.append(a)
         return found if len(found) == 1 else []
 
+    def anomer_line(self, loc, *, attached: bool = False) -> tuple[list[int], str]:
+        """(atoms, line) of a sugar's alpha / beta: the anomeric carbon the structure proves,
+        if any, and the line that names the anomer."""
+        lit = self.anomeric_carbon(self.carbohydrate_atoms, attached=attached)
+        return lit, describe_locant("position", loc, anomer=True, mol=self.mol, atom=lit[0] if lit else None,
+                                    pool=self.carbohydrate_atoms)
+
     def oxy_pair(self, tokens, i: int, items, k: int, own: set[int]):
         """(role, element, atoms) when item k of locant token i is half of a "4-O-" pair,
         else None. "4-O-beta-D-galactopyranosyl-D-glucopyranose", "6-O-acetyl",
@@ -709,8 +741,7 @@ class _Builder:
             return self.modifier(atoms, loc, loc)
         if (mode == "substituent" and self.carbohydrate_atoms is not None
                 and loc.lower() in ("alpha", "beta")):
-            return (self.anomeric_carbon(self.carbohydrate_atoms, attached=True),
-                    describe_locant("position", loc, anomer=True))
+            return self.anomer_line(loc, attached=True)
         if mode == "substituent" and leading:
             at_loc = [c for c in w.copies if c.locant == loc]
             if len(at_loc) > written:
@@ -731,7 +762,7 @@ class _Builder:
         if not hit and self.carbohydrate_atoms is not None and loc.lower() in ("alpha", "beta"):
             # A sugar's anomer mark names the anomeric carbon -- only when the
             # structure proves exactly one; otherwise it lights nothing.
-            return self.anomeric_carbon(self.carbohydrate_atoms), describe_locant("position", loc, anomer=True)
+            return self.anomer_line(loc)
         return (hit or list(atoms)), describe_locant("position", loc)
 
     # -- brackets, orphans, stereo ----------------------------------------
@@ -784,10 +815,48 @@ class _Builder:
                     return hits[0][0], sorted(atoms)[0]
         return None, None
 
+    def set_word(self, words, idx: int, brackets=()) -> Optional[str]:
+        """"rel" or "rac" when the stereo token at `idx` is governed by one. The word says
+        the whole compound is relative / a racemic mix (IUPAC P-93.1.3), so it reaches every
+        mark of the name, except that a word written inside a bracket reaches only that
+        bracket. Nearest first: its own token ("rel-(1R,2S)-"), a stereo token touching it
+        ("(1R,2S)-rel-", "(rac)-(2R)-"), then the nearest word before it, then after it.
+        `words` lists (token index, token, word, innermost bracket) of every stereo token
+        that carries a set word (``set_words``)."""
+        if not words:
+            return None
+        tok = self.t.tokens[idx]
+        piece = self.t.text[tok.span[0]:tok.span[1]]
+        own = _SET_PREFIX.match(piece)
+        if own:
+            return own.group(1).lower()
+        if _SET_WORD.match(piece):
+            return None
+        here = innermost_bracket(brackets, tok.span[0])
+        found = []
+        for j, other, word, reach in words:
+            if reach is not None and not (here is not None and reach[0] <= here[0] and here[1] <= reach[1]):
+                continue                      # a word inside a bracket keeps to that bracket
+            touching = other.span[1] == tok.span[0] or other.span[0] == tok.span[1]
+            found.append((0 if touching else 1 if j < idx else 2, abs(j - idx), word))
+        return min(found)[2] if found else None
+
+    def set_words(self, brackets) -> list:
+        """(token index, token, word, innermost bracket) of every stereo token that carries a
+        set word, in token order; built once per name for ``set_word``."""
+        text, out = self.t.text, []
+        for j, tok in enumerate(self.t.tokens):
+            if tok.kind == STEREO_KIND:
+                word = _set_word_of(text[tok.span[0]:tok.span[1]])
+                if word:
+                    out.append((j, tok, word, innermost_bracket(brackets, tok.span[0])))
+        return out
+
     def stereo(self, owners: dict) -> None:
         tokens = self.t.tokens
         brackets = written_brackets(tokens)
         by_key = self.by_key
+        words = self.set_words(brackets)
         for idx, tok in enumerate(tokens):
             if tok.kind != STEREO_KIND:
                 continue
@@ -812,6 +881,7 @@ class _Builder:
                 bridge = next((n for n in self.nodes if n["kind"] == "token"
                                and n["span"] == list(self.trim(written.span))), None)
             first_new = len(self.nodes)
+            within = self.set_word(words, idx, brackets)
             for label, span in stereo_items(self.t.text, tok.span):
                 m = STEREO_MARK.match(label)
                 if m:
@@ -820,7 +890,7 @@ class _Builder:
                     parent = self.part_node.get(owner_key, (None, []))[0]
                     self.add("stereo", label, span, parent=parent,
                              lights=[atom] if atom is not None else [],
-                             line=describe_token(STEREO_KIND, label))
+                             line=describe_stereo(label, within))
                 elif BARE_DESCRIPTOR.match(label) and head is not None:
                     # No locant: light the stereocentre (or stereo double
                     # bond) of the scope's main part only if it has exactly one.
@@ -828,7 +898,7 @@ class _Builder:
                     hits = sorted(a for a in self.atoms_of(head) if a in pool)
                     single = hits[:1] if (len(hits) == 1 or (label in ("E", "Z") and len(hits) == 2)) else []
                     self.add("stereo", label, span, parent=self.part_node.get(head.key, (None, []))[0],
-                             lights=single, line=describe_token(STEREO_KIND, label))
+                             lights=single, line=describe_stereo(label, within))
                 elif NUMBER_LOCANT.match(label):
                     # A locant listed with a mark: "3,17beta-diol" (it is the
                     # suffix's own locant) or "11beta,17,21-trihydroxy" (it is
@@ -851,13 +921,25 @@ class _Builder:
                             target = by_key.get(owner.span, head)
                     parent = self.part_node.get(target.key, (None, []))[0] if target else None
                     self.add("stereo", label, span, parent=parent, lights=[],
-                             line=describe_token(STEREO_KIND, label))
+                             line=describe_stereo(label, within))
             if bridge is not None:
                 # "4,5alpha-epoxy": the marks written right before a bridge name the
                 # positions it bridges.
                 lit = {a for n in self.nodes[first_new:] for a in n["lights"]}
                 if lit:
                     bridge["lights"] = sorted(lit)
+
+    def finish_parent_lines(self) -> None:
+        """With more than one parent node ("sodium acetate", "X hydrochloride"), no parent
+        is "the core the rest of the name is built around": each line says it is one of
+        that many cores. Text only; what any node lights is unchanged."""
+        cores = sum(1 for n in self.nodes if n["kind"] == "parent" and not not_a_core(n["label"]))
+        if cores < 2:
+            return
+        for node in self.nodes:
+            if node["id"] in self.parent_holds:
+                node["line"] = describe_part("parent", node["label"], len(node["owns"]), copies=node["copies"],
+                                             holds=self.parent_holds[node["id"]], cores=cores)
 
     def token_locant(self, loc: str, span: Span, head: Optional[_WrittenPart],
                      nxt: Optional[_WrittenPart] = None, bridge: Optional[dict] = None) -> None:
@@ -944,4 +1026,5 @@ def build_nodes(trace: Trace) -> list[dict]:
         else:
             b.orphan(tok)
     b.stereo(owners)
+    b.finish_parent_lines()
     return b.nodes

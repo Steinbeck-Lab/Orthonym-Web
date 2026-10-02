@@ -46,7 +46,7 @@
     "lights": [
      0
     ],
-    "line": "\"methyl\" is a CH3 group \u2014 one carbon with three hydrogens.",
+    "line": "\"methyl\" is a one-carbon group (CH3 on its own).",
     "owns": [
      0
     ],
@@ -147,7 +147,7 @@
     "kind": "stereo",
     "label": "+-",
     "lights": [],
-    "line": "\"+-\" fixes the three-dimensional arrangement at the positions it names.",
+    "line": "\"+-\" marks a racemate: an equal mix of the two mirror-image forms.",
     "owns": [],
     "parent": "n2",
     "span": [
@@ -162,7 +162,7 @@
     "kind": "stereo",
     "label": "trans",
     "lights": [],
-    "line": "\"trans\" fixes the three-dimensional arrangement at the positions it names.",
+    "line": "\"trans\" says two groups lie on opposite sides of the ring or double bond they are on.",
     "owns": [],
     "parent": "n2",
     "span": [
@@ -238,7 +238,7 @@
     "lights": [
      0
     ],
-    "line": "\"methyl\" is a CH3 group \u2014 one carbon with three hydrogens.",
+    "line": "\"methyl\" is a one-carbon group (CH3 on its own).",
     "owns": [
      0
     ],
@@ -257,7 +257,7 @@
     "lights": [
      1
     ],
-    "line": "\"amino\" is an -NH2 group.",
+    "line": "\"amino\" is a nitrogen group (-NH2 on its own). Here the nitrogen carries 1 hydrogen.",
     "owns": [
      1
     ],
@@ -535,7 +535,7 @@
     "lights": [
      0
     ],
-    "line": "\"amino\" is an -NH2 group.",
+    "line": "\"amino\" is a nitrogen group (-NH2 on its own).",
     "owns": [
      0
     ],
@@ -840,7 +840,7 @@
      11,
      12
     ],
-    "line": "\"methyl\" is a CH3 group \u2014 one carbon with three hydrogens. The name writes it once for 3 copies.",
+    "line": "\"methyl\" is a one-carbon group (CH3 on its own). The name writes it once for 3 copies.",
     "owns": [
      0,
      11,
@@ -966,7 +966,7 @@
     "lights": [
      3
     ],
-    "line": "Position 3 \u2014 the N3 atom carries a hydrogen here.",
+    "line": "Position 3 \u2014 the name puts a hydrogen on the N3 atom; here a group or bond named elsewhere takes its place.",
     "owns": [],
     "parent": "n5",
     "span": [
@@ -983,7 +983,7 @@
     "lights": [
      7
     ],
-    "line": "Position 7 \u2014 the N7 atom carries a hydrogen here.",
+    "line": "Position 7 \u2014 the name puts a hydrogen on the N7 atom; here a group or bond named elsewhere takes its place.",
     "owns": [],
     "parent": "n5",
     "span": [
@@ -1036,7 +1036,7 @@
     "lights": [
      1
     ],
-    "line": "Position 1 \u2014 the N1 atom carries a hydrogen here.",
+    "line": "Position 1 \u2014 the name puts a hydrogen on the N1 atom; here a group or bond named elsewhere takes its place.",
     "owns": [],
     "parent": "n5",
     "span": [
@@ -1203,7 +1203,7 @@
     "lights": [
      0
     ],
-    "line": "\"methyl\" is a CH3 group \u2014 one carbon with three hydrogens.",
+    "line": "\"methyl\" is a one-carbon group (CH3 on its own).",
     "owns": [
      0
     ],
@@ -1460,7 +1460,7 @@
     "kind": "substituent",
     "label": "methyl",
     "lights": [],
-    "line": "\"methyl\" is a CH3 group \u2014 one carbon with three hydrogens.",
+    "line": "\"methyl\" is a one-carbon group (CH3 on its own).",
     "owns": [],
     "parent": null,
     "span": [
