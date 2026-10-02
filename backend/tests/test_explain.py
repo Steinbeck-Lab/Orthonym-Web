@@ -153,6 +153,55 @@ def test_remap_keeps_bonded_parts_bonded(seed):
     assert user.GetBondBetweenAtoms(a, b) is not None
 
 
+def _stereo_label(mol, idx):
+    """The CIP label of the stereocentre at atom idx, or the E/Z label of a stereo double bond it is in."""
+    atom = mol.GetAtomWithIdx(idx)
+    if atom.HasProp("_CIPCode"):
+        return atom.GetProp("_CIPCode")
+    for bond in atom.GetBonds():
+        if str(bond.GetStereo()) in ("STEREOE", "STEREOZ"):
+            return str(bond.GetStereo())
+    return None
+
+
+STEREO_MOLECULES = [
+    "O[C@@H](C(=O)O)[C@@H](C(=O)O)O",                      # (2R,3S)-tartaric acid, meso
+    "O[C@H]1CCCC[C@H]1O",                                  # (1S,2R)-cyclohexane-1,2-diol, meso
+    "C[C@@H](O)CC[C@H](C)O",                               # (2R,5S)-hexane-2,5-diol
+    "O=C(O)[C@H]1CC[C@H](C1)C(=O)O",                       # (1S,3R)-cyclopentane-1,3-dicarboxylic acid
+    "C\\C=C/C=C/C",                                        # (2Z,4E)-hexa-2,4-diene
+    "CN1[C@H]2CC[C@@H]1CC(C2)OC(=O)C(CO)c1ccccc1",         # tropane ester, (1R,5S) bridgeheads
+    "C1CC#CCC[C@H]2C[C@@H]12",                             # (1S,8R)-bicyclo[6.1.0]non-4-yne
+]
+
+
+@pytest.mark.parametrize("smiles", STEREO_MOLECULES)
+def test_remap_keeps_every_stereo_mark_on_an_atom_of_its_own_label(smiles):
+    # a faithful match must not map a stereocentre (or a stereo double bond) onto its mirror twin,
+    # whatever the order the user typed the atoms in
+    for seed in range(20):
+        opsin, user, where = _shuffled(smiles, seed)
+        Chem.AssignStereochemistry(opsin, cleanIt=True, force=True)
+        Chem.AssignStereochemistry(user, cleanIt=True, force=True)
+        marked = [a for a in range(opsin.GetNumAtoms()) if _stereo_label(opsin, a)]
+        assert marked
+        nodes = [_node(f"m{a}", [a], [a]) for a in marked]
+        out = explain_module._remap_nodes(user, opsin, nodes)
+        for a, n in zip(marked, out):
+            assert not n["atoms_unmapped"], (smiles, seed)
+            assert _stereo_label(user, n["lights"][0]) == _stereo_label(opsin, a), (smiles, seed, a)
+
+
+def test_remap_without_a_stereo_keeping_match_falls_back_to_the_agreement_rule():
+    # the name path's molecule is the meso form, the user's the (R,R) form: both matches swap the
+    # centres, neither keeps the stereo, so a centre node is not pinned to a guess
+    opsin = Chem.MolFromSmiles("O[C@@H](C(=O)O)[C@@H](C(=O)O)O")
+    user = Chem.MolFromSmiles("O[C@@H](C(=O)O)[C@H](C(=O)O)O")
+    assert len(user.GetSubstructMatches(opsin, uniquify=False)) == 2
+    out = explain_module._remap_nodes(user, opsin, [_node("centre", [1], [1]), _node("acid", [2, 3, 4])])
+    assert out[0]["atoms_unmapped"] and out[0]["lights"] == []
+
+
 def test_remap_keeps_the_agreement_rule_when_no_match_is_faithful():
     # 4-isopropylimidazole, drawn as the other tautomer: the isopropyl methyls swap
     # between the two matches, and neither match keeps the ring N-H where it was

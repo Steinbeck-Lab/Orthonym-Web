@@ -174,26 +174,37 @@ def _atom_key(atom) -> tuple:
             atom.GetIsotope(), atom.GetNumRadicalElectrons())
 
 
+def _classes(mol) -> list:
+    """Each atom's symmetry class, stereo included: two atoms share a class only when
+    a symmetry that keeps every stereocentre and stereo double bond maps one onto the other."""
+    return list(Chem.CanonicalRankAtoms(mol, breakTies=False, includeChirality=True))
+
+
 def _first_faithful(mol, opsin_mol, matches):
     """The first match that pairs every atom with one of the same element,
-    hydrogen count, charge, isotope and radical electrons, or None. Two such
-    matches differ only by a symmetry of the molecule, so which one is taken
-    does not change what any part names."""
+    hydrogen count, charge, isotope and radical electrons AND the same stereo
+    symmetry class, or None. The classes are computed on each molecule alone, so
+    they agree only where the two are the same molecule; the pairing then is a
+    symmetry of that molecule that keeps its stereo, and an atom is only ever
+    swapped with one that is equivalent to it (a stereocentre is never put on its
+    mirror twin), so which such match is taken does not change what any part names."""
     keys = [_atom_key(a) for a in opsin_mol.GetAtoms()]
+    ranks, user_ranks = _classes(opsin_mol), _classes(mol)
     for match in matches:
-        if all(keys[i] == _atom_key(mol.GetAtomWithIdx(j)) for i, j in enumerate(match)):
+        if all(keys[i] == _atom_key(mol.GetAtomWithIdx(j)) and ranks[i] == user_ranks[j]
+               for i, j in enumerate(match)):
             return match
     return None
 
 
 def _remap_nodes(mol, opsin_mol, nodes, name: str = "") -> list:
-    """Remaps `nodes` (atom indices of `opsin_mol`, OPSIN's re-parse of the
-    name) onto the user's `mol`. A molecule the name does not describe in
-    full maps no node, nor does one with too many matches to enumerate and none
-    of them faithful. Every node
-    goes through the SAME faithful match, so equivalent atoms (ibuprofen's two
-    end methyls) are shared out between the parts as on the name path; with
-    no faithful match the all-matches-agree rule decides node by node."""
+    """Remaps `nodes` (atom indices of `opsin_mol`, OPSIN's re-parse of the name)
+    onto the user's `mol`. All nodes go through the SAME faithful match, so
+    equivalent atoms (ibuprofen's two end methyls) are shared out between the
+    parts as on the name path. With no faithful match the all-matches-agree rule
+    decides node by node over every match, which maps a node only if the matches
+    do not disagree on it. A molecule the name does not describe in full maps no
+    node, nor does one whose matches hit the cap with none of them faithful."""
     matches: tuple = ()
     if opsin_mol is None:
         logger.warning("explain: OPSIN's SMILES for %r could not be re-read", name)
