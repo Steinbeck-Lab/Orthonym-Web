@@ -209,8 +209,9 @@ Things the repo does not tell you, or tells you only after they cost time.
   OPSIN reads in a reordered form (CAS index names) are refused as `unplaced`. Known limitation:
   conjunctive names split the chain into the suffix. Honesty is **per node**: nothing lights a
   guessed atom, and on the SMILES path the nodes are remapped through one substructure match that keeps every
-  atom's H count and charge (such matches differ only by symmetry, so equivalent atoms such as
-  ibuprofen's two end methyls are shared out between the parts as on the name path), with the
+  atom's H count, charge and stereo symmetry class (such matches differ only by a symmetry that
+  keeps the stereo, so equivalent atoms such as ibuprofen's two end methyls are shared out between
+  the parts as on the name path, and a stereocentre never lands on its mirror twin), with the
   all-matches-agree rule as the fallback: a part whose atoms cannot be agreed keeps its text with
   `atoms_unmapped`. Measured 2026-10-02 -- corpus 724 names: CLEAN 722, 2 OPSIN cannot read;
   ChEMBL 10k (run in 30 shards): CLEAN 9997, UNREADABLE 2, every failure class 0 except
