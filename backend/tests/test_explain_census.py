@@ -3,7 +3,8 @@ with, so it gets its own tests (synthetic traces, no JVM)."""
 
 from app.opsin_trace import Trace, TraceAtom, TracePart, WrittenToken
 from app.token_owner import Owner
-from scripts.explain_census import classify
+from scripts import explain_census as census
+from scripts.explain_census import classify, smiles_path_lost
 
 T = Trace(text="ab-1H", smiles="CN", atoms=(TraceAtom(0, 1, "C", ("1",)), TraceAtom(1, 2, "N", ("2",))),
           tokens=(), parts=())
@@ -156,3 +157,31 @@ def test_an_oxidation_number_must_light_the_part_written_before_it():
     wrong = base + [_n("token", [6, 10], [], label="(II)", lights=[1])]
     assert "OXIDATION_WRONG" not in classify(t, ok, {})
     assert "OXIDATION_WRONG" in classify(t, wrong, {})
+
+
+ISOBUTANE = _words("methylpropane", "CC(C)C", [TraceAtom(i, i + 1, "C", ()) for i in range(4)], [])
+
+
+def test_a_smiles_path_that_keeps_symmetric_parts_loses_nothing():
+    nodes = [_n("substituent", [0, 6], [0], label="methyl"), _n("parent", [6, 13], [1, 2, 3], label="propane")]
+    assert smiles_path_lost(ISOBUTANE, nodes) == []
+    assert "SMILES_PATH_LOST" not in classify(ISOBUTANE, nodes, {})
+
+
+def test_a_part_the_smiles_path_leaves_unmapped_is_reported(monkeypatch):
+    def drop_all(mol, opsin_mol, nodes, name=""):
+        return [{**n, "owns": [], "lights": [], "atoms_unmapped": True} for n in nodes]
+    monkeypatch.setattr(census, "_remap_nodes", drop_all)
+    nodes = [_n("substituent", [0, 6], [0], label="methyl"), _n("parent", [6, 13], [], label="propane")]
+    assert smiles_path_lost(ISOBUTANE, nodes) == ["methyl"]
+    assert "SMILES_PATH_LOST" in classify(ISOBUTANE, nodes, {})
+
+
+def test_a_part_the_smiles_path_puts_on_another_element_is_reported(monkeypatch):
+    t = _words("ethanol", "CCO", [TraceAtom(0, 1, "C", ()), TraceAtom(1, 2, "C", ()), TraceAtom(2, 3, "O", ())], [])
+
+    def wrong_atom(mol, opsin_mol, nodes, name=""):
+        carbon = next(a.GetIdx() for a in mol.GetAtoms() if a.GetSymbol() == "C")
+        return [{**n, "owns": [carbon] * len(n["owns"]), "atoms_unmapped": False} for n in nodes]
+    monkeypatch.setattr(census, "_remap_nodes", wrong_atom)
+    assert smiles_path_lost(t, [_n("suffix", [0, 2], [2], label="ol")]) == ["ol"]

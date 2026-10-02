@@ -67,19 +67,27 @@ Outcomes, measured on the trace and the node list (a name may carry several):
                       the benzene ring its prose names, an isotope label's positions; or a
                       line using such a claim's words in a shape the check does not know
                       (see false_hover_lines)
+  SMILES_PATH_LOST    a name whose parts the name path pins to atoms, but the SMILES path
+                      (explain_molecule: the molecule typed in another atom order, here
+                      OPSIN's own SMILES with its atoms shuffled by a fixed seed) leaves
+                      unmapped, or maps onto atoms of another element or hydrogen count;
+                      see smiles_path_lost
 Every outcome except CLEAN and UNREADABLE fails the run (exit 1).
 """
 
 import argparse
 import collections
 import os
+import random
 import re
 import sys
+import zlib
 from typing import Optional
 
 from rdkit import Chem
 
 from app import glossary, opsin_trace
+from app.explain import _remap_nodes
 from app.explain_gate import foreign_lights, oxy_pair_allowed
 from app.explain_tree import build_nodes, stereo_atoms
 from app.label_rules import (
@@ -916,6 +924,46 @@ def oxidation_numbers_misplaced(trace, nodes) -> list:
     return out
 
 
+def _typed_in_another_order(smiles: str, seed: int):
+    """OPSIN's molecule as a user would type it: the same structure with its
+    atoms in a shuffled order, written non-canonically and read back. None when
+    that round trip does not give the same atom count."""
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return None, None
+    order = list(range(mol.GetNumAtoms()))
+    random.Random(seed).shuffle(order)
+    user = Chem.MolFromSmiles(Chem.MolToSmiles(Chem.RenumberAtoms(mol, order), canonical=False))
+    if user is None or user.GetNumAtoms() != mol.GetNumAtoms():
+        return None, None
+    return mol, user
+
+
+def _atom_kinds(mol, indices) -> list:
+    return sorted((mol.GetAtomWithIdx(i).GetSymbol(), mol.GetAtomWithIdx(i).GetTotalNumHs()) for i in indices)
+
+
+def smiles_path_lost(trace, nodes) -> list:
+    """Labels of the nodes the SMILES path loses. For each node that pins atoms on the name
+    path (owns or lights), explain_molecule's remap of the molecule typed in another atom
+    order must still pin as many atoms, and they must be atoms of the same elements with the
+    same hydrogen counts (equivalent by symmetry, never another kind of atom). The molecule
+    is built and every check made here, from the fixed seed of the name's text."""
+    mol, user = _typed_in_another_order(trace.smiles, zlib.crc32(trace.text.encode()))
+    if user is None:
+        return []
+    out = []
+    for before, after in zip(nodes, _remap_nodes(user, mol, nodes, trace.text)):
+        for key in ("owns", "lights"):
+            if not before[key]:
+                continue
+            if after.get("atoms_unmapped") or len(after[key]) != len(before[key]) \
+                    or _atom_kinds(user, after[key]) != _atom_kinds(mol, before[key]):
+                out.append(before["label"])
+                break
+    return out
+
+
 def classify(trace, nodes, owners) -> list[str]:
     """`trace` is a Trace, `nodes` build_nodes(trace), `owners`
     assign_owners(trace.tokens)."""
@@ -992,6 +1040,8 @@ def classify(trace, nodes, owners) -> list[str]:
         out.append("OXIDATION_WRONG")
     if false_hover_lines(trace, nodes):
         out.append("HOVER_LINE_FALSE")
+    if smiles_path_lost(trace, nodes):
+        out.append("SMILES_PATH_LOST")
     return out or ["CLEAN"]
 
 
@@ -1019,7 +1069,8 @@ def _report(title: str, results: dict[str, list[str]]) -> int:
                     "ATOM_GAP", "ATOM_OVERLAP", "BAD_SPAN", "CROSSING", "PART_CONTAINS_PART", "LABEL_EDGE", "ORPHAN_TOKEN",
                     "HYDRO_WRONG", "STEREO_NO_PARENT", "STEREO_WRONG_ATOM", "LOCANT_UNLIT",
                     "LIT_ATOM_FOREIGN", "LOCANT_WRONG_ATOM", "FUNCTION_SWALLOWED", "ALKYL_HETERO",
-                    "LINE_CLAIM_FALSE", "SUFFIX_OWNS_H", "OXIDATION_WRONG", "HOVER_LINE_FALSE"):
+                    "LINE_CLAIM_FALSE", "SUFFIX_OWNS_H", "OXIDATION_WRONG", "HOVER_LINE_FALSE",
+                    "SMILES_PATH_LOST"):
         print(f"  {outcome:18s} {counts.get(outcome, 0)}")
     print("  residue:")
     for name, outs in results.items():
