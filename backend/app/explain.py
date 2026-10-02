@@ -6,7 +6,9 @@ trace-design.md (gitignored).
   the trace's atom indices are the drawing's.
 * explain_molecule -- structure in. The engine names the molecule, the name
   is traced, and every node's atoms are remapped onto the USER's molecule by
-  substructure match under the all-matches-agree rule. A node whose atoms
+  substructure match: every node goes through the first match that keeps each
+  atom's hydrogens and charge (matches like that differ only by symmetry);
+  with no such match, the all-matches-agree rule decides. A node whose atoms
   cannot be agreed keeps its text and line and is flagged atoms_unmapped.
 """
 
@@ -167,10 +169,30 @@ def _remap_node(node: dict, matches) -> dict:
     return {**node, "owns": sorted(owns), "lights": sorted(lights)}
 
 
+def _atom_key(atom) -> tuple:
+    return (atom.GetAtomicNum(), atom.GetTotalNumHs(), atom.GetFormalCharge(),
+            atom.GetIsotope(), atom.GetNumRadicalElectrons())
+
+
+def _first_faithful(mol, opsin_mol, matches):
+    """The first match that pairs every atom with one of the same element,
+    hydrogen count, charge, isotope and radical electrons, or None. Two such
+    matches differ only by a symmetry of the molecule, so which one is taken
+    does not change what any part names."""
+    keys = [_atom_key(a) for a in opsin_mol.GetAtoms()]
+    for match in matches:
+        if all(keys[i] == _atom_key(mol.GetAtomWithIdx(j)) for i, j in enumerate(match)):
+            return match
+    return None
+
+
 def _remap_nodes(mol, opsin_mol, nodes, name: str = "") -> list:
     """Remaps `nodes` (atom indices of `opsin_mol`, OPSIN's re-parse of the
     name) onto the user's `mol`. A molecule the name does not describe in
-    full, or one with too many matches to enumerate, maps no node."""
+    full, or one with too many matches to enumerate, maps no node. Every node
+    goes through the SAME faithful match, so equivalent atoms (ibuprofen's two
+    end methyls) are shared out between the parts as on the name path; with
+    no faithful match the all-matches-agree rule decides node by node."""
     matches: tuple = ()
     if opsin_mol is None:
         logger.warning("explain: OPSIN's SMILES for %r could not be re-read", name)
@@ -186,6 +208,10 @@ def _remap_nodes(mol, opsin_mol, nodes, name: str = "") -> list:
         if len(matches) >= _MAX_SUBSTRUCT_MATCHES:
             logger.warning("explain: match cap hit for %r -- inconclusive", name)
             matches = ()
+        else:
+            faithful = _first_faithful(mol, opsin_mol, matches)
+            if faithful is not None:
+                matches = (faithful,)
     return [_remap_node(node, matches) for node in nodes]
 
 

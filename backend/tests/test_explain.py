@@ -108,12 +108,16 @@ def _node(label, owns, lights=()):
 
 def _shuffled(smiles, seed):
     """(the name path's molecule, the user's molecule = the same structure typed in
-    another atom order, order) where user atom k is name-path atom order[k]."""
+    another atom order, where) where name-path atom i is user atom where[i]."""
     mol = Chem.MolFromSmiles(smiles)
     order = list(range(mol.GetNumAtoms()))
     random.Random(seed).shuffle(order)
-    user = Chem.MolFromSmiles(Chem.MolToSmiles(Chem.RenumberAtoms(mol, order), canonical=False))
-    return mol, user, order
+    renumbered = Chem.RenumberAtoms(mol, order)
+    typed = Chem.MolToSmiles(renumbered, canonical=False)
+    written = [int(i) for i in renumbered.GetProp("_smilesAtomOutputOrder").strip("[],").split(",") if i]
+    user = Chem.MolFromSmiles(typed)
+    where = {order[old]: new for new, old in enumerate(written)}
+    return mol, user, where
 
 
 # atom indices are the name path's: isobutyl C0 C1 C2 C3; tert-butyl C0..C3 on ring C4;
@@ -126,12 +130,12 @@ def _shuffled(smiles, seed):
 ])
 @pytest.mark.parametrize("seed", range(6))
 def test_remap_gives_every_part_one_symmetry_choice(smiles, parts, seed):
-    opsin, user, order = _shuffled(smiles, seed)
+    opsin, user, where = _shuffled(smiles, seed)
     out = explain_module._remap_nodes(user, opsin, [_node(k, v, v) for k, v in parts.items()])
     assert not [n for n in out if n["atoms_unmapped"]]
     owns = [n["owns"] for n in out]
     assert sum(map(len, owns)) == len({a for o in owns for a in o}), "parts stay disjoint"
-    assert {a for o in owns for a in o} == {order.index(i) for v in parts.values() for i in v}
+    assert {a for o in owns for a in o} == {where[i] for v in parts.values() for i in v}
     for n in out:
         assert n["lights"] == n["owns"]
         assert sorted(user.GetAtomWithIdx(a).GetSymbol() for a in n["owns"]) == \
