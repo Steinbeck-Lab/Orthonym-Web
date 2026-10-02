@@ -167,6 +167,28 @@ def _remap_node(node: dict, matches) -> dict:
     return {**node, "owns": sorted(owns), "lights": sorted(lights)}
 
 
+def _remap_nodes(mol, opsin_mol, nodes, name: str = "") -> list:
+    """Remaps `nodes` (atom indices of `opsin_mol`, OPSIN's re-parse of the
+    name) onto the user's `mol`. A molecule the name does not describe in
+    full, or one with too many matches to enumerate, maps no node."""
+    matches: tuple = ()
+    if opsin_mol is None:
+        logger.warning("explain: OPSIN's SMILES for %r could not be re-read", name)
+    elif opsin_mol.GetNumAtoms() != mol.GetNumAtoms():
+        # A proper-substructure match would map happily while leaving the
+        # user's extra atoms in no node at all: the name does not describe
+        # this whole molecule, so no node is mapped.
+        logger.warning("explain: %r re-parses to %d heavy atoms, molecule has %d",
+                       name, opsin_mol.GetNumAtoms(), mol.GetNumAtoms())
+    else:
+        matches = mol.GetSubstructMatches(opsin_mol, uniquify=False,
+                                          maxMatches=_MAX_SUBSTRUCT_MATCHES)
+        if len(matches) >= _MAX_SUBSTRUCT_MATCHES:
+            logger.warning("explain: match cap hit for %r -- inconclusive", name)
+            matches = ()
+    return [_remap_node(node, matches) for node in nodes]
+
+
 def explain_molecule(smiles: str, namer: Orthonym) -> dict:
     """Name `smiles` with the SAME primary namer /api/translate uses, trace
     that name, and remap every node onto the user's molecule. All returned
@@ -195,22 +217,6 @@ def explain_molecule(smiles: str, namer: Orthonym) -> dict:
         return _response(smiles, name, svg=svg, atom_points=atom_points,
                          total_atoms=total_atoms, error=named["error"])
 
-    opsin_mol = Chem.MolFromSmiles(named["smiles"])
-    matches: tuple = ()
-    if opsin_mol is None:
-        logger.warning("explain: OPSIN's SMILES for %r could not be re-read", name)
-    elif opsin_mol.GetNumAtoms() != mol.GetNumAtoms():
-        # A proper-substructure match would map happily while leaving the
-        # user's extra atoms in no node at all: the name does not describe
-        # this whole molecule, so no node is mapped.
-        logger.warning("explain: %r re-parses to %d heavy atoms, molecule has %d",
-                       name, opsin_mol.GetNumAtoms(), mol.GetNumAtoms())
-    else:
-        matches = mol.GetSubstructMatches(opsin_mol, uniquify=False,
-                                          maxMatches=_MAX_SUBSTRUCT_MATCHES)
-        if len(matches) >= _MAX_SUBSTRUCT_MATCHES:
-            logger.warning("explain: match cap hit for %r -- inconclusive", name)
-            matches = ()
-    nodes = [_remap_node(node, matches) for node in named["nodes"]]
+    nodes = _remap_nodes(mol, Chem.MolFromSmiles(named["smiles"]), named["nodes"], name)
     return _response(smiles, name, svg=svg, atom_points=atom_points,
                      total_atoms=total_atoms, nodes=nodes)
