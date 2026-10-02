@@ -1,5 +1,10 @@
 """explain_name / explain_molecule: the v2 response (JVM + engine)."""
 
+import random
+
+import pytest
+from rdkit import Chem
+
 from app import explain as explain_module
 from app.explain import _align_spans, explain_molecule, explain_name
 from app.explain_tree import PART_NODE_KINDS
@@ -74,14 +79,169 @@ def test_smiles_in_maps_atoms_onto_the_users_molecule():
     assert not any(n["atoms_unmapped"] for n in body["nodes"])
 
 
-def test_symmetric_parts_keep_their_text():
-    body = explain_molecule("CC(C)Cc1ccc(cc1)C(C)C(=O)O", namer=get_primary_namer())
+IBUPROFEN = "CC(C)Cc1ccc(cc1)C(C)C(=O)O"
+
+
+def _lit(body, label):
+    return [n for n in body["nodes"] if n["label"] == label]
+
+
+def test_symmetric_parts_are_mapped_through_one_match():
+    body = explain_molecule(IBUPROFEN, namer=get_primary_namer())
     assert body["error"] is None
-    unmapped = [n for n in body["nodes"] if n["atoms_unmapped"]]
-    assert {n["label"] for n in unmapped} >= {"methyl", "propyl"}
-    for n in unmapped:
-        assert n["owns"] == [] and n["lights"] == [] and n["label"] and n["line"] and n["span"]
-    assert any(not n["atoms_unmapped"] and n["owns"] for n in _parts(body))
+    assert body["name"] == "2-[4-(2-methylpropyl)phenyl]propanoic acid"
+    assert not [n for n in body["nodes"] if n["atoms_unmapped"]]
+    (methyl,), (propyl,) = _lit(body, "methyl"), _lit(body, "propyl")
+    assert methyl["owns"] and propyl["owns"]
+    assert not set(methyl["owns"]) & set(propyl["owns"])
+    assert not set(methyl["lights"]) & set(propyl["lights"])
+    user = Chem.MolFromSmiles(IBUPROFEN)
+    isobutyl = {0, 1, 2, 3}
+    assert set(methyl["owns"]) | set(propyl["owns"]) == isobutyl
+    assert all(user.GetAtomWithIdx(a).GetSymbol() == "C" for a in methyl["owns"] + propyl["owns"])
+
+
+def _node(label, owns, lights=()):
+    return {"id": label, "kind": "substituent", "label": label, "span": [0, 1], "owns": list(owns),
+            "lights": list(lights), "line": "x", "parent": None, "atoms_unmapped": False}
+
+
+def _shuffled(smiles, seed):
+    """(the name path's molecule, the user's molecule = the same structure typed in
+    another atom order, where) where name-path atom i is user atom where[i]."""
+    mol = Chem.MolFromSmiles(smiles)
+    order = list(range(mol.GetNumAtoms()))
+    random.Random(seed).shuffle(order)
+    renumbered = Chem.RenumberAtoms(mol, order)
+    typed = Chem.MolToSmiles(renumbered, canonical=False)
+    written = [int(i) for i in renumbered.GetProp("_smilesAtomOutputOrder").strip("[],").split(",") if i]
+    user = Chem.MolFromSmiles(typed)
+    where = {order[old]: new for new, old in enumerate(written)}
+    return mol, user, where
+
+
+# atom indices are the name path's: isobutyl C0 C1 C2 C3; tert-butyl C0..C3 on ring C4;
+# the para-substituted ring c4..c10 with O8
+@pytest.mark.parametrize("smiles, parts", [
+    (IBUPROFEN, {"methyl": [0], "propyl": [1, 2, 3]}),
+    ("CC(C)(C)c1ccc(O)cc1", {"methyl": [0], "propan-2-yl": [1, 2, 3]}),
+    ("CC(C)Oc1ccccc1", {"methyl": [0], "propan-2-yl": [1, 2, 3]}),
+    ("CC(C)(C)c1ccc(O)cc1", {"ortho": [5], "rest": [4, 6, 7, 8, 9, 10]}),
+])
+@pytest.mark.parametrize("seed", range(6))
+def test_remap_gives_every_part_one_symmetry_choice(smiles, parts, seed):
+    opsin, user, where = _shuffled(smiles, seed)
+    out = explain_module._remap_nodes(user, opsin, [_node(k, v, v) for k, v in parts.items()])
+    assert not [n for n in out if n["atoms_unmapped"]]
+    owns = [n["owns"] for n in out]
+    assert sum(map(len, owns)) == len({a for o in owns for a in o}), "parts stay disjoint"
+    assert {a for o in owns for a in o} == {where[i] for v in parts.values() for i in v}
+    for n in out:
+        assert n["lights"] == n["owns"]
+        assert sorted(user.GetAtomWithIdx(a).GetSymbol() for a in n["owns"]) == \
+            sorted(opsin.GetAtomWithIdx(i).GetSymbol() for i in parts[n["label"]])
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_remap_keeps_bonded_parts_bonded(seed):
+    # ring atoms c5 (ortho) and c6 (meta) are bonded: whichever side of the ring the
+    # two parts land on, they must land on the same side
+    opsin, user, _ = _shuffled("CC(C)(C)c1ccc(O)cc1", seed)
+    out = explain_module._remap_nodes(user, opsin, [_node("ortho", [5]), _node("meta", [6])])
+    assert not [n for n in out if n["atoms_unmapped"]]
+    a, b = (n["owns"][0] for n in out)
+    assert user.GetBondBetweenAtoms(a, b) is not None
+
+
+def _stereo_label(mol, idx):
+    """The CIP label of the stereocentre at atom idx, or the E/Z label of a stereo double bond it is in."""
+    atom = mol.GetAtomWithIdx(idx)
+    if atom.HasProp("_CIPCode"):
+        return atom.GetProp("_CIPCode")
+    for bond in atom.GetBonds():
+        if str(bond.GetStereo()) in ("STEREOE", "STEREOZ"):
+            return str(bond.GetStereo())
+    return None
+
+
+STEREO_MOLECULES = [
+    "O[C@@H](C(=O)O)[C@@H](C(=O)O)O",                      # (2R,3S)-tartaric acid, meso
+    "O[C@H]1CCCC[C@H]1O",                                  # (1S,2R)-cyclohexane-1,2-diol, meso
+    "C[C@@H](O)CC[C@H](C)O",                               # (2R,5S)-hexane-2,5-diol
+    "O=C(O)[C@H]1CC[C@H](C1)C(=O)O",                       # (1S,3R)-cyclopentane-1,3-dicarboxylic acid
+    "C\\C=C/C=C/C",                                        # (2Z,4E)-hexa-2,4-diene
+    "CN1[C@H]2CC[C@@H]1CC(C2)OC(=O)C(CO)c1ccccc1",         # tropane ester, (1R,5S) bridgeheads
+    "C1CC#CCC[C@H]2C[C@@H]12",                             # (1S,8R)-bicyclo[6.1.0]non-4-yne
+]
+
+
+@pytest.mark.parametrize("smiles", STEREO_MOLECULES)
+def test_remap_keeps_every_stereo_mark_on_an_atom_of_its_own_label(smiles):
+    # a faithful match must not map a stereocentre (or a stereo double bond) onto its mirror twin,
+    # whatever the order the user typed the atoms in
+    for seed in range(20):
+        opsin, user, where = _shuffled(smiles, seed)
+        Chem.AssignStereochemistry(opsin, cleanIt=True, force=True)
+        Chem.AssignStereochemistry(user, cleanIt=True, force=True)
+        marked = [a for a in range(opsin.GetNumAtoms()) if _stereo_label(opsin, a)]
+        assert marked
+        nodes = [_node(f"m{a}", [a], [a]) for a in marked]
+        out = explain_module._remap_nodes(user, opsin, nodes)
+        for a, n in zip(marked, out):
+            assert not n["atoms_unmapped"], (smiles, seed)
+            assert _stereo_label(user, n["lights"][0]) == _stereo_label(opsin, a), (smiles, seed, a)
+
+
+def test_remap_without_a_stereo_keeping_match_falls_back_to_the_agreement_rule():
+    # the name path's molecule is the meso form, the user's the (R,R) form: both matches swap the
+    # centres, neither keeps the stereo, so a centre node is not pinned to a guess
+    opsin = Chem.MolFromSmiles("O[C@@H](C(=O)O)[C@@H](C(=O)O)O")
+    user = Chem.MolFromSmiles("O[C@@H](C(=O)O)[C@H](C(=O)O)O")
+    assert len(user.GetSubstructMatches(opsin, uniquify=False)) == 2
+    out = explain_module._remap_nodes(user, opsin, [_node("centre", [1], [1]), _node("acid", [2, 3, 4])])
+    assert out[0]["atoms_unmapped"] and out[0]["lights"] == []
+
+
+def test_remap_keeps_the_agreement_rule_when_no_match_is_faithful():
+    # 4-isopropylimidazole, drawn as the other tautomer: the isopropyl methyls swap
+    # between the two matches, and neither match keeps the ring N-H where it was
+    opsin, user = Chem.MolFromSmiles("CC(C)c1c[nH]cn1"), Chem.MolFromSmiles("CC(C)c1cnc[nH]1")
+    assert len(user.GetSubstructMatches(opsin, uniquify=False)) == 2
+    out = {n["label"]: n for n in explain_module._remap_nodes(
+        user, opsin, [_node("methyl", [0]), _node("propyl", [1, 2]), _node("ring", [3, 4, 5, 6, 7])])}
+    for label in ("methyl", "propyl"):
+        assert out[label]["atoms_unmapped"] and out[label]["owns"] == [] == out[label]["lights"]
+    assert not out["ring"]["atoms_unmapped"] and out["ring"]["owns"] == [3, 4, 5, 6, 7]
+
+
+def test_remap_maps_nothing_when_the_atom_counts_differ():
+    out = explain_module._remap_nodes(Chem.MolFromSmiles("CCCO"), Chem.MolFromSmiles("CCO"),
+                                      [_node("ethanol", [0, 1, 2])])
+    assert out[0]["atoms_unmapped"] and out[0]["owns"] == []
+
+
+def test_remap_uses_a_faithful_match_even_when_the_match_cap_is_hit(monkeypatch):
+    monkeypatch.setattr(explain_module, "_MAX_SUBSTRUCT_MATCHES", 2)
+    mol = Chem.MolFromSmiles("CC(C)(C)C")        # 24 matches, all faithful
+    out = explain_module._remap_nodes(mol, mol, [_node("methyl", [0]), _node("rest", [1, 2, 3, 4])])
+    assert not [n for n in out if n["atoms_unmapped"]]
+    assert sorted(a for n in out for a in n["owns"]) == [0, 1, 2, 3, 4]
+
+
+def test_remap_maps_nothing_when_the_cap_is_hit_and_no_match_is_faithful(monkeypatch):
+    monkeypatch.setattr(explain_module, "_MAX_SUBSTRUCT_MATCHES", 2)
+    opsin, user = Chem.MolFromSmiles("CC(C)c1c[nH]cn1"), Chem.MolFromSmiles("CC(C)c1cnc[nH]1")
+    out = explain_module._remap_nodes(user, opsin, [_node("ring", [3, 4, 5, 6, 7])])
+    assert out[0]["atoms_unmapped"] and out[0]["owns"] == []
+
+
+@pytest.mark.parametrize("smiles", ["CC(C)(C)c1ccc(O)cc1", "CC(C)Oc1ccccc1"])
+def test_symmetric_molecules_map_every_part(smiles):
+    body = explain_molecule(smiles, namer=get_primary_namer())
+    assert body["error"] is None
+    assert not [n for n in body["nodes"] if n["atoms_unmapped"]]
+    owned = sorted(a for n in _parts(body) for a in n["owns"])
+    assert owned == list(range(body["total_atoms"]))
 
 
 def test_bad_smiles():

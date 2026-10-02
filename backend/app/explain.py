@@ -6,7 +6,9 @@ trace-design.md (gitignored).
   the trace's atom indices are the drawing's.
 * explain_molecule -- structure in. The engine names the molecule, the name
   is traced, and every node's atoms are remapped onto the USER's molecule by
-  substructure match under the all-matches-agree rule. A node whose atoms
+  substructure match: every node goes through the first match that keeps each
+  atom's hydrogens and charge (matches like that differ only by symmetry);
+  with no such match, the all-matches-agree rule decides. A node whose atoms
   cannot be agreed keeps its text and line and is flagged atoms_unmapped.
 """
 
@@ -167,6 +169,65 @@ def _remap_node(node: dict, matches) -> dict:
     return {**node, "owns": sorted(owns), "lights": sorted(lights)}
 
 
+def _atom_key(atom) -> tuple:
+    return (atom.GetAtomicNum(), atom.GetTotalNumHs(), atom.GetFormalCharge(),
+            atom.GetIsotope(), atom.GetNumRadicalElectrons())
+
+
+def _classes(mol) -> list:
+    """Each atom's symmetry class, stereo included: two atoms share a class only when
+    a symmetry that keeps every stereocentre and stereo double bond maps one onto the other."""
+    return list(Chem.CanonicalRankAtoms(mol, breakTies=False, includeChirality=True))
+
+
+def _first_faithful(mol, opsin_mol, matches):
+    """The first match that pairs every atom with one of the same element,
+    hydrogen count, charge, isotope and radical electrons AND the same stereo
+    symmetry class, or None. The classes are computed on each molecule alone, so
+    they agree only where the two are the same molecule; the pairing then is a
+    symmetry of that molecule that keeps its stereo, and an atom is only ever
+    swapped with one that is equivalent to it (a stereocentre is never put on its
+    mirror twin), so which such match is taken does not change what any part names."""
+    keys = [_atom_key(a) for a in opsin_mol.GetAtoms()]
+    ranks, user_ranks = _classes(opsin_mol), _classes(mol)
+    for match in matches:
+        if all(keys[i] == _atom_key(mol.GetAtomWithIdx(j)) and ranks[i] == user_ranks[j]
+               for i, j in enumerate(match)):
+            return match
+    return None
+
+
+def _remap_nodes(mol, opsin_mol, nodes, name: str = "") -> list:
+    """Remaps `nodes` (atom indices of `opsin_mol`, OPSIN's re-parse of the name)
+    onto the user's `mol`. All nodes go through the SAME faithful match, so
+    equivalent atoms (ibuprofen's two end methyls) are shared out between the
+    parts as on the name path. With no faithful match the all-matches-agree rule
+    decides node by node over every match, which maps a node only if the matches
+    do not disagree on it. A molecule the name does not describe in full maps no
+    node, nor does one whose matches hit the cap with none of them faithful."""
+    matches: tuple = ()
+    if opsin_mol is None:
+        logger.warning("explain: OPSIN's SMILES for %r could not be re-read", name)
+    elif opsin_mol.GetNumAtoms() != mol.GetNumAtoms():
+        # A proper-substructure match would map happily while leaving the
+        # user's extra atoms in no node at all: the name does not describe
+        # this whole molecule, so no node is mapped.
+        logger.warning("explain: %r re-parses to %d heavy atoms, molecule has %d",
+                       name, opsin_mol.GetNumAtoms(), mol.GetNumAtoms())
+    else:
+        matches = mol.GetSubstructMatches(opsin_mol, uniquify=False,
+                                          maxMatches=_MAX_SUBSTRUCT_MATCHES)
+        faithful = _first_faithful(mol, opsin_mol, matches)
+        if faithful is not None:
+            # A truncated list still holds a true symmetry, so it is safe to use
+            # even when the cap was hit; only the agreement rule needs every match.
+            matches = (faithful,)
+        elif len(matches) >= _MAX_SUBSTRUCT_MATCHES:
+            logger.warning("explain: match cap hit for %r -- inconclusive", name)
+            matches = ()
+    return [_remap_node(node, matches) for node in nodes]
+
+
 def explain_molecule(smiles: str, namer: Orthonym) -> dict:
     """Name `smiles` with the SAME primary namer /api/translate uses, trace
     that name, and remap every node onto the user's molecule. All returned
@@ -195,22 +256,6 @@ def explain_molecule(smiles: str, namer: Orthonym) -> dict:
         return _response(smiles, name, svg=svg, atom_points=atom_points,
                          total_atoms=total_atoms, error=named["error"])
 
-    opsin_mol = Chem.MolFromSmiles(named["smiles"])
-    matches: tuple = ()
-    if opsin_mol is None:
-        logger.warning("explain: OPSIN's SMILES for %r could not be re-read", name)
-    elif opsin_mol.GetNumAtoms() != mol.GetNumAtoms():
-        # A proper-substructure match would map happily while leaving the
-        # user's extra atoms in no node at all: the name does not describe
-        # this whole molecule, so no node is mapped.
-        logger.warning("explain: %r re-parses to %d heavy atoms, molecule has %d",
-                       name, opsin_mol.GetNumAtoms(), mol.GetNumAtoms())
-    else:
-        matches = mol.GetSubstructMatches(opsin_mol, uniquify=False,
-                                          maxMatches=_MAX_SUBSTRUCT_MATCHES)
-        if len(matches) >= _MAX_SUBSTRUCT_MATCHES:
-            logger.warning("explain: match cap hit for %r -- inconclusive", name)
-            matches = ()
-    nodes = [_remap_node(node, matches) for node in named["nodes"]]
+    nodes = _remap_nodes(mol, Chem.MolFromSmiles(named["smiles"]), named["nodes"], name)
     return _response(smiles, name, svg=svg, atom_points=atom_points,
                      total_atoms=total_atoms, nodes=nodes)

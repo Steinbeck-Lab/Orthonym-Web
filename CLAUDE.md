@@ -208,10 +208,15 @@ Things the repo does not tell you, or tells you only after they cost time.
   `HOVER_LINE_FALSE` reads each line's claim and measures it by rules of its own. Names
   OPSIN reads in a reordered form (CAS index names) are refused as `unplaced`. Known limitation:
   conjunctive names split the chain into the suffix. Honesty is **per node**: nothing lights a
-  guessed atom, and on the SMILES path a part whose atoms cannot be agreed keeps its text with
-  `atoms_unmapped`. Measured 2026-10-01 -- corpus 724 names: CLEAN 722, 2 OPSIN cannot read;
-  ChEMBL 10k (run in 30 shards): CLEAN 9998, UNREADABLE 2, every failure class 0 (the census
-  classes are listed in the header of `explain_census.py`). The gated sets are engine-named or
+  guessed atom, and on the SMILES path the nodes are remapped through one substructure match that keeps every
+  atom's H count, charge and stereo symmetry class (such matches differ only by a symmetry that
+  keeps the stereo, so equivalent atoms such as ibuprofen's two end methyls are shared out between
+  the parts as on the name path, and a stereocentre never lands on its mirror twin), with the
+  all-matches-agree rule as the fallback: a part whose atoms cannot be agreed keeps its text with
+  `atoms_unmapped`. Measured 2026-10-02 -- corpus 724 names: CLEAN 722, 2 OPSIN cannot read;
+  ChEMBL 10k (run in 30 shards): CLEAN 9997, UNREADABLE 2, every failure class 0 except
+  SMILES_PATH_LOST 1 (RDKit reads one name's furan aromatic in the typed order only, so no match;
+  the census classes are listed in the header of `explain_census.py`). The gated sets are engine-named or
   curated, so a class they hold no name of is invisible to them: add the names to `CURATED` with
   the fix. Gate: `tests/test_explain_coverage.py`; census: `backend/scripts/explain_census.py`
   (`cd backend && ... scripts/explain_census.py --chembl tests/fixtures/explain_chembl_10k.tsv`).

@@ -67,19 +67,28 @@ Outcomes, measured on the trace and the node list (a name may carry several):
                       the benzene ring its prose names, an isotope label's positions; or a
                       line using such a claim's words in a shape the check does not know
                       (see false_hover_lines)
+  SMILES_PATH_LOST    a name whose parts the name path pins to atoms, but the SMILES path
+                      (explain_molecule: the molecule typed in another atom order, here
+                      OPSIN's own SMILES with its atoms shuffled by a fixed seed) leaves
+                      unmapped, or maps onto atoms of another element or hydrogen count;
+                      see smiles_path_lost (a stereo mark must also light atoms of its own CIP / E-Z label,
+                      and nodes must overlap as on the name path)
 Every outcome except CLEAN and UNREADABLE fails the run (exit 1).
 """
 
 import argparse
 import collections
 import os
+import random
 import re
 import sys
+import zlib
 from typing import Optional
 
 from rdkit import Chem
 
 from app import glossary, opsin_trace
+from app.explain import _remap_nodes
 from app.explain_gate import foreign_lights, oxy_pair_allowed
 from app.explain_tree import build_nodes, stereo_atoms
 from app.label_rules import (
@@ -916,6 +925,87 @@ def oxidation_numbers_misplaced(trace, nodes) -> list:
     return out
 
 
+def _typed_in_another_order(smiles: str, seed: int):
+    """OPSIN's molecule as a user would type it: the same structure with its
+    atoms in a shuffled order, written non-canonically and read back. None when
+    that round trip does not give the same atom count."""
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return None, None
+    order = list(range(mol.GetNumAtoms()))
+    random.Random(seed).shuffle(order)
+    user = Chem.MolFromSmiles(Chem.MolToSmiles(Chem.RenumberAtoms(mol, order), canonical=False))
+    if user is None or user.GetNumAtoms() != mol.GetNumAtoms():
+        return None, None
+    return mol, user
+
+
+def _atom_kinds(mol, indices) -> list:
+    return sorted((mol.GetAtomWithIdx(i).GetSymbol(), mol.GetAtomWithIdx(i).GetTotalNumHs()) for i in indices)
+
+
+def _stereo_labels(mol, indices) -> list:
+    """The CIP label of each atom (R / S, or E / Z of a stereo double bond it is in; "" for none)."""
+    out = []
+    for i in indices:
+        atom = mol.GetAtomWithIdx(i)
+        label = atom.GetProp("_CIPCode") if atom.HasProp("_CIPCode") else ""
+        for bond in atom.GetBonds():
+            if not label and str(bond.GetStereo()) in ("STEREOE", "STEREOZ"):
+                label = str(bond.GetStereo())[-1]
+        out.append(label)
+    return sorted(out)
+
+
+def _lost_on_one_order(mol, user, nodes, text) -> list:
+    out = []
+    after_nodes = _remap_nodes(user, mol, nodes, text)
+    for before, after in zip(nodes, after_nodes):
+        for key in ("owns", "lights"):
+            if not before[key]:
+                continue
+            if after.get("atoms_unmapped") or len(after[key]) != len(before[key]) \
+                    or _atom_kinds(user, after[key]) != _atom_kinds(mol, before[key]):
+                out.append(before["label"])
+                break
+        else:
+            if before["kind"] == "stereo" and before["lights"] \
+                    and _stereo_labels(user, after["lights"]) != _stereo_labels(mol, before["lights"]):
+                out.append(before["label"])
+    # nodes that overlap on the name path must overlap by as much on the SMILES path: a node
+    # mapped through another match than its neighbour overlaps wrongly
+    atoms = [set(n["owns"]) | set(n["lights"]) for n in nodes]
+    mapped = [set(n["owns"]) | set(n["lights"]) for n in after_nodes]
+    for i in range(len(nodes)):
+        for j in range(i + 1, len(nodes)):
+            if len(atoms[i] & atoms[j]) != len(mapped[i] & mapped[j]):
+                out.extend((nodes[i]["label"], nodes[j]["label"]))
+    return out
+
+
+SHUFFLES = 4
+
+
+def smiles_path_lost(trace, nodes) -> list:
+    """Labels of the nodes the SMILES path loses, over SHUFFLES typed atom orders of OPSIN's
+    molecule (fixed seeds from the name's text). A node that pins atoms on the name path
+    (owns or lights) must still pin as many on the remap onto the typed molecule, of the same
+    elements and hydrogen counts (equivalent by symmetry, never another kind of atom); a stereo
+    mark must light atoms with the same CIP / E-Z labels on both molecules (RDKit's own labels
+    on each); and every two nodes must overlap by the same number of atoms on both. All of it
+    is measured here, not by explain.py; only the remap under test is imported."""
+    out = []
+    seed = zlib.crc32(trace.text.encode())
+    for k in range(SHUFFLES):
+        mol, user = _typed_in_another_order(trace.smiles, seed + k)
+        if user is None:
+            continue
+        for m in (mol, user):
+            Chem.AssignStereochemistry(m, cleanIt=True, force=True)
+        out.extend(_lost_on_one_order(mol, user, nodes, trace.text))
+    return list(dict.fromkeys(out))
+
+
 def classify(trace, nodes, owners) -> list[str]:
     """`trace` is a Trace, `nodes` build_nodes(trace), `owners`
     assign_owners(trace.tokens)."""
@@ -992,6 +1082,8 @@ def classify(trace, nodes, owners) -> list[str]:
         out.append("OXIDATION_WRONG")
     if false_hover_lines(trace, nodes):
         out.append("HOVER_LINE_FALSE")
+    if smiles_path_lost(trace, nodes):
+        out.append("SMILES_PATH_LOST")
     return out or ["CLEAN"]
 
 
@@ -1019,7 +1111,8 @@ def _report(title: str, results: dict[str, list[str]]) -> int:
                     "ATOM_GAP", "ATOM_OVERLAP", "BAD_SPAN", "CROSSING", "PART_CONTAINS_PART", "LABEL_EDGE", "ORPHAN_TOKEN",
                     "HYDRO_WRONG", "STEREO_NO_PARENT", "STEREO_WRONG_ATOM", "LOCANT_UNLIT",
                     "LIT_ATOM_FOREIGN", "LOCANT_WRONG_ATOM", "FUNCTION_SWALLOWED", "ALKYL_HETERO",
-                    "LINE_CLAIM_FALSE", "SUFFIX_OWNS_H", "OXIDATION_WRONG", "HOVER_LINE_FALSE"):
+                    "LINE_CLAIM_FALSE", "SUFFIX_OWNS_H", "OXIDATION_WRONG", "HOVER_LINE_FALSE",
+                    "SMILES_PATH_LOST"):
         print(f"  {outcome:18s} {counts.get(outcome, 0)}")
     print("  residue:")
     for name, outs in results.items():

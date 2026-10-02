@@ -3,7 +3,10 @@ with, so it gets its own tests (synthetic traces, no JVM)."""
 
 from app.opsin_trace import Trace, TraceAtom, TracePart, WrittenToken
 from app.token_owner import Owner
-from scripts.explain_census import classify
+from rdkit import Chem
+
+from scripts import explain_census as census
+from scripts.explain_census import classify, smiles_path_lost
 
 T = Trace(text="ab-1H", smiles="CN", atoms=(TraceAtom(0, 1, "C", ("1",)), TraceAtom(1, 2, "N", ("2",))),
           tokens=(), parts=())
@@ -156,3 +159,65 @@ def test_an_oxidation_number_must_light_the_part_written_before_it():
     wrong = base + [_n("token", [6, 10], [], label="(II)", lights=[1])]
     assert "OXIDATION_WRONG" not in classify(t, ok, {})
     assert "OXIDATION_WRONG" in classify(t, wrong, {})
+
+
+ISOBUTANE = _words("methylpropane", "CC(C)C", [TraceAtom(i, i + 1, "C", ()) for i in range(4)], [])
+
+
+def test_a_smiles_path_that_keeps_symmetric_parts_loses_nothing():
+    nodes = [_n("substituent", [0, 6], [0], label="methyl"), _n("parent", [6, 13], [1, 2, 3], label="propane")]
+    assert smiles_path_lost(ISOBUTANE, nodes) == []
+    assert "SMILES_PATH_LOST" not in classify(ISOBUTANE, nodes, {})
+
+
+def test_a_part_the_smiles_path_leaves_unmapped_is_reported(monkeypatch):
+    def drop_all(mol, opsin_mol, nodes, name=""):
+        return [{**n, "owns": [], "lights": [], "atoms_unmapped": True} for n in nodes]
+    monkeypatch.setattr(census, "_remap_nodes", drop_all)
+    nodes = [_n("substituent", [0, 6], [0], label="methyl"), _n("parent", [6, 13], [], label="propane")]
+    assert smiles_path_lost(ISOBUTANE, nodes) == ["methyl"]
+    assert "SMILES_PATH_LOST" in classify(ISOBUTANE, nodes, {})
+
+
+def test_a_part_the_smiles_path_puts_on_another_element_is_reported(monkeypatch):
+    t = _words("ethanol", "CCO", [TraceAtom(0, 1, "C", ()), TraceAtom(1, 2, "C", ()), TraceAtom(2, 3, "O", ())], [])
+
+    def wrong_atom(mol, opsin_mol, nodes, name=""):
+        carbon = next(a.GetIdx() for a in mol.GetAtoms() if a.GetSymbol() == "C")
+        return [{**n, "owns": [carbon] * len(n["owns"]), "atoms_unmapped": False} for n in nodes]
+    monkeypatch.setattr(census, "_remap_nodes", wrong_atom)
+    assert smiles_path_lost(t, [_n("suffix", [0, 2], [2], label="ol")]) == ["ol"]
+
+
+TARTARIC = _words("tartaric", "O[C@@H](C(=O)O)[C@@H](C(=O)O)O", [TraceAtom(i, i + 1, "C", ()) for i in range(9)], [])
+
+
+def _twin_swap(mol, opsin_mol, nodes, name=""):
+    # every node through the identity, except that the two centres (atoms 1 and 5) are swapped
+    swap = {1: 5, 5: 1}
+    return [{**n, "owns": [swap.get(a, a) for a in n["owns"]], "lights": [swap.get(a, a) for a in n["lights"]],
+             "atoms_unmapped": False} for n in nodes]
+
+
+def test_a_stereo_mark_mapped_onto_the_mirror_twin_is_reported(monkeypatch):
+    monkeypatch.setattr(census, "SHUFFLES", 1)
+    nodes = [_n("stereo", [0, 2], label="2R", lights=[1])]
+    monkeypatch.setattr(census, "_typed_in_another_order",
+                        lambda smiles, seed: (Chem.MolFromSmiles(smiles), Chem.MolFromSmiles(smiles)))
+    monkeypatch.setattr(census, "_remap_nodes", _twin_swap)
+    assert smiles_path_lost(TARTARIC, nodes) == ["2R"]
+
+
+def test_nodes_mapped_through_different_matches_are_reported_by_their_overlap(monkeypatch):
+    monkeypatch.setattr(census, "SHUFFLES", 1)
+    monkeypatch.setattr(census, "_typed_in_another_order",
+                        lambda smiles, seed: (Chem.MolFromSmiles(smiles), Chem.MolFromSmiles(smiles)))
+
+    def split(mol, opsin_mol, nodes, name=""):     # the second node goes through the swapped match
+        swap = {2: 3, 3: 2}
+        return [nodes[0] | {"atoms_unmapped": False},
+                {**nodes[1], "owns": [swap.get(a, a) for a in nodes[1]["owns"]], "atoms_unmapped": False}]
+    monkeypatch.setattr(census, "_remap_nodes", split)
+    t = _words("ab", "CCCC", [TraceAtom(i, i + 1, "C", ()) for i in range(4)], [])
+    nodes = [_n("substituent", [0, 1], [0, 2]), _n("parent", [1, 2], [1, 3])]
+    assert set(smiles_path_lost(t, nodes)) == {"ab"}
