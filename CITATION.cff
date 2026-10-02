@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-message: If you use this software, please cite it as below.
+message: If you use Orthonym-Web, please cite the paper below; the software has its own DOI.
 title: Orthonym-Web
 abstract: >-
   Orthonym-Web is the web application for Orthonym, a deterministic, rule-based
@@ -28,6 +28,25 @@ keywords:
   - structure to name
   - SMILES
   - OPSIN
+preferred-citation:
+  type: article
+  status: preprint
+  title: 'Orthonym: verified IUPAC names for chemical structures in the wild'
+  authors:
+    - family-names: Rajan
+      given-names: Kohulan
+      orcid: https://orcid.org/0000-0003-1066-7792
+    - family-names: Zielesny
+      given-names: Achim
+      orcid: https://orcid.org/0000-0003-0722-4229
+    - family-names: Steinbeck
+      given-names: Christoph
+      orcid: https://orcid.org/0000-0001-6966-0814
+  journal: ChemRxiv
+  year: 2026
+  month: 10
+  doi: 10.26434/chemrxiv.15009769/v1
+  url: https://doi.org/10.26434/chemrxiv.15009769/v1
 references:
   - type: software
     title: Orthonym
