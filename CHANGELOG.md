@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.4.2](https://github.com/Steinbeck-Lab/Orthonym-Web/compare/v0.4.1...v0.4.2) (2026-10-03)
+
+
+### Bug Fixes
+
+* **explain:** a faithful match is used even when the match cap is hit ([dbd882d](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/dbd882d433abce0dc687f05eaa4a7c6b1efcbd15))
+* **explain:** map SMILES-path parts through one faithful match ([2d765b4](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/2d765b4bef39193a930813ffc7f46cbf1d6e5ff0))
+* **explain:** the faithful match keeps stereo ([16c7e0a](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/16c7e0a0669d05af1fca374dd9d420c9b098d18a))
+* **explain:** the SMILES path keeps parts over symmetric atoms ([eb44960](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/eb449601289473cc4516a0f61e195595069efb18))
+* show cisplatin as a connected square-planar structure ([5f98c0d](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/5f98c0db3eaa1e1f8bf70b873e7cdc2f4ae5f8ea))
+* show cisplatin as a connected square-planar structure ([5e382e9](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/5e382e9c686ae918346907708928c45e10dd72bb))
+
+
+### Refactoring
+
+* **explain:** factor the SMILES-path remap into one function ([cdcb050](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/cdcb050782a2e3e658aacdb67ad6f67a0b4cc3ad))
+
+
+### Documentation
+
+* describe the SMILES-path remap and the new census numbers ([8a5ac35](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/8a5ac35dbafa82b7c609faefe5ba4bc37be6d79f))
+* the SMILES-path match also keeps stereo ([bb54a00](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/bb54a004693e55bef86355e51d99d2cf18b41015))
+
 ## [0.4.1](https://github.com/Steinbeck-Lab/Orthonym-Web/compare/v0.4.0...v0.4.1) (2026-10-02)
 
 
