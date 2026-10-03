@@ -53,7 +53,9 @@ const MOLECULES = [
     smiles: 'CN1CC[C@@]23C=C[C@@H](C[C@@H]2OC4=C(C=CC(=C34)C1)OC)O',
     expect: 'fallback',
   },
-  { key: 'cisplatin', label: 'Cisplatin', smiles: 'N.N.Cl[Pt]Cl', expect: 'abstain' },
+  // One connected square-planar complex. Plain bonds, not dative ones (->):
+  // CDK, which draws the picture, cannot read dative bonds.
+  { key: 'cisplatin', label: 'Cisplatin', smiles: '[NH3][Pt@SP1]([NH3])(Cl)Cl', expect: 'abstain' },
 ]
 
 const DWELL_MS = 11000
