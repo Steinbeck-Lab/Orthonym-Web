@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom
 import Navigation from './components/Navigation'
 import Footer from './components/Footer'
 import IssueBuddy from './components/IssueBuddy'
+import MatomoTracker from './components/MatomoTracker'
 import Home from './pages/Home'
 import IupacToSmiles from './pages/IupacToSmiles'
 import Explain from './pages/Explain'
@@ -65,6 +66,7 @@ function Layout() {
       </div>
       <Footer />
       <IssueBuddy />
+      <MatomoTracker />
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { MATOMO, MATOMO_SERVER } from '../lib/matomo'
 import { LegalPage, LegalSection } from './LegalSection'
 import './Legal.css'
 
@@ -92,6 +93,24 @@ import './Legal.css'
 // open lib/github.js newIssueUrl(), the repository's BLANK /issues/new form:
 // no query string, so nothing from the page goes with it. Same
 // rel="noopener noreferrer", same repository, same `none` switch as above.
+//
+// Version 4 (7 October 2026) adds Matomo page counting, and with it the end of
+// the "no analytics of any kind" sentence above -- but ONLY where it is true.
+// Every Matomo paragraph renders on `MATOMO` (lib/matomo.js), which is null
+// unless the deployment sets both build args AND lib/matomo.js records the two
+// server facts this page states (IP masking, raw-data retention). Without them
+// the page keeps saying there is no analytics, which is then still true.
+// What the browser sends was MEASURED, not read off Matomo's docs: a
+// production build with the build args set, driven through five routes in
+// Chromium with every matomo.php request intercepted (none reached the
+// server). Each request carried url (origin + path only: a visit to
+// /structure?smiles=SECRET#frag was reported as /explain), urlref, action_name,
+// h/m/s, and Matomo's own counters (_idn, _refts, pv_id, r, rec, send_image)
+// with an EMPTY visitor id and empty client hints; no screen size, plugin flags
+// or timings (disableBrowserFeatureDetection, disablePerformanceTracking). The
+// browser held zero cookies and no new storage afterwards. The server's operator is the
+// owner's statement (2026-10-07), consistent with matomo.nfdi4chem.de
+// resolving to the university's own proxy, 141.35.136.25.
 
 // The UNIVERSITY leads, the working group follows as the responsible unit.
 // Art. 4 (7) requires the controller to be a natural or legal person, public
@@ -132,6 +151,41 @@ const RIGHTS = [
   'the right to object to the processing of data concerning you (Art. 21 (1) GDPR)',
   'the right to complain to a data protection supervisory authority (Art. 77 GDPR)',
 ]
+
+// § 2's analytics paragraphs. Rendered only when MATOMO is set, so every
+// sentence here is about a tracker that is actually running; the two server
+// facts come from lib/matomo.js, where the tracker refuses to start without them.
+function PageCounting() {
+  const { host, operator, ipBytesMasked, rawDataMonths } = MATOMO_SERVER
+  return (
+    <>
+      <h3>Counting page views</h3>
+      <p>
+        To see which pages are used, each page you open is also counted by Matomo, a web analytics
+        program, on the server <code>{host}</code>. That server is run by {operator} itself, so
+        these counts do not leave the university.
+      </p>
+      <p>
+        For each page, your browser sends that server the page’s address, cut off before any
+        &ldquo;?&rdquo; or &ldquo;#&rdquo;; the previous page on this site, or the address of the
+        site you came from; the page’s title; your local time of day; and Matomo’s own counters,
+        which number the request and not you. Like every web request, it also carries your IP
+        address and your browser’s identification string. It never carries anything you type,
+        draw, upload or submit, and it does not report the links you follow. Your screen size,
+        browser plugins and page-load timings are not collected, and no cookie is set.
+      </p>
+      <p>
+        The server stores your IP address{' '}
+        {ipBytesMasked === 0
+          ? 'in full'
+          : `with the last ${ipBytesMasked === 1 ? 'byte' : `${ipBytesMasked} bytes`} of an IPv4 address removed, and an IPv6 address shortened likewise`}
+        . It deletes the raw record of each visit after {rawDataMonths} months; after that only
+        aggregated statistics remain. The legal basis is Art. 6 (1) lit. e GDPR in conjunction with
+        the Thüringer Datenschutzgesetz. You can object to it as described in § 7.
+      </p>
+    </>
+  )
+}
 
 function Privacy() {
   return (
@@ -254,6 +308,7 @@ function Privacy() {
             The application’s own log, which is separate from the access log, records job
             identifiers, counts and timings. It does not record your IP address.
           </p>
+          {MATOMO && <PageCounting />}
         </LegalSection>
 
         <LegalSection
@@ -335,9 +390,9 @@ function Privacy() {
             banner to dismiss.
           </p>
           <p>
-            Two things are nevertheless stored by your browser for this site, and both stay in your
-            browser. Neither needs your consent: § 25 (2) Nr. 2 TDDDG exempts storage that is
-            strictly necessary to provide a service you have expressly asked for.
+            The following are nevertheless stored by your browser for this site, and all of them
+            stay in your browser. None needs your consent: § 25 (2) Nr. 2 TDDDG exempts storage
+            that is strictly necessary to provide a service you have expressly asked for.
           </p>
           <ul>
             <li>
@@ -376,16 +431,30 @@ function Privacy() {
           title="Third parties"
           note="There are none, unless you choose to report a result or an issue on GitHub. This section exists to say so precisely."
         >
+          {MATOMO ? (
+            <p>
+              This site uses no tag manager, no error-reporting service and no telemetry. Its one
+              form of web analytics is the page counting described in § 2, on the university’s own
+              Matomo server. There is no Google Analytics, no Plausible and no equivalent.
+            </p>
+          ) : (
+            <p>
+              This site uses no web analytics, no tag manager, no error-reporting service and no
+              telemetry of any kind. There is no Google Analytics, no Matomo, no Plausible and no
+              equivalent.
+            </p>
+          )}
           <p>
-            This site uses no web analytics, no tag manager, no error-reporting service and no
-            telemetry of any kind. There is no Google Analytics, no Matomo, no Plausible and no
-            equivalent.
-          </p>
-          <p>
-            Every request your browser makes while using this site goes to this site. The typefaces
-            are served from here, not from Google Fonts or any other font service. No image, script
-            or stylesheet is loaded from another domain. The structure editor runs entirely in your
-            browser and contacts no chemistry server.
+            Every request your browser makes while using this site goes to this site
+            {MATOMO && (
+              <>
+                , apart from the page counting in § 2: the counting script and each page count go to
+                the university’s Matomo server, <code>{MATOMO_SERVER.host}</code>
+              </>
+            )}
+            . The typefaces are served from here, not from Google Fonts or any other font service.
+            No {MATOMO && 'other '}image, script or stylesheet is loaded from another domain. The
+            structure editor runs entirely in your browser and contacts no chemistry server.
           </p>
           <p>
             The structures and names you submit are not sent to any third party, unless you follow a
@@ -499,7 +568,7 @@ function Privacy() {
             serve the site and honour an objection to it at the same time. That is a reason we would
             have to demonstrate if you objected — not an exception to your right to object.
           </p>
-          <p className="legal-updated">Version 3 — 28 September 2026</p>
+          <p className="legal-updated">Version 4 — 7 October 2026</p>
         </LegalSection>
     </LegalPage>
   )

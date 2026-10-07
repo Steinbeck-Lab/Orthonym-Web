@@ -30,6 +30,15 @@ COPY . .
 # is the only way to turn them off -- an empty string here would just fall
 # through to that file's own default.
 ARG VITE_GITHUB_URL="https://github.com/Steinbeck-Lab/Orthonym-Web"
+
+# Matomo page counting (src/lib/matomo.js), BUILD args for the same reason as
+# the one above. EMPTY by default, and empty means OFF -- the opposite of
+# VITE_GITHUB_URL's convention, on purpose: this repository is public, and a
+# default here would make every fork's visitors report into one deployment's
+# analytics. Both must be set for a tracker to ship; Privacy.jsx switches its
+# analytics paragraphs on the same condition.
+ARG VITE_MATOMO_URL=""
+ARG VITE_MATOMO_SITE_ID=""
 RUN npm run build
 
 FROM nginx:stable-alpine
