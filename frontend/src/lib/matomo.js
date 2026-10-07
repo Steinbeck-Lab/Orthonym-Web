@@ -33,8 +33,8 @@
 export const MATOMO_SERVER = {
   host: 'matomo.nfdi4chem.de',
   operator: 'Friedrich-Schiller-Universität Jena', // the owner, 2026-10-07; resolves to the university's own proxy
-  ipBytesMasked: null,
-  rawDataMonths: null,
+  ipBytesMasked: 2, // the owner, read in Matomo 2026-10-07
+  rawDataMonths: 6, // the owner, 2026-10-07
 }
 
 /** True once both server facts are recorded as whole numbers. */
