@@ -213,6 +213,9 @@ services:
       # link. frontend/Dockerfile carries the default.
       args:
         VITE_GITHUB_URL: ${VITE_GITHUB_URL:-}
+        # Matomo page counting, OFF unless both are set (frontend/Dockerfile).
+        VITE_MATOMO_URL: ${VITE_MATOMO_URL:-}
+        VITE_MATOMO_SITE_ID: ${VITE_MATOMO_SITE_ID:-}
     container_name: orthonym-frontend
     ports:
       # LOOPBACK BY DEFAULT, and still plain HTTP: this speaks no TLS, so a
