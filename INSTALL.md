@@ -238,10 +238,10 @@ Run these from your laptop, not the VM — the point is to test the path a visit
 curl -sI https://orthonym.example.org | head -3                    # 200, and a valid cert
 curl -s  https://orthonym.example.org/api/health                   # {"status":"OK",...}
 
-# the round-trip gate, end to end: ethanol must be `pin`, the fused polycyclic `fallback`
+# the round-trip gate, end to end: ethanol must be `pin`, the polycyclic cage `fallback`
 curl -s -X POST https://orthonym.example.org/api/translate \
   -H 'Content-Type: application/json' \
-  -d '{"smiles":["CCO","CC1=C2C=CN=CC2=C(C3=C1NC4=CC=CC=C43)C"]}' | head -c 400
+  -d '{"smiles":["CCO","C1C2C3C4C1C5C2C(C3C4CC5=O)O"]}' | head -c 400
 ```
 
 **Confirm the rate limiter sees real client addresses.** If this shows one shared bucket instead
