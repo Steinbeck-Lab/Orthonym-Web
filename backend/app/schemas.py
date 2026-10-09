@@ -110,6 +110,10 @@ class HealthResponse(BaseModel):
     # "DEGRADED" is actually reporting on, and what makes every naming
     # endpoint 503 rather than serving a name whose tier SELF-01 never checked.
     opsin: str
+    # orthonym.__version__, and the git commit when the install recorded one.
+    # The engine tracks main, so two builds can share a version.
+    engine_version: str
+    engine_commit: Optional[str] = None
 
 
 class ExampleItem(BaseModel):

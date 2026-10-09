@@ -88,12 +88,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
 #
 # ORTHONYM_REF picks another branch, tag or commit, for when main breaks the
 # SELF-01 check below: `--build-arg ORTHONYM_REF=<commit>`.
+#
+# --keep-git-dir is only there for .git/HEAD, which BuildKit leaves as the
+# resolved commit SHA. A directory install records no commit for pip, so it
+# is copied to ORTHONYM_COMMIT_FILE and /api/health reports it.
 ARG ORTHONYM_REF=main
-ADD https://github.com/Steinbeck-Lab/Orthonym.git#${ORTHONYM_REF} /tmp/orthonym
-ENV ORTHONYM_JAR_DIR=/opt/orthonym/jars
+ADD --keep-git-dir=true https://github.com/Steinbeck-Lab/Orthonym.git#${ORTHONYM_REF} /tmp/orthonym
+ENV ORTHONYM_JAR_DIR=/opt/orthonym/jars \
+    ORTHONYM_COMMIT_FILE=/opt/orthonym/COMMIT
 COPY requirements.txt .
 RUN grep -v '^orthonym @' requirements.txt > /tmp/requirements.txt \
     && pip install --no-cache-dir /tmp/orthonym -r /tmp/requirements.txt \
+    && mkdir -p /opt/orthonym && cp /tmp/orthonym/.git/HEAD "$ORTHONYM_COMMIT_FILE" \
     && rm -rf /tmp/orthonym /tmp/requirements.txt \
     && orthonym --fetch-jars \
     && chmod -R a+rX /opt/orthonym

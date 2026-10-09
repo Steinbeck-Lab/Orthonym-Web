@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import CreditCross from './CreditCross'
+import { checkHealth } from '../lib/api'
 
 // Site-wide footer — appears once, beneath every page, via the router shell.
 //
@@ -60,6 +62,59 @@ function CoffeeMark() {
   )
 }
 
+// Which engine names here, read once from /api/health. The lamp says whether
+// naming works right now; the words say it too, so the hue is never the only
+// signal. The commit rides behind the version and slides out on hover/focus.
+function EngineChip() {
+  const [health, setHealth] = useState(null) // null = asking, false = no answer
+
+  useEffect(() => {
+    let live = true
+    checkHealth()
+      .then((h) => live && setHealth(h))
+      .catch(() => live && setHealth(false))
+    return () => { live = false }
+  }, [])
+
+  const version = health?.engine_version
+  const commit = health?.engine_commit
+  const up = health?.status === 'OK'
+  const state = health === null ? 'asking' : up ? 'live' : 'down'
+  const repo = 'https://github.com/Steinbeck-Lab/Orthonym'
+  const label = !version
+    ? health === null ? 'Engine: checking' : 'Engine offline'
+    : `Engine version ${version}${commit ? `, commit ${commit.slice(0, 7)}` : ''}${up ? '' : ', naming offline'}`
+
+  return (
+    <a
+      className={`engine-chip engine-chip--${state}`}
+      href={commit ? `${repo}/commit/${commit}` : repo}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={label}
+    >
+      <span className="engine-chip__lamp" aria-hidden="true" />
+      <span aria-hidden="true">Engine</span>
+      {version ? (
+        // key on the version so the roll replays if it ever changes
+        <span className="engine-chip__ver" key={version} aria-hidden="true">
+          {[...`v${version}`].map((c, i) => (
+            <span key={i} style={{ '--i': i }}>{c}</span>
+          ))}
+        </span>
+      ) : (
+        <span aria-hidden="true">{health === null ? '···' : 'offline'}</span>
+      )}
+      {commit && (
+        <span className="engine-chip__commit" aria-hidden="true">
+          <span>· {commit.slice(0, 7)}</span>
+        </span>
+      )}
+      {version && !up && <span aria-hidden="true">· offline</span>}
+    </a>
+  )
+}
+
 function Footer() {
   // Build year, not new Date(): the app has no clock of its own and must not
   // invent one. Bump it deliberately.
@@ -89,14 +144,17 @@ function Footer() {
                 so they are not the duplicates that deletion was about.
             They are `<Link>`, not `<a>`: an `<a href>` inside the router
             shell reloads the whole app for an in-app route. */}
-        <p className="site-footer__copyright">
-          &copy; {year} Orthonym. All rights reserved.
-          <span className="site-footer__legal">
-            <Link to="/imprint">Impressum</Link>
-            <Link to="/privacy">Privacy</Link>
-            <Link to="/terms">Terms</Link>
-          </span>
-        </p>
+        <div className="site-footer__meta">
+          <p className="site-footer__copyright">
+            &copy; {year} Orthonym. All rights reserved.
+            <span className="site-footer__legal">
+              <Link to="/imprint">Impressum</Link>
+              <Link to="/privacy">Privacy</Link>
+              <Link to="/terms">Terms</Link>
+            </span>
+          </p>
+          <EngineChip />
+        </div>
 
         <p className="credit">
           <span className="credit__lead">Made with</span>
