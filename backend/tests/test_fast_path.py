@@ -4,6 +4,7 @@ Existing clients depend on TranslateResponse's exact shape, so the
 completed response stays byte-compatible; only the timeout case is new.
 """
 
+import orthonym
 import pytest
 from fastapi.testclient import TestClient
 
@@ -123,6 +124,7 @@ def test_health_reports_worker_opsin_status(redis_client):
     body = client.get("/api/health").json()
     assert body["status"] == "OK"
     assert body["opsin"] == "available"
+    assert body["engine_version"] == orthonym.__version__
 
 
 def test_health_degrades_without_a_live_jvm(redis_client, no_worker_opsin):

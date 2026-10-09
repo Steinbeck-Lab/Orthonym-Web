@@ -9,8 +9,13 @@ Endpoints (see the Orthonym API contract):
   GET  /api/explain-name
 """
 
+import importlib.metadata
+import json
 import logging
+import os
+from pathlib import Path
 
+import orthonym
 from celery.exceptions import TimeoutError as CeleryTimeoutError
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -172,6 +177,34 @@ def _canonicalize(smiles_list: list[str], max_molecules: int):
     return parse_molecules(data, InputFormat.SMILES_LIST, max_molecules)
 
 
+
+
+def _engine_commit() -> str | None:
+    """The engine commit, or None when nothing recorded one.
+
+    pip records it for a git-URL install (a local venv, CI). The Docker image
+    installs from a checked-out directory, so the Dockerfile writes it to
+    ORTHONYM_COMMIT_FILE instead.
+    """
+    path = os.environ.get("ORTHONYM_COMMIT_FILE")
+    if path:
+        try:
+            return Path(path).read_text().strip() or None
+        except OSError:
+            return None
+    try:
+        info = json.loads(importlib.metadata.distribution("orthonym").read_text("direct_url.json") or "{}")
+    except (importlib.metadata.PackageNotFoundError, ValueError):
+        return None
+    return info.get("vcs_info", {}).get("commit_id")
+
+
+# The API process and the workers run the same image, so this is the engine
+# that names. Read once: it cannot change without a restart.
+ENGINE_VERSION = orthonym.__version__
+ENGINE_COMMIT = _engine_commit()
+
+
 # /api/health and /api/examples below are the ONLY two endpoints with no rate
 # limiter, and that is deliberate rather than an oversight (audit item NB-6).
 # Both are a single Redis read or a constant, they take no user input, and a
@@ -189,6 +222,8 @@ def health() -> HealthResponse:
     return HealthResponse(
         status="OK" if opsin_ok else "DEGRADED",
         opsin="available" if opsin_ok else "no worker has a live JVM",
+        engine_version=ENGINE_VERSION,
+        engine_commit=ENGINE_COMMIT,
     )
 
 
