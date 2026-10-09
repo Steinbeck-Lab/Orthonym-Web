@@ -50,16 +50,19 @@ EXAMPLES = [
         "expected_status": "pin",
     },
     {
-        # Ellipticine (PubChem CID 3213). Replaced 2026-10-01: engine 1.0.2
-        # (6cab387) names the previous example,
-        # COC1C2=C(C)C(=O)OC2CC2CCC(O)C(C)C21C, as a verified PIN. Ellipticine
-        # is systematic_verified (a von Baeyer name, not the fused
-        # pyrido[4,3-b]carbazole PIN) on both 1.0.2 and the engine before it,
-        # and only a live OPSIN round trip makes it "fallback": without one it
-        # is best_effort. So it also serves verify_opsin_live.py as proof that
-        # the round trip ran.
-        "label": "Ellipticine, a fused polycyclic — verified name, preferred status not certified",
-        "smiles": "CC1=C2C=CN=CC2=C(C3=C1NC4=CC=CC=C43)C",
+        # A pentacyclic cage. Replaced 2026-10-09: engine 1.0.6 names the
+        # previous example, ellipticine (CC1=C2C=CN=CC2=C(C3=C1NC4=CC=CC=C43)C),
+        # as the fused PIN 5,11-dimethyl-6H-pyrido[4,3-b]carbazole. Before that,
+        # engine 1.0.2 (6cab387) had made a PIN of the one before it,
+        # COC1C2=C(C)C(=O)OC2CC2CCC(O)C(C)C21C. The cage is
+        # systematic_verified on 1.0.6, a von Baeyer name
+        # (8-hydroxypentacyclo[5.5.0.0^2,6.0^3,10.0^5,9]dodecan-11-one), and a
+        # cage has no fusion name for the engine to grow into soon. Only a live
+        # OPSIN round trip makes it "fallback": without one it is best_effort.
+        # So it also serves verify_opsin_live.py as proof that the round trip
+        # ran.
+        "label": "A polycyclic cage — verified name, preferred status not certified",
+        "smiles": "C1C2C3C4C1C5C2C(C3C4CC5=O)O",
         "expected_status": "fallback",
     },
     {

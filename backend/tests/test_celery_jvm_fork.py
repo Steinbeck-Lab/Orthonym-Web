@@ -23,11 +23,11 @@ from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
-# The fused-polycyclic Home example (ellipticine). With a live OPSIN round
+# The polycyclic-cage Home example. With a live OPSIN round
 # trip the engine ships a verified systematic name (tier systematic_verified,
 # status "fallback"); without a round trip the status can only be best_effort,
 # so "fallback" proves the child's JVM really ran the gate.
-FUSED_POLYCYCLIC = "CC1=C2C=CN=CC2=C(C3=C1NC4=CC=CC=C43)C"
+POLYCYCLIC_CAGE = "C1C2C3C4C1C5C2C(C3C4CC5=O)O"
 
 # os._exit(0) at the end of both probes is deliberate: a started JVM refuses
 # to let the interpreter exit, which would turn a clean assertion failure
@@ -45,7 +45,7 @@ _IMPORT_PROBE = (
 _FORK_PROBE = r'''
 import json, multiprocessing as mp, os, sys
 
-FUSED_POLYCYCLIC = "CC1=C2C=CN=CC2=C(C3=C1NC4=CC=CC=C43)C"
+POLYCYCLIC_CAGE = "C1C2C3C4C1C5C2C(C3C4CC5=O)O"
 
 
 def _child(queue):
@@ -53,7 +53,7 @@ def _child(queue):
 
     from app.orthonym_service import translate_one
 
-    result = translate_one(FUSED_POLYCYCLIC, best_effort=True)
+    result = translate_one(POLYCYCLIC_CAGE, best_effort=True)
     queue.put({
         "pid": os.getpid(),
         "status": result.status,

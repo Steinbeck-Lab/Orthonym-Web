@@ -12,11 +12,11 @@ verdict. A non-zero exit fails the Docker build, which is the point.
 
 import sys
 
-# A fused polycyclic (ellipticine). With a working OPSIN round trip the engine
-# ships a verified systematic name: "fallback". Without the round trip the
-# status can only be best_effort (measured 2026-10-01, engine 1.0.2 and the
-# one before it), so anything but "fallback" means the gate did not run.
-FUSED_POLYCYCLIC = "CC1=C2C=CN=CC2=C(C3=C1NC4=CC=CC=C43)C"
+# A polycyclic cage, the Home "fallback" example. With a working OPSIN round
+# trip the engine ships a verified systematic name: "fallback". Without the
+# round trip the status can only be best_effort (measured 2026-10-09, engine
+# 1.0.6), so anything but "fallback" means the gate did not run.
+POLYCYCLIC_CAGE = "C1C2C3C4C1C5C2C(C3C4CC5=O)O"
 
 
 def main() -> int:
@@ -24,7 +24,7 @@ def main() -> int:
 
     from app.main import EXAMPLES
 
-    # Check EVERY advertised example, not just the fused polycyclic (audit
+    # Check EVERY advertised example, not just the polycyclic cage (audit
     # item CC1-examples). These four are what Home renders as example chips,
     # each labelled with the tier it demonstrates, and until now this script
     # proved exactly one of them -- against its own private copy of the
@@ -37,16 +37,16 @@ def main() -> int:
                 f"FAIL: Home advertises {example['label']!r} as "
                 f"{example['expected_status']!r} but the engine returns "
                 f"{got.status!r}. Either the engine changed and the example "
-                "must be replaced (it has happened twice), or the engine is "
+                "must be replaced (it has happened three times), or the engine is "
                 "broken.",
                 file=sys.stderr,
             )
             return 1
 
-    result = translate_one(FUSED_POLYCYCLIC, best_effort=True)
+    result = translate_one(POLYCYCLIC_CAGE, best_effort=True)
     if result.status != "fallback":
         print(
-            f"FAIL: expected 'fallback' for the fused polycyclic, got "
+            f"FAIL: expected 'fallback' for the polycyclic cage, got "
             f"{result.status!r}.\n"
             "The Orthonym engine's SELF-01 gate is not working. The usual cause is a "
             "missing JRE or missing jars -- check that "
@@ -55,7 +55,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    print(f"OK: SELF-01 is live (fused polycyclic -> {result.status})")
+    print(f"OK: SELF-01 is live (polycyclic cage -> {result.status})")
     return 0
 
 
