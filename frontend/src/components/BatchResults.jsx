@@ -21,6 +21,7 @@ import { outcomeMessage, tierTally } from '../lib/batchTally'
 import { forgetJob, rememberJob } from '../lib/jobStore'
 import { STATE_CLASS, VERIFIED_STATUSES, stateLabelFor } from '../lib/statuses'
 import CopyButton from './CopyButton'
+import EngineStamp from './EngineStamp'
 import Icon from './Icon'
 import ReportLink from './ReportLink'
 import TierLamp from './TierLamp'
@@ -597,6 +598,7 @@ function BatchResults({ job, onForget }) {
               {expiry.charAt(0).toUpperCase() + expiry.slice(1)}
             </span>
           )}
+          <EngineStamp rows={rows} />
         </div>
       )}
 

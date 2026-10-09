@@ -91,6 +91,8 @@ CSV_COLUMNS = [
     "formula",
     "limit_code",
     "error",
+    "engine_version",
+    "engine_commit",
 ]
 
 

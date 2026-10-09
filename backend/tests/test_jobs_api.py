@@ -609,6 +609,25 @@ def test_a_formula_leading_cell_is_neutralised_in_the_csv(redis_client, job_id):
     assert "'=cmd" in body, "formula-leading cell was not neutralised"
 
 
+def test_the_csv_says_which_engine_named_each_row(redis_client, job_id):
+    # The engine tracks main, so a downloaded CSV is only reproducible if it
+    # names the engine that wrote it.
+    import orthonym
+
+    from app import redis_store
+    from app.schemas import BatchRow
+
+    redis_store.create_job(job_id, total=1, fmt="smiles_list", client_ip="::1")
+    row = BatchRow(index=0, input="CCO", name="ethanol", status="pin").model_dump()
+    redis_store.write_chunk(job_id, 0, [row])
+    redis_store.assemble_rows(job_id, n_chunks=1)
+    redis_store.set_job_status(job_id, "done")
+
+    header, first = client.get(f"/api/jobs/{job_id}/results.csv").text.splitlines()[:2]
+    assert header.split(",")[-2:] == ["engine_version", "engine_commit"]
+    assert orthonym.__version__ in first.split(",")
+
+
 def test_retrievable_is_short_of_total_on_a_failed_job(redis_client, job_id):
     # `total` is what was submitted; `retrievable` is what can be paged. A
     # client paginating to `total` on a failed job would never terminate.
