@@ -12,7 +12,6 @@ Endpoints (see the Orthonym API contract):
 import importlib.metadata
 import json
 import logging
-import os
 from pathlib import Path
 
 import orthonym
@@ -177,8 +176,6 @@ def _canonicalize(smiles_list: list[str], max_molecules: int):
     return parse_molecules(data, InputFormat.SMILES_LIST, max_molecules)
 
 
-
-
 def _engine_commit() -> str | None:
     """The engine commit, or None when nothing recorded one.
 
@@ -186,7 +183,7 @@ def _engine_commit() -> str | None:
     installs from a checked-out directory, so the Dockerfile writes it to
     ORTHONYM_COMMIT_FILE instead.
     """
-    path = os.environ.get("ORTHONYM_COMMIT_FILE")
+    path = get_settings().ORTHONYM_COMMIT_FILE
     if path:
         try:
             return Path(path).read_text().strip() or None
@@ -201,7 +198,6 @@ def _engine_commit() -> str | None:
 
 # The API process and the workers run the same image, so this is the engine
 # that names. Read once: it cannot change without a restart.
-ENGINE_VERSION = orthonym.__version__
 ENGINE_COMMIT = _engine_commit()
 
 
@@ -222,7 +218,7 @@ def health() -> HealthResponse:
     return HealthResponse(
         status="OK" if opsin_ok else "DEGRADED",
         opsin="available" if opsin_ok else "no worker has a live JVM",
-        engine_version=ENGINE_VERSION,
+        engine_version=orthonym.__version__,
         engine_commit=ENGINE_COMMIT,
     )
 
