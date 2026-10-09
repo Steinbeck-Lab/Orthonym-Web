@@ -1937,16 +1937,12 @@ input.field__control {
 }
 
 /* Odometer: each character rises out of a clip, 35ms behind the one before. */
-.engine-chip__ver,
-.engine-chip__commit {
-  /* a version and a hash are data, not a label: keep their case */
-  text-transform: none;
-}
-
 .engine-chip__ver {
   display: inline-flex;
   overflow: hidden;
   color: var(--ink);
+  /* a version and a hash are data, not a label: keep their case */
+  text-transform: none;
 }
 
 .engine-chip__ver > span {
@@ -1960,18 +1956,16 @@ input.field__control {
   to { transform: none; }
 }
 
-/* 0fr -> 1fr opens the track to the commit's own width, no magic max-width. */
+/* 0fr -> 1fr opens the track to the commit's own width, no magic max-width.
+   The chip's flex gap would sit beside the closed track and pad the pill's
+   right edge, so the commit carries its gap inside the clip instead. */
 .engine-chip__commit {
   display: inline-grid;
   grid-template-columns: 0fr;
-  opacity: 0;
-  transition: grid-template-columns 260ms cubic-bezier(0.16, 1, 0.3, 1), opacity 180ms ease;
-}
-
-/* The chip's flex gap would sit beside the closed track and pad the pill's
-   right edge, so the commit carries its own gap inside the clip instead. */
-.engine-chip__commit {
   margin-left: -0.6ch;
+  opacity: 0;
+  text-transform: none;
+  transition: grid-template-columns 260ms cubic-bezier(0.16, 1, 0.3, 1), opacity 180ms ease;
 }
 
 .engine-chip__commit > span {

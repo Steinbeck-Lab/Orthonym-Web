@@ -58,6 +58,9 @@ class Settings(BaseSettings):
 
     JOB_RESULT_TTL_SECONDS: int = 86400
     NAME_CACHE_TTL_SECONDS: int = 604800
+    # Where the Dockerfile writes the engine commit BuildKit resolved; unset
+    # outside the image, where pip's direct_url.json records it instead.
+    ORTHONYM_COMMIT_FILE: str = ""
 
     # The four per-minute budgets below are INDEPENDENT keys
     # (ratelimit.py:160-172: :minute, :depict, :poll, :download), and nothing

@@ -77,40 +77,40 @@ function EngineChip() {
   }, [])
 
   const version = health?.engine_version
-  const commit = health?.engine_commit
+  const commit = health?.engine_commit?.slice(0, 7)
+  const asking = health === null
   const up = health?.status === 'OK'
-  const state = health === null ? 'asking' : up ? 'live' : 'down'
   const repo = 'https://github.com/Steinbeck-Lab/Orthonym'
-  const label = !version
-    ? health === null ? 'Engine: checking' : 'Engine offline'
-    : `Engine version ${version}${commit ? `, commit ${commit.slice(0, 7)}` : ''}${up ? '' : ', naming offline'}`
+  // The aria-label replaces the chip's text for assistive technology, so the
+  // per-character spans below are never read one letter at a time.
+  const label = asking ? 'Engine: checking'
+    : !version ? 'Engine offline'
+    : [`Engine version ${version}`, commit && `commit ${commit}`, !up && 'offline'].filter(Boolean).join(', ')
 
   return (
     <a
-      className={`engine-chip engine-chip--${state}`}
-      href={commit ? `${repo}/commit/${commit}` : repo}
+      className={`engine-chip engine-chip--${asking ? 'asking' : up ? 'live' : 'down'}`}
+      href={commit ? `${repo}/commit/${health.engine_commit}` : repo}
       target="_blank"
       rel="noopener noreferrer"
       aria-label={label}
     >
-      <span className="engine-chip__lamp" aria-hidden="true" />
-      <span aria-hidden="true">Engine</span>
-      {version ? (
-        // key on the version so the roll replays if it ever changes
-        <span className="engine-chip__ver" key={version} aria-hidden="true">
+      <span className="engine-chip__lamp" />
+      <span>Engine</span>
+      {version && (
+        <span className="engine-chip__ver">
           {[...`v${version}`].map((c, i) => (
             <span key={i} style={{ '--i': i }}>{c}</span>
           ))}
         </span>
-      ) : (
-        <span aria-hidden="true">{health === null ? '···' : 'offline'}</span>
       )}
+      {asking && <span>···</span>}
       {commit && (
-        <span className="engine-chip__commit" aria-hidden="true">
-          <span>· {commit.slice(0, 7)}</span>
+        <span className="engine-chip__commit">
+          <span>· {commit}</span>
         </span>
       )}
-      {version && !up && <span aria-hidden="true">· offline</span>}
+      {!asking && !up && <span>{version ? '· offline' : 'offline'}</span>}
     </a>
   )
 }
