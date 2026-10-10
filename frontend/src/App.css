@@ -4216,6 +4216,12 @@ input.field__control {
    chrome, and it names no confidence tier. */
 .issue-buddy {
   display: none;
+  /* A <button> since it opens IssueDialog; none of a button's own chrome. */
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
 }
 
 @media (min-width: 960px) {
@@ -4488,6 +4494,428 @@ input.field__control {
 
   .issue-buddy:is(:hover, :focus-visible) :is(.issue-buddy__actor svg, .ib-eyes, .ib-body, .ib-wave, .ib-hold, .ib-spark) {
     animation: none;
+  }
+}
+
+.issue-host {
+  display: contents;
+}
+
+/* -------------------- the issue dialog (IssueDialog.jsx) --------------------
+
+   A native <dialog>: one white card on the dimmed bench, Kekunyo perched on
+   its top edge. The card is the system's card (radius, --card-shadow); the
+   crimson stays in chrome -- the lead choice's icon chip, the primary button
+   -- because this is chrome, not a result. Progress is drawn as LINE, the
+   material confidence already speaks in: four hairlines, each inking in as
+   its step is reached. The one authored moment is the arrival: the card
+   rises, Kekunyo drops onto its edge and squashes on landing. Steps then
+   slide in from the side they come from. */
+
+.issue-dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 16px);
+  margin: auto;
+  padding: 76px 0 8px;
+  overflow-y: auto;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  overscroll-behavior: contain;
+}
+
+.issue-dialog::backdrop {
+  background: rgba(17, 18, 20, 0.42);
+  animation: issue-fade 260ms ease-out both;
+}
+
+.issue-dialog__card {
+  position: relative;
+  padding: 26px 32px 28px;
+  background: var(--card);
+  border-radius: var(--r-card);
+  box-shadow: var(--card-shadow);
+  animation: issue-rise 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Kekunyo sits ON the card: its feet are on the top edge, 18px inside. */
+.issue-dialog__buddy {
+  position: absolute;
+  top: -86px;
+  left: 50%;
+  width: 104px;
+  height: 104px;
+  margin-left: -52px;
+  pointer-events: none;
+  animation: issue-land 760ms cubic-bezier(0.22, 1, 0.36, 1) 140ms both;
+}
+
+.issue-dialog__buddy svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* Moods. wave: hello, the right hand waving. listen: eyes on you, blinking,
+   the held atom rocking. happy: the face lights up, it hops, sparks. */
+.issue-dialog__buddy[data-mood='wave'] .ib-wave {
+  animation: ib-wave 900ms cubic-bezier(0.37, 0, 0.63, 1) 700ms infinite alternate;
+}
+
+.issue-dialog__buddy[data-mood='listen'] .ib-eyes {
+  animation: ib-blink 3.8s infinite;
+}
+
+.issue-dialog__buddy[data-mood='listen'] .ib-hold {
+  animation: ib-rock 2400ms cubic-bezier(0.37, 0, 0.63, 1) infinite alternate;
+}
+
+.issue-dialog__buddy[data-mood='happy'] :is(.ib-face-open, .ib-smile) {
+  opacity: 0;
+}
+
+.issue-dialog__buddy[data-mood='happy'] :is(.ib-face-happy, .ib-mouth-open) {
+  opacity: 1;
+}
+
+.issue-dialog__buddy[data-mood='happy'] .ib-body {
+  animation: ib-hop 1600ms cubic-bezier(0.37, 0, 0.63, 1) infinite;
+}
+
+.issue-dialog__buddy[data-mood='happy'] .ib-spark {
+  animation: ib-spark 2400ms cubic-bezier(0.37, 0, 0.63, 1) infinite;
+}
+
+.issue-dialog__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-sm);
+  margin-bottom: 18px;
+}
+
+.issue-dialog__rail {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.issue-dialog__rail li {
+  position: relative;
+  flex: 1;
+  height: 2px;
+  background: var(--hairline);
+  overflow: hidden;
+}
+
+/* The ink draws left to right, 90ms behind the segment before it. */
+.issue-dialog__rail li::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--ink);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 420ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.issue-dialog__rail li.is-done::after {
+  transform: scaleX(1);
+}
+
+.issue-dialog__rail li:nth-child(2)::after { transition-delay: 90ms; }
+.issue-dialog__rail li:nth-child(3)::after { transition-delay: 180ms; }
+.issue-dialog__rail li:nth-child(4)::after { transition-delay: 270ms; }
+
+.issue-dialog__close {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--card-soft);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.issue-dialog__close:hover {
+  background: var(--hairline);
+  transform: rotate(90deg);
+}
+
+.issue-dialog__close:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.issue-dialog__step {
+  display: grid;
+  gap: 14px;
+  animation: issue-step 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.issue-dialog__step--back {
+  animation-name: issue-step-back;
+}
+
+.issue-dialog__count {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.issue-dialog__title {
+  margin: -6px 0 0;
+  font-family: var(--font-display);
+  font-size: var(--t-display-sm);
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: var(--track-display-sm);
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+/* Focus moves here for screen readers on each step; a ring on a heading
+   would only puzzle a mouse user. */
+.issue-dialog__title:focus {
+  outline: none;
+}
+
+.issue-dialog__lede {
+  margin: 0;
+  max-width: 52ch;
+  font-size: var(--t-body-sm);
+  line-height: 1.55;
+  color: var(--body);
+}
+
+.issue-dialog__choices {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.issue-dialog__choices--two {
+  grid-template-columns: 1fr 1fr;
+}
+
+/* A choice: a soft-grey tile with an icon chip. Hover inks its edge and turns
+   the chip crimson -- the tile answers the pointer without moving. */
+.issue-choice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 14px;
+  row-gap: 2px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--r-card-sm);
+  background: var(--card-soft);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 180ms ease, background-color 180ms ease;
+}
+
+.issue-choice:hover {
+  border-color: var(--ink);
+  background: var(--card);
+  text-decoration: none;
+}
+
+.issue-choice:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.issue-choice.is-picked {
+  border-color: var(--hairline-strong);
+}
+
+.issue-choice__icon {
+  display: grid;
+  grid-row: 1 / span 2;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-pill);
+  background: var(--card);
+  color: var(--ink);
+  transition: background-color 200ms ease, color 200ms ease, transform 300ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.issue-choice:hover .issue-choice__icon,
+.issue-choice--lead .issue-choice__icon {
+  background: var(--accent);
+  color: #fff;
+}
+
+.issue-choice:hover .issue-choice__icon {
+  transform: scale(1.08);
+}
+
+.issue-choice__label {
+  font-size: var(--t-title-sm);
+  line-height: 1.3;
+}
+
+.issue-choice__hint {
+  grid-column: 2;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* The two start choices stand as columns: chip, then label, then hint. */
+.issue-dialog__choices--two .issue-choice {
+  grid-template-columns: 1fr;
+  grid-template-rows: none;
+  align-content: start;
+  gap: 6px;
+  padding: 18px;
+}
+
+.issue-dialog__choices--two .issue-choice__icon {
+  grid-row: auto;
+  margin-bottom: 8px;
+}
+
+.issue-dialog__choices--two .issue-choice__hint {
+  grid-column: auto;
+}
+
+.issue-dialog__form {
+  display: grid;
+  gap: 18px;
+}
+
+.issue-dialog__form textarea.field__control {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.issue-dialog__prose {
+  font-family: var(--font-body);
+}
+
+.issue-dialog__need {
+  color: var(--ink);
+}
+
+.issue-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.issue-dialog__actions > :first-child {
+  margin-right: auto;
+}
+
+/* The issue as GitHub will receive it, in the system's inner-frame look. */
+.issue-preview {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 16px 18px;
+  border-radius: var(--r-card-sm);
+  background: var(--card-soft);
+}
+
+.issue-preview__title {
+  font-size: var(--t-title-sm);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.issue-preview__body {
+  max-height: 210px;
+  margin: 0;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: var(--body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.issue-preview__label {
+  justify-self: start;
+  padding: 2px 10px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-pill);
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--body);
+}
+
+@keyframes issue-fade {
+  from { opacity: 0; }
+}
+
+@keyframes issue-rise {
+  from { opacity: 0; transform: translateY(18px) scale(0.97); }
+}
+
+/* Drops in from above, squashes as its feet meet the edge, settles. */
+@keyframes issue-land {
+  0% { opacity: 0; transform: translateY(-40px) rotate(-6deg); }
+  55% { opacity: 1; transform: translateY(4px) scale(1.06, 0.92) rotate(0deg); }
+  78% { transform: translateY(-3px) scale(0.98, 1.03); }
+  100% { opacity: 1; transform: none; }
+}
+
+@keyframes issue-step {
+  from { opacity: 0; transform: translateX(22px); }
+}
+
+@keyframes issue-step-back {
+  from { opacity: 0; transform: translateX(-22px); }
+}
+
+/* Reduced motion: things appear rather than travel. The faces still change
+   (a fade, and it says where you are); the loops and the landing stop. */
+@media (prefers-reduced-motion: reduce) {
+  .issue-dialog__card,
+  .issue-dialog__buddy,
+  .issue-dialog__step,
+  .issue-dialog__step--back {
+    animation: issue-fade 200ms linear both;
+  }
+
+  .issue-dialog__buddy[data-mood] :is(.ib-wave, .ib-eyes, .ib-hold, .ib-body, .ib-spark) {
+    animation: none;
+  }
+
+  .issue-dialog__rail li::after,
+  .issue-choice__icon,
+  .issue-dialog__close {
+    transition-duration: 1ms;
+  }
+
+  .issue-choice:hover .issue-choice__icon,
+  .issue-dialog__close:hover {
+    transform: none;
   }
 }
 

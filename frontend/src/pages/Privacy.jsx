@@ -135,6 +135,16 @@ import './Legal.css'
 // another origin. The 3D viewer's cookie helper is the same code as in 2.6.2.
 // The editor sits behind the Draw tab on Translate and on Explain; the old
 // text named only Explain.
+//
+// Version 7 (10 October 2026): the wide-screen Issues tab now opens a dialog
+// (components/IssueDialog.jsx) instead of linking GitHub directly. Its "Blank
+// issue" choice is the same bare /issues/new link as before. Its guided form
+// builds a /issues/new address (lib/issueForm.js) carrying ONLY what the
+// visitor typed into it, the path of the page they were on (no query string)
+// and, for the two naming kinds, the engine version from /api/health. The
+// dialog sends nothing itself: the address is followed only when the visitor
+// presses "Open on GitHub", after a preview of exactly that text. The phone
+// menu's "Report an issue" is unchanged, still the blank form.
 
 // The UNIVERSITY leads, the working group follows as the responsible unit.
 // Art. 4 (7) requires the controller to be a natural or legal person, public
@@ -516,17 +526,22 @@ function Privacy() {
             need to keep confidential.
           </p>
           <p>
-            The &ldquo;Issues&rdquo; tab at the left edge of the page (in the menu on a small
-            screen, &ldquo;Report an issue&rdquo;) opens GitHub&rsquo;s empty form for a new issue in
-            the same repository. It carries nothing from this site: no structure, no name and no
-            result. Following it is a visit to GitHub like the links above, so GitHub receives your
-            IP address and, if you are signed in, your GitHub account. What you then write and
-            submit is stored and shown exactly as described for a report.
+            The &ldquo;Issues&rdquo; tab at the left edge of the page asks how you want to report.
+            &ldquo;Blank issue&rdquo;, and &ldquo;Report an issue&rdquo; in the menu on a small
+            screen, open GitHub&rsquo;s empty form for a new issue in the same repository, carrying
+            nothing from this site. The guided form instead fills that GitHub form in for you, with
+            what you typed into it, the page you were on and, for a question about a name, the
+            version of the naming engine. Nothing leaves your browser while you fill it in: you see
+            the finished text first, and it reaches GitHub only when you press &ldquo;Open on
+            GitHub&rdquo;. Either way, following the link is a visit to GitHub like the links above,
+            so GitHub receives your IP address and, if you are signed in, your GitHub account. What
+            you then submit is stored and shown exactly as described for a report.
           </p>
           <p>
             This site itself transfers no data to a third country or to an international
             organisation. The one route by which anything you submitted reaches one is a report
-            link: following it sends the data described above to GitHub in the United States, and an
+            link or the issue form: following it sends the data described above to GitHub in the
+            United States, and an
             issue you submit, from a report link or the Issues tab, is then kept there, in our
             repository.
           </p>
@@ -601,7 +616,7 @@ function Privacy() {
             serve the site and honour an objection to it at the same time. That is a reason we would
             have to demonstrate if you objected — not an exception to your right to object.
           </p>
-          <p className="legal-updated">Version 6 — 10 October 2026</p>
+          <p className="legal-updated">Version 7 — 10 October 2026</p>
         </LegalSection>
     </LegalPage>
   )

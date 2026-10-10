@@ -3,15 +3,21 @@ import {
   ArrowRight,
   ArrowRightLeft,
   ArrowUp,
+  Ban,
+  Bug,
   Check,
   Copy,
   Download,
   ExternalLink,
+  Lightbulb,
+  PenLine,
   Plus,
   RefreshCw,
+  SpellCheck,
   Square,
   Trash2,
   Upload,
+  X,
 } from 'lucide-react'
 
 // The button icons: ONE map from a semantic name to a real, drawn icon.
@@ -52,6 +58,14 @@ const ICONS = {
   // states are the same drawn arrow rather than two icons a reader has to
   // tell apart at 12px.
   sort: ArrowUp,
+  // The issue dialog (IssueDialog.jsx): its close button, the guided path,
+  // and one glyph per kind of report.
+  close: X,
+  pen: PenLine,
+  spell: SpellCheck,
+  ban: Ban,
+  bug: Bug,
+  idea: Lightbulb,
 }
 
 /**

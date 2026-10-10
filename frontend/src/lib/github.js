@@ -60,7 +60,7 @@ const WITHHELD = 'withheld_unchecked'
 
 // GitHub refuses a new-issue address much past 8 KB. The backend caps a typed
 // SMILES at 2000 characters, which fits; an SDF record has no cap.
-const MAX_URL_LENGTH = 8000
+export const MAX_URL_LENGTH = 8000
 
 // What a result is called in the issue. Plain words, not the status code.
 const OUTCOME = {
