@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.5.0](https://github.com/Steinbeck-Lab/Orthonym-Web/compare/v0.4.2...v0.5.0) (2026-10-10)
+
+
+### Features
+
+* count page views with Matomo, cookieless and path only ([4f33f99](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/4f33f995a6c327c5554337644ed28ea8caeb5125))
+* count page views with Matomo, cookieless and path only ([fcf65e7](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/fcf65e7c3e9b99b9a36f506a2589e066ed7539a8))
+* show the running engine version in the footer ([8402e83](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/8402e83191a06c6cd8aa5ebac759af64e5d3d287))
+* show the running engine version in the footer ([0f20b7e](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/0f20b7eb8b391966b29d5c5050f2b6804c98dc6a))
+* stamp the engine version on every result and the batch CSV ([30cfd49](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/30cfd49d160de2466af788cdf0efcfc2a636dfcb))
+* stamp the engine version on every result and the batch CSV ([097e973](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/097e973cb6b38290364e7c00cd6230e3493b6805))
+* switch Matomo page counting on with the server's privacy settings ([279bb26](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/279bb262c788fbbad33a22882e02986dbfc7039f))
+* switch Matomo page counting on with the server's privacy settings ([8f4daf4](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/8f4daf4b0f0297f065000583ff3fd72815e73409))
+
+
+### Bug Fixes
+
+* **examples:** replace ellipticine with a polycyclic cage as the fallback example ([e8b4075](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/e8b4075e77f55f7921ac64611b7e3b1743a8f351))
+* **examples:** replace ellipticine with a polycyclic cage as the fallback example ([c3256f1](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/c3256f12e316223d91e689bcac20949b3af373a9))
+
+
+### Refactoring
+
+* simplify the engine chip ([81d8fe1](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/81d8fe1790bcd8ee168671864adae21f75a2ac56))
+* simplify the engine chip ([3beaba1](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/3beaba1662b7e12e6ae5b0408693e8ff2636f1c8))
+
+
+### Documentation
+
+* cite the Orthonym paper on ChemRxiv ([a686ba6](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/a686ba6691ae6101a9e976affd6cd563a2543136))
+* cite the Orthonym paper on ChemRxiv ([331f1fb](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/331f1fb5ebef75494417336251b9812918050445))
+
 ## [0.4.2](https://github.com/Steinbeck-Lab/Orthonym-Web/compare/v0.4.1...v0.4.2) (2026-10-03)
 
 
