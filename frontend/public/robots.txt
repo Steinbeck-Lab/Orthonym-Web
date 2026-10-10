@@ -1,0 +1,7 @@
+# Orthonym. Every page may be crawled; the API and the bundled structure
+# editor are not pages.
+User-agent: *
+Disallow: /api/
+Disallow: /standalone/
+
+Sitemap: https://orthonym.decimer.ai/sitemap.xml

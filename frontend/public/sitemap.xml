@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Keep in step with src/lib/routeMeta.js; routeMeta.test.js checks the two agree. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://orthonym.decimer.ai/</loc></url>
+  <url><loc>https://orthonym.decimer.ai/from-name</loc></url>
+  <url><loc>https://orthonym.decimer.ai/explain</loc></url>
+  <url><loc>https://orthonym.decimer.ai/about</loc></url>
+  <url><loc>https://orthonym.decimer.ai/imprint</loc></url>
+  <url><loc>https://orthonym.decimer.ai/privacy</loc></url>
+  <url><loc>https://orthonym.decimer.ai/terms</loc></url>
+</urlset>
