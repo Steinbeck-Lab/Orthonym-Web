@@ -108,13 +108,15 @@ export function reportIssueUrl(repo, row, where, settings) {
   // ponytail: github.com only. A GitHub Enterprise fork gets no report link
   // until someone needs one; widen this check then.
   if (!repo?.startsWith('https://github.com/') || !isReportable(row)) return null
-  const { smiles, status, limit_code, formula, error } = row
+  const { smiles, status, limit_code, formula, error, engine_version, engine_commit } = row
   const short = smiles.length > TITLE_SMILES_MAX ? `${smiles.slice(0, TITLE_SMILES_MAX)}…` : smiles
   const facts = [
     `- Result: ${OUTCOME[status]}`,
     limit_code && `- Reason code: \`${limit_code}\``,
     formula && `- Formula: ${formula}`,
     error && `- Message: ${error}`,
+    // The engine tracks main: without its version a report cannot be replayed.
+    engine_version && `- Engine: v${engine_version}${engine_commit ? ` (${engine_commit.slice(0, 7)})` : ''}`,
     where && `- Page: ${where}`,
     switchLine('Best-effort mode', settings?.bestEffort),
     switchLine('OPSIN verify', settings?.verify),
