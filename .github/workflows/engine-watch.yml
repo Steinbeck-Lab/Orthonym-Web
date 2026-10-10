@@ -1,0 +1,98 @@
+name: Engine watch
+
+# The backend installs the engine from its main branch, so an engine push can
+# change names or tiers with no commit here. Every night this names the panel
+# in backend/tests/fixtures/engine_watch.tsv and, when anything moved, keeps
+# ONE open issue (label engine-watch) up to date with the list. When the
+# panel matches again (someone committed the new one), it closes that issue.
+# On a pull request that touches the watch it only reports, in the summary.
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/engine-watch.yml
+      - backend/scripts/engine_watch.py
+      - backend/tests/fixtures/engine_watch.tsv
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # Same jar and checksum as ci.yml: a SMILES RDKit refuses falls back to CDK.
+      - name: Fetch CDK
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          CDK_VERSION=2.12
+          CDK_SHA256=443d86e549edd659807a444770819a05f9ea626511f433ed99342c7568272e5a
+          mkdir -p vendor/cdk
+          curl -fsSL -o "vendor/cdk/cdk-${CDK_VERSION}.jar" \
+            "https://github.com/cdk/cdk/releases/download/cdk-${CDK_VERSION}/cdk-${CDK_VERSION}.jar"
+          echo "${CDK_SHA256}  vendor/cdk/cdk-${CDK_VERSION}.jar" | sha256sum -c -
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --quiet -r requirements.txt
+
+      - name: Fetch the engine's jars
+        working-directory: backend
+        run: .venv/bin/orthonym --fetch-jars
+
+      - name: Name the panel and compare
+        id: compare
+        working-directory: backend
+        run: |
+          set +e
+          PYTHONPATH="$PWD" .venv/bin/python scripts/engine_watch.py \
+            --report "$RUNNER_TEMP/report.md" --out "$RUNNER_TEMP/engine_watch.tsv"
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          [ -f "$RUNNER_TEMP/report.md" ] && cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
+          # 2 is the run failing, not the engine changing: fail the job.
+          [ "$code" -ne 2 ]
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: engine-watch-panel
+          path: ${{ runner.temp }}/engine_watch.tsv
+
+      - name: Open, update or close the issue
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CODE: ${{ steps.compare.outputs.code }}
+        run: |
+          set -euo pipefail
+          open=$(gh issue list --label engine-watch --state open --json number -q '.[0].number')
+          if [ "$CODE" = 1 ]; then
+            gh label create engine-watch --color FBCA04 \
+              --description "The engine changed names or tiers on the watch panel" --force
+            if [ -n "$open" ]; then
+              gh issue edit "$open" --body-file "$RUNNER_TEMP/report.md"
+            else
+              gh issue create --label engine-watch --title "Engine watch: names or tiers changed" \
+                --body-file "$RUNNER_TEMP/report.md"
+            fi
+          elif [ -n "$open" ]; then
+            gh issue close "$open" --comment "The panel matches the engine again (run $GITHUB_RUN_ID)."
+          fi
