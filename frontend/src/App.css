@@ -43,7 +43,7 @@
 
 /* Vertical rhythm inside the content box, matching what .page used to give
    its children directly. */
-.page__content > * + *:not(.site-footer) {
+.page__content > * + *:not(.site-footer, dialog) {
   margin-top: var(--gap);
 }
 
@@ -117,7 +117,7 @@
    first child, so `* + *` promoted the header to "second child" and pushed
    the notch 14px down off the top edge -- measured, after the gradient
    landed. A layer that has no size must not create rhythm either. */
-.page > *:not(.ground) + *:not(.site-footer) {
+.page > *:not(.ground) + *:not(.site-footer, dialog) {
   margin-top: var(--gap);
 }
 
@@ -4497,10 +4497,6 @@ input.field__control {
   }
 }
 
-.issue-host {
-  display: contents;
-}
-
 /* -------------------- the issue dialog (IssueDialog.jsx) --------------------
 
    A native <dialog>: one white card on the dimmed bench, Kekunyo perched on
@@ -4620,16 +4616,12 @@ input.field__control {
   background: var(--ink);
   transform: scaleX(0);
   transform-origin: left;
-  transition: transform 420ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 420ms cubic-bezier(0.16, 1, 0.3, 1) calc(var(--i) * 90ms);
 }
 
 .issue-dialog__rail li.is-done::after {
   transform: scaleX(1);
 }
-
-.issue-dialog__rail li:nth-child(2)::after { transition-delay: 90ms; }
-.issue-dialog__rail li:nth-child(3)::after { transition-delay: 180ms; }
-.issue-dialog__rail li:nth-child(4)::after { transition-delay: 270ms; }
 
 .issue-dialog__close {
   display: grid;
@@ -4660,10 +4652,6 @@ input.field__control {
   display: grid;
   gap: 14px;
   animation: issue-step 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.issue-dialog__step--back {
-  animation-name: issue-step-back;
 }
 
 .issue-dialog__count {
@@ -4758,8 +4746,7 @@ input.field__control {
   transition: background-color 200ms ease, color 200ms ease, transform 300ms cubic-bezier(0.34, 1.4, 0.64, 1);
 }
 
-.issue-choice:hover .issue-choice__icon,
-.issue-choice--lead .issue-choice__icon {
+.issue-choice:is(:hover, .issue-choice--lead) .issue-choice__icon {
   background: var(--accent);
   color: #fff;
 }
@@ -4885,12 +4872,9 @@ input.field__control {
   100% { opacity: 1; transform: none; }
 }
 
+/* --dir is 1 going forward, -1 going back: a step slides in from its side. */
 @keyframes issue-step {
-  from { opacity: 0; transform: translateX(22px); }
-}
-
-@keyframes issue-step-back {
-  from { opacity: 0; transform: translateX(-22px); }
+  from { opacity: 0; transform: translateX(calc(var(--dir) * 22px)); }
 }
 
 /* Reduced motion: things appear rather than travel. The faces still change
@@ -4898,8 +4882,7 @@ input.field__control {
 @media (prefers-reduced-motion: reduce) {
   .issue-dialog__card,
   .issue-dialog__buddy,
-  .issue-dialog__step,
-  .issue-dialog__step--back {
+  .issue-dialog__step {
     animation: issue-fade 200ms linear both;
   }
 

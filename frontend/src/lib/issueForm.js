@@ -4,9 +4,7 @@
 // in a new tab and the visitor submits the issue on GitHub, under their own
 // account, after reading exactly what it says.
 
-import { MAX_URL_LENGTH, newIssueUrl } from './github.js'
-
-const TITLE_MAX = 60
+import { clipTitle, engineLine } from './github.js'
 
 /**
  * The four kinds of report, in the order the dialog offers them. `fields` drive
@@ -53,7 +51,6 @@ export const KINDS = [
     icon: 'bug',
     prefix: 'Site problem',
     labels: 'bug',
-    engine: false,
     need: 'happened',
     fields: [
       { key: 'did', label: 'What you did', multiline: true, placeholder: 'Opened Explain, drew benzene, pressed Name it' },
@@ -67,7 +64,6 @@ export const KINDS = [
     icon: 'idea',
     prefix: 'Idea',
     labels: 'enhancement',
-    engine: false,
     need: 'summary',
     fields: [
       { key: 'summary', label: 'In one line', placeholder: 'Export names as an SDF' },
@@ -76,18 +72,9 @@ export const KINDS = [
   },
 ]
 
-export function kindById(id) {
-  return KINDS.find((k) => k.id === id) ?? null
-}
-
 /** True when the kind's one required answer is filled in. */
 export function isComplete(kind, answers) {
   return Boolean(kind && answers[kind.need]?.trim())
-}
-
-function clip(text, max = TITLE_MAX) {
-  const line = text.trim().split('\n')[0]
-  return line.length > max ? `${line.slice(0, max)}…` : line
 }
 
 /**
@@ -105,21 +92,14 @@ export function buildIssue(kind, answers, context = {}) {
       const value = answers[f.key].trim()
       return f.mono ? `**${f.label}**\n\n\`\`\`\n${value}\n\`\`\`` : `**${f.label}**\n\n${value}`
     })
-  const engine = kind.engine && context.engineVersion
-    ? `- Engine: v${context.engineVersion}${context.engineCommit ? ` (${context.engineCommit.slice(0, 7)})` : ''}`
-    : null
-  const facts = [context.page && `- Page: ${context.page}`, engine, '- Sent from the issue form on the site'].filter(Boolean)
+  const facts = [
+    context.page && `- Page: ${context.page}`,
+    kind.engine && engineLine(context.engineVersion, context.engineCommit),
+    '- Sent from the issue form on the site',
+  ].filter(Boolean)
   return {
-    title: `${kind.prefix}: ${clip(answers[kind.need] ?? '')}`,
+    title: `${kind.prefix}: ${clipTitle(answers[kind.need] ?? '')}`,
     body: [...sections, facts.join('\n')].join('\n\n'),
     labels: kind.labels,
   }
-}
-
-/** The prefilled new-issue address, or null when it would be too long for a link. */
-export function issueUrl(repo, issue) {
-  const base = newIssueUrl(repo)
-  if (!base) return null
-  const url = `${base}?${new URLSearchParams(issue)}`
-  return url.length <= MAX_URL_LENGTH ? url : null
 }

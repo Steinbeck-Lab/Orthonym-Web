@@ -60,7 +60,7 @@ const WITHHELD = 'withheld_unchecked'
 
 // GitHub refuses a new-issue address much past 8 KB. The backend caps a typed
 // SMILES at 2000 characters, which fits; an SDF record has no cap.
-export const MAX_URL_LENGTH = 8000
+const MAX_URL_LENGTH = 8000
 
 // What a result is called in the issue. Plain words, not the status code.
 const OUTCOME = {
@@ -68,8 +68,33 @@ const OUTCOME = {
   error: 'the engine failed',
 }
 
-// Keeps the title readable; the full SMILES is in the body.
-const TITLE_SMILES_MAX = 60
+// Keeps a title readable; the full text is in the body.
+const TITLE_MAX = 60
+
+/** The first line of `text`, cut to a readable issue title. */
+export function clipTitle(text) {
+  const line = text.trim().split('\n')[0]
+  return line.length > TITLE_MAX ? `${line.slice(0, TITLE_MAX)}…` : line
+}
+
+/** "- Engine: v1.0.7 (61026e2)", or null with no version. The engine tracks
+ *  main: without its version a report cannot be replayed. */
+export function engineLine(version, commit) {
+  return version ? `- Engine: v${version}${commit ? ` (${commit.slice(0, 7)})` : ''}` : null
+}
+
+/**
+ * GitHub's new-issue address with title, body and label filled in, or null
+ * when there is no repository or the address would be too long.
+ * ponytail: a text too big for the address gets no link rather than a
+ * truncated one nobody can reproduce; callers say what to do instead.
+ */
+export function prefilledIssueUrl(repo, { title, body, labels }) {
+  const base = newIssueUrl(repo)
+  if (!base) return null
+  const url = `${base}?${new URLSearchParams({ title, body, labels })}`
+  return url.length <= MAX_URL_LENGTH ? url : null
+}
 
 // A switch the issue can state, or nothing when the page does not know it (a
 // batch job created before the backend recorded its settings).
@@ -109,14 +134,12 @@ export function reportIssueUrl(repo, row, where, settings) {
   // until someone needs one; widen this check then.
   if (!repo?.startsWith('https://github.com/') || !isReportable(row)) return null
   const { smiles, status, limit_code, formula, error, engine_version, engine_commit } = row
-  const short = smiles.length > TITLE_SMILES_MAX ? `${smiles.slice(0, TITLE_SMILES_MAX)}…` : smiles
   const facts = [
     `- Result: ${OUTCOME[status]}`,
     limit_code && `- Reason code: \`${limit_code}\``,
     formula && `- Formula: ${formula}`,
     error && `- Message: ${error}`,
-    // The engine tracks main: without its version a report cannot be replayed.
-    engine_version && `- Engine: v${engine_version}${engine_commit ? ` (${engine_commit.slice(0, 7)})` : ''}`,
+    engineLine(engine_version, engine_commit),
     where && `- Page: ${where}`,
     switchLine('Best-effort mode', settings?.bestEffort),
     switchLine('OPSIN verify', settings?.verify),
@@ -134,10 +157,5 @@ export function reportIssueUrl(repo, row, where, settings) {
     '',
     '<!-- Anything else that helps: the name you expected, where the structure comes from. -->',
   ].join('\n')
-  const query = new URLSearchParams({ title: `Could not name: ${short}`, body, labels: 'bug' })
-  const url = `${newIssueUrl(repo)}?${query}`
-  // ponytail: a structure too big for the address gets no link rather than a
-  // truncated SMILES nobody can reproduce. A paste-it-yourself body is the
-  // upgrade if giant SDF records ever need reporting.
-  return url.length <= MAX_URL_LENGTH ? url : null
+  return prefilledIssueUrl(repo, { title: `Could not name: ${clipTitle(smiles)}`, body, labels: 'bug' })
 }

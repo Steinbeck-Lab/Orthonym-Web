@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { checkHealth } from '../lib/api'
-import { GITHUB_URL, NEW_ISSUE_URL } from '../lib/github'
-import { KINDS, buildIssue, isComplete, issueUrl, kindById } from '../lib/issueForm'
+import { healthOnce } from '../lib/api'
+import { GITHUB_URL, NEW_ISSUE_URL, prefilledIssueUrl } from '../lib/github'
+import { KINDS, buildIssue, isComplete } from '../lib/issueForm'
 import BuddyDrawing from './BuddyDrawing'
 import CopyButton from './CopyButton'
 import Icon from './Icon'
@@ -23,6 +23,8 @@ const STEPS = ['start', 'kind', 'details', 'review']
 // Kekunyo's face per step: waving hello, listening while you type, delighted
 // once the issue is written. The moods are CSS only (`.issue-dialog__buddy`).
 const MOOD = { start: 'wave', kind: 'listen', details: 'listen', review: 'happy' }
+const TITLE = { start: 'Found a problem?', kind: 'What happened?', review: 'Here is your issue' }
+const PREV = { kind: 'start', details: 'kind', review: 'details' }
 
 export default function IssueDialog({ open, onClose }) {
   const dialogRef = useRef(null)
@@ -30,7 +32,7 @@ export default function IssueDialog({ open, onClose }) {
   const { pathname } = useLocation()
   const [step, setStep] = useState('start')
   const [back, setBack] = useState(false)
-  const [kindId, setKindId] = useState(null)
+  const [kind, setKind] = useState(null)
   const [answers, setAnswers] = useState({})
   const [engine, setEngine] = useState(null)
 
@@ -42,7 +44,7 @@ export default function IssueDialog({ open, onClose }) {
       setStep('start')
       setBack(false)
       dialog.showModal()
-      checkHealth().then(setEngine, () => setEngine(null))
+      healthOnce().then(setEngine, () => setEngine(null))
     } else if (!open && dialog.open) {
       dialog.close()
     }
@@ -53,13 +55,13 @@ export default function IssueDialog({ open, onClose }) {
     if (open) headingRef.current?.focus()
   }, [step, open])
 
-  const kind = kindById(kindId)
-  const issue = kind && buildIssue(kind, answers, {
+  // Built only where it is shown, not on every keystroke of the details step.
+  const issue = step === 'review' && buildIssue(kind, answers, {
     page: pathname,
     engineVersion: engine?.engine_version,
     engineCommit: engine?.engine_commit,
   })
-  const url = issue && issueUrl(GITHUB_URL, issue)
+  const url = issue && prefilledIssueUrl(GITHUB_URL, issue)
   const index = STEPS.indexOf(step)
 
   function go(next) {
@@ -67,10 +69,11 @@ export default function IssueDialog({ open, onClose }) {
     setStep(next)
   }
 
-  function pickKind(id) {
-    setKindId(id)
-    go('details')
-  }
+  const backButton = PREV[step] && (
+    <button type="button" className="btn btn--sm" onClick={() => go(PREV[step])}>
+      <Icon name="back" size={13} /> {step === 'review' ? 'Edit' : 'Back'}
+    </button>
+  )
 
   return (
     <dialog
@@ -89,7 +92,7 @@ export default function IssueDialog({ open, onClose }) {
         <header className="issue-dialog__head">
           <ol className="issue-dialog__rail" aria-hidden="true">
             {STEPS.map((s, i) => (
-              <li key={s} className={i <= index ? 'is-done' : undefined} />
+              <li key={s} className={i <= index ? 'is-done' : undefined} style={{ '--i': i }} />
             ))}
           </ol>
           <button type="button" className="issue-dialog__close" onClick={onClose} aria-label="Close">
@@ -97,16 +100,16 @@ export default function IssueDialog({ open, onClose }) {
           </button>
         </header>
 
-        <div key={step} className={`issue-dialog__step${back ? ' issue-dialog__step--back' : ''}`}>
+        <div key={step} className="issue-dialog__step" style={{ '--dir': back ? -1 : 1 }}>
           <p className="issue-dialog__count">
             Step {index + 1} of {STEPS.length}
           </p>
+          <h2 id="issue-dialog-title" ref={headingRef} tabIndex={-1} className="issue-dialog__title">
+            {step === 'details' ? kind.label : TITLE[step]}
+          </h2>
 
           {step === 'start' && (
             <>
-              <h2 id="issue-dialog-title" ref={headingRef} tabIndex={-1} className="issue-dialog__title">
-                Found a problem?
-              </h2>
               <p className="issue-dialog__lede">
                 Answer a few short questions and the issue is written for you, or start from a blank page on
                 GitHub.
@@ -134,16 +137,16 @@ export default function IssueDialog({ open, onClose }) {
 
           {step === 'kind' && (
             <>
-              <h2 id="issue-dialog-title" ref={headingRef} tabIndex={-1} className="issue-dialog__title">
-                What happened?
-              </h2>
               <div className="issue-dialog__choices">
                 {KINDS.map((k) => (
                   <button
                     type="button"
                     key={k.id}
-                    className={`issue-choice issue-choice--row${k.id === kindId ? ' is-picked' : ''}`}
-                    onClick={() => pickKind(k.id)}
+                    className={`issue-choice${k === kind ? ' is-picked' : ''}`}
+                    onClick={() => {
+                      setKind(k)
+                      go('details')
+                    }}
                   >
                     <span className="issue-choice__icon"><Icon name={k.icon} size={18} /></span>
                     <span className="issue-choice__label">{k.label}</span>
@@ -151,15 +154,11 @@ export default function IssueDialog({ open, onClose }) {
                   </button>
                 ))}
               </div>
-              <div className="issue-dialog__actions">
-                <button type="button" className="btn btn--sm" onClick={() => go('start')}>
-                  <Icon name="back" size={13} /> Back
-                </button>
-              </div>
+              <div className="issue-dialog__actions">{backButton}</div>
             </>
           )}
 
-          {step === 'details' && kind && (
+          {step === 'details' && (
             <form
               className="issue-dialog__form"
               onSubmit={(event) => {
@@ -167,9 +166,6 @@ export default function IssueDialog({ open, onClose }) {
                 if (isComplete(kind, answers)) go('review')
               }}
             >
-              <h2 id="issue-dialog-title" ref={headingRef} tabIndex={-1} className="issue-dialog__title">
-                {kind.label}
-              </h2>
               {kind.fields.map((f) => {
                 const Control = f.multiline ? 'textarea' : 'input'
                 return (
@@ -191,9 +187,7 @@ export default function IssueDialog({ open, onClose }) {
                 )
               })}
               <div className="issue-dialog__actions">
-                <button type="button" className="btn btn--sm" onClick={() => go('kind')}>
-                  <Icon name="back" size={13} /> Back
-                </button>
+                {backButton}
                 <button type="submit" className="btn btn--sm btn--accent" disabled={!isComplete(kind, answers)}>
                   Check the issue <Icon name="forward" size={13} />
                 </button>
@@ -201,11 +195,8 @@ export default function IssueDialog({ open, onClose }) {
             </form>
           )}
 
-          {step === 'review' && issue && (
+          {step === 'review' && (
             <>
-              <h2 id="issue-dialog-title" ref={headingRef} tabIndex={-1} className="issue-dialog__title">
-                Here is your issue
-              </h2>
               <figure className="issue-preview">
                 <figcaption className="issue-preview__title">{issue.title}</figcaption>
                 <pre className="issue-preview__body">{issue.body}</pre>
@@ -217,9 +208,7 @@ export default function IssueDialog({ open, onClose }) {
                   : 'This is too long to fit in a link. Copy it, then paste it into a blank issue on GitHub.'}
               </p>
               <div className="issue-dialog__actions">
-                <button type="button" className="btn btn--sm" onClick={() => go('details')}>
-                  <Icon name="back" size={13} /> Edit
-                </button>
+                {backButton}
                 {!url && <CopyButton text={`${issue.title}\n\n${issue.body}`} label="Copy the issue" />}
                 <a
                   className="btn btn--sm btn--accent"

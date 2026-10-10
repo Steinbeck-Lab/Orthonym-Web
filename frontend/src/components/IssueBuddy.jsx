@@ -24,10 +24,8 @@ import IssueDialog from './IssueDialog'
 export default function IssueBuddy() {
   const [open, setOpen] = useState(false)
   if (!NEW_ISSUE_URL) return null
-  // One wrapper, `display: contents`: the page shell spaces its children with
-  // `* + *` margins, and a margin on the dialog stops it centring.
   return (
-    <div className="issue-host">
+    <>
       <button
         type="button"
         className="issue-buddy"
@@ -52,6 +50,6 @@ export default function IssueBuddy() {
         </span>
       </button>
       <IssueDialog open={open} onClose={() => setOpen(false)} />
-    </div>
+    </>
   )
 }
