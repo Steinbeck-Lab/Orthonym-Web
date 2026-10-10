@@ -3,6 +3,7 @@ import Navigation from './components/Navigation'
 import Footer from './components/Footer'
 import IssueBuddy from './components/IssueBuddy'
 import MatomoTracker from './components/MatomoTracker'
+import RouteMeta from './components/RouteMeta'
 import Home from './pages/Home'
 import IupacToSmiles from './pages/IupacToSmiles'
 import Explain from './pages/Explain'
@@ -66,6 +67,8 @@ function Layout() {
       </div>
       <Footer />
       <IssueBuddy />
+      {/* Before the tracker: it reads document.title, which this sets. */}
+      <RouteMeta />
       <MatomoTracker />
     </div>
   )
