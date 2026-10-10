@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import ExampleChips from '../components/ExampleChips'
+import EngineStamp from '../components/EngineStamp'
 import SamplerGrid from '../components/SamplerGrid'
 import ResultsTable from '../components/ResultsTable'
 import ProcessingBar from '../components/ProcessingBar'
@@ -784,11 +785,14 @@ function Home() {
           /* 1-2 molecules read best as cards; 3+ switch to a scannable table
              with the structures inline (owner instruction 2026-09-03). A job
              (>10, or a timed-out fast path) is BatchResults, above. */
-          rows.length > 2 ? (
-            <ResultsTable rows={rows} />
-          ) : (
-            <SamplerGrid rows={rows} reduceMotion={reduceMotion} />
-          )
+          <div className="results-col">
+            {rows.length > 2 ? (
+              <ResultsTable rows={rows} />
+            ) : (
+              <SamplerGrid rows={rows} reduceMotion={reduceMotion} />
+            )}
+            <EngineStamp rows={rows} />
+          </div>
         ) : null /* Nothing at all until there is something to show. The key
                      moved to the band at the foot of the page, and the line
                      that replaced it ("submit a molecule and each result

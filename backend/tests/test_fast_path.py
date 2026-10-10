@@ -34,6 +34,8 @@ def test_translate_response_shape_is_unchanged(redis_client):
     # The single-molecule path keeps its picture; only batch rows drop it.
     assert item["depiction_svg"]
     assert item["roundtrip_match"] is True
+    # Every name says which engine wrote it.
+    assert item["engine_version"] == orthonym.__version__
 
 
 def test_an_oversized_smiles_on_the_fast_path_never_reaches_rdkit(

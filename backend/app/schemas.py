@@ -9,6 +9,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel
 
+from .engine_info import ENGINE_COMMIT, ENGINE_VERSION
+
 
 Status = Literal["pin", "fallback", "best_effort", "abstain", "error"]
 
@@ -97,6 +99,12 @@ class ResultItem(BaseModel):
     # because no round trip ran.
     roundtrip_smiles: Optional[str] = None
     roundtrip_match: Optional[bool] = None
+    # The engine that named this row. The default is the process building the
+    # row, which is always the worker that ran the engine: the API process
+    # only re-validates the worker's dict, which already carries both keys. A
+    # cached row is never served across engines (name_cache keys on them).
+    engine_version: str = ENGINE_VERSION
+    engine_commit: Optional[str] = ENGINE_COMMIT
 
 
 class TranslateResponse(BaseModel):
@@ -211,6 +219,9 @@ class BatchRow(BaseModel):
     formula: Optional[str] = None
     limit_code: Optional[str] = None
     error: Optional[str] = None
+    # As on ResultItem: built in the batch worker, so the engine that named it.
+    engine_version: str = ENGINE_VERSION
+    engine_commit: Optional[str] = ENGINE_COMMIT
 
 
 class JobEnvelope(BaseModel):

@@ -336,6 +336,14 @@
    radius so it reads as a continuation of the same mosaic rather than a
    panel of cards inside a panel. */
 
+/* The results and the engine line under them, as ONE workbench cell: two
+   siblings would land in separate cells of the split grid. */
+.results-col {
+  display: grid;
+  gap: var(--s-xs);
+  min-width: 0;
+}
+
 .sampler {
   display: grid;
   /* ONE column: result cards stack one below the other (owner instruction
@@ -1793,6 +1801,20 @@
   letter-spacing: var(--track-nav);
   text-transform: uppercase;
   color: var(--link);
+}
+
+/* Which engine named the rows. --body, not --muted: on Home this sits on
+   the bare ground, where --muted is under AA (see .site-footer__copyright). */
+.engine-stamp {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  color: var(--body);
+}
+
+.results-col > .engine-stamp {
+  justify-self: center;
 }
 
 /* Never let a results link read as permanent (design spec section 14). */
