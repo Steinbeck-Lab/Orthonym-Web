@@ -1,5 +1,7 @@
 cff-version: 1.2.0
-message: If you use Orthonym-Web, please cite the paper below; the software has its own DOI.
+message: >-
+  If you use Orthonym-Web, please cite the paper below; the software has its own
+  DOI.
 title: Orthonym-Web
 abstract: >-
   Orthonym-Web is the web application for Orthonym, a deterministic, rule-based
@@ -16,7 +18,7 @@ authors:
   - family-names: Steinbeck
     given-names: Christoph
     orcid: https://orcid.org/0000-0001-6966-0814
-version: 0.4.2
+version: 0.5.0
 doi: 10.5281/zenodo.23036568
 license: MIT
 url: https://orthonym.decimer.ai
