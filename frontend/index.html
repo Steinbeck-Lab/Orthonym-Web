@@ -33,21 +33,20 @@
     <title>Orthonym — free IUPAC name generator for chemical structures</title>
     <meta
       name="description"
-      content="Free IUPAC naming tool. Paste SMILES, upload a file or draw a molecule and get its IUPAC name, checked by an OPSIN round trip. Deterministic and open source."
+      content="Free IUPAC naming tool. Paste SMILES, upload a file or draw a molecule and get its IUPAC name, read back by OPSIN and labelled with its confidence. Open source."
     />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Orthonym" />
     <meta property="og:title" content="Orthonym — free IUPAC name generator for chemical structures" />
     <meta
       property="og:description"
-      content="Deterministic IUPAC names for chemical structures, each one checked by an OPSIN round trip and labelled with the confidence it earned."
+      content="Deterministic IUPAC names for chemical structures. OPSIN reads every name back, and each one is labelled with the confidence it earned."
     />
     <meta property="og:image" content="https://orthonym.decimer.ai/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="Orthonym: verified IUPAC names for chemical structures" />
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="apple-touch-icon" href="/favicon.png" />
     <!-- Tells Google the site's name is "Orthonym" (WebSite) and what it is
          (WebApplication). Every claim here is one the site itself makes. -->
     <script type="application/ld+json">
@@ -65,7 +64,7 @@
             "name": "Orthonym",
             "alternateName": "Orthonym IUPAC name generator",
             "url": "https://orthonym.decimer.ai/",
-            "description": "Free IUPAC name generator: a deterministic, rule-based SMILES to IUPAC name translator. Each name is checked by an OPSIN round trip and labelled with its confidence tier: verified PIN, verified fallback, best effort, or no name.",
+            "description": "Free IUPAC name generator: a deterministic, rule-based SMILES to IUPAC name translator. OPSIN reads every name back, and each result is labelled with the confidence tier it earned.",
             "applicationCategory": "Chemistry",
             "operatingSystem": "Any (web browser)",
             "isAccessibleForFree": true,
@@ -116,9 +115,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <h1>Orthonym — free IUPAC name generator</h1>
       <p>
         Orthonym is a free IUPAC naming tool: a deterministic, rule-based SMILES to IUPAC name translator. Paste SMILES,
-        upload a file or draw a molecule, and each name comes back checked by an OPSIN round
-        trip and labelled with the confidence it earned: verified PIN, verified fallback, best
-        effort, or no name. Orthonym needs JavaScript to run.
+        upload a file or draw a molecule, and each name comes back read by OPSIN and labelled
+        with the confidence it earned, or the engine says it could not name it. Orthonym needs
+        JavaScript to run.
       </p>
       <ul>
         <li><a href="/">Translate SMILES to IUPAC names</a></li>
