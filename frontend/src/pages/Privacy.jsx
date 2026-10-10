@@ -111,6 +111,40 @@ import './Legal.css'
 // browser held zero cookies and no new storage afterwards. The server's operator is the
 // owner's statement (2026-10-07), consistent with matomo.nfdi4chem.de
 // resolving to the university's own proxy, 141.35.136.25.
+//
+// Version 5 (10 October 2026) adds one item to what the "Report SMILES on
+// GitHub" link carries: the engine version and short commit that named the
+// result (lib/github.js reads them off the row, which the worker stamps;
+// schemas.py ResultItem / BatchRow). They describe the software, not the
+// visitor, so § 5 lists them and nothing else changes.
+//
+// Version 6 (10 October 2026) follows the structure editor from Ketcher 2.6.2
+// to 3.18.0, which changed what it stores. MEASURED in Chromium against both
+// bundles served side by side, storage cleared first: 2.6.2 wrote nothing on
+// load; 3.18.0 writes ketcher-opts (its default display settings),
+// ketcher_editor_saved_settings ({"selectionTool": rectangle select}) and
+// ketcher_polymer_sequence_type ("RNA") as soon as the editor opens, before any
+// input. Switching to its macromolecule mode added no key. From the bundle
+// (static/js/609.*.chunk.js), the three other keys it can write are each set
+// only in a handler for a visitor's action: favoriteItemsUniqueKeys
+// (toggleMonomerFavorites), ketcher_custom_presets (saving, deleting or
+// starring a preset) and ketcher_preset_phosphate_filter
+// (setPresetPhosphateFilter); ketcher-tmpls is still written only on saving a
+// template. Still measured after load and after the mode switch: no cookie, no
+// sessionStorage, no IndexedDB database, no service worker, no request to
+// another origin. The 3D viewer's cookie helper is the same code as in 2.6.2.
+// The editor sits behind the Draw tab on Translate and on Explain; the old
+// text named only Explain.
+//
+// Version 7 (10 October 2026): the wide-screen Issues tab now opens a dialog
+// (components/IssueDialog.jsx) instead of linking GitHub directly. Its "Blank
+// issue" choice is the same bare /issues/new link as before. Its guided form
+// builds a /issues/new address (lib/issueForm.js) carrying ONLY what the
+// visitor typed into it, the path of the page they were on (no query string)
+// and, for the two naming kinds, the engine version from /api/health. The
+// dialog sends nothing itself: the address is followed only when the visitor
+// presses "Open on GitHub", after a preview of exactly that text. The phone
+// menu's "Report an issue" is unchanged, still the blank form.
 
 // The UNIVERSITY leads, the working group follows as the responsible unit.
 // Art. 4 (7) requires the controller to be a natural or legal person, public
@@ -404,12 +438,21 @@ function Privacy() {
               cancel or delete the job it names.
             </li>
             <li>
-              <code>ketcher-opts</code> and <code>ketcher-tmpls</code> — written by the structure
-              editor bundled into the Explain page, and only if you change its settings or save one
-              of your own drawings as a template — each is written in response to something you did,
-              which is what makes it strictly necessary to the feature you asked for. They hold your
-              editor preferences and the structures you chose to save. Neither is sent to our
-              server.
+              <code>ketcher-opts</code>, <code>ketcher_editor_saved_settings</code> and{' '}
+              <code>ketcher_polymer_sequence_type</code> — written by the structure editor as soon
+              as you open the Draw tab on Translate or Explain. They hold the editor&rsquo;s own
+              settings (display options, the selected tool, the default sequence type), which it
+              needs to work, and nothing about you. Opening the tab is what asks for the editor.
+            </li>
+            <li>
+              <code>ketcher-tmpls</code>, <code>ketcher_custom_presets</code>,{' '}
+              <code>ketcher_preset_phosphate_filter</code> and{' '}
+              <code>favoriteItemsUniqueKeys</code> — written by the same editor only when you save
+              a drawing as a template, or save a preset, set a filter or mark a favourite in its
+              macromolecule mode. They hold what you chose to save.
+            </li>
+            <li>
+              None of the editor&rsquo;s entries is sent to our server.
             </li>
           </ul>
           <p>
@@ -471,8 +514,8 @@ function Privacy() {
             One kind of link is different. When Orthonym cannot name a molecule, or fails while
             naming it, the result offers a &ldquo;Report SMILES on GitHub&rdquo; link. That link carries the
             molecule&rsquo;s SMILES string and what Orthonym said about it (its reason code, formula
-            or error message, the page you were on, and the two naming switches it was produced
-            with), so that GitHub can fill in a new issue for
+            or error message, the page you were on, the two naming switches it was produced
+            with, and the version of the naming engine), so that GitHub can fill in a new issue for
             you. It carries nothing else from your submission: not an ID you gave the compound, and
             not your batch job. GitHub receives all of this as soon as you click, together with
             your IP address and, if you are signed in to GitHub, your GitHub account, even if you
@@ -483,17 +526,22 @@ function Privacy() {
             need to keep confidential.
           </p>
           <p>
-            The &ldquo;Issues&rdquo; tab at the left edge of the page (in the menu on a small
-            screen, &ldquo;Report an issue&rdquo;) opens GitHub&rsquo;s empty form for a new issue in
-            the same repository. It carries nothing from this site: no structure, no name and no
-            result. Following it is a visit to GitHub like the links above, so GitHub receives your
-            IP address and, if you are signed in, your GitHub account. What you then write and
-            submit is stored and shown exactly as described for a report.
+            The &ldquo;Issues&rdquo; tab at the left edge of the page asks how you want to report.
+            &ldquo;Blank issue&rdquo;, and &ldquo;Report an issue&rdquo; in the menu on a small
+            screen, open GitHub&rsquo;s empty form for a new issue in the same repository, carrying
+            nothing from this site. The guided form instead fills that GitHub form in for you, with
+            what you typed into it, the page you were on and, for a question about a name, the
+            version of the naming engine. Nothing leaves your browser while you fill it in: you see
+            the finished text first, and it reaches GitHub only when you press &ldquo;Open on
+            GitHub&rdquo;. Either way, following the link is a visit to GitHub like the links above,
+            so GitHub receives your IP address and, if you are signed in, your GitHub account. What
+            you then submit is stored and shown exactly as described for a report.
           </p>
           <p>
             This site itself transfers no data to a third country or to an international
             organisation. The one route by which anything you submitted reaches one is a report
-            link: following it sends the data described above to GitHub in the United States, and an
+            link or the issue form: following it sends the data described above to GitHub in the
+            United States, and an
             issue you submit, from a report link or the Issues tab, is then kept there, in our
             repository.
           </p>
@@ -568,7 +616,7 @@ function Privacy() {
             serve the site and honour an objection to it at the same time. That is a reason we would
             have to demonstrate if you objected — not an exception to your right to object.
           </p>
-          <p className="legal-updated">Version 4 — 7 October 2026</p>
+          <p className="legal-updated">Version 7 — 10 October 2026</p>
         </LegalSection>
     </LegalPage>
   )

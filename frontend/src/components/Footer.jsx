@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import CreditCross from './CreditCross'
-import { checkHealth } from '../lib/api'
+import { healthOnce } from '../lib/api'
 
 // Site-wide footer — appears once, beneath every page, via the router shell.
 //
@@ -70,7 +70,7 @@ function EngineChip() {
 
   useEffect(() => {
     let live = true
-    checkHealth()
+    healthOnce()
       .then((h) => live && setHealth(h))
       .catch(() => live && setHealth(false))
     return () => { live = false }
