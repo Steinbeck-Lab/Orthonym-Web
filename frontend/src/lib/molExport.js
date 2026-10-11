@@ -3,7 +3,9 @@
  * endpoint is involved: everything these need has already been fetched.
  */
 
-const CSV_COLUMNS = ['#', 'name', 'smiles', 'canonical_smiles', 'inchi', 'inchikey', 'error']
+import { warningsText } from './opsinWarnings.js'
+
+const CSV_COLUMNS = ['#', 'name', 'smiles', 'canonical_smiles', 'inchi', 'inchikey', 'opsin_warnings', 'error']
 
 /**
  * RFC 4180 quoting, and it is load-bearing rather than defensive: IUPAC names
@@ -28,6 +30,7 @@ export function rowsToCsv(rows) {
         d.canonical_smiles,
         d.inchi,
         d.inchikey,
+        warningsText(d.warnings),
         row.error,
       ]
         .map(csvField)
@@ -62,6 +65,7 @@ export function rowsToSdf(rows) {
       ['CANONICAL_SMILES', row.data.canonical_smiles],
       ['INCHI', row.data.inchi],
       ['INCHIKEY', row.data.inchikey],
+      ['OPSIN_WARNINGS', warningsText(row.data.warnings)],
     ]
       .filter(([, value]) => value)
       .map(([tag, value]) => `>  <${tag}>\n${value}\n`)

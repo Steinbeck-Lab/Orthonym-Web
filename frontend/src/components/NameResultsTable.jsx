@@ -1,6 +1,7 @@
 import CopyButton from './CopyButton'
 import ChemName from './Typeset'
 import Icon from './Icon'
+import OpsinWarnings from './OpsinWarnings'
 import { downloadText, rowsToCsv, rowsToSdf } from '../lib/molExport'
 
 /**
@@ -149,6 +150,14 @@ export default function NameResultsTable({ rows }) {
                   start would give it, so a long InChI (caffeine's,
                   aspirin's) wraps onto more lines here -- expected, not a
                   bug. */}
+              {row.data?.warnings?.length > 0 && (
+                <tr className="name-results__meta-row">
+                  <td className="name-results__meta-spacer" aria-hidden="true" />
+                  <td className="name-results__meta-cell" colSpan={4}>
+                    <OpsinWarnings warnings={row.data.warnings} />
+                  </td>
+                </tr>
+              )}
               {row.ok && row.data.inchi && (
                 <tr className="name-results__meta-row">
                   <td className="name-results__meta-spacer" aria-hidden="true" />

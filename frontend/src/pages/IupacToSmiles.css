@@ -711,3 +711,91 @@
 .name-results__meta-item .idlist__value {
   min-width: 0;
 }
+
+/* OPSIN's warnings on a parsed name: one soft yellow band, the icon in a
+   lamp. No tier rule (dashed, dotted, double) and no crimson: this page
+   computes no tier, and the warning is OPSIN's. The fill is the system's
+   highlighter (--glow-wash) and the icon wears --warning, the darkened ink
+   DESIGN.md keeps for technical callouts. */
+.opsin-warnings {
+  display: grid;
+  gap: var(--s-sm);
+  padding: var(--s-sm) var(--s-md);
+  border-radius: var(--r-card-sm);
+  background: var(--glow-wash);
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.opsin-warnings__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--s-sm);
+  align-items: start;
+}
+
+.opsin-warnings__item > p {
+  grid-column: 2;
+  margin: 0;
+}
+
+.opsin-warnings__icon {
+  grid-row: span 3;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--glow-wash-strong);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 22%, transparent);
+  color: var(--warning);
+}
+
+.opsin-warnings__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.opsin-warnings__title {
+  font-weight: 600;
+}
+
+.opsin-warnings__item > .opsin-warnings__raw {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--s-xs);
+  margin-top: 2px;
+}
+
+.opsin-warnings__raw-label {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.opsin-warnings__raw code {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+/* In the batch table the band sits under its row: tighter, no lamp. */
+.name-results .opsin-warnings {
+  margin-bottom: var(--s-xs);
+  padding: var(--s-xs) var(--s-sm);
+}
+
+.name-results .opsin-warnings__icon {
+  grid-row: 1;
+  width: auto;
+  height: auto;
+  padding-top: 3px;
+  background: none;
+  box-shadow: none;
+}

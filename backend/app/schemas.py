@@ -134,6 +134,13 @@ class ExamplesResponse(BaseModel):
     examples: list[ExampleItem]
 
 
+class OpsinWarning(BaseModel):
+    # OPSIN's OpsinWarningType name, verbatim: APPEARS_AMBIGUOUS or
+    # STEREOCHEMISTRY_IGNORED in OPSIN 2.9.0.
+    type: str
+    message: str
+
+
 class IupacToSmilesResponse(BaseModel):
     # OPSIN's own output, kept verbatim. NOT replaced by the canonical form:
     # the string a tool actually produced is information, and normalising it
@@ -151,6 +158,9 @@ class IupacToSmilesResponse(BaseModel):
     # 2D V2000 molblock, the payload of the SDF download.
     molblock: Optional[str] = None
     depiction_svg: Optional[str] = None
+    # OPSIN parsed the name but warned: the structure is the one OPSIN chose,
+    # not the only one the name can mean. Empty on a clean parse and a failure.
+    warnings: list[OpsinWarning] = []
     error: Optional[str] = None
 
 

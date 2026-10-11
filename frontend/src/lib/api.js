@@ -8,8 +8,9 @@
 //                                  envelope { job_id, molecule_count, status }
 //                                  -- see TranslateJobQueuedError below.
 //   GET  /api/iupac-to-smiles  -> { smiles, canonical_smiles, inchi, inchikey,
-//                                   molblock, depiction_svg, error } -- every
-//                                   field string|null. The four identifier
+//                                   molblock, depiction_svg, warnings, error }
+//                                   -- warnings is OPSIN's [{ type, message }],
+//                                   every other field string|null. The four identifier
 //                                   fields are independently optional: RDKit's
 //                                   InChI writer and 2D coordinate generation
 //                                   are not total, and losing one must not

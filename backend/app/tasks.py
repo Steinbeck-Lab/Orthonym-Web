@@ -591,6 +591,29 @@ def _molblock_2d(mol):
     return Chem.MolToMolBlock(copy)
 
 
+def _opsin_warnings(name: str) -> list[dict]:
+    """OPSIN's warnings for a name it parsed (APPEARS_AMBIGUOUS,
+    STEREOCHEMISTRY_IGNORED). The engine's opsin_parse keeps only the SMILES,
+    as the CLI does, so a name OPSIN read with a warning looked like a clean
+    parse. Same NameToStructure and CLI config opsin_parse uses; raises rather
+    than returning [] when the JVM is missing, because an empty list here
+    claims OPSIN raised no warning.
+    """
+    from orthonym import jvm_bridge
+
+    # ponytail: a second parse of the same name (a few ms); fold into one
+    # call if the engine ever exposes the OpsinResult itself.
+    if not jvm_bridge._ensure_jvm():
+        raise RuntimeError("OPSIN warnings need the in-process JVM")
+    with jvm_bridge._LOCK:
+        jvm_bridge._attach_thread()
+        result = jvm_bridge._n2s().parseChemicalName(name, jvm_bridge._cfg(False))
+        return [
+            {"type": str(w.getType()), "message": str(w.getMessage())}
+            for w in result.getWarnings()
+        ]
+
+
 @celery_app.task(name="app.tasks.name_to_smiles")
 def name_to_smiles(name: str) -> dict:
     from orthonym.validation.opsin_roundtrip import opsin_parse
@@ -608,6 +631,7 @@ def name_to_smiles(name: str) -> dict:
             "inchikey": None,
             "molblock": None,
             "depiction_svg": None,
+            "warnings": [],
             "error": "Could not parse this name via OPSIN",
         }
     inchi = _quietly(lambda: Chem.MolToInchi(mol))
@@ -627,6 +651,7 @@ def name_to_smiles(name: str) -> dict:
         "inchikey": inchikey,
         "molblock": _quietly(lambda: _molblock_2d(mol)),
         "depiction_svg": structure_svg_data_uri(raw, mol),
+        "warnings": _opsin_warnings(name),
         "error": None,
     }
 

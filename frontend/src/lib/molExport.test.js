@@ -20,8 +20,8 @@ test('rowsToCsv quotes a name containing a comma', () => {
   const csv = rowsToCsv([ok(0, '2,3-dimethylbutane', ASPIRIN)])
   const dataLine = csv.trim().split('\n')[1]
   assert.ok(dataLine.includes('"2,3-dimethylbutane"'))
-  // The row still has exactly the 7 columns the header declares.
-  assert.equal(csv.trim().split('\n')[0].split(',').length, 7)
+  // The row still has exactly the 8 columns the header declares.
+  assert.equal(csv.trim().split('\n')[0].split(',').length, 8)
 })
 
 test('rowsToCsv doubles an embedded double quote', () => {
@@ -81,9 +81,9 @@ test('rowsToCsv writes the exact file: numbering, column order, quoting, CRLF', 
   const csv = rowsToCsv([ok(0, 'aspirin', ASPIRIN), bad(1, 'zzz', 'Could not parse')])
   assert.equal(
     csv,
-    '"#","name","smiles","canonical_smiles","inchi","inchikey","error"\r\n' +
-      `"1","aspirin","${ASPIRIN.smiles}","${ASPIRIN.canonical_smiles}","${ASPIRIN.inchi}","${ASPIRIN.inchikey}",""\r\n` +
-      '"2","zzz","","","","","Could not parse"\r\n',
+    '"#","name","smiles","canonical_smiles","inchi","inchikey","opsin_warnings","error"\r\n' +
+      `"1","aspirin","${ASPIRIN.smiles}","${ASPIRIN.canonical_smiles}","${ASPIRIN.inchi}","${ASPIRIN.inchikey}","",""\r\n` +
+      '"2","zzz","","","","","","Could not parse"\r\n',
   )
 })
 
@@ -105,4 +105,11 @@ test('rowsToSdf writes the exact record: tags, blank lines and terminator', () =
     `A\nM  END\n${tags(true).replace('{n}', 'aspirin')}` +
       `B\nM  END\n${tags(false).replace('{n}', 'other')}`,
   )
+})
+
+test('OPSIN warnings reach the CSV and the SDF, type kept verbatim', () => {
+  const warnings = [{ type: 'APPEARS_AMBIGUOUS', message: 'Connection of eth to pyridin' }]
+  const row = ok(0, 'ethylpyridine', { ...ASPIRIN, molblock: 'A\nM  END', warnings })
+  assert.match(rowsToCsv([row]), /"APPEARS_AMBIGUOUS: Connection of eth to pyridin",""\r\n$/)
+  assert.match(rowsToSdf([row]).text, />  <OPSIN_WARNINGS>\nAPPEARS_AMBIGUOUS: Connection of eth to pyridin\n/)
 })

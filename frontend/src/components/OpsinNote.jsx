@@ -9,7 +9,7 @@ import { useDisclosure } from '../lib/useDisclosure'
 // what belongs on THIS page.
 //
 // /from-name computes no confidence tier -- OPSIN's parse either succeeds
-// or it does not -- so there is no rung ladder here, only four short
+// or it does not -- so there is no rung ladder here, only a few short
 // paragraphs of prose explaining how a typed name becomes a structure, and
 // the citation for the parser doing the work.
 //
@@ -53,7 +53,7 @@ export default function OpsinNote() {
         <div className="info__panel">
           {/* `.prose` (App.css), not `.prose-sm`: this is running explanatory
               copy, the same register About.jsx's own paragraphs use, and
-              its `> * + *` rule is what gives four independent <p>s their
+              its `> * + *` rule is what gives independent <p>s their
               spacing without a new class just for this drawer. */}
           <div className="prose">
             <p>
@@ -73,10 +73,17 @@ export default function OpsinNote() {
               coordinates the SDF download carries.
             </p>
             <p>
-              A name OPSIN cannot resolve is refused, not guessed. Trade names, typos
-              and ambiguous fragments come back as &ldquo;Could not parse this name via
-              OPSIN&rdquo; rather than a nearest match &mdash; the same honesty the
-              confidence tiers exist for on the naming side.
+              A name OPSIN cannot resolve is refused, not guessed. Trade names and typos
+              come back as &ldquo;Could not parse this name via OPSIN&rdquo; rather
+              than a nearest match &mdash; the same honesty the confidence tiers exist
+              for on the naming side.
+            </p>
+            <p>
+              Some names OPSIN reads but warns about, and the warning is shown with the
+              result. &ldquo;Ethylpyridine&rdquo; is one: it can mean the 2-, 3- or
+              4-isomer, and OPSIN draws one of them. An optical rotation such as
+              &ldquo;(+)-&rdquo; is ignored, because it does not give the
+              configuration.
             </p>
             <p>
               OPSIN 2.9.0. Lowe, D. M.; Corbett, P. T.; Murray-Rust, P.; Glen, R. C.

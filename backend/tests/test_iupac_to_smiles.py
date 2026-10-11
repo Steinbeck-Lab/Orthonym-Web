@@ -123,3 +123,18 @@ def test_an_empty_inchi_is_reported_as_missing_not_as_an_empty_string(
     assert body["inchi"] is None
     assert body["inchikey"] is None
     assert body["molblock"]
+
+
+def test_opsin_warnings_reach_the_response(redis_client):
+    """OPSIN parses both names but warns; the CLI-style parse the engine uses
+    drops the warning, so without this field both looked like clean parses."""
+    ambiguous = _convert("ethylpyridine")
+    assert ambiguous["smiles"]
+    assert [w["type"] for w in ambiguous["warnings"]] == ["APPEARS_AMBIGUOUS"]
+
+    rotation = _convert("(+)-camphor")
+    assert rotation["smiles"]
+    assert [w["type"] for w in rotation["warnings"]] == ["STEREOCHEMISTRY_IGNORED"]
+
+    assert _convert(ASPIRIN)["warnings"] == []
+    assert _convert("not a chemical name")["warnings"] == []
