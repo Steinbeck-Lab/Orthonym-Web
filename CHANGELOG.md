@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.5.0](https://github.com/Steinbeck-Lab/Orthonym-Web/compare/v0.4.2...v0.5.0) (2026-10-11)
+
+
+### Features
+
+* count page views with Matomo, cookieless and path only ([4f33f99](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/4f33f995a6c327c5554337644ed28ea8caeb5125))
+* count page views with Matomo, cookieless and path only ([fcf65e7](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/fcf65e7c3e9b99b9a36f506a2589e066ed7539a8))
+* guided issue dialog behind the Issues tab ([8bcb2e2](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/8bcb2e2c30e0444968a9dfb458df05ef215286d8))
+* guided issue dialog behind the Issues tab ([6b6fc29](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/6b6fc29a1172f93601c32598dd340e0cccef1dbc))
+* nightly engine watch ([67558af](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/67558afe3b02fa299668d33ffb69eb642503bf48))
+* nightly engine watch ([8c5319f](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/8c5319f73c62909157909f7678e2d7503a4709ee))
+* put the engine version in the report link ([e7d736c](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/e7d736cbde7a6e6e5f8eb2327c42f581996d964f))
+* put the engine version in the report link ([ce65f23](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/ce65f237e10619f0e2f46568d11caad0b3209f6e))
+* search and link-preview metadata ([fa9a391](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/fa9a3913b755047c27f6a9663332a4faf5538e0a))
+* search and link-preview metadata ([22c0aea](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/22c0aeaffed1823a8a38a839856dba094d873d9e))
+* show the running engine version in the footer ([8402e83](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/8402e83191a06c6cd8aa5ebac759af64e5d3d287))
+* show the running engine version in the footer ([0f20b7e](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/0f20b7eb8b391966b29d5c5050f2b6804c98dc6a))
+* stamp the engine version on every result and the batch CSV ([30cfd49](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/30cfd49d160de2466af788cdf0efcfc2a636dfcb))
+* stamp the engine version on every result and the batch CSV ([097e973](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/097e973cb6b38290364e7c00cd6230e3493b6805))
+* switch Matomo page counting on with the server's privacy settings ([279bb26](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/279bb262c788fbbad33a22882e02986dbfc7039f))
+* switch Matomo page counting on with the server's privacy settings ([8f4daf4](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/8f4daf4b0f0297f065000583ff3fd72815e73409))
+
+
+### Bug Fixes
+
+* **examples:** replace ellipticine with a polycyclic cage as the fallback example ([e8b4075](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/e8b4075e77f55f7921ac64611b7e3b1743a8f351))
+* **examples:** replace ellipticine with a polycyclic cage as the fallback example ([c3256f1](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/c3256f12e316223d91e689bcac20949b3af373a9))
+* review findings on the search metadata ([3f327e4](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/3f327e4fc836de22db484536c853bd157a47f86c))
+
+
+### Refactoring
+
+* share one issue-link builder and one health answer ([ab31228](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/ab31228f02cf1d76d11b8cafe1edceb6ad152642))
+* simplify the engine chip ([81d8fe1](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/81d8fe1790bcd8ee168671864adae21f75a2ac56))
+* simplify the engine chip ([3beaba1](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/3beaba1662b7e12e6ae5b0408693e8ff2636f1c8))
+
+
+### Documentation
+
+* cite the Orthonym paper on ChemRxiv ([a686ba6](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/a686ba6691ae6101a9e976affd6cd563a2543136))
+* cite the Orthonym paper on ChemRxiv ([331f1fb](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/331f1fb5ebef75494417336251b9812918050445))
+* Privacy v6 and Terms for Ketcher 3.18 ([f6fafee](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/f6fafee496881d10e18a1d2f01b0b51be83a41a5))
+
 ## [0.4.2](https://github.com/Steinbeck-Lab/Orthonym-Web/compare/v0.4.1...v0.4.2) (2026-10-03)
 
 
