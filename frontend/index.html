@@ -26,11 +26,63 @@
       type="font/woff2"
       crossorigin="anonymous"
     />
+    <!-- Search and link previews. The route's own title, description and
+         canonical link are set by components/RouteMeta.jsx (lib/routeMeta.js);
+         these are Home's, for the first response and for preview bots that run
+         no script. No canonical here on purpose: see RouteMeta.jsx. -->
+    <title>Orthonym — free IUPAC name generator for chemical structures</title>
     <meta
       name="description"
-      content="Orthonym — a deterministic, rule-based SMILES-to-IUPAC name translator. Try your own molecules and see its honest confidence: verified PIN, fallback, or abstain."
+      content="Free IUPAC naming tool. Paste SMILES, upload a file or draw a molecule and get its IUPAC name, read back by OPSIN and labelled with its confidence. Open source."
     />
-    <title>Orthonym — SMILES to IUPAC, honestly</title>
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Orthonym" />
+    <meta property="og:title" content="Orthonym — free IUPAC name generator for chemical structures" />
+    <meta
+      property="og:description"
+      content="Deterministic IUPAC names for chemical structures. OPSIN reads every name back, and each one is labelled with the confidence it earned."
+    />
+    <meta property="og:image" content="https://orthonym.decimer.ai/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Orthonym: verified IUPAC names for chemical structures" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <!-- Tells Google the site's name is "Orthonym" (WebSite) and what it is
+         (WebApplication). Every claim here is one the site itself makes. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://orthonym.decimer.ai/#website",
+            "name": "Orthonym",
+            "url": "https://orthonym.decimer.ai/"
+          },
+          {
+            "@type": "WebApplication",
+            "name": "Orthonym",
+            "alternateName": "Orthonym IUPAC name generator",
+            "url": "https://orthonym.decimer.ai/",
+            "description": "Free IUPAC name generator: a deterministic, rule-based SMILES to IUPAC name translator. OPSIN reads every name back, and each result is labelled with the confidence tier it earned.",
+            "applicationCategory": "Chemistry",
+            "operatingSystem": "Any (web browser)",
+            "isAccessibleForFree": true,
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+            "isPartOf": { "@id": "https://orthonym.decimer.ai/#website" },
+            "creator": [
+              { "@type": "Organization", "name": "Steinbeck Lab, Friedrich Schiller University Jena", "url": "https://cheminf.uni-jena.de" },
+              { "@type": "Organization", "name": "Beilstein-Institut", "url": "https://www.beilstein-institut.de/en/" }
+            ],
+            "sameAs": [
+              "https://github.com/Steinbeck-Lab/Orthonym",
+              "https://github.com/Steinbeck-Lab/Orthonym-Web"
+            ],
+            "citation": "https://doi.org/10.26434/chemrxiv.15009769/v1"
+          }
+        ]
+      }
+    </script>
     <script>
       // The first-load assembly (pages/Home.css, "first load"). Set here, before
       // the first paint, so the page never flashes whole and then hides. Only on
@@ -57,6 +109,24 @@ FORM: Bugatti design analysis (getdesign.md/bugatti), user-pinned; light-inverte
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md.
 -->
     <div id="root"></div>
+    <!-- What a crawler or a browser without JavaScript reads: the same words
+         the site says, and its routes as plain links. -->
+    <noscript>
+      <h1>Orthonym — free IUPAC name generator</h1>
+      <p>
+        Orthonym is a free IUPAC naming tool: a deterministic, rule-based SMILES to IUPAC name translator. Paste SMILES,
+        upload a file or draw a molecule, and each name comes back read by OPSIN and labelled
+        with the confidence it earned, or the engine says it could not name it. Orthonym needs
+        JavaScript to run.
+      </p>
+      <ul>
+        <li><a href="/">Translate SMILES to IUPAC names</a></li>
+        <li><a href="/from-name">IUPAC name to structure</a></li>
+        <li><a href="/explain">Explain an IUPAC name</a></li>
+        <li><a href="/about">About Orthonym</a></li>
+        <li><a href="https://github.com/Steinbeck-Lab/Orthonym">The Orthonym engine on GitHub</a></li>
+      </ul>
+    </noscript>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
