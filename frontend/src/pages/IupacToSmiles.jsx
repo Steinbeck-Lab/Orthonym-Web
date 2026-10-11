@@ -7,6 +7,7 @@ import Icon from '../components/Icon'
 import CopyButton from '../components/CopyButton'
 import NameResultsTable from '../components/NameResultsTable'
 import OpsinNote from '../components/OpsinNote'
+import OpsinWarnings from '../components/OpsinWarnings'
 import TransportNotice from '../components/TransportNotice'
 
 // Curated names verified live against the real /api/iupac-to-smiles
@@ -301,11 +302,15 @@ function SingleResult({ row }) {
     )
   }
   const d = row.data
+  const warned = d.warnings?.length > 0
   return (
     <div className="from-name-patch from-name-patch--success">
       <div className="from-name-patch__top">
-        <span className="from-name-patch__state-label">Parsed successfully</span>
+        <span className="from-name-patch__state-label">
+          {warned ? 'Parsed with a warning' : 'Parsed successfully'}
+        </span>
       </div>
+      <OpsinWarnings warnings={d.warnings} />
       {/* Two columns: the picture and the strings it stands for. They are two
           different kinds of content and reading one does not mean reading the
           other, so they sit side by side rather than stacked -- which also stops

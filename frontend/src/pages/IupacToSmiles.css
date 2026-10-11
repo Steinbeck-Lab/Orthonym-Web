@@ -711,3 +711,21 @@
 .name-results__meta-item .idlist__value {
   min-width: 0;
 }
+
+/* OPSIN's warnings on a parsed name. Neutral ink and a dashed rule, not a
+   tier colour: this page computes no tier, and the warning is OPSIN's. */
+.opsin-warnings {
+  margin: 0;
+  padding: var(--s-xs) 0 var(--s-xs) var(--s-sm);
+  list-style: none;
+  border-left: 2px dashed var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.opsin-warnings__detail {
+  font-family: var(--font-mono);
+  color: var(--muted);
+}
