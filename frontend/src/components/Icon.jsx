@@ -14,6 +14,7 @@ import {
   Plus,
   RefreshCw,
   SpellCheck,
+  TriangleAlert,
   Square,
   Trash2,
   Upload,
@@ -66,6 +67,7 @@ const ICONS = {
   ban: Ban,
   bug: Bug,
   idea: Lightbulb,
+  warn: TriangleAlert,
 }
 
 /**
