@@ -53,6 +53,18 @@ export async function checkHealth() {
   return res.json()
 }
 
+// The page's one health answer, for the parts that only read the engine
+// version (the footer chip, the issue dialog). About's status board calls
+// checkHealth itself, because it refreshes. A failed check is not kept.
+let firstHealth = null
+export function healthOnce() {
+  firstHealth ??= checkHealth().catch((error) => {
+    firstHealth = null
+    throw error
+  })
+  return firstHealth
+}
+
 /**
  * @returns {Promise<{label:string, smiles:string, expected_status:string}[]>}
  */
