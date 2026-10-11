@@ -89,10 +89,10 @@ const THIRD_PARTY = [
     note: 'Reads and canonicalises structures, computes formulae, and is the depiction fallback for any process without a JVM. Installed from PyPI, not redistributed by this repository.',
   },
   {
-    name: 'Ketcher 2.6.2',
+    name: 'Ketcher 3.18.0',
     href: 'https://github.com/epam/ketcher',
     spdx: 'Apache-2.0',
-    note: 'The structure editor on /explain. Bundled and served from this origin, running its Indigo engine entirely in your browser — it contacts no chemistry server. © EPAM Systems.',
+    note: 'The structure editor behind the Draw tab on Translate and /explain. Bundled and served from this origin, running its Indigo engine entirely in your browser — it contacts no chemistry server. © EPAM Systems.',
   },
   {
     name: 'FastAPI',

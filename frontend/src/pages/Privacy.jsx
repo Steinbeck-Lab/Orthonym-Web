@@ -117,6 +117,24 @@ import './Legal.css'
 // result (lib/github.js reads them off the row, which the worker stamps;
 // schemas.py ResultItem / BatchRow). They describe the software, not the
 // visitor, so § 5 lists them and nothing else changes.
+//
+// Version 6 (10 October 2026) follows the structure editor from Ketcher 2.6.2
+// to 3.18.0, which changed what it stores. MEASURED in Chromium against both
+// bundles served side by side, storage cleared first: 2.6.2 wrote nothing on
+// load; 3.18.0 writes ketcher-opts (its default display settings),
+// ketcher_editor_saved_settings ({"selectionTool": rectangle select}) and
+// ketcher_polymer_sequence_type ("RNA") as soon as the editor opens, before any
+// input. Switching to its macromolecule mode added no key. From the bundle
+// (static/js/609.*.chunk.js), the three other keys it can write are each set
+// only in a handler for a visitor's action: favoriteItemsUniqueKeys
+// (toggleMonomerFavorites), ketcher_custom_presets (saving, deleting or
+// starring a preset) and ketcher_preset_phosphate_filter
+// (setPresetPhosphateFilter); ketcher-tmpls is still written only on saving a
+// template. Still measured after load and after the mode switch: no cookie, no
+// sessionStorage, no IndexedDB database, no service worker, no request to
+// another origin. The 3D viewer's cookie helper is the same code as in 2.6.2.
+// The editor sits behind the Draw tab on Translate and on Explain; the old
+// text named only Explain.
 
 // The UNIVERSITY leads, the working group follows as the responsible unit.
 // Art. 4 (7) requires the controller to be a natural or legal person, public
@@ -410,12 +428,21 @@ function Privacy() {
               cancel or delete the job it names.
             </li>
             <li>
-              <code>ketcher-opts</code> and <code>ketcher-tmpls</code> — written by the structure
-              editor bundled into the Explain page, and only if you change its settings or save one
-              of your own drawings as a template — each is written in response to something you did,
-              which is what makes it strictly necessary to the feature you asked for. They hold your
-              editor preferences and the structures you chose to save. Neither is sent to our
-              server.
+              <code>ketcher-opts</code>, <code>ketcher_editor_saved_settings</code> and{' '}
+              <code>ketcher_polymer_sequence_type</code> — written by the structure editor as soon
+              as you open the Draw tab on Translate or Explain. They hold the editor&rsquo;s own
+              settings (display options, the selected tool, the default sequence type), which it
+              needs to work, and nothing about you. Opening the tab is what asks for the editor.
+            </li>
+            <li>
+              <code>ketcher-tmpls</code>, <code>ketcher_custom_presets</code>,{' '}
+              <code>ketcher_preset_phosphate_filter</code> and{' '}
+              <code>favoriteItemsUniqueKeys</code> — written by the same editor only when you save
+              a drawing as a template, or save a preset, set a filter or mark a favourite in its
+              macromolecule mode. They hold what you chose to save.
+            </li>
+            <li>
+              None of the editor&rsquo;s entries is sent to our server.
             </li>
           </ul>
           <p>
@@ -574,7 +601,7 @@ function Privacy() {
             serve the site and honour an objection to it at the same time. That is a reason we would
             have to demonstrate if you objected — not an exception to your right to object.
           </p>
-          <p className="legal-updated">Version 5 — 10 October 2026</p>
+          <p className="legal-updated">Version 6 — 10 October 2026</p>
         </LegalSection>
     </LegalPage>
   )
