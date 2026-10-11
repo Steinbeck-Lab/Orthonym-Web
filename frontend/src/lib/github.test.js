@@ -48,6 +48,8 @@ test('the issue carries the SMILES and what the engine said, exactly', () => {
     error: null,
     input: 'C[NH3+].[Cl-] SECRET-ID-42',
     input_id: 'SECRET-ID-42',
+    engine_version: '1.0.7',
+    engine_commit: '61026e217e5d97191ee9fc020fedd7b453d5eb06',
   }, 'Home')
   assert.ok(url.startsWith(`${REPO}/issues/new?`))
   const q = query(url)
@@ -56,6 +58,7 @@ test('the issue carries the SMILES and what the engine said, exactly', () => {
   assert.ok(q.get('body').includes('- Reason code: `UNNAMEABLE`'))
   assert.ok(q.get('body').includes('- Formula: CH6ClN'))
   assert.ok(q.get('body').includes('- Page: Home'))
+  assert.ok(q.get('body').includes('- Engine: v1.0.7 (61026e2)'))
   assert.equal(q.get('title'), `Could not name: ${smiles}`)
   assert.equal(q.get('labels'), 'bug')
   // The visitor's own compound label never leaves the page.

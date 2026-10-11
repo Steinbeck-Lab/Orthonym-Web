@@ -111,6 +111,12 @@ import './Legal.css'
 // browser held zero cookies and no new storage afterwards. The server's operator is the
 // owner's statement (2026-10-07), consistent with matomo.nfdi4chem.de
 // resolving to the university's own proxy, 141.35.136.25.
+//
+// Version 5 (10 October 2026) adds one item to what the "Report SMILES on
+// GitHub" link carries: the engine version and short commit that named the
+// result (lib/github.js reads them off the row, which the worker stamps;
+// schemas.py ResultItem / BatchRow). They describe the software, not the
+// visitor, so § 5 lists them and nothing else changes.
 
 // The UNIVERSITY leads, the working group follows as the responsible unit.
 // Art. 4 (7) requires the controller to be a natural or legal person, public
@@ -471,8 +477,8 @@ function Privacy() {
             One kind of link is different. When Orthonym cannot name a molecule, or fails while
             naming it, the result offers a &ldquo;Report SMILES on GitHub&rdquo; link. That link carries the
             molecule&rsquo;s SMILES string and what Orthonym said about it (its reason code, formula
-            or error message, the page you were on, and the two naming switches it was produced
-            with), so that GitHub can fill in a new issue for
+            or error message, the page you were on, the two naming switches it was produced
+            with, and the version of the naming engine), so that GitHub can fill in a new issue for
             you. It carries nothing else from your submission: not an ID you gave the compound, and
             not your batch job. GitHub receives all of this as soon as you click, together with
             your IP address and, if you are signed in to GitHub, your GitHub account, even if you
@@ -568,7 +574,7 @@ function Privacy() {
             serve the site and honour an objection to it at the same time. That is a reason we would
             have to demonstrate if you objected — not an exception to your right to object.
           </p>
-          <p className="legal-updated">Version 4 — 7 October 2026</p>
+          <p className="legal-updated">Version 5 — 10 October 2026</p>
         </LegalSection>
     </LegalPage>
   )
