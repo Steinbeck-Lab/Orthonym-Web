@@ -302,7 +302,8 @@ def test_a_locant_listed_with_a_mark_before_a_prefix_belongs_to_the_prefix():
 
 
 def _neighbours(t, atom):
-    return {n.GetIdx() for n in Chem.MolFromSmiles(t.smiles).GetAtomWithIdx(atom).GetNeighbors()}
+    mol = Chem.MolFromSmiles(t.smiles)  # held: atoms of a freed temporary read garbage
+    return {n.GetIdx() for n in mol.GetAtomWithIdx(atom).GetNeighbors()}
 
 
 # I2. glossary lines on live names

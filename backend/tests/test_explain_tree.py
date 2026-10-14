@@ -264,7 +264,8 @@ def test_a_carbohydrate_anomer_mark_lights_the_anomeric_carbon_only():
     alpha = _one_node(nodes, "locant", "alpha")
     (atom,) = alpha["lights"]
     assert t.atoms[atom].element == "C" and "anomer" in alpha["line"]
-    neighbours = Chem.MolFromSmiles(t.smiles).GetAtomWithIdx(atom).GetNeighbors()
+    mol = Chem.MolFromSmiles(t.smiles)  # held: atoms of a freed temporary read garbage
+    neighbours = mol.GetAtomWithIdx(atom).GetNeighbors()
     assert sorted(t.atoms[n.GetIdx()].element for n in neighbours) == ["C", "O", "O"]
 
 
