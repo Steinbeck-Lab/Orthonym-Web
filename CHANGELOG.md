@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.0](https://github.com/Steinbeck-Lab/Orthonym-Web/compare/v0.5.0...v0.6.0) (2026-10-14)
+
+
+### Features
+
+* **from-name:** show OPSIN warnings ([13b013d](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/13b013d33516ec7f95278e57d843a52ec91ed8e8))
+* **from-name:** show OPSIN's warnings ([a9e321d](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/a9e321d33abe6035ecb7bcbc9b114a7cb6d2d3dc))
+* new link-preview image ([6bf1d44](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/6bf1d4455b42fb259724a79df760435c42a53a30))
+* new link-preview image ([7f10186](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/7f10186b0cd5ec13211ed8fde42dc3f2cda686b5))
+
 ## [0.5.0](https://github.com/Steinbeck-Lab/Orthonym-Web/compare/v0.4.2...v0.5.0) (2026-10-11)
 
 
