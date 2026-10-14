@@ -51,8 +51,9 @@ jobs:
       - name: Install dependencies
         working-directory: backend
         run: |
-          python -m venv .venv
-          .venv/bin/pip install --quiet -r requirements.txt
+          pip install --quiet uv
+          uv venv --python 3.12 .venv
+          uv pip install --quiet -r requirements.txt
 
       - name: Fetch the engine's jars
         working-directory: backend
