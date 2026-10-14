@@ -41,7 +41,7 @@ elif [ -x .venv/bin/python ]; then
     PYTHON=.venv/bin/python
 else
     echo "error: no interpreter at .venv-mac/bin/python or .venv/bin/python." >&2
-    echo "Build one (from backend/): python3 -m venv .venv && .venv/bin/pip install -r requirements.txt -r requirements-dev.txt" >&2
+    echo "Build one (from backend/): uv venv --python 3.12 .venv && uv pip install -r requirements.txt -r requirements-dev.txt" >&2
     exit 3
 fi
 

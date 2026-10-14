@@ -97,8 +97,9 @@ ADD --keep-git-dir=true https://github.com/Steinbeck-Lab/Orthonym.git#${ORTHONYM
 ENV ORTHONYM_JAR_DIR=/opt/orthonym/jars \
     ORTHONYM_COMMIT_FILE=/opt/orthonym/COMMIT
 COPY requirements.txt .
+COPY --from=ghcr.io/astral-sh/uv:0.11.8 /uv /usr/local/bin/uv
 RUN grep -v '^orthonym @' requirements.txt > /tmp/requirements.txt \
-    && pip install --no-cache-dir /tmp/orthonym -r /tmp/requirements.txt \
+    && uv pip install --system --no-cache /tmp/orthonym -r /tmp/requirements.txt \
     && mkdir -p /opt/orthonym && cp /tmp/orthonym/.git/HEAD "$ORTHONYM_COMMIT_FILE" \
     && rm -rf /tmp/orthonym /tmp/requirements.txt \
     && orthonym --fetch-jars \
