@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ConfidenceReport from '../components/ConfidenceReport'
 import { verdictKindFor } from '../lib/explainVerdict'
@@ -12,6 +12,8 @@ import { useKetcher } from '../lib/useKetcher'
 import './Explain.css'
 import Icon from '../components/Icon'
 import ReportLink from '../components/ReportLink'
+import ShareButton from '../components/ShareButton'
+import { readShareHash } from '../lib/shareLink'
 import TransportNotice from '../components/TransportNotice'
 
 // Curated structures spanning what the decomposition really does now that
@@ -70,6 +72,9 @@ function Explain() {
   // tier wherever a name appears). Set by runExplain alongside the request it
   // describes.
   const [resultMode, setResultMode] = useState(null)
+  // What the displayed result was asked for, as share-link fields: `name` for
+  // a typed name, `smiles` for a typed or drawn structure.
+  const [shareFields, setShareFields] = useState(null)
   // Which runExplain is current. The tier fetch below settles on its own
   // clock, after the explain request has already released the form, so a
   // reply from an EARLIER molecule could land after the next submit and pin
@@ -111,6 +116,22 @@ function Explain() {
     runExplain(structure, 'smiles')
   }
 
+  // A share link (lib/shareLink.js) is explained once on arrival; a name wins
+  // over a SMILES when a link carries both. The ref stops StrictMode's second
+  // mount from asking twice.
+  const sharedRef = useRef(false)
+  useEffect(() => {
+    if (sharedRef.current) return
+    sharedRef.current = true
+    const fields = readShareHash(window.location.hash)
+    const linkMode = fields?.name ? 'name' : fields?.smiles ? 'smiles' : null
+    if (!linkMode) return
+    const value = fields[linkMode].trim()
+    setMode(linkMode)
+    setSmilesInput(value)
+    runExplain(value, linkMode)
+  }, [])
+
   function toggleId(id) {
     setPinnedId((current) => (current === id ? null : id))
   }
@@ -151,6 +172,7 @@ function Explain() {
     // never blocked by the tier.
     setTierRow(null)
     setResultMode(requestMode)
+    setShareFields(requestMode === 'name' ? { name: value } : { smiles: value })
     const run = ++latestRun.current
     if (requestMode !== 'name') {
       translateBatch([value], TIER_SETTINGS)
@@ -469,6 +491,7 @@ function Explain() {
                           </Fragment>
                         )
                       })}
+                      {shareFields && <ShareButton fields={shareFields} />}
                     </p>
                   )}
                   {unplaced.length > 0 && (

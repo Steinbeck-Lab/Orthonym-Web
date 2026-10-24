@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { fetchStructureFromName } from '../lib/api'
 import { MAX_NAMES, parseNameLines, convertNames } from '../lib/nameBatch'
 import { rowsToSdf, downloadText } from '../lib/molExport'
+import { readShareHash } from '../lib/shareLink'
+import ShareButton from '../components/ShareButton'
 import './IupacToSmiles.css'
 import Icon from '../components/Icon'
 import CopyButton from '../components/CopyButton'
@@ -42,6 +44,20 @@ function IupacToSmiles() {
   // `nameText` here would still see the value from BEFORE the click. Passing
   // the text explicitly is what lets the chip "submit through this same
   // path" without a second lookup function.
+  // A share link (lib/shareLink.js) is converted once on arrival. The ref
+  // stops StrictMode's second mount from converting it twice.
+  const sharedRef = useRef(false)
+  useEffect(() => {
+    if (sharedRef.current) return
+    sharedRef.current = true
+    const name = readShareHash(window.location.hash)?.name
+    if (!name) return
+    setNameText(name)
+    convert(name)
+    // Once, on arrival: a link is read when the page opens, never again.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   async function convert(text) {
     if (phase === 'converting') return
 
@@ -309,6 +325,7 @@ function SingleResult({ row }) {
         <span className="from-name-patch__state-label">
           {warned ? 'Parsed with a warning' : 'Parsed successfully'}
         </span>
+        <ShareButton fields={{ name: row.name }} />
       </div>
       <OpsinWarnings warnings={d.warnings} />
       {/* Two columns: the picture and the strings it stands for. They are two

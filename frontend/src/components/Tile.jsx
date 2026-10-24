@@ -2,6 +2,7 @@ import { NAMED_STATUSES, STATE_CLASS, VERIFIED_STATUSES, isMismatchHere, isUnche
 import useDepiction from '../lib/useDepiction'
 import CopyButton from './CopyButton'
 import ReportLink from './ReportLink'
+import ShareButton from './ShareButton'
 import ResolvingName from './ResolvingName'
 import TierLamp from './TierLamp'
 import { ChemFormula } from './Typeset'
@@ -47,6 +48,7 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
           <span className="tile__name-line">
             <ResolvingName name={name} animate={animateName} />
             <CopyButton text={name} />
+            <ShareButton fields={{ smiles }} />
           </span>
         </div>
       )}

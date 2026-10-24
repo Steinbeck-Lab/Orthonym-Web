@@ -1,7 +1,16 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 
-import { buildShareHash, readShareHash } from './shareLink.js'
+import { buildShareHash, readShareHash, shareUrl } from './shareLink.js'
+
+test('shareUrl keeps the page path and puts the input after #, never in the query', () => {
+  globalThis.window = { location: { origin: 'https://orthonym.decimer.ai', pathname: '/explain' } }
+  try {
+    assert.equal(shareUrl({ name: 'ethanol' }), 'https://orthonym.decimer.ai/explain#name=ethanol')
+  } finally {
+    delete globalThis.window
+  }
+})
 
 test('round-trips a SMILES with every character that needs encoding', () => {
   const smiles = 'C/C=C\\C#N.[nH]1cccc1 %10+'

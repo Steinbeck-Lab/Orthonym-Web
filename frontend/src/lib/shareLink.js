@@ -34,3 +34,8 @@ export function readShareHash(hash) {
   }
   return Object.keys(fields).length ? fields : null
 }
+
+/** The current page's address with `fields` as its share hash. */
+export function shareUrl(fields) {
+  return `${window.location.origin}${window.location.pathname}${buildShareHash(fields)}`
+}
