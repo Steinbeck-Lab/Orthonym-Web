@@ -226,6 +226,9 @@ class BatchRow(BaseModel):
     smiles: Optional[str] = None
     name: Optional[str] = None
     status: Status
+    # The engine's own tier, as on ResultItem. None on a row from a job made
+    # before rows stored it -- an export writes it empty, never guessed.
+    tier: Optional[Tier] = None
     roundtrip_smiles: Optional[str] = None
     roundtrip_match: Optional[bool] = None
     formula: Optional[str] = None
