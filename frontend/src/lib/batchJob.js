@@ -130,3 +130,14 @@ export function latestOnly() {
     )
   }
 }
+
+/** The job entry the page keeps (and Home remembers) from POST /api/jobs's
+ *  envelope. `count` stands in when the envelope has no molecule_count. */
+export function jobEntryFromEnvelope(envelope, count = null) {
+  return {
+    jobId: envelope.job_id,
+    ownerToken: envelope.owner_token,
+    moleculeCount: envelope.molecule_count ?? count,
+    status: envelope.status ?? 'queued',
+  }
+}

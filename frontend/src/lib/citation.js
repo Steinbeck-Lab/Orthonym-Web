@@ -34,21 +34,14 @@ export function referenceAuthors() {
   return AUTHORS.map(([family, given]) => `${family}, ${given[0]}.`).join('; ')
 }
 
-function bibEntry(type, key, fields) {
-  const body = fields
-    .filter(([, value]) => value != null)
-    .map(([name, value]) => `  ${name} = {${value}}`)
-    .join(',\n')
-  return `@${type}{${key},\n${body}\n}`
-}
-
-/** The paper, then the software at `{version, commit}`, as BibTeX. The
- *  version has its own field; the note carries only the commit, since two
- *  builds of one version can differ (the engine tracks main). */
-export function bibtex(engine = {}) {
+/** The paper, then the software at `{version, commit}`, as data:
+ *  [{type, key, fields: [[name, value], ...]}], empty fields left out. The
+ *  BibTeX text and the page both render from this. */
+export function citationEntries(engine = {}) {
   const author = AUTHORS.map(([family, given]) => `${family}, ${given}`).join(' and ')
+  const entry = (type, key, fields) => ({ type, key, fields: fields.filter(([, value]) => value != null) })
   return [
-    bibEntry('article', 'rajan2026orthonym', [
+    entry('article', 'rajan2026orthonym', [
       ['author', author],
       ['title', PAPER.title],
       ['journal', PAPER.journal],
@@ -57,7 +50,9 @@ export function bibtex(engine = {}) {
       ['doi', PAPER.doi],
       ['url', PAPER.url],
     ]),
-    bibEntry('software', 'orthonym', [
+    // The version has its own field; the note carries only the commit, since
+    // two builds of one version can differ (the engine tracks main).
+    entry('software', 'orthonym', [
       ['author', author],
       ['title', SOFTWARE.title],
       ['version', engine.version || null],
@@ -66,23 +61,15 @@ export function bibtex(engine = {}) {
       ['license', SOFTWARE.license],
       ['note', engine.commit ? `Commit ${engine.commit.slice(0, 7)}` : null],
     ]),
-  ].join('\n\n')
+  ]
 }
 
-const ENTRY = /^(@\w+)\{(.*),$/
-const FIELD = /^ {2}(\w+) = \{(.*)\},?$/
-
-/** bibtex() as typed lines, so the page can set keys and values in two
- *  tones. Joining every `text` with "\n" gives bibtex() back exactly. */
-export function bibtexLines(engine = {}) {
-  return bibtex(engine)
-    .split('\n')
-    .map((text) => {
-      const entry = text.match(ENTRY)
-      if (entry) return { kind: 'entry', text, type: entry[1], key: entry[2] }
-      const field = text.match(FIELD)
-      if (field) return { kind: 'field', text, name: field[1], value: field[2], comma: text.endsWith(',') }
-      if (text === '}') return { kind: 'close', text }
-      return { kind: 'blank', text }
+/** The same entries as BibTeX text, for the copy button. */
+export function bibtex(engine = {}) {
+  return citationEntries(engine)
+    .map(({ type, key, fields }) => {
+      const body = fields.map(([name, value]) => `  ${name} = {${value}}`).join(',\n')
+      return `@${type}{${key},\n${body}\n}`
     })
+    .join('\n\n')
 }

@@ -21,3 +21,12 @@ test('a switch that could not run says so', () => {
     'Salts not stripped: this structure could not be split into fragments, so all of it was named.'
   )
 })
+
+test('a stripped row shows what was typed, and its picture says it is a fragment', async () => {
+  const { typedInput, structureAlt } = await import('./strippedNote.js')
+  const stripped = { smiles: 'CCO', stripped_from: 'CCO.Cl' }
+  assert.equal(typedInput(stripped), 'CCO.Cl')
+  assert.equal(typedInput({ smiles: 'CCO' }), 'CCO')
+  assert.equal(structureAlt(stripped), 'named: the largest fragment of "CCO.Cl"')
+  assert.equal(structureAlt({ smiles: 'CCO' }), 'you entered, "CCO"')
+})

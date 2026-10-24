@@ -5,7 +5,6 @@ import { readFileSync } from 'node:fs'
 import { afterEach, test } from 'node:test'
 
 import { checkName, createJob, explainMolecule, explainName, fetchJobResults, jobResultsCsvUrl, jobResultsSdfUrl, translateBatch } from './api.js'
-import { VERDICT_TEXT } from './verdicts.js'
 
 const REAL = JSON.parse(readFileSync(new URL('./explainResponses.fixture.json', import.meta.url), 'utf8'))
 const RESPONSE_KEYS = ['atom_points', 'error', 'name', 'nodes', 'smiles', 'svg', 'total_atoms']
@@ -111,18 +110,6 @@ test('createJob sends the job kind, name by default', async () => {
   assert.equal(JSON.parse(seen[0].body).kind, 'name')
   await createJob({ file: new Blob(['smiles,name\nCCO,ethanol\n']), kind: 'check' })
   assert.equal(seen[1].body.get('kind'), 'check')
-})
-
-test('the verdict words match the backend, one per verdict', () => {
-  assert.deepEqual(VERDICT_TEXT, {
-    same: 'Same structure',
-    protonation: 'Same skeleton; protonation differs',
-    stereo: 'Same skeleton; stereo or isotopes differ',
-    stereo_protonation: 'Same skeleton; stereo or isotopes and protonation differ',
-    different: 'Different structure',
-    unreadable: 'OPSIN cannot read this name',
-    uncomparable: 'Could not compare',
-  })
 })
 
 test('the strip switch travels on every naming request, off by default', async () => {

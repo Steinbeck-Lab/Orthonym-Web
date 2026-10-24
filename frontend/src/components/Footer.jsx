@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import CreditCross from './CreditCross'
-import { healthOnce } from '../lib/api'
+import useHealth from '../lib/useHealth'
 
 // Site-wide footer — appears once, beneath every page, via the router shell.
 //
@@ -66,15 +65,7 @@ function CoffeeMark() {
 // naming works right now; the words say it too, so the hue is never the only
 // signal. The commit rides behind the version and slides out on hover/focus.
 function EngineChip() {
-  const [health, setHealth] = useState(null) // null = asking, false = no answer
-
-  useEffect(() => {
-    let live = true
-    healthOnce()
-      .then((h) => live && setHealth(h))
-      .catch(() => live && setHealth(false))
-    return () => { live = false }
-  }, [])
+  const health = useHealth() // null = asking, false = no answer
 
   const version = health?.engine_version
   const commit = health?.engine_commit?.slice(0, 7)

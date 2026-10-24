@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import { PAPER, SOFTWARE, bibtex, bibtexLines, referenceAuthors } from '../lib/citation'
+import { Fragment, useState } from 'react'
+import useCopy from '../lib/useCopy'
+import { PAPER, SOFTWARE, bibtex, citationEntries, referenceAuthors } from '../lib/citation'
 import useHealth from '../lib/useHealth'
 import Icon from './Icon'
 
@@ -10,25 +11,14 @@ export default function CitationBox() {
   const health = useHealth()
   const engine = { version: health?.engine_version, commit: health?.engine_commit }
   const text = bibtex(engine)
-  const lines = bibtexLines(engine)
-  const [copied, setCopied] = useState(false)
+  const entries = citationEntries(engine)
+  const [copied, copyText] = useCopy(text, 1800)
   // Bumped on every copy, so the sweep restarts even on a second click
   // (a reused animation name would not replay).
   const [sweep, setSweep] = useState(0)
-  const timer = useRef(null)
-
-  useEffect(() => () => clearTimeout(timer.current), [])
 
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(text)
-    } catch {
-      return // Clipboard blocked: claim nothing.
-    }
-    setCopied(true)
-    setSweep((n) => n + 1)
-    clearTimeout(timer.current)
-    timer.current = setTimeout(() => setCopied(false), 1800)
+    if (await copyText()) setSweep((n) => n + 1)
   }
 
   return (
@@ -87,28 +77,27 @@ export default function CitationBox() {
         </div>
         <pre className="cite__code" tabIndex={0} aria-label="BibTeX for the paper and the software">
           <code>
-            {lines.map((line, i) => (
-              <span className={`cite__line cite__line--${line.kind}`} key={i}>
-                {line.kind === 'entry' && (
-                  <>
-                    <span className="cite__type">{line.type}</span>
-                    {'{'}
-                    <span className="cite__key">{line.key}</span>,
-                  </>
-                )}
-                {line.kind === 'field' && (
-                  <>
+            {entries.map(({ type, key, fields }, e) => (
+              <Fragment key={key}>
+                {e > 0 && <span className="cite__line">{'\n'}</span>}
+                <span className="cite__line">
+                  <span className="cite__type">@{type}</span>
+                  {'{'}
+                  <span className="cite__key">{key}</span>,{'\n'}
+                </span>
+                {fields.map(([name, value], f) => (
+                  <span className="cite__line" key={name}>
                     {'  '}
-                    <span className="cite__field">{line.name}</span>
+                    {name}
                     {' = {'}
-                    <span className="cite__value">{line.value}</span>
+                    <span className="cite__value">{value}</span>
                     {'}'}
-                    {line.comma ? ',' : ''}
-                  </>
-                )}
-                {(line.kind === 'close' || line.kind === 'blank') && line.text}
-                {'\n'}
-              </span>
+                    {f < fields.length - 1 ? ',' : ''}
+                    {'\n'}
+                  </span>
+                ))}
+                <span className="cite__line">{'}\n'}</span>
+              </Fragment>
             ))}
           </code>
           {sweep > 0 && <span className="cite__sweep" key={sweep} aria-hidden="true" />}
