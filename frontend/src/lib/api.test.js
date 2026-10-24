@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { afterEach, test } from 'node:test'
 
-import { explainMolecule, explainName } from './api.js'
+import { explainMolecule, explainName, fetchJobResults } from './api.js'
 
 const REAL = JSON.parse(readFileSync(new URL('./explainResponses.fixture.json', import.meta.url), 'utf8'))
 const RESPONSE_KEYS = ['atom_points', 'error', 'name', 'nodes', 'smiles', 'svg', 'total_atoms']
@@ -63,4 +63,16 @@ test('explainMolecule encodes the SMILES and returns nodes as sent', async () =>
 test('a non-2xx answer rejects with status and the backend detail', async () => {
   stub({ detail: 'Explain is busy' }, 503)
   await assert.rejects(explainName('x'), (err) => err.status === 503 && err.message === 'Explain is busy')
+})
+
+test('fetchJobResults sends one status param per filtered tier', async () => {
+  const calls = stub({ rows: [] })
+  await fetchJobResults('job1', { statuses: ['abstain', 'error'] })
+  assert.match(calls[0], /status=abstain&status=error/)
+})
+
+test('fetchJobResults with no filter sends no status param', async () => {
+  const calls = stub({ rows: [] })
+  await fetchJobResults('job1', {})
+  assert.doesNotMatch(calls[0], /status=/)
 })

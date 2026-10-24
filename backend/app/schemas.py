@@ -280,6 +280,9 @@ class JobResultsResponse(BaseModel):
     # The rows actually retrievable. Equals `total` on a done job; short of
     # it on a failed one. Paginate against this, not `total`.
     retrievable: int
+    # The rows the `status` filter kept: equal to `retrievable` with no
+    # filter. Paginate a filtered view against this.
+    matched: int
     rows: list[BatchRow]
 
 

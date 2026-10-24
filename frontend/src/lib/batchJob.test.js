@@ -6,6 +6,7 @@ import {
   clampPage,
   expiryLabel,
   isTerminal,
+  latestOnly,
   needsJob,
   pageCount,
   progressPercent,
@@ -123,4 +124,22 @@ test('expiryLabel rounds the way a reader expects at its edges', () => {
   assert.equal(expiryLabel(now + 23.5 * 3600, now), 'expires in 23 hours', 'hours round down')
   assert.equal(expiryLabel(now + 70, now), 'expires in 1 minute', 'minutes round to nearest')
   assert.equal(expiryLabel(now + 20, now), 'expires in 1 minute', 'never "0 minutes"')
+})
+
+test('latestOnly marks a reply stale when a newer request started after it', async () => {
+  const track = latestOnly()
+  let finishFirst
+  const first = track(new Promise((resolve) => { finishFirst = resolve }))
+  const second = track(Promise.resolve('error rows'))
+  assert.deepEqual(await second, { stale: false, value: 'error rows' })
+  finishFirst('abstain rows')
+  assert.deepEqual(await first, { stale: true, value: 'abstain rows' })
+})
+
+test('latestOnly swallows a stale failure but rethrows a current one', async () => {
+  const track = latestOnly()
+  const stale = track(Promise.reject(new Error('old')))
+  const current = track(Promise.reject(new Error('new')))
+  assert.deepEqual(await stale, { stale: true, value: undefined })
+  await assert.rejects(current, /new/)
 })

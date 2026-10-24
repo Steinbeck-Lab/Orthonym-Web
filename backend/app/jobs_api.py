@@ -61,6 +61,7 @@ from app.schemas import (
     JobStatusResponse,
     ParsePreviewResponse,
     ParsePreviewRow,
+    Status,
 )
 from app.tasks import (
     dispatch_batch,
@@ -651,19 +652,28 @@ def job_results(
     limit: int = Query(default=100, ge=1, le=1000),
     sort: batch_sort.SortField = Query(default="index"),
     order: batch_sort.SortOrder = Query(default="asc"),
+    # Repeatable (?status=abstain&status=error): only rows in these tiers.
+    # Like a sort, it applies to the WHOLE job before paging, so page 2 of a
+    # filtered view is page 2 of the matches.
+    status: list[Status] | None = Query(default=None),
 ) -> JobResultsResponse:
     check_poll_allowed(client_ip(request))
     meta = _require_complete_meta(job_id)
-    if sort == "index" and order == "asc":
+    retrievable = redis_store.rows_length(job_id)
+    if not status and sort == "index" and order == "asc":
         # The stored order, so this stays a single 50-row LRANGE. Every other
         # ordering has to be computed over the WHOLE list, because a sort of
         # one page would only reorder the page -- see app/batch_sort.py.
         rows = redis_store.read_rows(job_id, offset, limit)
+        matched = retrievable
     else:
-        ordered = batch_sort.sort_rows(
-            list(redis_store.iter_all_rows(job_id)), sort, order
-        )
+        kept = list(redis_store.iter_all_rows(job_id))
+        if status:
+            wanted = set(status)
+            kept = [row for row in kept if row.get("status") in wanted]
+        ordered = batch_sort.sort_rows(kept, sort, order)
         rows = ordered[offset : offset + limit]
+        matched = len(ordered)
     return JobResultsResponse(
         job_id=job_id,
         offset=offset,
@@ -672,7 +682,8 @@ def job_results(
         # What a caller can actually page through. On a failed job this is
         # SHORT of `total`, and a client paginating to `total` would
         # otherwise never terminate on row count alone.
-        retrievable=redis_store.rows_length(job_id),
+        retrievable=retrievable,
+        matched=matched,
         rows=[BatchRow.model_validate(r) for r in rows],
     )
 
