@@ -17,6 +17,7 @@ const REASONS = Object.freeze({
   NO_VERIFIED_PIN: 'The engine built a name, but not a verified preferred IUPAC name, so it is not shown.',
   withheld_unchecked:
     'The engine found a name, but no round trip checked it and best effort is off, so it is not shown. Turn best effort on to see it.',
+  roundtrip_mismatch: 'OPSIN read this name back as a different structure, so it is not shown.',
 })
 
 /** The reason sentence for an abstain row, or null. An error row gets none:

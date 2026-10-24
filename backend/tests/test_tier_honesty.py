@@ -192,7 +192,7 @@ def test_a_mismatched_name_abstains_for_a_caller_who_refused_best_effort(
 
     assert item.status == "abstain"
     assert item.name is None
-    assert item.limit_code != "withheld_unchecked"
+    assert item.limit_code == "roundtrip_mismatch"
 
 
 def test_a_genuinely_verified_pin_is_untouched():

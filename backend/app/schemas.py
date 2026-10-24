@@ -36,6 +36,8 @@ VERIFIED_STATUSES = frozenset({"pin", "fallback"})
 ENGINE_ERROR = "engine_error"
 TIMEOUT = "timeout"
 WITHHELD_UNCHECKED = "withheld_unchecked"
+# best-effort off, and the round trip RAN and read back another molecule.
+ROUNDTRIP_MISMATCH = "roundtrip_mismatch"
 # The Orthonym engine's own tier labels, from Orthonym.name_tiered's docstring. The
 # earlier T1/T3/T4/T5 codes were replaced upstream by these names; there is
 # no T-code anywhere in the engine any more. `pin_unverified` is a name in PIN

@@ -64,7 +64,9 @@ logger = logging.getLogger(__name__)
 # v10 (2026-09-25): no engine change. A pin or fallback whose round trip ran
 #     and did NOT match is now demoted to best_effort (abstain when the caller
 #     refused best-effort names); a cached v9 copy keeps the verified status.
-_KEY_VERSION = "v10"
+# v11 (2026-10-24): no engine change. That mismatch abstain now carries
+#     limit_code "roundtrip_mismatch"; a cached v10 copy has none, so no reason shows.
+_KEY_VERSION = "v11"
 _ENGINE_VERSION = orthonym.__version__
 
 
