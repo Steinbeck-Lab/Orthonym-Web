@@ -164,6 +164,26 @@ def _timeout_504(settings) -> HTTPException:
     )
 
 
+def _fast_result(task, args: list, settings) -> dict:
+    """Run one fast-queue task and wait for it; a timeout is a 504.
+
+    The result is then forgotten. Celery's backend keeps every result for
+    JOB_RESULT_TTL_SECONDS (24 h) and .get() never removes it, and these
+    carry the visitor's structure or name (and a drawing): nobody reads a
+    fast-path result twice. /api/translate forgets its own the same way.
+    """
+    async_result = task.apply_async(args=args, queue="fast")
+    try:
+        result = async_result.get(timeout=settings.FAST_PATH_TIMEOUT)
+    except CeleryTimeoutError as exc:
+        raise _timeout_504(settings) from exc
+    try:
+        async_result.forget()
+    except Exception:  # noqa: BLE001 - cleanup must not fail a served request
+        logger.debug("Could not forget a fast-path result", exc_info=True)
+    return result
+
+
 def _canonicalize(smiles_list: list[str], max_molecules: int):
     """Route /api/translate's job-dispatch branches through the same
     canonicalization and per-row error handling as every other input path
@@ -304,12 +324,7 @@ def iupac_to_smiles(
     check_fast_allowed(ip)
     require_a_live_jvm()
 
-    try:
-        result = name_to_smiles.apply_async(
-            args=[name], queue="fast"
-        ).get(timeout=settings.FAST_PATH_TIMEOUT)
-    except CeleryTimeoutError as exc:
-        raise _timeout_504(settings) from exc
+    result = _fast_result(name_to_smiles, [name], settings)
     return IupacToSmilesResponse(**result)
 
 
@@ -333,19 +348,7 @@ def name_check(request: Request, body: NameCheckRequest) -> NameCheckResponse:
     (molecule,) = _canonicalize([smiles], 1)
     if molecule.smiles is None:
         raise HTTPException(status_code=400, detail=molecule.error)
-    async_result = check_name.apply_async(
-        args=[molecule.smiles, body.name], queue="fast"
-    )
-    try:
-        result = async_result.get(timeout=settings.FAST_PATH_TIMEOUT)
-    except CeleryTimeoutError as exc:
-        raise _timeout_504(settings) from exc
-    # As /api/translate does: the backend would keep this result, the
-    # visitor's SMILES and name included, for JOB_RESULT_TTL_SECONDS.
-    try:
-        async_result.forget()
-    except Exception:  # noqa: BLE001 - cleanup must not fail a served request
-        logger.debug("Could not forget name-check result", exc_info=True)
+    result = _fast_result(check_name, [molecule.smiles, body.name], settings)
     return NameCheckResponse(**result)
 
 
@@ -358,12 +361,7 @@ def explain(
     check_fast_allowed(ip)
     require_a_live_jvm()
 
-    try:
-        result = explain_smiles.apply_async(
-            args=[smiles], queue="fast"
-        ).get(timeout=settings.FAST_PATH_TIMEOUT)
-    except CeleryTimeoutError as exc:
-        raise _timeout_504(settings) from exc
+    result = _fast_result(explain_smiles, [smiles], settings)
     return ExplainResponse(**result)
 
 
@@ -376,10 +374,5 @@ def explain_by_name(
     check_fast_allowed(ip)
     require_a_live_jvm()
 
-    try:
-        result = explain_iupac_name.apply_async(
-            args=[name], queue="fast"
-        ).get(timeout=settings.FAST_PATH_TIMEOUT)
-    except CeleryTimeoutError as exc:
-        raise _timeout_504(settings) from exc
+    result = _fast_result(explain_iupac_name, [name], settings)
     return ExplainResponse(**result)

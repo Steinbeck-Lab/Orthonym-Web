@@ -1744,8 +1744,9 @@ def test_the_check_columns_are_in_the_csv(redis_client):
     job_id = _submit_check().json()["job_id"]
     header, first = client.get(f"/api/jobs/{job_id}/results.csv").text.splitlines()[:2]
     cols = header.split(",")
-    assert cols[-6:] == [
-        "claimed_name", "verdict", "claimed_smiles", "opsin_warnings", "engine_version", "engine_commit",
+    assert cols[-7:] == [
+        "claimed_name", "verdict", "verdict_text", "claimed_smiles", "opsin_warnings",
+        "engine_version", "engine_commit",
     ]
     assert "ethanol" in first and "same" in first
 
@@ -1755,3 +1756,11 @@ def test_the_check_tags_are_in_the_sdf(redis_client):
     body = client.get(f"/api/jobs/{job_id}/results.sdf").text
     assert "> <VERDICT>\nsame\n" in body
     assert "> <CLAIMED_NAME>\nmethanol\n" in body
+
+
+def test_a_csv_field_past_the_csv_module_limit_is_a_400(redis_client):
+    # Python's csv refuses a field over 131072 characters with csv.Error,
+    # which is not a ValueError: it used to escape as a 500.
+    text = "smiles,id\nCCO," + "x" * 140_000 + "\n"
+    response = client.post("/api/jobs", json={"text": text})
+    assert response.status_code == 400, response.text

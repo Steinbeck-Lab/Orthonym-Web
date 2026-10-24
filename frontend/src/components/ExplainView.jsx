@@ -5,6 +5,7 @@ import { isPart, partOf, sliceName, unplacedNodes } from '../lib/nameTargets'
 import { detailNotes, pieceMark, revealedActive, tabStops } from '../lib/explainView'
 import { nameRuns, applyRuns } from '../lib/nameTypography'
 import { useAtomHighlight } from '../lib/useAtomHighlight'
+import { lineGivesAway } from '../lib/classroom'
 import { TIER_SETTINGS } from '../lib/useExplain'
 import ConfidenceReport from './ConfidenceReport'
 import ReportLink from './ReportLink'
@@ -205,7 +206,13 @@ export default function ExplainView({
                   <h3 className="explain-detail__label">
                     <ChemName name={activeNode.label} />
                   </h3>
-                  <p className="explain-detail__explanation">{activeNode.line}</p>
+                  {/* Classroom mode: a line that names a part still hidden
+                      waits, like the part itself. */}
+                  <p className="explain-detail__explanation">
+                    {veiled && lineGivesAway(activeNode.line, nodes.filter((n) => hidden.has(n.id)).map((n) => n.label))
+                      ? 'Explained in full once the whole name is shown.'
+                      : activeNode.line}
+                  </p>
                   {/* Classroom mode: naming a part still hidden would give it away. */}
                   {notes.partLabel && !(activePart && hidden?.has(activePart.id)) && (
                     <p className="explain-detail__note">

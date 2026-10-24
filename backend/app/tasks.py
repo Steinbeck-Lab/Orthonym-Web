@@ -8,6 +8,7 @@ ten molecules would add a poll cycle for nothing, and a single task for
 
 from __future__ import annotations
 
+import csv
 import dataclasses
 import logging
 
@@ -182,6 +183,7 @@ def _name_prepared(
         if removed is not None:
             # After the cache, never in it (app/name_cache.py stores the item).
             row.update(stripped_from=item["smiles"], removed=removed)
+        row["strip_skipped"] = _strip_skipped(item)
         # A name-check row's verdict, per row and inside the loop, so a time
         # limit hands _ChunkTimedOut rows that already carry their verdicts.
         try:
@@ -210,6 +212,18 @@ def _stripped(item: dict) -> tuple[str, str | None]:
     return strip_salts(item["smiles"])
 
 
+def _strip_skipped(item: dict) -> bool:
+    """The switch was on, the input has fragments, but RDKit cannot read it
+    (a structure only CDK rescued), so nothing could be stripped. The row says
+    so rather than staying silent about a switch that did nothing."""
+    if not item.get("strip_salts") or "." not in (item["smiles"] or ""):
+        return False
+    from rdkit import Chem, rdBase
+
+    with rdBase.BlockLogs():
+        return Chem.MolFromSmiles(item["smiles"]) is None
+
+
 def _check_row(item: dict, row: dict) -> None:
     """A name-check job's verdict, merged into one row already named.
 
@@ -236,6 +250,8 @@ def _check_row(item: dict, row: dict) -> None:
         logger.exception("Name check failed for %s", item["smiles"])
         return
     row["verdict"] = result["verdict"]
+    # The words too: an export reader should not need the key table.
+    row["verdict_text"] = result["verdict_text"]
     row["claimed_smiles"] = result["claimed_smiles"]
     # Batch rows hold text: OPSIN's warnings in one cell, never dropped.
     row["opsin_warnings"] = "; ".join(
@@ -622,6 +638,8 @@ def translate_fast(
             result_item = result_item.model_copy(
                 update={"stripped_from": item["smiles"], "removed": removed}
             )
+        if _strip_skipped(item):
+            result_item = result_item.model_copy(update={"strip_skipped": True})
         rows.append(result_item.model_dump())
     return rows
 
@@ -815,6 +833,10 @@ def parse_input(data: bytes, max_molecules: int, kind: str = "name") -> dict:
         )
     except TooManyMolecules as exc:
         return {"error": "too_many", "limit": exc.limit, "fmt": fmt.value}
+    except csv.Error as exc:
+        # csv's own error (a field past its 131072-character limit) is not a
+        # ValueError; uncaught it reached the visitor as a 500.
+        return {"error": "unreadable", "detail": f"Could not read this CSV: {exc}", "fmt": fmt.value}
     except ValueError as exc:
         return {"error": "unreadable", "detail": str(exc), "fmt": fmt.value}
     if not molecules:

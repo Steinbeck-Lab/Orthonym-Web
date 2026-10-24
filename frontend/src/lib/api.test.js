@@ -118,6 +118,7 @@ test('the verdict words match the backend, one per verdict', () => {
     same: 'Same structure',
     protonation: 'Same skeleton; protonation differs',
     stereo: 'Same skeleton; stereo or isotopes differ',
+    stereo_protonation: 'Same skeleton; stereo or isotopes and protonation differ',
     different: 'Different structure',
     unreadable: 'OPSIN cannot read this name',
     uncomparable: 'Could not compare',

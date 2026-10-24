@@ -8,12 +8,15 @@ name, so no verdict here says "correct".
 
 from typing import Literal, Optional
 
-Verdict = Literal["same", "protonation", "stereo", "different", "unreadable", "uncomparable"]
+Verdict = Literal[
+    "same", "protonation", "stereo", "stereo_protonation", "different", "unreadable", "uncomparable",
+]
 
 VERDICT_TEXT: dict[str, str] = {
     "same": "Same structure",
     "protonation": "Same skeleton; protonation differs",
     "stereo": "Same skeleton; stereo or isotopes differ",
+    "stereo_protonation": "Same skeleton; stereo or isotopes and protonation differ",
     "different": "Different structure",
     "unreadable": "OPSIN cannot read this name",
     "uncomparable": "Could not compare",
@@ -31,7 +34,8 @@ def compare_keys(input_key: Optional[str], claimed_key: Optional[str]) -> Verdic
     if a[:2] == b[:2]:
         return "protonation"
     if a[0] == b[0]:
-        return "stereo"
+        # Both later blocks differing must not hide the protonation half.
+        return "stereo_protonation" if a[2] != b[2] else "stereo"
     return "different"
 
 

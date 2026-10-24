@@ -105,3 +105,14 @@ def test_a_run_with_no_summary_exits_2(tmp_path):
 @pytest.mark.skipif(sys.platform == "win32", reason="bash script")
 def test_the_script_is_executable():
     assert SCRIPT.is_file() and SCRIPT.stat().st_mode & 0o111
+
+
+def test_the_default_wait_outlasts_the_full_suite():
+    # The suite passed 210 s on a busy machine (2026-10-24); a 180 s default
+    # reported a passing run as "NO PYTEST SUMMARY".
+    import re
+    from pathlib import Path
+
+    script = (Path(__file__).resolve().parents[1] / "scripts/run-tests.sh").read_text()
+    default = int(re.search(r"ORTHONYM_TEST_WAIT:-(\d+)", script).group(1))
+    assert default >= 600

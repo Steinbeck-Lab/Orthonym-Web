@@ -18,3 +18,16 @@ export function revealSteps(pieces, nodes) {
 export function hiddenAt(steps, step) {
   return new Set(steps.slice(step))
 }
+
+const MULTIPLIER = /^(di|tri|tetra|penta|hexa|hepta|octa|nona|deca|bis|tris)/
+
+/** Whether a detail line names a part that is still hidden. A label is
+ *  reduced to its stem ("dihydro" -> "hydro", which "hydrogen" contains);
+ *  stems under four letters (locants, "di") are too common to judge. */
+export function lineGivesAway(line, hiddenLabels) {
+  const text = (line || '').toLowerCase()
+  return hiddenLabels.some((label) => {
+    const stem = label.toLowerCase().replace(/[^a-z]/g, '').replace(MULTIPLIER, '')
+    return stem.length >= 4 && text.includes(stem)
+  })
+}

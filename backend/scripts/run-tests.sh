@@ -64,7 +64,7 @@ PYTEST_PID=$!
 # this one regex; add any outcome word pytest can print, never a subset.
 _OUTCOMES='passed|failed|error|errors|skipped|xfailed|xpassed|deselected|warning|warnings'
 SUMMARY="^(=+ .*($_OUTCOMES|no tests ran)|[0-9]+ ($_OUTCOMES)|no tests ran)"
-WAIT_SECONDS=${ORTHONYM_TEST_WAIT:-180}
+WAIT_SECONDS=${ORTHONYM_TEST_WAIT:-600}
 
 for _ in $(seq 1 "$WAIT_SECONDS"); do
     grep -qE "$SUMMARY" "$LOG" && break

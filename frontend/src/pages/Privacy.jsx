@@ -170,6 +170,14 @@ import './Legal.css'
 // removed (schemas.BatchRow): what was submitted, and the fragments taken off
 // it. "the two naming switches" became "the naming switches". Nothing new is
 // sent: the switch is one boolean in the request body.
+//
+// Version 11 (24 October 2026): the application-log sentence was incomplete.
+// Failures log the structure or name involved: tasks.py "Naming failed for %s"
+// and "Name check failed for %s", explain.py (drawing, nodes, OPSIN re-read,
+// match cap: %r of the name or SMILES), opsin_trace.py ("cannot place the
+// parts of %r"). Debug-level lines in cdk_bridge.py are not emitted at the
+// default INFO level (main.py basicConfig; docker-compose.yml CELERY_LOG_LEVEL
+// defaults to info). The sentence now says so; no logging was added.
 
 // The UNIVERSITY leads, the working group follows as the responsible unit.
 // Art. 4 (7) requires the controller to be a natural or legal person, public
@@ -377,7 +385,9 @@ function Privacy() {
           </p>
           <p>
             The application’s own log, which is separate from the access log, records job
-            identifiers, counts and timings. It does not record your IP address.
+            identifiers, counts and timings, and, when naming, explaining or checking a molecule
+            fails, the structure or name that failed, so the fault can be found. It does not record
+            your IP address.
           </p>
           {MATOMO && <PageCounting />}
         </LegalSection>
@@ -655,7 +665,7 @@ function Privacy() {
             serve the site and honour an objection to it at the same time. That is a reason we would
             have to demonstrate if you objected — not an exception to your right to object.
           </p>
-          <p className="legal-updated">Version 10 — 24 October 2026</p>
+          <p className="legal-updated">Version 11 — 24 October 2026</p>
         </LegalSection>
     </LegalPage>
   )

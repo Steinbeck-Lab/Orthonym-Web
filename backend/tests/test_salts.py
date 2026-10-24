@@ -167,3 +167,18 @@ def test_a_check_job_never_strips(redis_client):
     assert status["strip_salts"] is False
     (row,) = client.get(f"/api/jobs/{job['job_id']}/results").json()["rows"]
     assert row["stripped_from"] is None and row["smiles"] == "CCO.Cl"
+
+
+def test_a_structure_rdkit_cannot_read_says_it_was_not_stripped(redis_client, monkeypatch):
+    # CDK rescues some inputs RDKit refuses; those are never stripped, and
+    # the row must say the switch did nothing rather than stay silent.
+    item = dict(_SALT, smiles="C[N](C)(C)(C)C.Cl", raw_input="C[N](C)(C)(C)C.Cl")
+    (row,), _ = tasks._name_prepared([item], True, True)
+    assert row["strip_skipped"] is True
+    assert row["stripped_from"] is None
+    assert strip_salts("C[N](C)(C)(C)C.Cl") == ("C[N](C)(C)(C)C.Cl", None)
+
+
+def test_an_ordinary_row_is_not_marked_skipped(redis_client):
+    (row,), _ = tasks._name_prepared([dict(_SALT)], True, True)
+    assert row["strip_skipped"] is False

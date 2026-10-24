@@ -42,6 +42,7 @@ def test_every_verdict_has_its_words():
         "same": "Same structure",
         "protonation": "Same skeleton; protonation differs",
         "stereo": "Same skeleton; stereo or isotopes differ",
+        "stereo_protonation": "Same skeleton; stereo or isotopes and protonation differ",
         "different": "Different structure",
         "unreadable": "OPSIN cannot read this name",
         "uncomparable": "Could not compare",
@@ -225,3 +226,54 @@ def test_a_name_on_two_lines_is_refused(redis_client):
 def test_a_batch_row_keeps_opsins_warning(redis_client):
     (row,), _ = tasks._name_prepared([_pair(0, "CCc1cccnc1", "ethylpyridine")], True, True)
     assert "APPEARS_AMBIGUOUS" in row["opsin_warnings"]
+
+
+# --- small things -------------------------------------------------------------
+
+
+def test_stereo_and_protonation_both_differing_say_both():
+    # D-alanine against L-alaninium: block 2 and block 3 both differ.
+    assert compare_keys(_key("C[C@@H](C(=O)O)N"), _key("C[C@H](C(=O)O)[NH3+]")) == "stereo_protonation"
+    assert VERDICT_TEXT["stereo_protonation"] == "Same skeleton; stereo or isotopes and protonation differ"
+
+
+def test_a_check_row_carries_the_verdict_words(redis_client):
+    (row,), _ = tasks._name_prepared([_pair(0, "C[C@@H](C(=O)O)N", "(2R)-2-aminopropanoic acid")], True, True)
+    assert row["verdict"] == "stereo"
+    assert row["verdict_text"] == "Same skeleton; stereo or isotopes differ"
+
+
+def test_the_csv_and_sdf_carry_the_verdict_words():
+    from app.jobs_api import CSV_COLUMNS
+    from app.sdf_export import SDF_TAGS
+
+    assert CSV_COLUMNS[CSV_COLUMNS.index("verdict") + 1] == "verdict_text"
+    assert ("VERDICT_TEXT", "verdict_text") in SDF_TAGS
+
+
+def _forgotten_after(monkeypatch, task, method, url, **kw):
+    from app import main
+
+    forgotten = []
+    reply = kw.pop("reply")
+
+    class _Result:
+        def get(self, timeout):
+            return reply
+
+        def forget(self):
+            forgotten.append(True)
+
+    monkeypatch.setattr(getattr(main, task), "apply_async", lambda *a, **k: _Result())
+    response = getattr(client, method)(url, **kw)
+    assert response.status_code == 200, response.text
+    return forgotten
+
+
+def test_explain_and_from_name_forget_their_results(redis_client, monkeypatch):
+    explain_reply = {"smiles": "CCO", "name": "ethanol", "nodes": []}
+    assert _forgotten_after(monkeypatch, "explain_smiles", "get", "/api/explain", params={"smiles": "CCO"}, reply=dict(explain_reply)) == [True]
+    assert _forgotten_after(monkeypatch, "explain_iupac_name", "get", "/api/explain-name", params={"name": "ethanol"}, reply=dict(explain_reply)) == [True]
+    n2s = {"smiles": "CCO", "canonical_smiles": "CCO", "inchi": None, "inchikey": None,
+           "molblock": None, "depiction_svg": None, "warnings": [], "error": None}
+    assert _forgotten_after(monkeypatch, "name_to_smiles", "get", "/api/iupac-to-smiles", params={"name": "ethanol"}, reply=n2s) == [True]

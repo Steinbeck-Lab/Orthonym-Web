@@ -5,7 +5,7 @@ import { verdictHow } from './verdicts.js'
 test('a compared pair says it was compared', () => {
   assert.equal(
     verdictHow({ verdict: 'same', input_inchikey: 'A', claimed_inchikey: 'A' }),
-    'OPSIN read your name; the two structures were compared by InChIKey.'
+    'OPSIN read your name; the two structures were compared by InChIKey, which counts tautomers as one structure.'
   )
 })
 
