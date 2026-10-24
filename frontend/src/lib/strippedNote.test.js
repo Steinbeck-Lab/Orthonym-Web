@@ -14,3 +14,10 @@ test('an ordinary row says nothing', () => {
 test('never "removing: null"', () => {
   assert.equal(strippedNote({ stripped_from: 'CCO.Cl', removed: null }), null)
 })
+
+test('a switch that could not run says so', () => {
+  assert.equal(
+    strippedNote({ strip_skipped: true }),
+    'Salts not stripped: this structure could not be split into fragments, so all of it was named.'
+  )
+})

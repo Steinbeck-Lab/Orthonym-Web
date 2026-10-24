@@ -6,6 +6,7 @@ export const VERDICT_TEXT = Object.freeze({
   same: 'Same structure',
   protonation: 'Same skeleton; protonation differs',
   stereo: 'Same skeleton; stereo or isotopes differ',
+  stereo_protonation: 'Same skeleton; stereo or isotopes and protonation differ',
   different: 'Different structure',
   unreadable: 'OPSIN cannot read this name',
   uncomparable: 'Could not compare',
@@ -21,5 +22,7 @@ export function verdictHow(result) {
     const side = result.input_inchikey ? 'the structure it describes' : 'your structure'
     return `OPSIN read your name, but no InChIKey could be made for ${side}, so the two could not be compared.`
   }
-  return 'OPSIN read your name; the two structures were compared by InChIKey.'
+  // Standard InChI merges tautomers (2-pyridone and pyridin-2-ol share a
+  // key), so "Same structure" means the same up to tautomerism: say so.
+  return 'OPSIN read your name; the two structures were compared by InChIKey, which counts tautomers as one structure.'
 }

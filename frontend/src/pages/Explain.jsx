@@ -37,6 +37,9 @@ const EXAMPLES = [
 
 
 // phase: 'idle' | 'loading' | 'success' | 'error' (mirrors IupacToSmiles.jsx)
+// Classroom mode's default step: every part shown (clamped to the count).
+const ALL = Infinity
+
 function Explain() {
   const [smilesInput, setSmilesInput] = useState('')
   // 'name' | 'smiles' | 'draw'. Seeded from ?input= so the /structure and
@@ -48,10 +51,12 @@ function Explain() {
   )
   const { phase, data, apiError, fetchError, tierRow, resultMode, shareFields, run } = useExplain()
   const [validationNote, setValidationNote] = useState(null)
-  // Classroom mode: the name hidden, revealed one part at a time. `step` is
-  // how many parts are showing; every new result starts again at 0.
+  // Classroom mode: the name revealed one part at a time. `step` is how many
+  // parts are showing. The default is everything shown (ALL, clamped to the
+  // part count below); "Hide all" starts a lesson. Only a shared classroom
+  // link opens hidden, so a student does not see the answer first.
   const [classroom, setClassroom] = useState(false)
-  const [step, setStep] = useState(0)
+  const [step, setStep] = useState(ALL)
   // enabled only on the Draw tab: the iframe does not exist otherwise, and an
   // armed readiness clock would time out against nothing and report the editor
   // broken before the user ever opened it.
@@ -99,7 +104,7 @@ function Explain() {
     setMode(linkMode)
     // A classroom link to a NAME must not print the answer in the input box.
     setSmilesInput(teachingLink && linkMode === 'name' ? '' : value)
-    runExplain(value, linkMode)
+    runExplain(value, linkMode, teachingLink ? 0 : ALL)
   })
 
   // requestMode defaults to the current tab, but a caller whose tab does not
@@ -108,8 +113,8 @@ function Explain() {
   // 'smiles' while `mode` still reads 'draw'. (setMode() is not visible to
   // this function's `mode` closure until the next render, so a caller that
   // sets the tab in the same tick must pass one too.)
-  function runExplain(value, requestMode = mode) {
-    setStep(0)
+  function runExplain(value, requestMode = mode, startStep = ALL) {
+    setStep(startStep)
     run(value, requestMode)
   }
 
@@ -146,17 +151,18 @@ function Explain() {
     [data]
   )
   const teaching = classroom && phase === 'success' && steps.length > 0
-  const hidden = teaching ? hiddenAt(steps, step) : null
+  const shown = Math.min(step, steps.length)
+  const hidden = teaching ? hiddenAt(steps, shown) : null
 
   // Left and right arrows step while focus is in the controls.
   function stepKeys(event) {
-    if (event.key === 'ArrowRight') setStep((s) => Math.min(s + 1, steps.length))
-    if (event.key === 'ArrowLeft') setStep((s) => Math.max(s - 1, 0))
+    if (event.key === 'ArrowRight') next()
+    if (event.key === 'ArrowLeft') back()
   }
 
   // aria-disabled, not disabled: a button that disables itself under the
   // keyboard drops focus to <body>, and the arrow keys stop working.
-  const back = () => setStep((s) => Math.max(s - 1, 0))
+  const back = () => setStep((s) => Math.max(Math.min(s, steps.length) - 1, 0))
   const next = () => setStep((s) => Math.min(s + 1, steps.length))
   const stepButton = (label, onClick, off, extra = '') => (
     <button
@@ -170,12 +176,13 @@ function Explain() {
   )
   const stepControls = teaching ? (
     <div className="classroom" role="group" aria-label="Reveal the name part by part" onKeyDown={stepKeys}>
-      {stepButton('Back', back, step === 0)}
+      {stepButton('Hide all', () => setStep(0), shown === 0)}
+      {stepButton('Back', back, shown === 0)}
       <span className="classroom__count" aria-live="polite">
-        {step} of {steps.length}
+        {shown} of {steps.length}
       </span>
-      {stepButton('Next', next, step === steps.length, ' classroom__btn--next')}
-      {stepButton('Reveal all', () => setStep(steps.length), step === steps.length)}
+      {stepButton('Next', next, shown === steps.length, ' classroom__btn--next')}
+      {stepButton('Reveal all', () => setStep(ALL), shown === steps.length)}
     </div>
   ) : classroom && phase === 'success' ? (
     <p className="classroom__none">
@@ -301,14 +308,14 @@ function Explain() {
             checked={classroom}
             onChange={(on) => {
               setClassroom(on)
-              setStep(0)
+              setStep(ALL)
             }}
             label="Classroom mode"
             onWord="On"
             offWord="Off"
             hint={
               classroom
-                ? 'The name starts hidden. Press Next to reveal it one part at a time.'
+                ? 'Press Hide all, then Next to reveal the name one part at a time. A shared link opens hidden.'
                 : 'Shows the whole name at once.'
             }
           />
@@ -413,7 +420,7 @@ function Explain() {
                 shareFields={classroom && data?.smiles ? { smiles: data.smiles, classroom: '1' } : shareFields}
                 hidden={hidden}
                 // Once everything shows, hover and pin work again.
-                forcedId={teaching && step > 0 && step < steps.length ? steps[step - 1] : null}
+                forcedId={teaching && shown > 0 && shown < steps.length ? steps[shown - 1] : null}
                 afterName={stepControls}
               />
             </div>

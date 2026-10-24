@@ -34,3 +34,14 @@ test('step 0 hides everything, the last step hides nothing', () => {
   assert.deepEqual([...hiddenAt(steps, 1)].sort(), ['n1', 'n2'])
   assert.equal(hiddenAt(steps, steps.length).size, 0)
 })
+
+test('a detail line that names a hidden part gives it away', async () => {
+  const { lineGivesAway } = await import('./classroom.js')
+  // Caffeine: the N3 locant's line mentions hydrogen before "dihydro" shows.
+  assert.equal(lineGivesAway('the name puts a hydrogen on the N3 atom', ['dihydro']), true)
+  assert.equal(lineGivesAway('Position 2 — this group is attached at position 2.', ['methyl', 'butane']), false)
+  assert.equal(lineGivesAway('part of methylpropyl', ['methyl']), true)
+  // Short labels (locants, "di") are too common to judge; they never trigger.
+  assert.equal(lineGivesAway('attached at position 2', ['2', 'di']), false)
+  assert.equal(lineGivesAway('anything', []), false)
+})

@@ -108,6 +108,9 @@ class ResultItem(BaseModel):
     # the fragments taken off it. `smiles` is then the fragment that was named.
     stripped_from: Optional[str] = None
     removed: Optional[str] = None
+    # Salt stripping was asked for but could not run (RDKit cannot read the
+    # structure), so the whole input was named.
+    strip_skipped: bool = False
     # The engine that named this row. The default is the process building the
     # row, which is always the worker that ran the engine: the API process
     # only re-validates the worker's dict, which already carries both keys. A
@@ -159,7 +162,9 @@ class NameCheckResponse(BaseModel):
     """Does `name` describe `smiles`? A verdict about STRUCTURE only (see
     app/name_check.py), with the engine's own name and tier beside it."""
 
-    verdict: Literal["same", "protonation", "stereo", "different", "unreadable", "uncomparable"]
+    verdict: Literal[
+        "same", "protonation", "stereo", "stereo_protonation", "different", "unreadable", "uncomparable",
+    ]
     verdict_text: str
     claimed_smiles: Optional[str] = None
     input_inchikey: Optional[str] = None
@@ -266,12 +271,14 @@ class BatchRow(BaseModel):
     # naming job's row.
     claimed_name: Optional[str] = None
     verdict: Optional[str] = None
+    verdict_text: Optional[str] = None
     claimed_smiles: Optional[str] = None
     # OPSIN's warnings on the claimed name, "TYPE: message; ...", or None.
     opsin_warnings: Optional[str] = None
     # As on ResultItem: set only when salt stripping removed something.
     stripped_from: Optional[str] = None
     removed: Optional[str] = None
+    strip_skipped: bool = False
     # As on ResultItem: built in the batch worker, so the engine that named it.
     engine_version: str = ENGINE_VERSION
     engine_commit: Optional[str] = ENGINE_COMMIT
