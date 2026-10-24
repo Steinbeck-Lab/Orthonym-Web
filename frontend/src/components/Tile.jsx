@@ -109,7 +109,11 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
         {!isPending && NAMED_STATUSES.has(status) && depiction_svg && (
           <div className="tile__depictions">
             <figure className="tile__depiction">
-              <img src={depiction_svg} alt={`2D structure you entered, "${smiles}"`} />
+              <img src={depiction_svg} alt={
+                row.stripped_from
+                  ? `2D structure named: the largest fragment of "${row.stripped_from}"`
+                  : `2D structure you entered, "${smiles}"`
+              } />
               <figcaption className="tile__depiction-cap">Input</figcaption>
             </figure>
             {roundtrip_smiles && (

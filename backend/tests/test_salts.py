@@ -118,3 +118,52 @@ def test_the_sdf_has_the_strip_tags():
     assert "> <STRIPPED_FROM>\nCCO.Cl\n" in record
     assert "> <REMOVED>\nCl\n" in record
     assert "> <STRIPPED_FROM>\n\n" in sdf_record({"smiles": "CCO", "status": "pin"})
+
+
+# --- review fixes: error and timeout paths, cache, check jobs ----------------
+
+import pytest  # noqa: E402
+from celery.exceptions import SoftTimeLimitExceeded  # noqa: E402
+
+_SALT = {"index": 0, "raw_input": "CCO.Cl", "input_id": None, "smiles": "CCO.Cl",
+         "error": None, "strip_salts": True}
+
+
+def _boom(*args, **kwargs):
+    raise RuntimeError("engine down")
+
+
+def test_a_batch_engine_error_names_the_fragment_it_ran_on(redis_client, monkeypatch):
+    monkeypatch.setattr(tasks, "name_one", _boom)
+    (row,), _ = tasks._name_prepared([dict(_SALT)], True, True)
+    assert (row["status"], row["smiles"], row["stripped_from"], row["removed"]) == (
+        "error", "CCO", "CCO.Cl", "Cl")
+
+
+def test_a_fast_engine_error_keeps_the_note(redis_client, monkeypatch):
+    monkeypatch.setattr(tasks, "translate_one", _boom)
+    monkeypatch.setattr(tasks.name_cache, "get_cached", lambda *a, **k: None)
+    (row,) = client.post("/api/translate", json={"smiles": ["CCCO.Cl"], "strip_salts": True}).json()["results"]
+    assert (row["status"], row["smiles"], row["stripped_from"]) == ("error", "CCCO", "CCCO.Cl")
+
+
+def test_a_timed_out_row_names_the_fragment_it_ran_on():
+    timeout = tasks._ChunkTimedOut([], 0, [dict(_SALT)])
+    (row,), _ = tasks._timed_out_rows(timeout)
+    assert (row["smiles"], row["stripped_from"], row["removed"]) == ("CCO", "CCO.Cl", "Cl")
+
+
+def test_the_batch_path_does_not_poison_the_cache(redis_client):
+    tasks._name_prepared([dict(_SALT)], True, True)
+    cached = name_cache.get_cached("CCO", True, True)
+    assert cached is not None and cached.stripped_from is None
+
+
+def test_a_check_job_never_strips(redis_client):
+    job = client.post(
+        "/api/jobs", json={"text": "smiles,name\nCCO.Cl,ethanol\n", "kind": "check", "strip_salts": True}
+    ).json()
+    status = client.get(f"/api/jobs/{job['job_id']}").json()
+    assert status["strip_salts"] is False
+    (row,) = client.get(f"/api/jobs/{job['job_id']}/results").json()["rows"]
+    assert row["stripped_from"] is None and row["smiles"] == "CCO.Cl"

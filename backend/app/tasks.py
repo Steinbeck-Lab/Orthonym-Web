@@ -147,9 +147,10 @@ def _name_prepared(
     for offset, item in enumerate(prepared):
         index = item["index"]
         if item["smiles"] is None:
-            rows.append(_unparsed_row(item))
+            rows.append(_with_claim(_unparsed_row(item), item))
             failed += 1
             continue
+        smiles, removed = item["smiles"], None
         try:
             # Stripped BEFORE the cache: the kept fragment is named as if it
             # were typed alone, so its cache entry is the plain molecule's.
@@ -163,27 +164,40 @@ def _name_prepared(
             raise _ChunkTimedOut(rows, failed, list(prepared[offset:])) from exc
         except Exception as exc:  # noqa: BLE001 - one molecule, not the chunk
             logger.exception("Naming failed for %s", item["smiles"])
-            rows.append(
-                _error_row(
-                    index,
-                    item["raw_input"],
-                    item["input_id"],
-                    f"Naming failed: {exc}",
-                    smiles=item["smiles"],
-                    limit_code=ENGINE_ERROR,
-                )
+            row = _error_row(
+                index,
+                item["raw_input"],
+                item["input_id"],
+                f"Naming failed: {exc}",
+                # What the engine ran on: the kept fragment, when stripped, so
+                # a "Report SMILES on GitHub" issue replays the same molecule.
+                smiles=smiles,
+                limit_code=ENGINE_ERROR,
             )
             failed += 1
-            continue
-        row = _row(index, item["raw_input"], item["input_id"], named)
+        else:
+            row = _row(index, item["raw_input"], item["input_id"], named)
+            if named["status"] == "error":
+                failed += 1
         if removed is not None:
             # After the cache, never in it (app/name_cache.py stores the item).
             row.update(stripped_from=item["smiles"], removed=removed)
+        # A name-check row's verdict, per row and inside the loop, so a time
+        # limit hands _ChunkTimedOut rows that already carry their verdicts.
+        try:
+            _check_row(item, row)
+        except SoftTimeLimitExceeded as exc:
+            rows.append(row)
+            raise _ChunkTimedOut(rows, failed, list(prepared[offset + 1:])) from exc
         rows.append(row)
-        if named["status"] == "error":
-            failed += 1
-    _check_rows(prepared, rows)
     return rows, failed
+
+
+def _with_claim(row: dict, item: dict) -> dict:
+    """A row keeps the visitor's claimed name whatever happened to it."""
+    if item.get("claimed_name"):
+        row["claimed_name"] = item["claimed_name"]
+    return row
 
 
 def _stripped(item: dict) -> tuple[str, str | None]:
@@ -196,33 +210,37 @@ def _stripped(item: dict) -> tuple[str, str | None]:
     return strip_salts(item["smiles"])
 
 
-def _check_rows(prepared: list[dict], rows: list[dict]) -> None:
-    """A name-check job's verdicts, merged into the rows already named.
+def _check_row(item: dict, row: dict) -> None:
+    """A name-check job's verdict, merged into one row already named.
 
-    Per row, inside its own guard, apart from naming: the verdict and the
-    engine's name are independent, so one failing never loses the other. A
-    naming job's items carry no claimed_name, so this does nothing for them.
+    Inside its own guard, apart from naming: the verdict and the engine's
+    name are independent, so one failing never loses the other. A naming
+    job's items carry no claimed_name, so this does nothing for them. A soft
+    time limit propagates; the caller turns it into _ChunkTimedOut.
     """
+    from app import name_check
     from app.inputs import MAX_CLAIMED_NAME_LENGTH
-    from app.name_check import check_pair
 
-    for item, row in zip(prepared, rows):
-        claimed = item.get("claimed_name")
-        if not claimed:
-            continue
-        row["claimed_name"] = claimed
-        # The parser already refuses these; a second gate before OPSIN.
-        if item["smiles"] is None or len(claimed) > MAX_CLAIMED_NAME_LENGTH:
-            continue
-        try:
-            result = check_pair(item["smiles"], claimed)
-        except SoftTimeLimitExceeded:
-            raise
-        except Exception:  # noqa: BLE001 - one row's check, not the chunk
-            logger.exception("Name check failed for %s", item["smiles"])
-            continue
-        row["verdict"] = result["verdict"]
-        row["claimed_smiles"] = result["claimed_smiles"]
+    claimed = item.get("claimed_name")
+    if not claimed:
+        return
+    row["claimed_name"] = claimed
+    # The parser already refuses these; a second gate before OPSIN.
+    if len(claimed) > MAX_CLAIMED_NAME_LENGTH or not name_check.one_line(claimed):
+        return
+    try:
+        result = name_check.check_pair(item["smiles"], claimed)
+    except SoftTimeLimitExceeded:
+        raise
+    except Exception:  # noqa: BLE001 - one row's check, not the chunk
+        logger.exception("Name check failed for %s", item["smiles"])
+        return
+    row["verdict"] = result["verdict"]
+    row["claimed_smiles"] = result["claimed_smiles"]
+    # Batch rows hold text: OPSIN's warnings in one cell, never dropped.
+    row["opsin_warnings"] = "; ".join(
+        f"{w['type']}: {w['message']}" for w in result["warnings"]
+    ) or None
 
 
 def _timed_out_rows(timeout: _ChunkTimedOut) -> tuple[list[dict], int]:
@@ -235,15 +253,18 @@ def _timed_out_rows(timeout: _ChunkTimedOut) -> tuple[list[dict], int]:
     rows = list(timeout.rows)
     failed = timeout.failed
     for position, item in enumerate(timeout.remaining):
+        # remaining[0] was being named when the limit fired: name it as the
+        # engine saw it (the kept fragment, when stripped), with the note.
+        smiles, removed = _stripped(item) if position == 0 and item["smiles"] else (None, None)
         if item["smiles"] is None:
             # This one had already failed to PARSE, before any time ran out.
             # Keep that reason: relabelling it "Timed out" told the visitor a
             # retry could help an input that can never be read.
-            rows.append(_unparsed_row(item))
+            rows.append(_with_claim(_unparsed_row(item), item))
             failed += 1
             continue
         rows.append(
-            _error_row(
+            _with_claim(_error_row(
                 item["index"],
                 item["raw_input"],
                 item["input_id"],
@@ -254,10 +275,12 @@ def _timed_out_rows(timeout: _ChunkTimedOut) -> tuple[list[dict], int]:
                 # "Report SMILES on GitHub" row (frontend/src/lib/github.js). Claiming
                 # the engine failed on a molecule it never tried is a report
                 # nobody can reproduce.
-                smiles=item["smiles"] if position == 0 else None,
+                smiles=smiles,
                 limit_code=TIMEOUT,
-            )
+            ), item)
         )
+        if removed is not None:
+            rows[-1].update(stripped_from=item["smiles"], removed=removed)
         failed += 1
     return rows, failed
 
@@ -568,9 +591,11 @@ def translate_fast(
             # per-row error. The last upstream tier rename made classify()
             # raise on live rows; the next one will too.
             logger.exception("Naming failed for %s", smiles)
-            rows.append(
-                _fast_error_item(smiles, f"Naming failed: {exc}", limit_code=ENGINE_ERROR)
-            )
+            error_item = _fast_error_item(smiles, f"Naming failed: {exc}", limit_code=ENGINE_ERROR)
+            if removed is not None:
+                # `smiles` is the kept fragment the engine ran on: say so.
+                error_item.update(stripped_from=item["smiles"], removed=removed)
+            rows.append(error_item)
             continue
         if result_item.depiction_svg is None and result_item.status in (
             "pin",
@@ -648,26 +673,11 @@ def _molblock_2d(mol):
 
 
 def _opsin_warnings(name: str) -> list[dict]:
-    """OPSIN's warnings for a name it parsed (APPEARS_AMBIGUOUS,
-    STEREOCHEMISTRY_IGNORED). The engine's opsin_parse keeps only the SMILES,
-    as the CLI does, so a name OPSIN read with a warning looked like a clean
-    parse. Same NameToStructure and CLI config opsin_parse uses; raises rather
-    than returning [] when the JVM is missing, because an empty list here
-    claims OPSIN raised no warning.
-    """
-    from orthonym import jvm_bridge
+    """OPSIN's warnings for a name; lives in app/name_check.py, where the
+    name check needs it without importing this module."""
+    from app.name_check import opsin_warnings
 
-    # ponytail: a second parse of the same name (a few ms); fold into one
-    # call if the engine ever exposes the OpsinResult itself.
-    if not jvm_bridge._ensure_jvm():
-        raise RuntimeError("OPSIN warnings need the in-process JVM")
-    with jvm_bridge._LOCK:
-        jvm_bridge._attach_thread()
-        result = jvm_bridge._n2s().parseChemicalName(name, jvm_bridge._cfg(False))
-        return [
-            {"type": str(w.getType()), "message": str(w.getMessage())}
-            for w in result.getWarnings()
-        ]
+    return opsin_warnings(name)
 
 
 @celery_app.task(name="app.tasks.name_to_smiles")
@@ -724,14 +734,24 @@ def check_name(smiles: str, name: str) -> dict:
 
     result = check_pair(smiles, name)
     claimed = result["claimed_smiles"]
-    result["warnings"] = _opsin_warnings(name) if claimed else []
     result["claimed_svg"] = (
         structure_svg_data_uri(claimed, Chem.MolFromSmiles(claimed)) if claimed else None
     )
-    cached = name_cache.get_cached(smiles, True, True)
-    engine = cached if cached is not None else translate_one(smiles, best_effort=True, verify=True)
-    if cached is None:
-        name_cache.put_cached(engine, True, True)
+    # The engine half is independent of the verdict: a crash in naming is an
+    # error row beside the verdict, never a 500 that throws the verdict away
+    # (translate_fast guards the same way).
+    try:
+        cached = name_cache.get_cached(smiles, True, True)
+        engine = cached if cached is not None else translate_one(smiles, best_effort=True, verify=True)
+        if cached is None:
+            name_cache.put_cached(engine, True, True)
+    except SoftTimeLimitExceeded:
+        raise
+    except Exception as exc:  # noqa: BLE001 - the verdict must survive
+        logger.exception("Naming failed for %s", smiles)
+        engine = ResultItem.model_validate(
+            _fast_error_item(smiles, f"Naming failed: {exc}", limit_code=ENGINE_ERROR)
+        )
     # The input's picture rides in the answer, so the page never fetches it
     # with a GET /api/depict?smiles= that nginx would log. A cached row is
     # stored without its picture, so draw it here either way.

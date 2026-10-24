@@ -128,7 +128,7 @@ export function isReportable(row) {
  *               nothing on another host.
  * @param row    a result row (ResultItem or BatchRow shape).
  * @param where  the page the visitor was on, in words, e.g. "Home".
- * @param settings  {bestEffort, verify} the result was named WITH -- not the
+ * @param settings  {bestEffort, verify, stripSalts} the result was named WITH -- not the
  *               switches' current position. Best-effort off abstains on
  *               molecules the defaults name, so a report that omits it cannot
  *               be reproduced.
@@ -147,6 +147,7 @@ export function reportIssueUrl(repo, row, where, settings) {
     where && `- Page: ${where}`,
     switchLine('Best-effort mode', settings?.bestEffort),
     switchLine('OPSIN verify', settings?.verify),
+    switchLine('Salt stripping', settings?.stripSalts),
   ].filter(Boolean)
   const body = [
     'Orthonym could not name this molecule.',

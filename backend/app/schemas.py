@@ -267,6 +267,8 @@ class BatchRow(BaseModel):
     claimed_name: Optional[str] = None
     verdict: Optional[str] = None
     claimed_smiles: Optional[str] = None
+    # OPSIN's warnings on the claimed name, "TYPE: message; ...", or None.
+    opsin_warnings: Optional[str] = None
     # As on ResultItem: set only when salt stripping removed something.
     stripped_from: Optional[str] = None
     removed: Optional[str] = None

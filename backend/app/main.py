@@ -37,6 +37,7 @@ from .schemas import (
     TranslateRequest,
     TranslateResponse,
 )
+from .name_check import one_line
 from .tasks import check_name, explain_iupac_name, explain_smiles, name_to_smiles, translate_fast
 
 # Verified live against the real Orthonym engine -- do not invent
@@ -322,7 +323,14 @@ def name_check(request: Request, body: NameCheckRequest) -> NameCheckResponse:
 
     # The same gate every naming path takes: a length cap before RDKit, and
     # the parser's own message for a SMILES it cannot read.
-    (molecule,) = _canonicalize([body.smiles], 1)
+    smiles = body.smiles.strip()
+    if not smiles or any(ch.isspace() for ch in smiles):
+        # _canonicalize reads a LIST: a line break would make two molecules,
+        # a space an ID, and all-blank none at all.
+        raise HTTPException(status_code=400, detail="Enter one SMILES, with no spaces in it.")
+    if not one_line(body.name):
+        raise HTTPException(status_code=400, detail="A name must be one line.")
+    (molecule,) = _canonicalize([smiles], 1)
     if molecule.smiles is None:
         raise HTTPException(status_code=400, detail=molecule.error)
     async_result = check_name.apply_async(

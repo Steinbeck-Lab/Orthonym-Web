@@ -54,7 +54,11 @@ function ResultRow({ row, index }) {
         </td>
         <td className="results-cell--pic">
           {depiction_svg ? (
-            <img src={depiction_svg} alt={`Structure you entered, "${smiles}"`} />
+            <img src={depiction_svg} alt={
+                row.stripped_from
+                  ? `Structure named: the largest fragment of "${row.stripped_from}"`
+                  : `Structure you entered, "${smiles}"`
+              } />
           ) : (
             <span className="results-cell__none">—</span>
           )}

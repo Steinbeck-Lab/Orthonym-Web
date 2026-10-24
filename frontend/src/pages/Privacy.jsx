@@ -159,7 +159,11 @@ import './Legal.css'
 // which nginx does not log; the picture of the typed structure comes back in
 // that answer (input_svg), not from a GET. The re-parsed picture under
 // Orthonym's own name is the same logged GET /api/depict?smiles= as on
-// Translate (Tile.jsx, useDepiction).
+// Translate (Tile.jsx, useDepiction). A name-check JOB (POST /api/jobs,
+// kind=check) keeps, per row, the claimed name, claimed_smiles, OPSIN's
+// warnings and the verdict (schemas.BatchRow), and the meta keeps `kind`
+// (redis_store.create_job); § Batch jobs lists them, with the engine tier
+// rows have carried since phase 2 (tasks._row).
 
 // The UNIVERSITY leads, the working group follows as the responsible unit.
 // Art. 4 (7) requires the controller to be a natural or legal person, public
@@ -398,8 +402,10 @@ function Privacy() {
           <p>
             A larger submission becomes a job you can come back to. For 24 hours we keep the job’s
             rows — for each molecule, what you submitted, the standardised structure, the name
-            produced, the round-trip check, the molecular formula and any error — together with the
-            two naming switches you chose, the submitting IP address, which is used only to release
+            produced and its confidence tier, the round-trip check, the molecular formula and any
+            error, and, for a name check, the name you gave, the structure OPSIN read from it,
+            OPSIN&rsquo;s warnings and the verdict — together with the two naming switches you chose,
+            whether the job is a name check, the submitting IP address, which is used only to release
             your concurrent-job slot, and the job’s owner token. All of it is deleted automatically after 24 hours, or immediately if
             you delete the job yourself.
           </p>

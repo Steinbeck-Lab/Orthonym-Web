@@ -99,6 +99,7 @@ CSV_COLUMNS = [
     "claimed_name",
     "verdict",
     "claimed_smiles",
+    "opsin_warnings",
     "engine_version",
     "engine_commit",
 ]
@@ -348,6 +349,9 @@ def admit_and_dispatch(
     (check_and_register_job) -- the hourly cap and the cheap concurrent
     pre-check both already happened, earlier, in the caller.
     """
+    # A name check compares the structure as given: never strip it, and never
+    # record a switch that did nothing.
+    strip_salts = strip_salts and kind != "check"
     settings = get_settings()
     job_id = uuid.uuid4().hex
     # secrets, not uuid4: this one is a capability, not an identifier, and the
