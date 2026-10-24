@@ -85,3 +85,36 @@ def test_a_job_strips_when_asked(redis_client):
     job = client.post("/api/jobs", json={"text": "CCO.Cl\nCCN\n", "strip_salts": True}).json()
     rows = client.get(f"/api/jobs/{job['job_id']}/results").json()["rows"]
     assert [(r["smiles"], r["removed"]) for r in rows] == [("CCO", "Cl"), ("CCN", None)]
+
+
+def test_a_job_echoes_the_strip_switch(redis_client):
+    job = client.post("/api/jobs", json={"text": "CCO\n", "strip_salts": True}).json()
+    assert client.get(f"/api/jobs/{job['job_id']}").json()["strip_salts"] is True
+    job = client.post("/api/jobs", json={"text": "CCO\n"}).json()
+    assert client.get(f"/api/jobs/{job['job_id']}").json()["strip_salts"] is False
+
+
+def test_an_old_job_has_no_strip_switch():
+    from app.redis_store import job_switches
+
+    assert job_switches({"best_effort": "1", "verify": "1"})["strip_salts"] is None
+
+
+def test_the_csv_has_the_strip_columns(redis_client):
+    job = client.post("/api/jobs", json={"text": "CCO.Cl\nCCN\n", "strip_salts": True}).json()
+    lines = client.get(f"/api/jobs/{job['job_id']}/results.csv").text.splitlines()
+    cols = lines[0].split(",")
+    assert cols[-2:] == ["engine_version", "engine_commit"]
+    at = cols.index("stripped_from")
+    assert cols[at + 1] == "removed"
+    first = lines[1].split(",")
+    assert (first[at], first[at + 1]) == ("CCO.Cl", "Cl")
+
+
+def test_the_sdf_has_the_strip_tags():
+    from app.sdf_export import sdf_record
+
+    record = sdf_record({"smiles": "CCO", "status": "pin", "stripped_from": "CCO.Cl", "removed": "Cl"})
+    assert "> <STRIPPED_FROM>\nCCO.Cl\n" in record
+    assert "> <REMOVED>\nCl\n" in record
+    assert "> <STRIPPED_FROM>\n\n" in sdf_record({"smiles": "CCO", "status": "pin"})

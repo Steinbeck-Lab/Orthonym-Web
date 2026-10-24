@@ -310,6 +310,7 @@ class JobStatusResponse(BaseModel):
     # a job created before they were recorded.
     best_effort: Optional[bool] = None
     verify: Optional[bool] = None
+    strip_salts: Optional[bool] = None
     # "check" for a name-check job (rows carry a verdict), else "name".
     kind: Literal["name", "check"] = "name"
 

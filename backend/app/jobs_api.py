@@ -94,6 +94,8 @@ CSV_COLUMNS = [
     "formula",
     "limit_code",
     "error",
+    "stripped_from",
+    "removed",
     "claimed_name",
     "verdict",
     "claimed_smiles",
