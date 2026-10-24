@@ -1378,3 +1378,54 @@
   }
 }
 
+
+/* -------------------- cite -------------------- */
+.cite {
+  padding: clamp(var(--s-lg), 3.5vw, var(--s-xl));
+}
+
+.cite__formats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: var(--s-lg);
+}
+
+.cite__format {
+  min-width: 0;
+}
+
+.cite__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--s-xs);
+}
+
+.cite__label {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* A long line scrolls inside its block, never the page. */
+.cite__code {
+  margin: 0;
+  padding: var(--s-md);
+  overflow-x: auto;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  line-height: 1.6;
+  color: var(--body);
+  white-space: pre;
+}
+
+.cite__code:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
