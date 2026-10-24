@@ -108,11 +108,12 @@ test('one voice: the sentence is plain English and still carries the proof', () 
 // one of its kind in the suite -- justified because the defect is invisible to
 // every other tool available: it type-checks, it lints, it renders, and it is
 // wrong.
-test('Explain.jsx decides the claim from the result, never from the live tab', () => {
-  const src = readFileSync(
-    fileURLToPath(new URL('../pages/Explain.jsx', import.meta.url)),
-    'utf8'
-  )
+// The view and the request moved out of Explain.jsx (components/ExplainView.jsx
+// and lib/useExplain.js, so /compare can show two); the checks follow them.
+const read = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
+
+test('/explain decides the claim from the result, never from the live tab', () => {
+  const src = read('../components/ExplainView.jsx')
 
   // Find the tier branch by the copy it guards, not by a line number.
   const marker = 'This breakdown is of the name'
@@ -138,9 +139,9 @@ test('Explain.jsx decides the claim from the result, never from the live tab', (
 
   // And the result's mode must be recorded where the request is made.
   assert.match(
-    src,
+    read('./useExplain.js'),
     /setResultMode\(requestMode\)/,
-    'runExplain must record the mode it actually requested'
+    'the request must record the mode it actually requested'
   )
 })
 
@@ -166,9 +167,9 @@ test('a missing proof on a verified tier is worded, not just flagged', () => {
   assert.match(line.tail, /not confirmed/)
 })
 
-test('Explain.jsx shows the user-supplied disclosure when the verdict is user-supplied', () => {
+test('/explain shows the user-supplied disclosure when the verdict is user-supplied', () => {
   // The call is asserted above; inverting the comparison would swap the two
   // disclosures while still calling the right function.
-  const src = readFileSync(fileURLToPath(new URL('../pages/Explain.jsx', import.meta.url)), 'utf8')
+  const src = read('../components/ExplainView.jsx')
   assert.match(src, /verdictKindFor\(\s*resultMode\s*\)\s*===\s*'user-supplied'\s*\?/)
 })
