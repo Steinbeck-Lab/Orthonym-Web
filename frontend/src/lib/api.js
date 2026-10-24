@@ -198,6 +198,22 @@ export async function explainName(name) {
   return getJson(`/api/explain-name?name=${encodeURIComponent(name)}`, 'GET /api/explain-name')
 }
 
+/**
+ * Does `name` describe `smiles`? A POST, so neither reaches the access log.
+ * The answer is a verdict about structure only, plus the engine's own name
+ * for the SMILES (`engine`, a full ResultItem). Non-2xx rejects with
+ * httpError (a SMILES RDKit cannot read is a 400 with the parser's reason).
+ */
+export async function checkName(smiles, name) {
+  const res = await fetch('/api/name-check', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ smiles, name }),
+  })
+  if (!res.ok) throw await httpError(res, 'POST /api/name-check')
+  return res.json()
+}
+
 /* ------------------------------------------------------------------ *
  * The job layer
  * ------------------------------------------------------------------ */
@@ -261,19 +277,20 @@ async function jobFailure(res, jobId) {
  * file as JSON, or text as multipart, both 400 — see _read_input in
  * backend/app/jobs_api.py.
  */
-function inputRequest({ file, text, bestEffort, verify = true }) {
+function inputRequest({ file, text, bestEffort, verify = true, kind = 'name' }) {
   if (file) {
     const form = new FormData()
     form.append('file', file)
     form.append('best_effort', String(bestEffort))
     form.append('verify', String(verify))
+    form.append('kind', kind)
     // No Content-Type header: the browser has to set the multipart boundary.
     return { method: 'POST', body: form }
   }
   return {
     method: 'POST',
     headers: JSON_HEADERS,
-    body: JSON.stringify({ text, best_effort: bestEffort, verify }),
+    body: JSON.stringify({ text, best_effort: bestEffort, verify, kind }),
   }
 }
 
@@ -301,8 +318,9 @@ export async function parsePreview({ file = null, text = '', bestEffort = true, 
  * accounts).
  * @returns {Promise<{job_id:string, molecule_count:number, status:string, owner_token:string}>}
  */
-export async function createJob({ file = null, text = '', bestEffort = true, verify = true } = {}) {
-  const res = await fetch('/api/jobs', inputRequest({ file, text, bestEffort, verify }))
+/** `kind: 'check'` starts a name-check job from a smiles,name CSV. */
+export async function createJob({ file = null, text = '', bestEffort = true, verify = true, kind = 'name' } = {}) {
+  const res = await fetch('/api/jobs', inputRequest({ file, text, bestEffort, verify, kind }))
   if (!res.ok) throw await jobFailure(res)
   return res.json()
 }

@@ -96,6 +96,7 @@ def create_job(
     owner_token: str = "",
     best_effort: bool = True,
     verify: bool = True,
+    kind: str = "name",
 ) -> None:
     settings = get_settings()
     client = get_redis()
@@ -123,6 +124,7 @@ def create_job(
             # settings would reproduce.
             "best_effort": int(best_effort),
             "verify": int(verify),
+            "kind": kind,
         },
     )
     pipe.expire(key, settings.JOB_RESULT_TTL_SECONDS)

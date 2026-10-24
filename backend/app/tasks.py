@@ -147,7 +147,7 @@ def _name_prepared(
     for offset, item in enumerate(prepared):
         index = item["index"]
         if item["smiles"] is None:
-            rows.append(_unparsed_row(item))
+            rows.append(_with_claim(_unparsed_row(item), item))
             failed += 1
             continue
         try:
@@ -160,22 +160,68 @@ def _name_prepared(
             raise _ChunkTimedOut(rows, failed, list(prepared[offset:])) from exc
         except Exception as exc:  # noqa: BLE001 - one molecule, not the chunk
             logger.exception("Naming failed for %s", item["smiles"])
-            rows.append(
-                _error_row(
-                    index,
-                    item["raw_input"],
-                    item["input_id"],
-                    f"Naming failed: {exc}",
-                    smiles=item["smiles"],
-                    limit_code=ENGINE_ERROR,
-                )
+            row = _error_row(
+                index,
+                item["raw_input"],
+                item["input_id"],
+                f"Naming failed: {exc}",
+                smiles=item["smiles"],
+                limit_code=ENGINE_ERROR,
             )
             failed += 1
-            continue
-        rows.append(_row(index, item["raw_input"], item["input_id"], named))
-        if named["status"] == "error":
-            failed += 1
+        else:
+            row = _row(index, item["raw_input"], item["input_id"], named)
+            if named["status"] == "error":
+                failed += 1
+        # A name-check row's verdict, per row and inside the loop, so a time
+        # limit hands _ChunkTimedOut rows that already carry their verdicts.
+        try:
+            _check_row(item, row)
+        except SoftTimeLimitExceeded as exc:
+            rows.append(row)
+            raise _ChunkTimedOut(rows, failed, list(prepared[offset + 1:])) from exc
+        rows.append(row)
     return rows, failed
+
+
+def _with_claim(row: dict, item: dict) -> dict:
+    """A row keeps the visitor's claimed name whatever happened to it."""
+    if item.get("claimed_name"):
+        row["claimed_name"] = item["claimed_name"]
+    return row
+
+
+def _check_row(item: dict, row: dict) -> None:
+    """A name-check job's verdict, merged into one row already named.
+
+    Inside its own guard, apart from naming: the verdict and the engine's
+    name are independent, so one failing never loses the other. A naming
+    job's items carry no claimed_name, so this does nothing for them. A soft
+    time limit propagates; the caller turns it into _ChunkTimedOut.
+    """
+    from app import name_check
+    from app.inputs import MAX_CLAIMED_NAME_LENGTH
+
+    claimed = item.get("claimed_name")
+    if not claimed:
+        return
+    row["claimed_name"] = claimed
+    # The parser already refuses these; a second gate before OPSIN.
+    if len(claimed) > MAX_CLAIMED_NAME_LENGTH or not name_check.one_line(claimed):
+        return
+    try:
+        result = name_check.check_pair(item["smiles"], claimed)
+    except SoftTimeLimitExceeded:
+        raise
+    except Exception:  # noqa: BLE001 - one row's check, not the chunk
+        logger.exception("Name check failed for %s", item["smiles"])
+        return
+    row["verdict"] = result["verdict"]
+    row["claimed_smiles"] = result["claimed_smiles"]
+    # Batch rows hold text: OPSIN's warnings in one cell, never dropped.
+    row["opsin_warnings"] = "; ".join(
+        f"{w['type']}: {w['message']}" for w in result["warnings"]
+    ) or None
 
 
 def _timed_out_rows(timeout: _ChunkTimedOut) -> tuple[list[dict], int]:
@@ -192,11 +238,11 @@ def _timed_out_rows(timeout: _ChunkTimedOut) -> tuple[list[dict], int]:
             # This one had already failed to PARSE, before any time ran out.
             # Keep that reason: relabelling it "Timed out" told the visitor a
             # retry could help an input that can never be read.
-            rows.append(_unparsed_row(item))
+            rows.append(_with_claim(_unparsed_row(item), item))
             failed += 1
             continue
         rows.append(
-            _error_row(
+            _with_claim(_error_row(
                 item["index"],
                 item["raw_input"],
                 item["input_id"],
@@ -209,7 +255,7 @@ def _timed_out_rows(timeout: _ChunkTimedOut) -> tuple[list[dict], int]:
                 # nobody can reproduce.
                 smiles=item["smiles"] if position == 0 else None,
                 limit_code=TIMEOUT,
-            )
+            ), item)
         )
         failed += 1
     return rows, failed
@@ -594,26 +640,11 @@ def _molblock_2d(mol):
 
 
 def _opsin_warnings(name: str) -> list[dict]:
-    """OPSIN's warnings for a name it parsed (APPEARS_AMBIGUOUS,
-    STEREOCHEMISTRY_IGNORED). The engine's opsin_parse keeps only the SMILES,
-    as the CLI does, so a name OPSIN read with a warning looked like a clean
-    parse. Same NameToStructure and CLI config opsin_parse uses; raises rather
-    than returning [] when the JVM is missing, because an empty list here
-    claims OPSIN raised no warning.
-    """
-    from orthonym import jvm_bridge
+    """OPSIN's warnings for a name; lives in app/name_check.py, where the
+    name check needs it without importing this module."""
+    from app.name_check import opsin_warnings
 
-    # ponytail: a second parse of the same name (a few ms); fold into one
-    # call if the engine ever exposes the OpsinResult itself.
-    if not jvm_bridge._ensure_jvm():
-        raise RuntimeError("OPSIN warnings need the in-process JVM")
-    with jvm_bridge._LOCK:
-        jvm_bridge._attach_thread()
-        result = jvm_bridge._n2s().parseChemicalName(name, jvm_bridge._cfg(False))
-        return [
-            {"type": str(w.getType()), "message": str(w.getMessage())}
-            for w in result.getWarnings()
-        ]
+    return opsin_warnings(name)
 
 
 @celery_app.task(name="app.tasks.name_to_smiles")
@@ -658,6 +689,46 @@ def name_to_smiles(name: str) -> dict:
     }
 
 
+@celery_app.task(name="app.tasks.check_name")
+def check_name(smiles: str, name: str) -> dict:
+    """POST /api/name-check: the verdict, OPSIN's warnings and picture for
+    the name, and the engine's own name for the structure (through the cache,
+    as Home would name it). The two halves are independent."""
+    from rdkit import Chem
+
+    from app.depiction import structure_svg_data_uri
+    from app.name_check import check_pair
+
+    result = check_pair(smiles, name)
+    claimed = result["claimed_smiles"]
+    result["claimed_svg"] = (
+        structure_svg_data_uri(claimed, Chem.MolFromSmiles(claimed)) if claimed else None
+    )
+    # The engine half is independent of the verdict: a crash in naming is an
+    # error row beside the verdict, never a 500 that throws the verdict away
+    # (translate_fast guards the same way).
+    try:
+        cached = name_cache.get_cached(smiles, True, True)
+        engine = cached if cached is not None else translate_one(smiles, best_effort=True, verify=True)
+        if cached is None:
+            name_cache.put_cached(engine, True, True)
+    except SoftTimeLimitExceeded:
+        raise
+    except Exception as exc:  # noqa: BLE001 - the verdict must survive
+        logger.exception("Naming failed for %s", smiles)
+        engine = ResultItem.model_validate(
+            _fast_error_item(smiles, f"Naming failed: {exc}", limit_code=ENGINE_ERROR)
+        )
+    # The input's picture rides in the answer, so the page never fetches it
+    # with a GET /api/depict?smiles= that nginx would log. A cached row is
+    # stored without its picture, so draw it here either way.
+    result["input_svg"] = engine.depiction_svg or structure_svg_data_uri(
+        smiles, Chem.MolFromSmiles(smiles)
+    )
+    result["engine"] = engine.model_copy(update={"depiction_svg": result["input_svg"]}).model_dump()
+    return result
+
+
 def dispatch_batch(
     job_id: str, prepared: list[dict], best_effort: bool, chunk_size: int,
     verify: bool = True
@@ -675,7 +746,7 @@ def dispatch_batch(
     return len(chunks)
 
 @celery_app.task(name="app.tasks.parse_input")
-def parse_input(data: bytes, max_molecules: int) -> dict:
+def parse_input(data: bytes, max_molecules: int, kind: str = "name") -> dict:
     """Sniff and parse an uploaded body, in a WORKER rather than the web process.
 
     Spec section 13a / audit item parse-cost-aggregate. Parsing is RDKit work,
@@ -700,11 +771,15 @@ def parse_input(data: bytes, max_molecules: int) -> dict:
     Returns a plain dict rather than raising, because an HTTPException cannot
     cross the broker: the web process re-raises the right status from `error`.
     """
-    from app.inputs import TooManyMolecules, parse, sniff
+    from app.inputs import InputFormat, TooManyMolecules, parse, parse_check_csv, sniff
 
-    fmt = sniff(data)
+    # A name-check job's input is always a smiles,name CSV.
+    fmt = InputFormat.CSV if kind == "check" else sniff(data)
     try:
-        molecules = parse(data, fmt, max_molecules)
+        molecules = (
+            parse_check_csv(data, max_molecules) if kind == "check"
+            else parse(data, fmt, max_molecules)
+        )
     except TooManyMolecules as exc:
         return {"error": "too_many", "limit": exc.limit, "fmt": fmt.value}
     except ValueError as exc:

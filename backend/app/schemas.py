@@ -7,7 +7,7 @@ frontend that depends on it.
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .engine_info import ENGINE_COMMIT, ENGINE_VERSION
 
@@ -143,6 +143,26 @@ class OpsinWarning(BaseModel):
     message: str
 
 
+class NameCheckRequest(BaseModel):
+    smiles: str = Field(min_length=1, max_length=2000)
+    name: str = Field(min_length=1, max_length=2000)
+
+
+class NameCheckResponse(BaseModel):
+    """Does `name` describe `smiles`? A verdict about STRUCTURE only (see
+    app/name_check.py), with the engine's own name and tier beside it."""
+
+    verdict: Literal["same", "protonation", "stereo", "different", "unreadable", "uncomparable"]
+    verdict_text: str
+    claimed_smiles: Optional[str] = None
+    input_inchikey: Optional[str] = None
+    claimed_inchikey: Optional[str] = None
+    warnings: list[OpsinWarning] = []
+    claimed_svg: Optional[str] = None
+    input_svg: Optional[str] = None
+    engine: ResultItem
+
+
 class IupacToSmilesResponse(BaseModel):
     # OPSIN's own output, kept verbatim. NOT replaced by the canonical form:
     # the string a tool actually produced is information, and normalising it
@@ -234,6 +254,14 @@ class BatchRow(BaseModel):
     formula: Optional[str] = None
     limit_code: Optional[str] = None
     error: Optional[str] = None
+    # A name-check job's row (app/name_check.py): the name the visitor gave,
+    # the verdict on STRUCTURE, and what OPSIN read the name as. None on a
+    # naming job's row.
+    claimed_name: Optional[str] = None
+    verdict: Optional[str] = None
+    claimed_smiles: Optional[str] = None
+    # OPSIN's warnings on the claimed name, "TYPE: message; ...", or None.
+    opsin_warnings: Optional[str] = None
     # As on ResultItem: built in the batch worker, so the engine that named it.
     engine_version: str = ENGINE_VERSION
     engine_commit: Optional[str] = ENGINE_COMMIT
@@ -274,6 +302,8 @@ class JobStatusResponse(BaseModel):
     # a job created before they were recorded.
     best_effort: Optional[bool] = None
     verify: Optional[bool] = None
+    # "check" for a name-check job (rows carry a verdict), else "name".
+    kind: Literal["name", "check"] = "name"
 
 
 class JobResultsResponse(BaseModel):

@@ -21,6 +21,11 @@ export const ROUTE_META = {
     description:
       'See how an IUPAC name is built. Point at any part of the name and Orthonym lights up the atoms it describes.',
   },
+  '/check': {
+    title: 'Check an IUPAC name against a structure · Orthonym',
+    description:
+      'Paste a structure and a name. OPSIN reads the name and Orthonym compares the two structures by InChIKey, beside its own name and confidence tier.',
+  },
   '/about': {
     title: 'About Orthonym — how it names molecules and how accurate it is',
     description:

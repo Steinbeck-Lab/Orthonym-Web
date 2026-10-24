@@ -1003,7 +1003,7 @@ def test_an_uploaded_file_can_turn_best_effort_off(redis_client, monkeypatch):
     """
     seen: dict = {}
 
-    def _capture(ip, molecules, fmt, best_effort, verify=True):
+    def _capture(ip, molecules, fmt, best_effort, verify=True, kind="name"):
         seen["best_effort"] = best_effort
         seen["verify"] = verify
         from app.schemas import JobEnvelope
@@ -1038,7 +1038,7 @@ def test_an_uploaded_file_still_defaults_to_best_effort(redis_client, monkeypatc
     """
     seen: dict = {}
 
-    def _capture(ip, molecules, fmt, best_effort, verify=True):
+    def _capture(ip, molecules, fmt, best_effort, verify=True, kind="name"):
         seen["best_effort"] = best_effort
         seen["verify"] = verify
         from app.schemas import JobEnvelope
@@ -1690,3 +1690,68 @@ def test_a_failed_jobs_sdf_is_served_but_labelled(redis_client, job_id):
     assert response.status_code == 200
     assert response.headers["X-Orthonym-Job-Status"] == "failed"
     assert "-partial.sdf" in response.headers["content-disposition"]
+
+
+# --- kind=check jobs --------------------------------------------------------
+
+_PAIRS = "smiles,name\nCCO,ethanol\nCCO,methanol\n"
+
+
+def _submit_check(text=_PAIRS):
+    return client.post("/api/jobs", json={"text": text, "kind": "check"})
+
+
+def test_a_check_job_gives_a_verdict_per_row(redis_client):
+    response = _submit_check()
+    assert response.status_code == 200, response.text
+    job_id = response.json()["job_id"]
+    assert client.get(f"/api/jobs/{job_id}").json()["kind"] == "check"
+    rows = client.get(f"/api/jobs/{job_id}/results").json()["rows"]
+    assert [(r["claimed_name"], r["verdict"]) for r in rows] == [
+        ("ethanol", "same"),
+        ("methanol", "different"),
+    ]
+    # The engine still names each structure, independently of the verdict.
+    assert [r["name"] for r in rows] == ["ethanol", "ethanol"]
+    assert rows[1]["claimed_smiles"]
+
+
+def test_a_check_row_keeps_its_verdict_when_naming_fails(redis_client, monkeypatch):
+    def boom(*args, **kwargs):
+        raise RuntimeError("engine down")
+
+    monkeypatch.setattr(tasks, "name_one", boom)
+    job_id = _submit_check("smiles,name\nCCO,ethanol\n").json()["job_id"]
+    (row,) = client.get(f"/api/jobs/{job_id}/results").json()["rows"]
+    assert row["status"] == "error"
+    assert row["verdict"] == "same"
+
+
+def test_a_check_job_without_a_name_column_is_400(redis_client):
+    response = _submit_check("smiles,id\nCCO,a\n")
+    assert response.status_code == 400
+    assert "name" in response.json()["detail"]
+
+
+def test_kind_defaults_to_name(redis_client):
+    job_id = _submit("CCO\n")["job_id"]
+    assert client.get(f"/api/jobs/{job_id}").json()["kind"] == "name"
+    (row,) = client.get(f"/api/jobs/{job_id}/results").json()["rows"]
+    assert row["verdict"] is None and row["claimed_name"] is None
+
+
+def test_the_check_columns_are_in_the_csv(redis_client):
+    job_id = _submit_check().json()["job_id"]
+    header, first = client.get(f"/api/jobs/{job_id}/results.csv").text.splitlines()[:2]
+    cols = header.split(",")
+    assert cols[-6:] == [
+        "claimed_name", "verdict", "claimed_smiles", "opsin_warnings", "engine_version", "engine_commit",
+    ]
+    assert "ethanol" in first and "same" in first
+
+
+def test_the_check_tags_are_in_the_sdf(redis_client):
+    job_id = _submit_check().json()["job_id"]
+    body = client.get(f"/api/jobs/{job_id}/results.sdf").text
+    assert "> <VERDICT>\nsame\n" in body
+    assert "> <CLAIMED_NAME>\nmethanol\n" in body

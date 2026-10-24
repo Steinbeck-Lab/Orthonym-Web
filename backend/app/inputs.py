@@ -55,6 +55,9 @@ class ParsedMolecule:
     input_id: str | None
     smiles: str | None
     error: str | None
+    # A name-check job's claimed name for this structure (parse_check_csv);
+    # None for a naming job.
+    claimed_name: str | None = None
 
 
 class TooManyMolecules(Exception):
@@ -306,6 +309,55 @@ def _parse_csv(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
         rows.append(
             _canonical_or_error(len(rows), smiles, smiles, input_id or None)
         )
+    return rows
+
+
+MAX_CLAIMED_NAME_LENGTH = 2000
+
+
+def parse_check_csv(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
+    """A name-check job's input: a CSV with a `smiles` and a `name` column
+    (case and spaces ignored) and an optional `id` column.
+
+    Its own parser, not _parse_csv: there a `name` column is the ID column of
+    a NAMING job, and that must not change.
+    """
+    reader = csv.DictReader(io.StringIO(_decode(data)))
+    lowered = {name.strip().lower(): name for name in reader.fieldnames or []}
+    missing = [col for col in ("smiles", "name") if col not in lowered]
+    if missing:
+        raise ValueError(
+            f"A name check needs a smiles and a name column; missing {missing}. "
+            f"Columns found: {reader.fieldnames}"
+        )
+    id_col = lowered.get("id")
+
+    rows: list[ParsedMolecule] = []
+    for record in reader:
+        smiles = (record.get(lowered["smiles"]) or "").strip()
+        if not smiles:
+            continue
+        if len(rows) >= max_molecules:
+            raise TooManyMolecules(max_molecules, partial=rows)
+        name = (record.get(lowered["name"]) or "").strip()
+        input_id = ((record.get(id_col) or "").strip() if id_col else "") or None
+        if any(ord(ch) < 32 or ord(ch) == 127 for ch in name):
+            # Never handed to OPSIN (app/name_check.one_line); kept so the
+            # row still shows what was given.
+            row = ParsedMolecule(len(rows), smiles, input_id, None, "A name must be one line")
+        elif len(name) > MAX_CLAIMED_NAME_LENGTH:
+            # The single check's cap (NameCheckRequest): never hand OPSIN more.
+            row = ParsedMolecule(
+                len(rows), smiles, input_id, None,
+                f"Name exceeds {MAX_CLAIMED_NAME_LENGTH} characters",
+            )
+            name = ""
+        elif name:
+            row = _canonical_or_error(len(rows), smiles, smiles, input_id)
+        else:
+            row = ParsedMolecule(len(rows), smiles, input_id, None, "No name to check")
+        row.claimed_name = name or None
+        rows.append(row)
     return rows
 
 

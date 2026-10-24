@@ -14,6 +14,7 @@ import logging
 import secrets
 import time
 import uuid
+from typing import Literal
 
 from celery.exceptions import TimeoutError as CeleryTimeoutError
 from fastapi import (
@@ -93,6 +94,10 @@ CSV_COLUMNS = [
     "formula",
     "limit_code",
     "error",
+    "claimed_name",
+    "verdict",
+    "claimed_smiles",
+    "opsin_warnings",
     "engine_version",
     "engine_commit",
 ]
@@ -102,6 +107,7 @@ class TextPayload(BaseModel):
     text: str
     best_effort: bool = True
     verify: bool = True
+    kind: Literal["name", "check"] = "name"
 
 
 async def _read_input(
@@ -109,7 +115,8 @@ async def _read_input(
     file: UploadFile | None,
     best_effort: bool = True,
     verify: bool = True,
-) -> tuple[bytes, bool, bool]:
+    kind: str = "name",
+) -> tuple[bytes, bool, bool, str]:
     """Accept either a multipart file or a JSON {"text": ...} body.
 
     Size is checked before the bytes are handed on, so an oversized upload
@@ -158,7 +165,7 @@ async def _read_input(
         # best-effort names with nothing recording that their request had
         # been overridden. The default stays True, matching TextPayload's, so
         # nothing changes for a caller who sends no field.
-        return data, best_effort, verify
+        return data, best_effort, verify, kind
 
     try:
         body = await request.json()
@@ -175,7 +182,7 @@ async def _read_input(
             status_code=413,
             detail=f"Input is larger than the {settings.MAX_FILE_SIZE_MB} MB limit",
         )
-    return data, payload.best_effort, payload.verify
+    return data, payload.best_effort, payload.verify, payload.kind
 
 
 def _raise_for_parse_outcome(outcome: dict) -> None:
@@ -210,7 +217,7 @@ def _raise_for_parse_outcome(outcome: dict) -> None:
     raise HTTPException(status_code=400, detail=f"Could not read this {fmt}")
 
 
-def _parse_or_400(data: bytes, max_molecules: int):
+def _parse_or_400(data: bytes, max_molecules: int, kind: str = "name"):
     """Parse an uploaded body in a WORKER, but block for the answer.
 
     Spec section 13a / audit item parse-cost-aggregate. RDKit does not release
@@ -234,7 +241,7 @@ def _parse_or_400(data: bytes, max_molecules: int):
     state is the signal; once a worker has it, we wait as long as it needs.
     """
     settings = get_settings()
-    async_result = parse_input.apply_async(args=[data, max_molecules], queue="batch")
+    async_result = parse_input.apply_async(args=[data, max_molecules, kind], queue="batch")
     try:
         if not _worker_picked_it_up(async_result, settings.PARSE_TIMEOUT):
             # Nobody is listening. Revoke so a worker that wakes later does
@@ -246,7 +253,7 @@ def _parse_or_400(data: bytes, max_molecules: int):
                 "web process. This blocks other requests -- check the batch queue.",
                 settings.PARSE_TIMEOUT,
             )
-            outcome = parse_input.run(data, max_molecules)
+            outcome = parse_input.run(data, max_molecules, kind)
         else:
             outcome = async_result.get()
     finally:
@@ -292,13 +299,15 @@ def prepared_payload(molecules) -> list[dict]:
             "input_id": m.input_id,
             "smiles": m.smiles,
             "error": m.error,
+            "claimed_name": m.claimed_name,
         }
         for m in molecules
     ]
 
 
 def admit_and_dispatch(
-    ip: str, molecules, fmt: str, best_effort: bool, verify: bool = True
+    ip: str, molecules, fmt: str, best_effort: bool, verify: bool = True,
+    kind: str = "name",
 ) -> JobEnvelope:
     """Admit, register, and dispatch one batch job as a single unit.
 
@@ -338,7 +347,7 @@ def admit_and_dispatch(
     # delete this job" (audit item delete-no-ownership).
     owner_token = secrets.token_urlsafe(32)
     redis_store.create_job(
-        job_id, len(molecules), fmt, ip, owner_token, best_effort, verify
+        job_id, len(molecules), fmt, ip, owner_token, best_effort, verify, kind
     )
     try:
         check_and_register_job(ip, job_id)
@@ -404,7 +413,7 @@ async def parse_preview(
     SDF), so `molecule_count` stays honest without paying for a full parse.
     """
     check_fast_allowed(client_ip(request))
-    data, _, _ = await _read_input(request, file)
+    data, _, _, _ = await _read_input(request, file)
     fmt = sniff(data)
     try:
         sample_molecules, total = parse_preview_sample(data, fmt, PREVIEW_SAMPLE)
@@ -449,6 +458,8 @@ async def create_job(
     # turned verification off on Home must not have it silently turned back on
     # by choosing the Upload tab.
     verify: bool = Form(default=True),
+    # "check": a smiles,name CSV whose rows get a name-check verdict.
+    kind: Literal["name", "check"] = Form(default="name"),
 ) -> JobEnvelope:
     settings = get_settings()
     ip = client_ip(request)
@@ -493,17 +504,19 @@ async def create_job(
     # TOCTOU-safe registration now, since this already ran.
     check_job_allowed(ip)
 
-    data, best_effort, verify = await _read_input(request, file, best_effort, verify)
+    data, best_effort, verify, kind = await _read_input(
+        request, file, best_effort, verify, kind
+    )
     # run_in_threadpool: create_job is `async def`, so calling the blocking
     # parse directly would hold the asyncio event loop for its whole duration
     # -- nothing else on that loop runs, including uvicorn reading other
     # request bodies. The wait is now I/O (a worker's answer) rather than
     # GIL-held RDKit, but blocking the loop is just as total either way.
     fmt, molecules = await run_in_threadpool(
-        _parse_or_400, data, settings.MAX_BATCH_SIZE
+        _parse_or_400, data, settings.MAX_BATCH_SIZE, kind
     )
 
-    return admit_and_dispatch(ip, molecules, fmt.value, best_effort, verify)
+    return admit_and_dispatch(ip, molecules, fmt.value, best_effort, verify, kind)
 
 
 # A job in one of these has stopped doing work and can be deleted. "cancelled"
@@ -533,6 +546,7 @@ def _status_response(
         created_at=int(meta["created"]),
         expires_at=int(meta["expires"]),
         **redis_store.job_switches(meta),
+        kind=meta.get("kind", "name"),
     )
 
 

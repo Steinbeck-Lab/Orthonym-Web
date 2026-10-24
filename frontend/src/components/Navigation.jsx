@@ -55,6 +55,8 @@ const NAV_LINKS = [
   // page's own Input tabs (name / SMILES / draw) are what used to be separate
   // routes. See spec section 12.
   { to: '/explain', label: 'Explain' },
+  // Does a claimed name describe a structure? A verdict on structure only.
+  { to: '/check', label: 'Check' },
   // Health Check folded into /about as a compact board (Task 18) rather than
   // its own page; /health now redirects there (App.jsx), so the nav no
   // longer needs a separate item. The sliding pill below is measured off the

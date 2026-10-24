@@ -312,3 +312,62 @@ def test_count_sdf_does_not_treat_an_indented_terminator_as_one():
         parse(data, InputFormat.SDF, 100)
     )
     assert count_molecules(data, InputFormat.SDF) == 1
+
+
+# --- name-check pairs (kind=check jobs) -----------------------------------
+
+from app.inputs import parse_check_csv  # noqa: E402
+
+
+def test_a_pair_csv_gives_each_row_its_claimed_name():
+    rows = parse_check_csv(b"SMILES, Name ,id\nCCO,ethanol,a\nCO,methanol,b\nc1ccccc1,benzene,\n", 100)
+    assert [(r.smiles, r.claimed_name, r.input_id) for r in rows] == [
+        ("CCO", "ethanol", "a"),
+        ("CO", "methanol", "b"),
+        ("c1ccccc1", "benzene", None),
+    ]
+
+
+def test_a_pair_csv_needs_a_name_column():
+    with pytest.raises(ValueError, match="name"):
+        parse_check_csv(b"smiles,id\nCCO,a\n", 100)
+
+
+def test_a_row_with_no_name_is_an_error_row():
+    (row,) = parse_check_csv(b"smiles,name\nCCO,\n", 100)
+    assert row.smiles is None
+    assert row.error == "No name to check"
+
+
+def test_a_pair_with_an_unreadable_smiles_keeps_its_name():
+    (row,) = parse_check_csv(b"smiles,name\nC1CC,ethanol\n", 100)
+    assert row.claimed_name == "ethanol"
+    assert row.error
+
+
+def test_a_pair_csv_has_the_same_cap():
+    with pytest.raises(TooManyMolecules):
+        parse_check_csv(b"smiles,name\n" + b"CCO,ethanol\n" * 3, 2)
+
+
+def test_the_wire_form_carries_the_claimed_name():
+    from app.jobs_api import prepared_payload
+
+    (item,) = prepared_payload(parse_check_csv(b"smiles,name\nCCO,ethanol\n", 10))
+    assert item["claimed_name"] == "ethanol"
+
+
+def test_an_over_long_name_is_an_error_row_not_an_opsin_call():
+    # The single check caps a name at 2000 characters (NameCheckRequest);
+    # the batch must not let a longer one reach OPSIN.
+    (row,) = parse_check_csv(b"smiles,name\nCCO," + b"x" * 2001 + b"\n", 10)
+    assert row.smiles is None
+    assert row.claimed_name is None
+    assert "2000" in row.error
+
+
+def test_a_name_on_two_lines_is_an_error_row():
+    (row,) = parse_check_csv(b'smiles,name\nCCO,"ethanol\nmethanol"\n', 10)
+    assert row.smiles is None
+    assert row.error == "A name must be one line"
+    assert row.claimed_name == "ethanol\nmethanol"

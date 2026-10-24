@@ -1,0 +1,177 @@
+/* ============================================================
+   Orthonym — Check a name (/check)
+
+   The `.workspace` shell /from-name uses: an input card and a result card.
+   The verdict is plain ink. It is about structure only and must never look
+   like a confidence tier, so it takes no tier hue and no tier rule; the
+   engine's own tier sits below it, in Home's tile.
+   ============================================================ */
+
+.check-panel form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-lg);
+}
+
+.check-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-md);
+}
+
+.check-panel__note {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.check-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-lg);
+}
+
+/* A flex child's minimum width is its content: without this the batch table
+   widens the column past a phone screen instead of scrolling in its own box. */
+.check-results > * {
+  min-width: 0;
+}
+
+.check-results__empty {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--t-body-md);
+  line-height: 1.55;
+  color: var(--body);
+}
+
+.check-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-sm);
+}
+
+.check-verdict__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-xs);
+}
+
+.check-verdict__text {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--t-display-md);
+  line-height: 1.15;
+  letter-spacing: var(--track-display-md);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.check-verdict__how {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
+  color: var(--body);
+}
+
+/* Side by side when there is room, stacked on a phone. */
+.check-verdict__figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: var(--s-md);
+}
+
+.check-figure {
+  display: grid;
+  gap: var(--s-xs);
+  margin: 0;
+  padding: var(--s-md);
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  background: var(--card);
+}
+
+.check-figure img {
+  width: 100%;
+  height: 220px;
+  object-fit: contain;
+}
+
+.check-figure figcaption {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.check-results__engine {
+  margin: var(--s-md) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  font-weight: 400;
+  letter-spacing: var(--track-caption);
+  color: var(--muted);
+}
+
+/* Two choices, one pair or a file: a plain segmented pair inside the card,
+   ink when chosen. Radios, so arrow keys move and the choice is announced. */
+.check-mode {
+  display: inline-flex;
+  gap: 4px;
+  margin-bottom: var(--s-lg);
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  border: 1px solid var(--hairline);
+}
+
+.check-mode__opt {
+  position: relative;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--body);
+  cursor: pointer;
+}
+
+.check-mode__opt input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.check-mode__opt--on {
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(17, 18, 20, 0.08);
+}
+
+.check-mode__opt:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.check-panel__help {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.5;
+  color: var(--body);
+}
+
+/* The batch panel brings its own card: the cell gives up its chrome rather
+   than nest one card in another. */
+.workspace > .check-results--job {
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+}

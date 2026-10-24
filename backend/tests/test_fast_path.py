@@ -238,9 +238,9 @@ def test_jobs_checks_the_job_cap_before_parsing(redis_client, monkeypatch):
         order.append("check_job_allowed")
         return real_check(ip)
 
-    def spy_parse(data, max_molecules):
+    def spy_parse(data, max_molecules, kind="name"):
         order.append("_parse_or_400")
-        return real_parse(data, max_molecules)
+        return real_parse(data, max_molecules, kind)
 
     monkeypatch.setattr(jobs_api_module, "check_job_allowed", spy_check)
     monkeypatch.setattr(jobs_api_module, "_parse_or_400", spy_parse)

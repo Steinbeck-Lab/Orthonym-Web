@@ -30,12 +30,15 @@ from .schemas import (
     ExplainResponse,
     HealthResponse,
     IupacToSmilesResponse,
+    NameCheckRequest,
+    NameCheckResponse,
     JobEnvelope,
     ResultItem,
     TranslateRequest,
     TranslateResponse,
 )
-from .tasks import explain_iupac_name, explain_smiles, name_to_smiles, translate_fast
+from .name_check import one_line
+from .tasks import check_name, explain_iupac_name, explain_smiles, name_to_smiles, translate_fast
 
 # Verified live against the real Orthonym engine -- do not invent
 # different examples.
@@ -306,6 +309,42 @@ def iupac_to_smiles(
     except CeleryTimeoutError as exc:
         raise _timeout_504(settings) from exc
     return IupacToSmilesResponse(**result)
+
+
+@app.post("/api/name-check", response_model=NameCheckResponse)
+def name_check(request: Request, body: NameCheckRequest) -> NameCheckResponse:
+    """Does a claimed name describe a structure? POST, so neither the name nor
+    the SMILES reaches the access log as a query string."""
+    settings = get_settings()
+    check_fast_allowed(client_ip(request))
+    require_a_live_jvm()
+
+    # The same gate every naming path takes: a length cap before RDKit, and
+    # the parser's own message for a SMILES it cannot read.
+    smiles = body.smiles.strip()
+    if not smiles or any(ch.isspace() for ch in smiles):
+        # _canonicalize reads a LIST: a line break would make two molecules,
+        # a space an ID, and all-blank none at all.
+        raise HTTPException(status_code=400, detail="Enter one SMILES, with no spaces in it.")
+    if not one_line(body.name):
+        raise HTTPException(status_code=400, detail="A name must be one line.")
+    (molecule,) = _canonicalize([smiles], 1)
+    if molecule.smiles is None:
+        raise HTTPException(status_code=400, detail=molecule.error)
+    async_result = check_name.apply_async(
+        args=[molecule.smiles, body.name], queue="fast"
+    )
+    try:
+        result = async_result.get(timeout=settings.FAST_PATH_TIMEOUT)
+    except CeleryTimeoutError as exc:
+        raise _timeout_504(settings) from exc
+    # As /api/translate does: the backend would keep this result, the
+    # visitor's SMILES and name included, for JOB_RESULT_TTL_SECONDS.
+    try:
+        async_result.forget()
+    except Exception:  # noqa: BLE001 - cleanup must not fail a served request
+        logger.debug("Could not forget name-check result", exc_info=True)
+    return NameCheckResponse(**result)
 
 
 @app.get("/api/explain", response_model=ExplainResponse)

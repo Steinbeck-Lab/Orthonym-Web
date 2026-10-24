@@ -7,6 +7,7 @@ import RouteMeta from './components/RouteMeta'
 import Home from './pages/Home'
 import IupacToSmiles from './pages/IupacToSmiles'
 import Explain from './pages/Explain'
+import Check from './pages/Check'
 import About from './pages/About'
 import Imprint from './pages/Imprint'
 import Privacy from './pages/Privacy'
@@ -92,6 +93,7 @@ function App() {
           <Route path="/teach" element={<Navigate to="/explain?input=draw" replace />} />
           <Route path="/from-name" element={<IupacToSmiles />} />
           <Route path="/explain" element={<Explain />} />
+          <Route path="/check" element={<Check />} />
           {/* Health Check folded into About as a compact status board
               (Task 18, owner instruction: "move the health check to about
               and keep it as a message board rather than a whole page").
