@@ -209,6 +209,66 @@ def test_an_unknown_sort_field_is_a_422_not_a_silent_no_op(redis_client):
     assert response.status_code == 422, response.text
 
 
+_SIX_TIERS = [
+    {"index": 0, "input": "a", "status": "pin", "name": "a"},
+    {"index": 1, "input": "b", "status": "abstain"},
+    {"index": 2, "input": "c", "status": "pin", "name": "c"},
+    {"index": 3, "input": "d", "status": "error"},
+    {"index": 4, "input": "e", "status": "fallback", "name": "e"},
+    {"index": 5, "input": "f", "status": "abstain"},
+]
+
+
+def test_results_status_filter_returns_only_those_tiers_across_the_whole_job(redis_client):
+    job_id = _submit("\n".join(["CCO"] * 6))["job_id"]
+    _rows_with_tiers(job_id, _SIX_TIERS)
+    body = client.get(
+        f"/api/jobs/{job_id}/results",
+        params=[("status", "abstain"), ("status", "error")],
+    ).json()
+    assert [r["index"] for r in body["rows"]] == [1, 3, 5]
+    assert body["matched"] == 3
+    assert body["retrievable"] == 6
+
+
+def test_results_status_filter_pages_after_filtering(redis_client):
+    # Page 2 of a filtered view is page 2 of the MATCHES, not of the job.
+    job_id = _submit("\n".join(["CCO"] * 6))["job_id"]
+    _rows_with_tiers(job_id, _SIX_TIERS)
+    body = client.get(
+        f"/api/jobs/{job_id}/results",
+        params=[("status", "pin"), ("status", "abstain"), ("offset", 2), ("limit", 2)],
+    ).json()
+    assert [r["index"] for r in body["rows"]] == [2, 5]
+    assert body["matched"] == 4
+
+
+def test_results_without_a_filter_report_matched_equal_to_retrievable(redis_client):
+    job_id = _submit("\n".join(["CCO"] * 6))["job_id"]
+    _rows_with_tiers(job_id, _SIX_TIERS)
+    body = client.get(f"/api/jobs/{job_id}/results").json()
+    assert body["matched"] == body["retrievable"] == 6
+
+
+def test_results_filter_matching_nothing_is_an_empty_page_not_an_error(redis_client):
+    job_id = _submit("\n".join(["CCO"] * 6))["job_id"]
+    _rows_with_tiers(job_id, _SIX_TIERS)
+    response = client.get(
+        f"/api/jobs/{job_id}/results", params={"status": "best_effort"}
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["rows"] == []
+    assert response.json()["matched"] == 0
+
+
+def test_results_unknown_status_is_a_422(redis_client):
+    job_id = _submit("\n".join(["CCO", "CCC"]))["job_id"]
+    response = client.get(
+        f"/api/jobs/{job_id}/results", params={"status": "nonsense"}
+    )
+    assert response.status_code == 422, response.text
+
+
 def test_chunk_order_is_preserved_across_multiple_chunks(redis_client, monkeypatch):
     from app.core.config import get_settings
 

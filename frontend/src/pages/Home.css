@@ -1780,6 +1780,64 @@
   color: var(--muted);
 }
 
+/* A finished job's counts filter the table. The tier's rule stays on the
+   <li> underneath, so the toggle only adds a ground: grey on hover, ink-ringed
+   when pressed. No crimson -- the accent never touches a tier. */
+.batch__tally-toggle,
+.batch__tally-clear {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.6ch;
+  margin: -3px -6px 0;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    background-color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.batch__tally-toggle:hover,
+.batch__tally-clear:hover {
+  background: var(--surface-soft);
+}
+
+.batch__tally-toggle[aria-pressed='true'] {
+  background: var(--surface-card);
+  border-color: var(--ink);
+}
+
+.batch__tally-toggle[aria-pressed='true'] .batch__tally-label {
+  color: var(--ink);
+}
+
+.batch__tally-toggle:focus-visible,
+.batch__tally-clear:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.batch__tally-clear {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  color: var(--body-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .batch__tally-toggle,
+  .batch__tally-clear {
+    transition: none;
+  }
+}
+
 .batch__error,
 .batch__gone {
   margin: 0;
