@@ -1982,6 +1982,17 @@
   color: var(--muted);
 }
 
+/* Why the engine declined (lib/limitReasons.js), on its own line under the
+   label: the body face, because it is a sentence, not a code. */
+.batch__reason {
+  display: block;
+  margin-top: 2px;
+  max-width: 60ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.45;
+}
+
 .batch__name--pin,
 .batch__tally-item--pin {
   border-bottom: 3px double var(--ink);

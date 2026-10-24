@@ -2735,6 +2735,17 @@ input.field__control {
   color: var(--muted);
 }
 
+/* Why the engine declined (lib/limitReasons.js), under the abstain label. */
+.results-cell__reason {
+  display: block;
+  margin-top: var(--s-xxs);
+  max-width: 44ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.45;
+  color: var(--muted);
+}
+
 /* The quiet mono pill two result actions share, defined once: the batch
    table's Draw (a <button>, Home.css adds what a button needs) and "Report
    SMILES on GitHub" (a link, ReportLink.jsx). The same quiet voice as the

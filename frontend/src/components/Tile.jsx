@@ -1,3 +1,4 @@
+import { limitReasonFor } from '../lib/limitReasons'
 import { NAMED_STATUSES, STATE_CLASS, VERIFIED_STATUSES, isMismatchHere, isUncheckedHere, stateLabelFor } from '../lib/statuses'
 import useDepiction from '../lib/useDepiction'
 import CopyButton from './CopyButton'
@@ -189,6 +190,11 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
                 ? 'OPSIN read this name back as the different structure shown above.'
                 : 'Built partly or wholly by the general engine, not the strict PIN rules.'}
           </span>
+        )}
+        {/* Why the engine declined (lib/limitReasons.js). Abstain only: an
+            error row's own message already says what went wrong. */}
+        {!isPending && status === 'abstain' && limitReasonFor(row) && (
+          <span className="tile__origin">{limitReasonFor(row)}</span>
         )}
         {!isPending && status === 'abstain' && formula && (
           <span className="tile__formula">

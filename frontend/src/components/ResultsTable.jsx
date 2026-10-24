@@ -1,6 +1,7 @@
 import { NAMED_STATUSES, STATE_CLASS, stateLabelFor } from '../lib/statuses'
 import useDepiction from '../lib/useDepiction'
 import CopyButton from './CopyButton'
+import { limitReasonFor } from '../lib/limitReasons'
 import ReportLink from './ReportLink'
 import ChemName from './Typeset'
 import TierLamp from './TierLamp'
@@ -66,6 +67,9 @@ function ResultRow({ row, index }) {
             <span className="results-cell__none">
               {status === 'error' ? error || 'Could not parse this SMILES string' : stateLabelFor(row)}
             </span>
+          )}
+          {status === 'abstain' && limitReasonFor(row) && (
+            <span className="results-cell__reason">{limitReasonFor(row)}</span>
           )}
           <ReportLink row={row} where="Home" settings={row.settings} />
         </td>

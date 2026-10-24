@@ -18,6 +18,7 @@ import {
   stateLabel,
 } from '../lib/batchJob'
 import { outcomeMessage, tierTally } from '../lib/batchTally'
+import { limitReasonFor } from '../lib/limitReasons'
 import { forgetJob, rememberJob } from '../lib/jobStore'
 import { STATE_CLASS, VERIFIED_STATUSES, stateLabelFor } from '../lib/statuses'
 import CopyButton from './CopyButton'
@@ -188,6 +189,9 @@ function NameCell({ row }) {
             <ChemFormula formula={row.formula} />
           </>
         ) : null}
+        {row.status === 'abstain' && limitReasonFor(row) && (
+          <span className="batch__reason">{limitReasonFor(row)}</span>
+        )}
       </span>
     </div>
   )
