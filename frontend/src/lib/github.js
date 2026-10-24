@@ -11,8 +11,8 @@
 // was correctly switched off for it. It pointed at the naming ENGINE,
 // whose repository was private then and answered 404 to an anonymous
 // visitor -- a dead link in the header of every route. It points at
-// Orthonym-Web, this web app; About and Terms link the engine
-// (github.com/Steinbeck-Lab/Orthonym) where they credit it.
+// Orthonym-Web, this web app. The engine is public now and has its own header
+// link, ENGINE_URL below; About and Terms also link it where they credit it.
 //
 // Still overridable: a fork or a private deployment sets VITE_GITHUB_URL and
 // gets its own source. The literal `none` ships no link and no separator.
@@ -23,6 +23,10 @@
 // which is exactly the bug this line replaced. `||` treats empty as absent,
 // and `none` is then the explicit way to say "off".
 const GITHUB_URL_DEFAULT = 'https://github.com/Steinbeck-Lab/Orthonym-Web'
+
+/** The naming engine's repository. Not overridable: every deployment of this
+ *  app runs this engine. */
+export const ENGINE_URL = 'https://github.com/Steinbeck-Lab/Orthonym'
 
 /** The build arg, resolved. Exported so a test can reach '' and 'none',
  *  which node --test (no import.meta.env) never produces on its own. */
