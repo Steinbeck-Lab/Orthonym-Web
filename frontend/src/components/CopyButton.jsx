@@ -10,7 +10,7 @@ import Icon from './Icon'
  * only thing that changes, and it is aria-hidden, so a screen-reader user is
  * not told "copied" on a control they did not just operate.
  */
-export default function CopyButton({ text, label = 'Copy name' }) {
+export default function CopyButton({ text, label = 'Copy name', icon = 'copy', className = '' }) {
   const [copied, setCopied] = useState(false)
   const timer = useRef(null)
 
@@ -31,12 +31,12 @@ export default function CopyButton({ text, label = 'Copy name' }) {
   return (
     <button
       type="button"
-      className={`copy-btn${copied ? ' copy-btn--done' : ''}`}
+      className={`copy-btn ${className}${copied ? ' copy-btn--done' : ''}`}
       onClick={copy}
       aria-label={label}
       title={label}
     >
-      <Icon name={copied ? 'check' : 'copy'} size={14} />
+      <Icon name={copied ? 'check' : icon} size={14} />
     </button>
   )
 }

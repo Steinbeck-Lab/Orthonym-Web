@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { fetchStructureFromName } from '../lib/api'
 import { MAX_NAMES, parseNameLines, convertNames } from '../lib/nameBatch'
 import { rowsToSdf, downloadText } from '../lib/molExport'
+import useShareLink from '../lib/useShareLink'
+import ShareButton from '../components/ShareButton'
 import './IupacToSmiles.css'
 import Icon from '../components/Icon'
 import CopyButton from '../components/CopyButton'
@@ -42,6 +44,13 @@ function IupacToSmiles() {
   // `nameText` here would still see the value from BEFORE the click. Passing
   // the text explicitly is what lets the chip "submit through this same
   // path" without a second lookup function.
+  // A share link is converted on arrival.
+  useShareLink(({ name }) => {
+    if (!name) return
+    setNameText(name)
+    convert(name)
+  })
+
   async function convert(text) {
     if (phase === 'converting') return
 
@@ -309,6 +318,7 @@ function SingleResult({ row }) {
         <span className="from-name-patch__state-label">
           {warned ? 'Parsed with a warning' : 'Parsed successfully'}
         </span>
+        <ShareButton fields={{ name: row.name }} />
       </div>
       <OpsinWarnings warnings={d.warnings} />
       {/* Two columns: the picture and the strings it stands for. They are two
