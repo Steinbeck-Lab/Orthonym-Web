@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { GITHUB_URL, NEW_ISSUE_URL } from '../lib/github'
+import { ENGINE_URL, GITHUB_URL, NEW_ISSUE_URL } from '../lib/github'
 
 // The site header: ONE NOTCH ISLAND hanging off the top edge of the window,
 // centred, welded to the edge by a pair of concave fillets, so it reads as
@@ -247,12 +247,25 @@ function Navigation() {
             ))}
           </nav>
 
-          {/* The rule is the link's separator, so it goes when the link
-              does -- otherwise the notch keeps a divider with nothing
-              after it. */}
+          <span className="notch__rule" aria-hidden="true" />
+
+          {/* Two repositories, two pills: the engine that does the naming
+              and this web app. Both labels are needed, because one bare
+              "GitHub" cannot say which one it opens. The engine link is
+              fixed: a fork with VITE_GITHUB_URL=none still runs this engine. */}
+          <a
+            className="site-head__ext"
+            href={ENGINE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="The Orthonym engine's source on GitHub (opens in a new tab)"
+          >
+            <GitHubMark />
+            Engine
+          </a>
+
           {GITHUB_URL && (
             <>
-              <span className="notch__rule" aria-hidden="true" />
 
               {/* The word and the mark, nothing else -- but wearing the
                   chrome adapted from a rainbow-bordered button reference:
@@ -273,13 +286,10 @@ function Navigation() {
                 href={GITHUB_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                /* "this site's source", not just "GitHub": a bare "GitHub"
-                   beside a naming engine invites the reading that the ENGINE
-                   is open, which it is not. */
-                aria-label="This site's source on GitHub (opens in a new tab)"
+                aria-label="This web app's source on GitHub (opens in a new tab)"
               >
                 <GitHubMark />
-                GitHub
+                Web app
               </a>
             </>
           )}
@@ -299,20 +309,28 @@ function Navigation() {
                 {link.label}
               </NavLink>
             ))}
+            <span className="site-nav__mobile-sep" aria-hidden="true" />
+            <a
+              className="site-nav__mlink"
+              href={ENGINE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="The Orthonym engine's source on GitHub (opens in a new tab)"
+            >
+              <GitHubMark />
+              Engine
+            </a>
             {GITHUB_URL && (
-              <>
-                <span className="site-nav__mobile-sep" aria-hidden="true" />
-                <a
-                  className="site-nav__mlink"
-                  href={GITHUB_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="This site's source on GitHub (opens in a new tab)"
-                >
-                  <GitHubMark />
-                  GitHub
-                </a>
-              </>
+              <a
+                className="site-nav__mlink"
+                href={GITHUB_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="This web app's source on GitHub (opens in a new tab)"
+              >
+                <GitHubMark />
+                Web app
+              </a>
             )}
             {/* The issue tab's link, for the widths where the tab itself is
                 hidden (IssueBuddy.jsx): below 960px, which is exactly when
