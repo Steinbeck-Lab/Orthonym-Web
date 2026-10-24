@@ -49,6 +49,6 @@ test('the size and PIN sentences claim no more than the engine does', () => {
 test('a round trip that read back another molecule has its own reason', () => {
   assert.equal(
     limitReasonFor({ status: 'abstain', limit_code: 'roundtrip_mismatch' }),
-    'OPSIN read this name back as a different structure, so it is not shown.'
+    'OPSIN’s reading of this name did not match the structure, so it is not shown.'
   )
 })

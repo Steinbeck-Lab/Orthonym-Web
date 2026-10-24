@@ -1380,6 +1380,12 @@
 
 
 /* -------------------- cite -------------------- */
+/* /about#cite is a shared address: land the heading below the fixed header
+   notch, not under it. */
+.cite {
+  scroll-margin-top: calc(var(--notch-h-nav) + var(--s-lg));
+}
+
 .cite {
   padding: clamp(var(--s-lg), 3.5vw, var(--s-xl));
 }

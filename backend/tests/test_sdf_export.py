@@ -91,3 +91,10 @@ def test_a_value_cannot_fake_a_record_end_or_a_tag(tmp_path):
     assert mols[0].GetProp("ORTHONYM_NAME") == "ethanol"
     assert mols[0].GetProp("INPUT").strip() == "$$$$"
     assert text.count("\n$$$$\n") == 2
+
+
+def test_spaces_inside_a_value_are_kept():
+    # Only line breaks are folded; the user's own spacing is data.
+    record = sdf_record(_row(input="M  END", error="a\tb  c"))
+    assert "> <INPUT>\nM  END\n" in record
+    assert "> <ERROR>\na\tb  c\n" in record
