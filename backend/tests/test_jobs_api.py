@@ -1643,3 +1643,50 @@ def test_iter_all_rows_pages_through_every_row(redis_client, job_id):
     rows = list(redis_store.iter_all_rows(job_id, page=2))
 
     assert [r["index"] for r in rows] == [0, 1, 2, 3, 4]
+
+
+def test_a_batch_row_carries_the_engine_tier(redis_client):
+    # The SDF export writes the engine's tier; the row must store it.
+    job_id = _submit("CCO\n")["job_id"]
+    row = client.get(f"/api/jobs/{job_id}/results").json()["rows"][0]
+    assert row["tier"] == "pin_verified"
+
+
+def test_sdf_is_refused_while_a_job_is_still_running(redis_client, job_id):
+    redis_store.create_job(job_id, total=5, fmt="smiles_list", client_ip="::1")
+    redis_store.set_job_status(job_id, "running")
+    response = client.get(f"/api/jobs/{job_id}/results.sdf")
+    assert response.status_code == 409
+    assert "running" in response.json()["detail"]
+
+
+def test_the_sdf_has_one_record_per_row(redis_client, job_id):
+    from app.schemas import BatchRow
+
+    rows = [
+        BatchRow(index=0, input="CCO", smiles="CCO", name="ethanol", status="pin").model_dump(),
+        BatchRow(index=1, input="C1CC", status="error", error="Could not parse").model_dump(),
+        BatchRow(index=2, input="c1ccccc1", smiles="c1ccccc1", name="benzene", status="pin").model_dump(),
+    ]
+    redis_store.create_job(job_id, total=3, fmt="smiles_list", client_ip="::1")
+    redis_store.write_chunk(job_id, 0, rows)
+    redis_store.assemble_rows(job_id, n_chunks=1)
+    redis_store.set_job_status(job_id, "done")
+
+    response = client.get(f"/api/jobs/{job_id}/results.sdf")
+    assert response.status_code == 200
+    assert response.text.count("$$$$") == 3
+    assert response.headers["content-disposition"].endswith('.sdf"')
+    assert response.headers["content-type"].startswith("chemical/x-mdl-sdfile")
+
+
+def test_a_failed_jobs_sdf_is_served_but_labelled(redis_client, job_id):
+    redis_store.create_job(job_id, total=5, fmt="smiles_list", client_ip="::1")
+    redis_store.write_chunk(job_id, 0, [{"index": 0, "input": "CCO"}])
+    redis_store.assemble_rows(job_id, n_chunks=1)
+    redis_store.set_job_status(job_id, "failed")
+
+    response = client.get(f"/api/jobs/{job_id}/results.sdf")
+    assert response.status_code == 200
+    assert response.headers["X-Orthonym-Job-Status"] == "failed"
+    assert "-partial.sdf" in response.headers["content-disposition"]

@@ -101,7 +101,7 @@ from orthonym.validation.opsin_roundtrip import opsin_parse
 
 from . import cdk_bridge
 from .depiction import structure_svg_data_uri
-from .schemas import VERIFIED_STATUSES, WITHHELD_UNCHECKED, ResultItem
+from .schemas import ROUNDTRIP_MISMATCH, VERIFIED_STATUSES, WITHHELD_UNCHECKED, ResultItem
 
 # Constructed once per process and reused across all requests. This is
 # REQUIRED for both correctness (general_fallback=True is what enables the
@@ -394,10 +394,11 @@ def translate_one(
         #
         # A round trip that RAN and read back a different molecule
         # (roundtrip_match False) lands here too: the label is just as
-        # unbacked. That abstain is not "withheld_unchecked" -- the check ran
-        # and failed, which is an engine defect worth reporting.
+        # unbacked. That abstain is "roundtrip_mismatch", not
+        # "withheld_unchecked" -- the check ran and failed, which is an engine
+        # defect worth reporting.
         if not best_effort:
-            withheld = WITHHELD_UNCHECKED if roundtrip_smiles is None else None
+            withheld = WITHHELD_UNCHECKED if roundtrip_smiles is None else ROUNDTRIP_MISMATCH
             return _abstain_item(smiles, tier, row, limit_code=withheld)
         # STATUS only. `tier` stays the engine's own verdict on how the name
         # was built: this app's check not running does not change it. (This

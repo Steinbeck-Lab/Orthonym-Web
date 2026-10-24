@@ -45,3 +45,10 @@ test('the size and PIN sentences claim no more than the engine does', () => {
     'The engine built a name, but not a verified preferred IUPAC name, so it is not shown.'
   )
 })
+
+test('a round trip that read back another molecule has its own reason', () => {
+  assert.equal(
+    limitReasonFor({ status: 'abstain', limit_code: 'roundtrip_mismatch' }),
+    'OPSIN’s reading of this name did not match the structure, so it is not shown.'
+  )
+})

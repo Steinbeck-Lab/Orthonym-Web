@@ -36,6 +36,8 @@ VERIFIED_STATUSES = frozenset({"pin", "fallback"})
 ENGINE_ERROR = "engine_error"
 TIMEOUT = "timeout"
 WITHHELD_UNCHECKED = "withheld_unchecked"
+# best-effort off, and the round trip RAN and read back another molecule.
+ROUNDTRIP_MISMATCH = "roundtrip_mismatch"
 # The Orthonym engine's own tier labels, from Orthonym.name_tiered's docstring. The
 # earlier T1/T3/T4/T5 codes were replaced upstream by these names; there is
 # no T-code anywhere in the engine any more. `pin_unverified` is a name in PIN
@@ -224,6 +226,9 @@ class BatchRow(BaseModel):
     smiles: Optional[str] = None
     name: Optional[str] = None
     status: Status
+    # The engine's own tier, as on ResultItem. None on a row from a job made
+    # before rows stored it -- an export writes it empty, never guessed.
+    tier: Optional[Tier] = None
     roundtrip_smiles: Optional[str] = None
     roundtrip_match: Optional[bool] = None
     formula: Optional[str] = None

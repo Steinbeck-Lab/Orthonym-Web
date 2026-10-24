@@ -53,6 +53,7 @@ from app.ratelimit import (
     client_ip,
     release_job,
 )
+from app.sdf_export import sdf_record
 from app.schemas import (
     BatchRow,
     DepictResponse,
@@ -701,9 +702,8 @@ def _csv_safe(value):
     return value
 
 
-@router.get("/api/jobs/{job_id}/results.csv")
-def job_results_csv(request: Request, job_id: str) -> StreamingResponse:
-    """The finished job as CSV. Only for a job that has actually finished.
+def _finished_status(job_id: str) -> str:
+    """The status of a job whose results may be downloaded: done or failed.
 
     A mid-run download would hand back a header-only or half-length file
     that is byte-indistinguishable from a complete one, and this is the
@@ -717,7 +717,6 @@ def job_results_csv(request: Request, job_id: str) -> StreamingResponse:
     X-Orthonym-Job-Status machinery rather than refused outright (final
     review report, C4).
     """
-    check_download_allowed(client_ip(request))
     meta = _require_complete_meta(job_id)
     status = _actual_status(job_id, meta)
     if status not in ("done", "failed"):
@@ -728,7 +727,28 @@ def job_results_csv(request: Request, job_id: str) -> StreamingResponse:
                 "Poll the job until it reports done."
             ),
         )
+    return status
+
+
+def _download(job_id: str, status: str, body, media_type: str, ext: str) -> StreamingResponse:
     suffix = "-partial" if status == "failed" else ""
+    return StreamingResponse(
+        body,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="orthonym-{job_id}{suffix}.{ext}"'
+            ),
+            "X-Orthonym-Job-Status": status,
+        },
+    )
+
+
+@router.get("/api/jobs/{job_id}/results.csv")
+def job_results_csv(request: Request, job_id: str) -> StreamingResponse:
+    """The finished job as CSV. Only for a job that has actually finished."""
+    check_download_allowed(client_ip(request))
+    status = _finished_status(job_id)
 
     def generate():
         buffer = io.StringIO()
@@ -744,16 +764,16 @@ def job_results_csv(request: Request, job_id: str) -> StreamingResponse:
             writer.writerow({k: _csv_safe(v) for k, v in row.items()})
             yield buffer.getvalue()
 
-    return StreamingResponse(
-        generate(),
-        media_type="text/csv",
-        headers={
-            "Content-Disposition": (
-                f'attachment; filename="orthonym-{job_id}{suffix}.csv"'
-            ),
-            "X-Orthonym-Job-Status": status,
-        },
-    )
+    return _download(job_id, status, generate(), "text/csv", "csv")
+
+
+@router.get("/api/jobs/{job_id}/results.sdf")
+def job_results_sdf(request: Request, job_id: str) -> StreamingResponse:
+    """The finished job as SDF, one record per row. Same rules as the CSV."""
+    check_download_allowed(client_ip(request))
+    status = _finished_status(job_id)
+    body = (sdf_record(row) for row in redis_store.iter_all_rows(job_id))
+    return _download(job_id, status, body, "chemical/x-mdl-sdfile", "sdf")
 
 
 @router.post("/api/jobs/{job_id}/cancel", response_model=JobStatusResponse)

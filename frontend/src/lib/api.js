@@ -352,6 +352,12 @@ export function jobResultsCsvUrl(jobId) {
   return `/api/jobs/${encodeURIComponent(jobId)}/results.csv`
 }
 
+/** The same finished job as SDF: one record per row, structure rebuilt from
+ *  its SMILES, the name and tier as SD tags. */
+export function jobResultsSdfUrl(jobId) {
+  return `/api/jobs/${encodeURIComponent(jobId)}/results.sdf`
+}
+
 /**
  * Stops a running job. Cooperative on the server: it marks the job cancelled
  * and the workers decline the next chunk, so molecules already in flight

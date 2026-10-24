@@ -24,6 +24,8 @@ test('an abstain and an engine failure are reportable; a bad SMILES is not', () 
   assert.equal(isReportable({ smiles: 'O=[U](=O)=O', status: 'abstain', limit_code: 'UNSUPPORTED_ELEMENT' }), true)
   assert.equal(isReportable({ smiles: 'CCO', status: 'error', limit_code: 'engine_error' }), true)
   assert.equal(isReportable({ smiles: 'CCO', status: 'error', limit_code: 'timeout' }), true)
+  // A failed round trip is an engine defect: worth a report.
+  assert.equal(isReportable({ smiles: 'CCO', status: 'abstain', limit_code: 'roundtrip_mismatch' }), true)
   // The visitor's typo: no limit_code. Reporting it would file noise.
   assert.equal(isReportable({ smiles: 'C1CC', status: 'error', limit_code: null, error: 'Could not parse this SMILES string' }), false)
   // A name was shipped: not "could not name".
