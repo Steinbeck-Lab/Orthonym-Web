@@ -9,6 +9,7 @@ import {
   Copy,
   Download,
   ExternalLink,
+  Link,
   Lightbulb,
   PenLine,
   Plus,
@@ -45,6 +46,7 @@ const ICONS = {
   translate: ArrowRightLeft, // SMILES becomes a name, and back again
   check: Check,
   copy: Copy,
+  link: Link,
   download: Download,
   upload: Upload,
   stop: Square, // a stopped thing is a shape, not a gesture

@@ -1,6 +1,7 @@
 import { NAMED_STATUSES, STATE_CLASS, stateLabelFor } from '../lib/statuses'
 import useDepiction from '../lib/useDepiction'
 import CopyButton from './CopyButton'
+import ShareButton from './ShareButton'
 import { limitReasonFor } from '../lib/limitReasons'
 import ReportLink from './ReportLink'
 import ChemName from './Typeset'
@@ -63,6 +64,7 @@ function ResultRow({ row, index }) {
                 <ChemName name={name} />
               </span>
               <CopyButton text={name} />
+              <ShareButton fields={{ smiles }} />
             </span>
           ) : (
             <span className="results-cell__none">

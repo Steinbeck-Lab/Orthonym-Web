@@ -111,3 +111,22 @@ export function expiryLabel(expiresAtSeconds, nowSeconds) {
 export function needsJob(moleculeCount, fastPathMax) {
   return Number.isFinite(moleculeCount) && moleculeCount > fastPathMax
 }
+
+/** Tags each tracked request's outcome with whether a newer one has started
+ *  since. A filtered or sorted page reads the whole job on the server, so
+ *  replies to quick clicks can land out of order; a stale reply must not
+ *  overwrite the newer one. A stale failure is swallowed, a current one thrown.
+ */
+export function latestOnly() {
+  let latest = 0
+  return (promise) => {
+    const mine = ++latest
+    return promise.then(
+      (value) => ({ stale: mine !== latest, value }),
+      (err) => {
+        if (mine !== latest) return { stale: true, value: undefined }
+        throw err
+      }
+    )
+  }
+}

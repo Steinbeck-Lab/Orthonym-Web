@@ -145,6 +145,14 @@ import './Legal.css'
 // dialog sends nothing itself: the address is followed only when the visitor
 // presses "Open on GitHub", after a preview of exactly that text. The phone
 // menu's "Report an issue" is unchanged, still the blank form.
+//
+// Version 8 (24 October 2026) adds result links (lib/shareLink.js). They put
+// the input in the URL fragment, which browsers never send in a request or a
+// referrer, so the page load logs no structure. Matomo was already path-only
+// (lib/matomo.js). Opening a link then makes the ordinary requests: a GET for
+// Explain and From-name, logged with its query as the paragraph above says;
+// a POST body for Translate, which nginx does not log, followed by a
+// GET /api/depict?smiles= for the re-parsed picture, which is logged.
 
 // The UNIVERSITY leads, the working group follows as the responsible unit.
 // Art. 4 (7) requires the controller to be a natural or legal person, public
@@ -322,6 +330,12 @@ function Privacy() {
             submitted in the address itself — a structure you asked to have explained, or a name you
             asked to have parsed. Those requests therefore appear in the access log with the
             structure or name in the recorded address, on the same line as your IP address.
+          </p>
+          <p>
+            A result link you copy from this site carries the structure or name after a{' '}
+            <code>#</code>. Your browser does not send that part to any server, so opening the
+            link does not put it in the access log. The page then runs the same request as if you
+            had typed the input yourself, and that request is logged as described above.
           </p>
           <p>
             We cannot give these logs a fixed retention period, because nothing deletes them by
@@ -616,7 +630,7 @@ function Privacy() {
             serve the site and honour an objection to it at the same time. That is a reason we would
             have to demonstrate if you objected — not an exception to your right to object.
           </p>
-          <p className="legal-updated">Version 7 — 10 October 2026</p>
+          <p className="legal-updated">Version 8 — 24 October 2026</p>
         </LegalSection>
     </LegalPage>
   )

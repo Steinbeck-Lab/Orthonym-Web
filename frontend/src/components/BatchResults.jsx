@@ -13,6 +13,7 @@ import {
   clampPage,
   expiryLabel,
   isTerminal,
+  latestOnly,
   pageCount,
   progressPercent,
   stateLabel,
@@ -20,7 +21,7 @@ import {
 import { outcomeMessage, tierTally } from '../lib/batchTally'
 import { limitReasonFor } from '../lib/limitReasons'
 import { forgetJob, rememberJob } from '../lib/jobStore'
-import { STATE_CLASS, VERIFIED_STATUSES, stateLabelFor } from '../lib/statuses'
+import { STATE_CLASS, STATE_SHORT, VERIFIED_STATUSES, stateLabelFor } from '../lib/statuses'
 import CopyButton from './CopyButton'
 import EngineStamp from './EngineStamp'
 import Icon from './Icon'
@@ -217,11 +218,11 @@ function NameCell({ row }) {
  *      job's declared total, which would report work-in-progress as a
  *      shortfall.
  */
-function BatchTally({ counts, finished }) {
+function BatchTally({ counts, finished, filter = [], onToggle = null, onClear, tallyRef }) {
   const rows = tierTally(counts)
   if (rows.length === 0) return null
   return (
-    <div className="batch__tally">
+    <div className="batch__tally" ref={tallyRef}>
       {/* The reading in words, so nobody has to add the chips up. It is
           role="status" because the panel's job is to report an outcome and a
           screen-reader user gets the numbers here rather than by walking a
@@ -236,12 +237,41 @@ function BatchTally({ counts, finished }) {
             key={row.status}
             className={`batch__tally-item batch__tally-item--${row.className}`}
           >
-            <span className="batch__tally-count">{row.count}</span>
-            <span className="batch__tally-label">{row.label}</span>
+            {/* A toggle once the rows can be read back: it filters the table
+                to this tier. Before that the counts are partial and there is
+                no table to filter, so they stay plain text. */}
+            {onToggle ? (
+              <button
+                type="button"
+                className="batch__tally-toggle"
+                aria-pressed={filter.includes(row.status)}
+                onClick={() => onToggle(row.status)}
+              >
+                <TallyCount row={row} />
+              </button>
+            ) : (
+              <TallyCount row={row} />
+            )}
           </li>
         ))}
+        {filter.length > 0 && (
+          <li>
+            <button type="button" className="batch__tally-clear" onClick={onClear}>
+              Show all
+            </button>
+          </li>
+        )}
       </ul>
     </div>
+  )
+}
+
+function TallyCount({ row }) {
+  return (
+    <>
+      <span className="batch__tally-count">{row.count}</span>
+      <span className="batch__tally-label">{row.label}</span>
+    </>
   )
 }
 
@@ -361,8 +391,16 @@ function BatchResults({ job, onForget }) {
   // actually be read back, and on a failed job the second is short of the
   // first. Until the first page lands, `total` is the best guess available.
   const [retrievable, setRetrievable] = useState(null)
+  // The tiers the table is filtered to (empty = every row), and how many rows
+  // they hold. Pages count against `matched`, which the server sets equal to
+  // `retrievable` when nothing is filtered.
+  const [filter, setFilter] = useState([])
+  const [matched, setMatched] = useState(null)
+  // Quick toggles send overlapping requests; only the newest may fill the table.
+  const trackPage = useRef(latestOnly())
+  const tallyRef = useRef(null)
   const finished = status ? isTerminal(status.status) : false
-  const countable = retrievable ?? status?.total ?? 0
+  const countable = matched ?? retrievable ?? status?.total ?? 0
   const pages = pageCount(countable)
   // Rows are only worth offering when the server says some can be read back.
   // `retrievable` starts null (nothing fetched yet) and a job that closed
@@ -372,14 +410,19 @@ function BatchResults({ job, onForget }) {
   const loadPage = useCallback(
     async (which) => {
       try {
-        const data = await fetchJobResults(jobId, {
-          offset: which * PAGE_SIZE,
-          limit: PAGE_SIZE,
-          sort,
-          order,
-        })
+        const { stale, value: data } = await trackPage.current(
+          fetchJobResults(jobId, {
+            offset: which * PAGE_SIZE,
+            limit: PAGE_SIZE,
+            sort,
+            order,
+            statuses: filter,
+          })
+        )
+        if (stale) return null
         setRows(data.rows ?? [])
         if (Number.isFinite(data.retrievable)) setRetrievable(data.retrievable)
+        if (Number.isFinite(data.matched)) setMatched(data.matched)
         setError(null)
         return data
       } catch (err) {
@@ -392,7 +435,7 @@ function BatchResults({ job, onForget }) {
         return null
       }
     },
-    [jobId, sort, order]
+    [jobId, sort, order, filter]
   )
 
   // Rows are fetched when the job reaches a terminal state, and when the page
@@ -430,6 +473,25 @@ function BatchResults({ job, onForget }) {
       setOrder(column.first)
     }
     setPage(0)
+  }
+
+  // A filter change also goes back to page 1: page 4 of the old view may not
+  // exist in the new one.
+  const toggleTier = (tier) => {
+    setFilter((current) =>
+      current.includes(tier) ? current.filter((t) => t !== tier) : [...current, tier]
+    )
+    setPage(0)
+  }
+  // "Show all" removes itself, so focus moves to the first tier toggle rather
+  // than falling back to the page.
+  const filterNote = filter.length
+    ? `, showing only ${filter.map((s) => STATE_SHORT[s] ?? s).join(' and ')}`
+    : ''
+  const clearFilter = () => {
+    setFilter([])
+    setPage(0)
+    requestAnimationFrame(() => tallyRef.current?.querySelector('.batch__tally-toggle')?.focus())
   }
 
   // --- controls -------------------------------------------------------
@@ -548,7 +610,14 @@ function BatchResults({ job, onForget }) {
         <span className="batch__progress-fill" style={{ width: `${percent}%` }} />
       </div>
 
-      <BatchTally counts={status?.counts} finished={finished} />
+      <BatchTally
+        counts={status?.counts}
+        finished={finished}
+        filter={filter}
+        onToggle={finished && hasRows ? toggleTier : null}
+        onClear={clearFilter}
+        tallyRef={tallyRef}
+      />
 
       {error && (
         <p className="batch__error" role="status">
@@ -593,7 +662,7 @@ function BatchResults({ job, onForget }) {
       {finished && hasRows && (
         <div className="batch__downloads">
           <a className="batch__csv" href={jobResultsCsvUrl(jobId)}>
-            Download CSV
+            {filter.length ? 'Download CSV (all rows)' : 'Download CSV'}
           </a>
           {/* The one sentence that stops a results link reading as permanent. */}
           {expiry && (
@@ -605,6 +674,10 @@ function BatchResults({ job, onForget }) {
         </div>
       )}
 
+      {finished && hasRows && filter.length > 0 && matched === 0 && (
+        <p className="batch__outcome">No rows in this job have the selected confidence.</p>
+      )}
+
       {finished && rows.length > 0 && (
         <>
           <SortBar sort={sort} order={order} onSort={applySort} />
@@ -613,7 +686,8 @@ function BatchResults({ job, onForget }) {
               <caption className="sr-only">
                 Batch results, page {page + 1} of {pages}, sorted by{' '}
                 {SORT_COLUMNS.find((c) => c.key === sort)?.sr}
-                {order === 'desc' ? ', reversed' : ''}. Every name carries its
+                {order === 'desc' ? ', reversed' : ''}
+                {filterNote}. Every name carries its
                 confidence mark.
               </caption>
               <thead>
