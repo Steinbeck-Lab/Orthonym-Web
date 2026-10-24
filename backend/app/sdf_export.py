@@ -33,7 +33,11 @@ def _value(value) -> str:
         return ""
     if isinstance(value, bool):
         return "true" if value else "false"
-    return " ".join(str(value).split())
+    text = " ".join(str(value).split())
+    # A line of "$$$$" ends a record and one starting ">" opens a tag, and
+    # input, input_id and error are user text: a leading space keeps such a
+    # value data. The cost is one leading space on such a value.
+    return " " + text if text.startswith(("$$$$", ">")) else text
 
 
 def _molblock(smiles: str | None, title: str) -> str:

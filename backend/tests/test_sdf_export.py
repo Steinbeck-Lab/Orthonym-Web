@@ -79,3 +79,15 @@ def test_records_round_trip_through_rdkit(tmp_path):
 def test_the_title_line_is_the_input_id():
     record = sdf_record(_row(input_id="CPD-7"))
     assert record.split("\n", 1)[0] == "CPD-7"
+
+
+def test_a_value_cannot_fake_a_record_end_or_a_tag(tmp_path):
+    # `input`, `input_id` and `error` are user text. A value of "$$$$" on its
+    # own line would end the record; one starting with ">" reads as a tag.
+    text = sdf_record(_row(input="$$$$", error="> <ORTHONYM_NAME>", input_id="$$$$"))
+    text += sdf_record(_row(index=1))
+    mols = _read_all(text, tmp_path)
+    assert len(mols) == 2
+    assert mols[0].GetProp("ORTHONYM_NAME") == "ethanol"
+    assert mols[0].GetProp("INPUT").strip() == "$$$$"
+    assert text.count("\n$$$$\n") == 2
