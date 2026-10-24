@@ -164,6 +164,12 @@ import './Legal.css'
 // warnings and the verdict (schemas.BatchRow), and the meta keeps `kind`
 // (redis_store.create_job); § Batch jobs lists them, with the engine tier
 // rows have carried since phase 2 (tasks._row).
+//
+// Version 10 (24 October 2026): a job records a third switch, strip_salts
+// (redis_store.create_job), and a stripped row keeps stripped_from and
+// removed (schemas.BatchRow): what was submitted, and the fragments taken off
+// it. "the two naming switches" became "the naming switches". Nothing new is
+// sent: the switch is one boolean in the request body.
 
 // The UNIVERSITY leads, the working group follows as the responsible unit.
 // Art. 4 (7) requires the controller to be a natural or legal person, public
@@ -404,7 +410,7 @@ function Privacy() {
             rows — for each molecule, what you submitted, the standardised structure, the name
             produced and its confidence tier, the round-trip check, the molecular formula and any
             error, and, for a name check, the name you gave, the structure OPSIN read from it,
-            OPSIN&rsquo;s warnings and the verdict — together with the two naming switches you chose,
+            OPSIN&rsquo;s warnings and the verdict — together with the naming switches you chose,
             whether the job is a name check, the submitting IP address, which is used only to release
             your concurrent-job slot, and the job’s owner token. All of it is deleted automatically after 24 hours, or immediately if
             you delete the job yourself.
@@ -649,7 +655,7 @@ function Privacy() {
             serve the site and honour an objection to it at the same time. That is a reason we would
             have to demonstrate if you objected — not an exception to your right to object.
           </p>
-          <p className="legal-updated">Version 9 — 24 October 2026</p>
+          <p className="legal-updated">Version 10 — 24 October 2026</p>
         </LegalSection>
     </LegalPage>
   )

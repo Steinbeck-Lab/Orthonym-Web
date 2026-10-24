@@ -97,6 +97,7 @@ def create_job(
     best_effort: bool = True,
     verify: bool = True,
     kind: str = "name",
+    strip_salts: bool = False,
 ) -> None:
     settings = get_settings()
     client = get_redis()
@@ -125,6 +126,7 @@ def create_job(
             "best_effort": int(best_effort),
             "verify": int(verify),
             "kind": kind,
+            "strip_salts": int(strip_salts),
         },
     )
     pipe.expire(key, settings.JOB_RESULT_TTL_SECONDS)
@@ -287,13 +289,13 @@ def job_tier_counts(meta: dict[str, str]) -> dict[str, int]:
 
 
 def job_switches(meta: dict[str, str]) -> dict[str, bool | None]:
-    """The best_effort/verify switches create_job stored, read back.
+    """The best_effort/verify/strip_salts switches create_job stored, read back.
 
     None for a job created before they were recorded -- not a guess.
     """
     return {
         key: (meta[key] == "1" if key in meta else None)
-        for key in ("best_effort", "verify")
+        for key in ("best_effort", "verify", "strip_salts")
     }
 
 

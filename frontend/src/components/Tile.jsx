@@ -1,4 +1,5 @@
 import { limitReasonFor } from '../lib/limitReasons'
+import { strippedNote } from '../lib/strippedNote'
 import { NAMED_STATUSES, STATE_CLASS, VERIFIED_STATUSES, isMismatchHere, isUncheckedHere, stateLabelFor } from '../lib/statuses'
 import useDepiction from '../lib/useDepiction'
 import CopyButton from './CopyButton'
@@ -21,6 +22,7 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
   // roundtrip_smiles. A null roundtrip (no round trip ran) is a no-op fetch.
   const retrans = useDepiction(roundtrip_smiles)
   const reason = limitReasonFor(row)
+  const stripped = strippedNote(row)
   const isPending = phase === 'pending'
   const isActive = phase === 'active'
   const animateName = isActive && !reduceMotion
@@ -85,8 +87,10 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
       )}
 
       <div className="tile__head">
-        <code className="tile__smiles" title={smiles}>
-          {smiles}
+        {/* What the visitor typed: after salt stripping `smiles` is the kept
+            fragment, and the note in the foot says what went. */}
+        <code className="tile__smiles" title={row.stripped_from ?? smiles}>
+          {row.stripped_from ?? smiles}
         </code>
       </div>
 
@@ -105,7 +109,11 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
         {!isPending && NAMED_STATUSES.has(status) && depiction_svg && (
           <div className="tile__depictions">
             <figure className="tile__depiction">
-              <img src={depiction_svg} alt={`2D structure you entered, "${smiles}"`} />
+              <img src={depiction_svg} alt={
+                row.stripped_from
+                  ? `2D structure named: the largest fragment of "${row.stripped_from}"`
+                  : `2D structure you entered, "${smiles}"`
+              } />
               <figcaption className="tile__depiction-cap">Input</figcaption>
             </figure>
             {roundtrip_smiles && (
@@ -142,10 +150,12 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
       {/* The foot renders only when it has something to say. A verified PIN or
           fallback moved its label and proof up into the olive verdict, leaving
           the foot empty -- and an empty foot still drew its top hairline and
-          padding, which was the whitespace at the card's bottom edge. */}
+          padding, which was the whitespace at the card's bottom edge. A
+          salt-stripped row always has something to say: what was removed. */}
       {(isPending ||
         !NAMED_STATUSES.has(status) ||
         status === 'best_effort' ||
+        stripped ||
         (status === 'abstain' && formula)) && (
       <div className="tile__foot">
         {/* The state label lives with the name (in the olive verdict) for a
@@ -197,6 +207,7 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
         {/* Why the engine declined (lib/limitReasons.js). Abstain only: an
             error row's own message already says what went wrong. */}
         {!isPending && reason && <span className="tile__origin">{reason}</span>}
+        {!isPending && stripped && <span className="tile__origin">{stripped}</span>}
         {!isPending && status === 'abstain' && formula && (
           <span className="tile__formula">
             Formula: <ChemFormula formula={formula} />

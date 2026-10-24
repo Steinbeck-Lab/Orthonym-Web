@@ -243,7 +243,8 @@ def translate(request: Request, body: TranslateRequest):
         check_job_allowed(ip)
         molecules = _canonicalize(non_blank, settings.MAX_BATCH_SIZE)
         return admit_and_dispatch(
-            ip, molecules, "smiles_list", body.best_effort, body.verify
+            ip, molecules, "smiles_list", body.best_effort, body.verify,
+            strip_salts=body.strip_salts,
         )
 
     # Crash-loop fix (final review): this branch used to hand raw,
@@ -261,7 +262,7 @@ def translate(request: Request, body: TranslateRequest):
     # effect, deferred item I3(c) (the fast path previously had no
     # per-record length bound at all).
     molecules = _canonicalize(non_blank, settings.MAX_BATCH_SIZE)
-    prepared = prepared_payload(molecules)
+    prepared = prepared_payload(molecules, body.strip_salts)
     try:
         async_result = translate_fast.apply_async(
             args=[prepared, body.best_effort, body.verify], queue="fast"
@@ -277,7 +278,8 @@ def translate(request: Request, body: TranslateRequest):
         # it twice.
         check_job_allowed(ip)
         return admit_and_dispatch(
-            ip, molecules, "smiles_list", body.best_effort, body.verify
+            ip, molecules, "smiles_list", body.best_effort, body.verify,
+            strip_salts=body.strip_salts,
         )
     # Forget the backend entry. Celery's redis backend SETEXs every result for
     # JOB_RESULT_TTL_SECONDS (24 h) and .get() never removes it -- and

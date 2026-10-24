@@ -142,3 +142,13 @@ test('an abstain report says so, and prints no message line when there is none',
   assert.ok(body.includes('- Result: no name (abstain)'))
   assert.ok(!body.includes('Message'), 'a null error must not print a line')
 })
+
+test('a report states the salt-stripping switch when the row was named with it', () => {
+  const row = { smiles: 'CCO', status: 'abstain', limit_code: 'UNNAMEABLE', stripped_from: 'CCO.Cl', removed: 'Cl' }
+  const on = query(reportIssueUrl(REPO, row, 'Home', { bestEffort: true, verify: true, stripSalts: true })).get('body')
+  assert.ok(on.includes('- Salt stripping: on'))
+  const off = query(reportIssueUrl(REPO, row, 'Home', { bestEffort: true, verify: true, stripSalts: false })).get('body')
+  assert.ok(off.includes('- Salt stripping: off'))
+  const unknown = query(reportIssueUrl(REPO, row, 'Home', { bestEffort: true, verify: true })).get('body')
+  assert.ok(!unknown.includes('Salt stripping'))
+})

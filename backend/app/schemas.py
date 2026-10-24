@@ -81,6 +81,9 @@ class TranslateRequest(BaseModel):
     # must be provable, and being able to turn the proof off and watch every
     # claim downgrade is a stronger demonstration than a paragraph saying so.
     verify: bool = True
+    # Opt-in: name only the largest organic fragment (app/salts.py). The row
+    # then says what was removed (stripped_from, removed).
+    strip_salts: bool = False
 
 
 class ResultItem(BaseModel):
@@ -101,6 +104,10 @@ class ResultItem(BaseModel):
     # because no round trip ran.
     roundtrip_smiles: Optional[str] = None
     roundtrip_match: Optional[bool] = None
+    # Set only when salt stripping removed something: the SMILES as typed, and
+    # the fragments taken off it. `smiles` is then the fragment that was named.
+    stripped_from: Optional[str] = None
+    removed: Optional[str] = None
     # The engine that named this row. The default is the process building the
     # row, which is always the worker that ran the engine: the API process
     # only re-validates the worker's dict, which already carries both keys. A
@@ -262,6 +269,9 @@ class BatchRow(BaseModel):
     claimed_smiles: Optional[str] = None
     # OPSIN's warnings on the claimed name, "TYPE: message; ...", or None.
     opsin_warnings: Optional[str] = None
+    # As on ResultItem: set only when salt stripping removed something.
+    stripped_from: Optional[str] = None
+    removed: Optional[str] = None
     # As on ResultItem: built in the batch worker, so the engine that named it.
     engine_version: str = ENGINE_VERSION
     engine_commit: Optional[str] = ENGINE_COMMIT
@@ -302,6 +312,7 @@ class JobStatusResponse(BaseModel):
     # a job created before they were recorded.
     best_effort: Optional[bool] = None
     verify: Optional[bool] = None
+    strip_salts: Optional[bool] = None
     # "check" for a name-check job (rows carry a verdict), else "name".
     kind: Literal["name", "check"] = "name"
 

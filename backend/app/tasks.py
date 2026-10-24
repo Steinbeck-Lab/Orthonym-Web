@@ -150,8 +150,12 @@ def _name_prepared(
             rows.append(_with_claim(_unparsed_row(item), item))
             failed += 1
             continue
+        smiles, removed = item["smiles"], None
         try:
-            named = name_one(item["smiles"], best_effort, verify)
+            # Stripped BEFORE the cache: the kept fragment is named as if it
+            # were typed alone, so its cache entry is the plain molecule's.
+            smiles, removed = _stripped(item)
+            named = name_one(smiles, best_effort, verify)
         except SoftTimeLimitExceeded as exc:
             # MUST come before the broad handler: SoftTimeLimitExceeded
             # subclasses Exception, so `except Exception` would swallow the
@@ -165,7 +169,9 @@ def _name_prepared(
                 item["raw_input"],
                 item["input_id"],
                 f"Naming failed: {exc}",
-                smiles=item["smiles"],
+                # What the engine ran on: the kept fragment, when stripped, so
+                # a "Report SMILES on GitHub" issue replays the same molecule.
+                smiles=smiles,
                 limit_code=ENGINE_ERROR,
             )
             failed += 1
@@ -173,6 +179,9 @@ def _name_prepared(
             row = _row(index, item["raw_input"], item["input_id"], named)
             if named["status"] == "error":
                 failed += 1
+        if removed is not None:
+            # After the cache, never in it (app/name_cache.py stores the item).
+            row.update(stripped_from=item["smiles"], removed=removed)
         # A name-check row's verdict, per row and inside the loop, so a time
         # limit hands _ChunkTimedOut rows that already carry their verdicts.
         try:
@@ -189,6 +198,16 @@ def _with_claim(row: dict, item: dict) -> dict:
     if item.get("claimed_name"):
         row["claimed_name"] = item["claimed_name"]
     return row
+
+
+def _stripped(item: dict) -> tuple[str, str | None]:
+    """The SMILES to name for a prepared item, and what salt stripping removed
+    (None when the switch is off or there was nothing to strip)."""
+    if not item.get("strip_salts"):
+        return item["smiles"], None
+    from app.salts import strip_salts
+
+    return strip_salts(item["smiles"])
 
 
 def _check_row(item: dict, row: dict) -> None:
@@ -234,6 +253,9 @@ def _timed_out_rows(timeout: _ChunkTimedOut) -> tuple[list[dict], int]:
     rows = list(timeout.rows)
     failed = timeout.failed
     for position, item in enumerate(timeout.remaining):
+        # remaining[0] was being named when the limit fired: name it as the
+        # engine saw it (the kept fragment, when stripped), with the note.
+        smiles, removed = _stripped(item) if position == 0 and item["smiles"] else (None, None)
         if item["smiles"] is None:
             # This one had already failed to PARSE, before any time ran out.
             # Keep that reason: relabelling it "Timed out" told the visitor a
@@ -253,10 +275,12 @@ def _timed_out_rows(timeout: _ChunkTimedOut) -> tuple[list[dict], int]:
                 # "Report SMILES on GitHub" row (frontend/src/lib/github.js). Claiming
                 # the engine failed on a molecule it never tried is a report
                 # nobody can reproduce.
-                smiles=item["smiles"] if position == 0 else None,
+                smiles=smiles,
                 limit_code=TIMEOUT,
             ), item)
         )
+        if removed is not None:
+            rows[-1].update(stripped_from=item["smiles"], removed=removed)
         failed += 1
     return rows, failed
 
@@ -539,8 +563,10 @@ def translate_fast(
             rows.append(_fast_error_item(item["raw_input"], item["error"]))
             continue
 
+        removed = None
         smiles = item["smiles"]
         try:
+            smiles, removed = _stripped(item)
             cached = name_cache.get_cached(smiles, best_effort, verify)
             result_item = cached if cached is not None else translate_one(
                 smiles, best_effort=best_effort, verify=verify
@@ -565,9 +591,11 @@ def translate_fast(
             # per-row error. The last upstream tier rename made classify()
             # raise on live rows; the next one will too.
             logger.exception("Naming failed for %s", smiles)
-            rows.append(
-                _fast_error_item(smiles, f"Naming failed: {exc}", limit_code=ENGINE_ERROR)
-            )
+            error_item = _fast_error_item(smiles, f"Naming failed: {exc}", limit_code=ENGINE_ERROR)
+            if removed is not None:
+                # `smiles` is the kept fragment the engine ran on: say so.
+                error_item.update(stripped_from=item["smiles"], removed=removed)
+            rows.append(error_item)
             continue
         if result_item.depiction_svg is None and result_item.status in (
             "pin",
@@ -589,6 +617,11 @@ def translate_fast(
             )
             if svg is not None:
                 result_item = result_item.model_copy(update={"depiction_svg": svg})
+        if removed is not None:
+            # After put_cached above: a stripped row's note never enters the cache.
+            result_item = result_item.model_copy(
+                update={"stripped_from": item["smiles"], "removed": removed}
+            )
         rows.append(result_item.model_dump())
     return rows
 

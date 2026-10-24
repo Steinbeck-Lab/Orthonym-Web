@@ -3,6 +3,7 @@ import useDepiction from '../lib/useDepiction'
 import CopyButton from './CopyButton'
 import ShareButton from './ShareButton'
 import { limitReasonFor } from '../lib/limitReasons'
+import { strippedNote } from '../lib/strippedNote'
 import ReportLink from './ReportLink'
 import ChemName from './Typeset'
 import TierLamp from './TierLamp'
@@ -40,6 +41,7 @@ function ResultRow({ row, index }) {
   const { smiles, status, name, error, depiction_svg, roundtrip_smiles, roundtrip_match } = row
   const retrans = useDepiction(roundtrip_smiles)
   const reason = limitReasonFor(row)
+  const stripped = strippedNote(row)
   const named = NAMED_STATUSES.has(status)
   const stateClass = STATE_CLASS[status] || status
 
@@ -48,11 +50,15 @@ function ResultRow({ row, index }) {
       <tr className="results-row">
         <td className="results-cell--num">{index + 1}</td>
         <td className="results-cell--smiles">
-          <code title={smiles}>{smiles}</code>
+          <code title={row.stripped_from ?? smiles}>{row.stripped_from ?? smiles}</code>
         </td>
         <td className="results-cell--pic">
           {depiction_svg ? (
-            <img src={depiction_svg} alt={`Structure you entered, "${smiles}"`} />
+            <img src={depiction_svg} alt={
+                row.stripped_from
+                  ? `Structure named: the largest fragment of "${row.stripped_from}"`
+                  : `Structure you entered, "${smiles}"`
+              } />
           ) : (
             <span className="results-cell__none">—</span>
           )}
@@ -72,6 +78,7 @@ function ResultRow({ row, index }) {
             </span>
           )}
           {reason && <span className="limit-reason">{reason}</span>}
+          {stripped && <span className="limit-reason">{stripped}</span>}
           <ReportLink row={row} where="Home" settings={row.settings} />
         </td>
         <td className="results-cell--pic">

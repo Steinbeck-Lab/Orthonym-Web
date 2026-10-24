@@ -1445,6 +1445,9 @@
    line above it. */
 .tile__origin {
   max-width: 52ch;
+  /* A removed counter-ion is a SMILES with no break points (pamoic acid is
+     48 characters): wrap it rather than cut it at the card edge. */
+  overflow-wrap: anywhere;
   font-family: var(--font-body);
   font-size: var(--t-body-sm);
   line-height: 1.5;

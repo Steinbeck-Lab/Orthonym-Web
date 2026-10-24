@@ -2824,6 +2824,8 @@ input.field__control {
   display: block;
   margin-top: var(--s-xxs);
   max-width: 52ch;
+  /* A removed SMILES or an OPSIN warning can be one long unbreakable run. */
+  overflow-wrap: anywhere;
   font-family: var(--font-body);
   font-size: var(--t-body-sm);
   line-height: 1.45;
