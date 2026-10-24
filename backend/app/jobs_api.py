@@ -107,6 +107,7 @@ class TextPayload(BaseModel):
     best_effort: bool = True
     verify: bool = True
     kind: Literal["name", "check"] = "name"
+    strip_salts: bool = False
 
 
 async def _read_input(
@@ -115,7 +116,8 @@ async def _read_input(
     best_effort: bool = True,
     verify: bool = True,
     kind: str = "name",
-) -> tuple[bytes, bool, bool, str]:
+    strip_salts: bool = False,
+) -> tuple[bytes, bool, bool, str, bool]:
     """Accept either a multipart file or a JSON {"text": ...} body.
 
     Size is checked before the bytes are handed on, so an oversized upload
@@ -164,7 +166,7 @@ async def _read_input(
         # best-effort names with nothing recording that their request had
         # been overridden. The default stays True, matching TextPayload's, so
         # nothing changes for a caller who sends no field.
-        return data, best_effort, verify, kind
+        return data, best_effort, verify, kind, strip_salts
 
     try:
         body = await request.json()
@@ -181,7 +183,7 @@ async def _read_input(
             status_code=413,
             detail=f"Input is larger than the {settings.MAX_FILE_SIZE_MB} MB limit",
         )
-    return data, payload.best_effort, payload.verify, payload.kind
+    return data, payload.best_effort, payload.verify, payload.kind, payload.strip_salts
 
 
 def _raise_for_parse_outcome(outcome: dict) -> None:
@@ -289,8 +291,11 @@ def _worker_picked_it_up(async_result, timeout: int) -> bool:
     return False
 
 
-def prepared_payload(molecules) -> list[dict]:
-    """The wire form a task receives: JSON-serialisable, index preserved."""
+def prepared_payload(molecules, strip_salts: bool = False) -> list[dict]:
+    """The wire form a task receives: JSON-serialisable, index preserved.
+
+    `strip_salts` rides on every item, so the worker strips at naming time
+    (app/salts.py) and no task signature has to change."""
     return [
         {
             "index": m.index,
@@ -299,6 +304,7 @@ def prepared_payload(molecules) -> list[dict]:
             "smiles": m.smiles,
             "error": m.error,
             "claimed_name": m.claimed_name,
+            "strip_salts": strip_salts,
         }
         for m in molecules
     ]
@@ -307,6 +313,7 @@ def prepared_payload(molecules) -> list[dict]:
 def admit_and_dispatch(
     ip: str, molecules, fmt: str, best_effort: bool, verify: bool = True,
     kind: str = "name",
+    strip_salts: bool = False,
 ) -> JobEnvelope:
     """Admit, register, and dispatch one batch job as a single unit.
 
@@ -346,7 +353,8 @@ def admit_and_dispatch(
     # delete this job" (audit item delete-no-ownership).
     owner_token = secrets.token_urlsafe(32)
     redis_store.create_job(
-        job_id, len(molecules), fmt, ip, owner_token, best_effort, verify, kind
+        job_id, len(molecules), fmt, ip, owner_token, best_effort, verify, kind,
+        strip_salts,
     )
     try:
         check_and_register_job(ip, job_id)
@@ -355,7 +363,7 @@ def admit_and_dispatch(
         raise
 
     try:
-        prepared = prepared_payload(molecules)
+        prepared = prepared_payload(molecules, strip_salts)
         if len(prepared) <= settings.FAST_PATH_MAX_MOLECULES:
             # link_error, matching what dispatch_batch already wires onto
             # every chord header AND its body (final review report, I5).
@@ -412,7 +420,7 @@ async def parse_preview(
     SDF), so `molecule_count` stays honest without paying for a full parse.
     """
     check_fast_allowed(client_ip(request))
-    data, _, _, _ = await _read_input(request, file)
+    data, _, _, _, _ = await _read_input(request, file)
     fmt = sniff(data)
     try:
         sample_molecules, total = parse_preview_sample(data, fmt, PREVIEW_SAMPLE)
@@ -459,6 +467,8 @@ async def create_job(
     verify: bool = Form(default=True),
     # "check": a smiles,name CSV whose rows get a name-check verdict.
     kind: Literal["name", "check"] = Form(default="name"),
+    # Off unless asked, like the other switches.
+    strip_salts: bool = Form(default=False),
 ) -> JobEnvelope:
     settings = get_settings()
     ip = client_ip(request)
@@ -503,8 +513,8 @@ async def create_job(
     # TOCTOU-safe registration now, since this already ran.
     check_job_allowed(ip)
 
-    data, best_effort, verify, kind = await _read_input(
-        request, file, best_effort, verify, kind
+    data, best_effort, verify, kind, strip_salts = await _read_input(
+        request, file, best_effort, verify, kind, strip_salts
     )
     # run_in_threadpool: create_job is `async def`, so calling the blocking
     # parse directly would hold the asyncio event loop for its whole duration
@@ -515,7 +525,9 @@ async def create_job(
         _parse_or_400, data, settings.MAX_BATCH_SIZE, kind
     )
 
-    return admit_and_dispatch(ip, molecules, fmt.value, best_effort, verify, kind)
+    return admit_and_dispatch(
+        ip, molecules, fmt.value, best_effort, verify, kind, strip_salts
+    )
 
 
 # A job in one of these has stopped doing work and can be deleted. "cancelled"

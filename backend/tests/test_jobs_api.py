@@ -1003,7 +1003,7 @@ def test_an_uploaded_file_can_turn_best_effort_off(redis_client, monkeypatch):
     """
     seen: dict = {}
 
-    def _capture(ip, molecules, fmt, best_effort, verify=True, kind="name"):
+    def _capture(ip, molecules, fmt, best_effort, verify=True, *_later_switches):
         seen["best_effort"] = best_effort
         seen["verify"] = verify
         from app.schemas import JobEnvelope
@@ -1038,7 +1038,7 @@ def test_an_uploaded_file_still_defaults_to_best_effort(redis_client, monkeypatc
     """
     seen: dict = {}
 
-    def _capture(ip, molecules, fmt, best_effort, verify=True, kind="name"):
+    def _capture(ip, molecules, fmt, best_effort, verify=True, *_later_switches):
         seen["best_effort"] = best_effort
         seen["verify"] = verify
         from app.schemas import JobEnvelope

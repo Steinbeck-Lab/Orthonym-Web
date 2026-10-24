@@ -38,3 +38,50 @@ def test_pieces_that_do_not_parse_alone_fall_back_to_canonical():
     kept, removed = strip_salts("C1.C1.Cl")
     assert (kept, removed) == ("CC", "Cl")
     assert Chem.MolFromSmiles(kept) is not None
+
+
+# --- in the naming paths ----------------------------------------------------
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from app import name_cache, tasks  # noqa: E402
+from app.main import app  # noqa: E402
+
+client = TestClient(app)
+
+
+def test_the_fast_path_names_the_kept_fragment(redis_client):
+    body = client.post("/api/translate", json={"smiles": ["CCO.Cl"], "strip_salts": True}).json()
+    (row,) = body["results"]
+    assert row["smiles"] == "CCO"
+    assert row["stripped_from"] == "CCO.Cl"
+    assert row["removed"] == "Cl"
+    assert row["name"] == "ethanol"
+
+
+def test_the_switch_is_off_by_default(redis_client):
+    (row,) = client.post("/api/translate", json={"smiles": ["CCO.Cl"]}).json()["results"]
+    assert row["smiles"] == "CCO.Cl"
+    assert row["stripped_from"] is None
+
+
+def test_a_stripped_row_does_not_reach_the_cache(redis_client):
+    client.post("/api/translate", json={"smiles": ["CCO.Cl"], "strip_salts": True})
+    (row,) = client.post("/api/translate", json={"smiles": ["CCO"]}).json()["results"]
+    assert row["stripped_from"] is None
+    cached = name_cache.get_cached("CCO", True, True)
+    assert cached is not None and cached.stripped_from is None
+
+
+def test_a_batch_row_says_what_was_removed(redis_client):
+    item = {"index": 0, "raw_input": "CCO.Cl", "input_id": None, "smiles": "CCO.Cl",
+            "error": None, "strip_salts": True}
+    (row,), failed = tasks._name_prepared([item], True, True)
+    assert (row["smiles"], row["stripped_from"], row["removed"]) == ("CCO", "CCO.Cl", "Cl")
+    assert row["name"] == "ethanol" and failed == 0
+
+
+def test_a_job_strips_when_asked(redis_client):
+    job = client.post("/api/jobs", json={"text": "CCO.Cl\nCCN\n", "strip_salts": True}).json()
+    rows = client.get(f"/api/jobs/{job['job_id']}/results").json()["rows"]
+    assert [(r["smiles"], r["removed"]) for r in rows] == [("CCO", "Cl"), ("CCN", None)]

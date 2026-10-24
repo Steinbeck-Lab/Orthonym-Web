@@ -151,7 +151,10 @@ def _name_prepared(
             failed += 1
             continue
         try:
-            named = name_one(item["smiles"], best_effort, verify)
+            # Stripped BEFORE the cache: the kept fragment is named as if it
+            # were typed alone, so its cache entry is the plain molecule's.
+            smiles, removed = _stripped(item)
+            named = name_one(smiles, best_effort, verify)
         except SoftTimeLimitExceeded as exc:
             # MUST come before the broad handler: SoftTimeLimitExceeded
             # subclasses Exception, so `except Exception` would swallow the
@@ -172,11 +175,25 @@ def _name_prepared(
             )
             failed += 1
             continue
-        rows.append(_row(index, item["raw_input"], item["input_id"], named))
+        row = _row(index, item["raw_input"], item["input_id"], named)
+        if removed is not None:
+            # After the cache, never in it (app/name_cache.py stores the item).
+            row.update(stripped_from=item["smiles"], removed=removed)
+        rows.append(row)
         if named["status"] == "error":
             failed += 1
     _check_rows(prepared, rows)
     return rows, failed
+
+
+def _stripped(item: dict) -> tuple[str, str | None]:
+    """The SMILES to name for a prepared item, and what salt stripping removed
+    (None when the switch is off or there was nothing to strip)."""
+    if not item.get("strip_salts"):
+        return item["smiles"], None
+    from app.salts import strip_salts
+
+    return strip_salts(item["smiles"])
 
 
 def _check_rows(prepared: list[dict], rows: list[dict]) -> None:
@@ -523,8 +540,10 @@ def translate_fast(
             rows.append(_fast_error_item(item["raw_input"], item["error"]))
             continue
 
+        removed = None
         smiles = item["smiles"]
         try:
+            smiles, removed = _stripped(item)
             cached = name_cache.get_cached(smiles, best_effort, verify)
             result_item = cached if cached is not None else translate_one(
                 smiles, best_effort=best_effort, verify=verify
@@ -573,6 +592,11 @@ def translate_fast(
             )
             if svg is not None:
                 result_item = result_item.model_copy(update={"depiction_svg": svg})
+        if removed is not None:
+            # After put_cached above: a stripped row's note never enters the cache.
+            result_item = result_item.model_copy(
+                update={"stripped_from": item["smiles"], "removed": removed}
+            )
         rows.append(result_item.model_dump())
     return rows
 

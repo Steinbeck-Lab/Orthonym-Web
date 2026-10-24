@@ -97,6 +97,7 @@ def create_job(
     best_effort: bool = True,
     verify: bool = True,
     kind: str = "name",
+    strip_salts: bool = False,
 ) -> None:
     settings = get_settings()
     client = get_redis()
@@ -125,6 +126,7 @@ def create_job(
             "best_effort": int(best_effort),
             "verify": int(verify),
             "kind": kind,
+            "strip_salts": int(strip_salts),
         },
     )
     pipe.expire(key, settings.JOB_RESULT_TTL_SECONDS)
