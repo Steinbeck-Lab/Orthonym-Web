@@ -149,9 +149,10 @@ import './Legal.css'
 // Version 8 (24 October 2026) adds result links (lib/shareLink.js). They put
 // the input in the URL fragment, which browsers never send in a request or a
 // referrer, so the page load logs no structure. Matomo was already path-only
-// (lib/matomo.js). Opening a link then makes the ordinary request: a GET for
-// Explain and From-name, logged with its query as the paragraph above says,
-// and a POST body for Translate, which nginx does not log.
+// (lib/matomo.js). Opening a link then makes the ordinary requests: a GET for
+// Explain and From-name, logged with its query as the paragraph above says;
+// a POST body for Translate, which nginx does not log, followed by a
+// GET /api/depict?smiles= for the re-parsed picture, which is logged.
 
 // The UNIVERSITY leads, the working group follows as the responsible unit.
 // Art. 4 (7) requires the controller to be a natural or legal person, public

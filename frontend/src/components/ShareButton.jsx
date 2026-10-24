@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { shareUrl } from '../lib/shareLink'
+import { canShare, shareUrl } from '../lib/shareLink'
 import Icon from './Icon'
 
 /**
- * Copies a share link to this result (lib/shareLink.js). A small glass chip
+ * Copies a share link to this structure (lib/shareLink.js). The link carries
+ * the input only, not the Translate switches, so the person who opens it gets
+ * the tier their own switches produce -- hence "names this structure", not
+ * "this result". A small glass chip
  * that sits beside the name's own copy button, so both copy actions live in
  * one place; a sheen crosses it on hover, like the site's large buttons.
  *
@@ -27,12 +30,16 @@ export default function ShareButton({ fields }) {
     }
   }
 
+  // A structure too large to fit a readable link gets no chip, rather than
+  // one that copies a link opening an empty page.
+  if (!canShare(fields)) return null
+
   return (
     <button
       type="button"
       className={`share-chip${copied ? ' share-chip--done' : ''}`}
       onClick={copy}
-      aria-label="Copy link to this result"
+      aria-label="Copy a link that names this structure"
       title="Copy link"
     >
       <Icon name={copied ? 'check' : 'link'} size={14} />

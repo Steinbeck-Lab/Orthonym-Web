@@ -17,6 +17,12 @@ export function buildShareHash(fields) {
   )
 }
 
+/** Whether a link for `fields` could be read back: readShareHash refuses
+ *  anything longer, so a longer link must not be offered at all. */
+export function canShare(fields) {
+  return buildShareHash(fields).length <= MAX_HASH
+}
+
 /** The fields in a share hash, or null when there are none to use. */
 export function readShareHash(hash) {
   if (!hash || hash.length > MAX_HASH) return null
