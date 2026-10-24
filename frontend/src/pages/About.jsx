@@ -8,6 +8,7 @@ import RoundTripLoop from '../components/RoundTripLoop'
 import TierLamp from '../components/TierLamp'
 import TierRule from '../components/TierRule'
 import BuddyRoam from '../components/BuddyRoam'
+import ApiSection from '../components/ApiSection'
 import CitationBox from '../components/CitationBox'
 import useHealth from '../lib/useHealth'
 import './About.css'
@@ -405,6 +406,8 @@ function About() {
       </section>
 
       <CitationBox />
+
+      <ApiSection />
     </main>
   )
 }

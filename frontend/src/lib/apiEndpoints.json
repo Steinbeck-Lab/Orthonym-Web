@@ -1,0 +1,80 @@
+[
+  {
+    "method": "POST",
+    "path": "/api/translate",
+    "summary": "Name structures and get each name, its tier and the OPSIN round trip. Past the per-request limit above, the answer is a job to poll instead.",
+    "curl": "curl -X POST https://orthonym.decimer.ai/api/translate -H 'Content-Type: application/json' -d '{\"smiles\": [\"CC(=O)Oc1ccccc1C(=O)O\"], \"best_effort\": true, \"verify\": true}'"
+  },
+  {
+    "method": "GET",
+    "path": "/api/iupac-to-smiles",
+    "summary": "Read a name with OPSIN and get the structure: SMILES, InChI, InChIKey and a molblock.",
+    "curl": "curl -G https://orthonym.decimer.ai/api/iupac-to-smiles --data-urlencode 'name=2-acetyloxybenzoic acid'"
+  },
+  {
+    "method": "GET",
+    "path": "/api/explain",
+    "summary": "Name a structure and split the name into its parts, each with the atoms it describes.",
+    "curl": "curl -G https://orthonym.decimer.ai/api/explain --data-urlencode 'smiles=CC(=O)Oc1ccccc1C(=O)O'"
+  },
+  {
+    "method": "GET",
+    "path": "/api/explain-name",
+    "summary": "Split a name you supply into its parts, each with the atoms it describes.",
+    "curl": "curl -G https://orthonym.decimer.ai/api/explain-name --data-urlencode 'name=ethanol'"
+  },
+  {
+    "method": "POST",
+    "path": "/api/parse-preview",
+    "summary": "Count the molecules in a SMILES list, CSV or SDF and show the first few, without naming anything.",
+    "curl": "curl -X POST https://orthonym.decimer.ai/api/parse-preview -F 'file=@molecules.sdf'"
+  },
+  {
+    "method": "POST",
+    "path": "/api/jobs",
+    "summary": "Start a batch job from a file (SMILES list, CSV or SDF) or from text. The answer has a job_id to poll.",
+    "curl": "curl -X POST https://orthonym.decimer.ai/api/jobs -F 'file=@molecules.csv' -F best_effort=true -F verify=true"
+  },
+  {
+    "method": "GET",
+    "path": "/api/jobs/{job_id}",
+    "summary": "A job's state (queued, running, done, failed, cancelled), its counts and its tier tally.",
+    "curl": "curl https://orthonym.decimer.ai/api/jobs/JOB_ID"
+  },
+  {
+    "method": "GET",
+    "path": "/api/jobs/{job_id}/results",
+    "summary": "A page of a job's rows. Takes offset, limit, sort, order and a repeatable status filter.",
+    "curl": "curl -G https://orthonym.decimer.ai/api/jobs/JOB_ID/results -d offset=0 -d limit=50 -d status=pin -d status=fallback"
+  },
+  {
+    "method": "GET",
+    "path": "/api/jobs/{job_id}/results.csv",
+    "summary": "A finished job as CSV, every row.",
+    "curl": "curl -OJ https://orthonym.decimer.ai/api/jobs/JOB_ID/results.csv"
+  },
+  {
+    "method": "GET",
+    "path": "/api/jobs/{job_id}/results.sdf",
+    "summary": "A finished job as SDF: one record per row, the name and tier as SD tags.",
+    "curl": "curl -OJ https://orthonym.decimer.ai/api/jobs/JOB_ID/results.sdf"
+  },
+  {
+    "method": "GET",
+    "path": "/api/depict",
+    "summary": "Draw a structure as an SVG data URI.",
+    "curl": "curl -G https://orthonym.decimer.ai/api/depict --data-urlencode 'smiles=c1ccccc1'"
+  },
+  {
+    "method": "GET",
+    "path": "/api/examples",
+    "summary": "The example molecules the home page offers.",
+    "curl": "curl https://orthonym.decimer.ai/api/examples"
+  },
+  {
+    "method": "GET",
+    "path": "/api/health",
+    "summary": "Whether naming works right now, the engine version and commit, and the limits listed here.",
+    "curl": "curl https://orthonym.decimer.ai/api/health"
+  }
+]

@@ -29,7 +29,7 @@ export default function CitationBox() {
               <h3 className="cite__label">{label}</h3>
               <CopyButton text={text} label={`Copy ${label}`} />
             </div>
-            <pre className="cite__code" tabIndex={0} aria-label={`${label} citation`}>
+            <pre className="about-code" tabIndex={0} aria-label={`${label} citation`}>
               {text}
             </pre>
           </div>
