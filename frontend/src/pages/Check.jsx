@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import { checkName } from '../lib/api'
 import { latestOnly } from '../lib/batchJob'
 import useShareLink from '../lib/useShareLink'
-import useDepiction from '../lib/useDepiction'
 import Icon from '../components/Icon'
 import OpsinWarnings from '../components/OpsinWarnings'
 import ShareButton from '../components/ShareButton'
@@ -22,7 +21,6 @@ const EXAMPLES = [
 // The verdict is about STRUCTURE only. It borrows no tier and no tier colour:
 // the engine's own tier sits below it, in the tile Home uses.
 function Verdict({ result, smiles }) {
-  const input = useDepiction(smiles)
   const unreadable = result.verdict === 'unreadable'
   return (
     <div className="check-verdict">
@@ -38,7 +36,9 @@ function Verdict({ result, smiles }) {
       <OpsinWarnings warnings={result.warnings} />
       <div className="check-verdict__figures">
         <figure className="check-figure">
-          {input.svg && <img src={input.svg} alt="2D structure of your SMILES" />}
+          {/* From the answer, not a GET /api/depict?smiles=: that would put the
+              structure in the access log (Privacy.jsx). */}
+          {result.input_svg && <img src={result.input_svg} alt="2D structure of your SMILES" />}
           <figcaption>Your structure</figcaption>
         </figure>
         {!unreadable && (

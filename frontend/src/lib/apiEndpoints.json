@@ -6,6 +6,12 @@
     "curl": "curl -X POST https://orthonym.decimer.ai/api/translate -H 'Content-Type: application/json' -d '{\"smiles\": [\"CC(=O)Oc1ccccc1C(=O)O\"], \"best_effort\": true, \"verify\": true}'"
   },
   {
+    "method": "POST",
+    "path": "/api/name-check",
+    "summary": "Does a name describe a structure? OPSIN reads the name and the two InChIKeys are compared. The answer also carries Orthonym's own name and tier for the structure.",
+    "curl": "curl -X POST https://orthonym.decimer.ai/api/name-check -H 'Content-Type: application/json' -d '{\"smiles\": \"CCO\", \"name\": \"ethanol\"}'"
+  },
+  {
     "method": "GET",
     "path": "/api/iupac-to-smiles",
     "summary": "Read a name with OPSIN and get the structure: SMILES, InChI, InChIKey and a molblock.",

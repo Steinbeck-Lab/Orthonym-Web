@@ -140,3 +140,16 @@ def test_the_answer_is_not_left_in_the_result_backend(redis_client, monkeypatch)
     monkeypatch.setattr(main.check_name, "apply_async", lambda *a, **k: _Result())
     assert client.post("/api/name-check", json={"smiles": "CCO", "name": "ethanol"}).status_code == 200
     assert forgotten == [True]
+
+
+def test_both_pictures_come_with_the_answer(redis_client):
+    # The page must not fetch "Your structure" with a GET /api/depict?smiles=,
+    # which nginx would log; the answer carries it, cached engine row or not.
+    from app import name_cache
+
+    first = client.post("/api/name-check", json={"smiles": "CCO", "name": "ethanol"}).json()
+    assert first["input_svg"].startswith("data:image/svg+xml")
+    assert name_cache.get_cached("CCO", True, True) is not None
+    again = client.post("/api/name-check", json={"smiles": "CCO", "name": "ethanol"}).json()
+    assert again["input_svg"].startswith("data:image/svg+xml")
+    assert again["engine"]["depiction_svg"].startswith("data:image/svg+xml")

@@ -173,6 +173,7 @@ class NameCheckResponse(BaseModel):
     claimed_inchikey: Optional[str] = None
     warnings: list[OpsinWarning] = []
     claimed_svg: Optional[str] = None
+    input_svg: Optional[str] = None
     engine: ResultItem
 
 

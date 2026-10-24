@@ -153,6 +153,13 @@ import './Legal.css'
 // Explain and From-name, logged with its query as the paragraph above says;
 // a POST body for Translate, which nginx does not log, followed by a
 // GET /api/depict?smiles= for the re-parsed picture, which is logged.
+//
+// Version 9 (24 October 2026) adds Check a name (/check). It sends the
+// structure and the name in a POST body to /api/name-check (app/main.py),
+// which nginx does not log; the picture of the typed structure comes back in
+// that answer (input_svg), not from a GET. The re-parsed picture under
+// Orthonym's own name is the same logged GET /api/depict?smiles= as on
+// Translate (Tile.jsx, useDepiction).
 
 // The UNIVERSITY leads, the working group follows as the responsible unit.
 // Art. 4 (7) requires the controller to be a natural or legal person, public
@@ -336,6 +343,12 @@ function Privacy() {
             <code>#</code>. Your browser does not send that part to any server, so opening the
             link does not put it in the access log. The page then runs the same request as if you
             had typed the input yourself, and that request is logged as described above.
+          </p>
+          <p>
+            Check a name sends the structure and the name you typed in the body of the request,
+            which the access log does not record. The picture of the structure the engine&rsquo;s
+            own name reads back to is then loaded by its SMILES in the address, and that request is
+            logged, as on the Translate page.
           </p>
           <p>
             We cannot give these logs a fixed retention period, because nothing deletes them by
@@ -630,7 +643,7 @@ function Privacy() {
             serve the site and honour an objection to it at the same time. That is a reason we would
             have to demonstrate if you objected — not an exception to your right to object.
           </p>
-          <p className="legal-updated">Version 8 — 24 October 2026</p>
+          <p className="legal-updated">Version 9 — 24 October 2026</p>
         </LegalSection>
     </LegalPage>
   )

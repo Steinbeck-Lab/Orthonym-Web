@@ -678,7 +678,13 @@ def check_name(smiles: str, name: str) -> dict:
     engine = cached if cached is not None else translate_one(smiles, best_effort=True, verify=True)
     if cached is None:
         name_cache.put_cached(engine, True, True)
-    result["engine"] = engine.model_dump()
+    # The input's picture rides in the answer, so the page never fetches it
+    # with a GET /api/depict?smiles= that nginx would log. A cached row is
+    # stored without its picture, so draw it here either way.
+    result["input_svg"] = engine.depiction_svg or structure_svg_data_uri(
+        smiles, Chem.MolFromSmiles(smiles)
+    )
+    result["engine"] = engine.model_copy(update={"depiction_svg": result["input_svg"]}).model_dump()
     return result
 
 
