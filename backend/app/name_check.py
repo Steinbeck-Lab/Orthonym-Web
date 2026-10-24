@@ -8,6 +8,9 @@ name, so no verdict here says "correct".
 
 from typing import Literal, Optional
 
+# The longest claimed name the single check and a check job accept.
+MAX_CLAIMED_NAME_LENGTH = 2000
+
 Verdict = Literal[
     "same", "protonation", "stereo", "stereo_protonation", "different", "unreadable", "uncomparable",
 ]
@@ -70,15 +73,6 @@ def one_line(name: str) -> bool:
     return not any(ord(ch) < 32 or ord(ch) == 127 for ch in name)
 
 
-def _inchikey(mol) -> Optional[str]:
-    from rdkit import Chem
-
-    try:
-        return Chem.MolToInchiKey(mol) or None
-    except Exception:  # noqa: BLE001 - no InChI means "could not compare"
-        return None
-
-
 def check_pair(smiles: str, name: str) -> dict:
     """The verdict for `name` against `smiles`, with what it rests on.
 
@@ -87,8 +81,12 @@ def check_pair(smiles: str, name: str) -> dict:
     from orthonym.validation.opsin_roundtrip import opsin_parse
     from rdkit import Chem
 
+    from app.orthonym_service import _inchikey
+
     input_mol = Chem.MolFromSmiles(smiles)
-    raw = opsin_parse(name)
+    # The one gate before OPSIN: a name with a line break would go to a
+    # subprocess that reads only its last line (see one_line).
+    raw = opsin_parse(name) if one_line(name) else None
     claimed_mol = Chem.MolFromSmiles(raw) if raw else None
     input_key = _inchikey(input_mol) if input_mol is not None else None
     if claimed_mol is None:

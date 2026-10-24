@@ -56,7 +56,9 @@ from app.ratelimit import (
 )
 from app.sdf_export import sdf_record
 from app.schemas import (
+    EXPORT_FIELDS,
     BatchRow,
+    JobOptions,
     DepictResponse,
     JobEnvelope,
     JobResultsResponse,
@@ -82,46 +84,18 @@ router = APIRouter()
 
 PREVIEW_SAMPLE = 5
 
-CSV_COLUMNS = [
-    "index",
-    "input",
-    "input_id",
-    "smiles",
-    "name",
-    "status",
-    "roundtrip_smiles",
-    "roundtrip_match",
-    "formula",
-    "limit_code",
-    "error",
-    "stripped_from",
-    "removed",
-    "claimed_name",
-    "verdict",
-    "verdict_text",
-    "claimed_smiles",
-    "opsin_warnings",
-    "engine_version",
-    "engine_commit",
-]
+CSV_COLUMNS = EXPORT_FIELDS
 
 
-class TextPayload(BaseModel):
+class TextPayload(JobOptions):
     text: str
-    best_effort: bool = True
-    verify: bool = True
-    kind: Literal["name", "check"] = "name"
-    strip_salts: bool = False
 
 
 async def _read_input(
     request: Request,
     file: UploadFile | None,
-    best_effort: bool = True,
-    verify: bool = True,
-    kind: str = "name",
-    strip_salts: bool = False,
-) -> tuple[bytes, bool, bool, str, bool]:
+    form: JobOptions | None = None,
+) -> tuple[bytes, JobOptions]:
     """Accept either a multipart file or a JSON {"text": ...} body.
 
     Size is checked before the bytes are handed on, so an oversized upload
@@ -170,7 +144,7 @@ async def _read_input(
         # best-effort names with nothing recording that their request had
         # been overridden. The default stays True, matching TextPayload's, so
         # nothing changes for a caller who sends no field.
-        return data, best_effort, verify, kind, strip_salts
+        return data, form or JobOptions()
 
     try:
         body = await request.json()
@@ -187,7 +161,7 @@ async def _read_input(
             status_code=413,
             detail=f"Input is larger than the {settings.MAX_FILE_SIZE_MB} MB limit",
         )
-    return data, payload.best_effort, payload.verify, payload.kind, payload.strip_salts
+    return data, JobOptions.model_validate(payload.model_dump(exclude={"text"}))
 
 
 def _raise_for_parse_outcome(outcome: dict) -> None:
@@ -315,9 +289,7 @@ def prepared_payload(molecules, strip_salts: bool = False) -> list[dict]:
 
 
 def admit_and_dispatch(
-    ip: str, molecules, fmt: str, best_effort: bool, verify: bool = True,
-    kind: str = "name",
-    strip_salts: bool = False,
+    ip: str, molecules, fmt: str, options: JobOptions | None = None
 ) -> JobEnvelope:
     """Admit, register, and dispatch one batch job as a single unit.
 
@@ -350,9 +322,12 @@ def admit_and_dispatch(
     (check_and_register_job) -- the hourly cap and the cheap concurrent
     pre-check both already happened, earlier, in the caller.
     """
-    # A name check compares the structure as given: never strip it, and never
-    # record a switch that did nothing.
-    strip_salts = strip_salts and kind != "check"
+    options = options or JobOptions()
+    if options.kind == "check":
+        # A name check compares the structure as given: never strip it, and
+        # never record a switch that did nothing.
+        options = options.model_copy(update={"strip_salts": False})
+    best_effort, verify = options.best_effort, options.verify
     settings = get_settings()
     job_id = uuid.uuid4().hex
     # secrets, not uuid4: this one is a capability, not an identifier, and the
@@ -360,8 +335,7 @@ def admit_and_dispatch(
     # delete this job" (audit item delete-no-ownership).
     owner_token = secrets.token_urlsafe(32)
     redis_store.create_job(
-        job_id, len(molecules), fmt, ip, owner_token, best_effort, verify, kind,
-        strip_salts,
+        job_id, len(molecules), fmt, ip, owner_token, **options.model_dump()
     )
     try:
         check_and_register_job(ip, job_id)
@@ -370,7 +344,7 @@ def admit_and_dispatch(
         raise
 
     try:
-        prepared = prepared_payload(molecules, strip_salts)
+        prepared = prepared_payload(molecules, options.strip_salts)
         if len(prepared) <= settings.FAST_PATH_MAX_MOLECULES:
             # link_error, matching what dispatch_batch already wires onto
             # every chord header AND its body (final review report, I5).
@@ -427,7 +401,7 @@ async def parse_preview(
     SDF), so `molecule_count` stays honest without paying for a full parse.
     """
     check_fast_allowed(client_ip(request))
-    data, _, _, _, _ = await _read_input(request, file)
+    data, _ = await _read_input(request, file)
     fmt = sniff(data)
     try:
         sample_molecules, total = parse_preview_sample(data, fmt, PREVIEW_SAMPLE)
@@ -520,8 +494,10 @@ async def create_job(
     # TOCTOU-safe registration now, since this already ran.
     check_job_allowed(ip)
 
-    data, best_effort, verify, kind, strip_salts = await _read_input(
-        request, file, best_effort, verify, kind, strip_salts
+    data, options = await _read_input(
+        request,
+        file,
+        JobOptions(best_effort=best_effort, verify=verify, kind=kind, strip_salts=strip_salts),
     )
     # run_in_threadpool: create_job is `async def`, so calling the blocking
     # parse directly would hold the asyncio event loop for its whole duration
@@ -529,12 +505,10 @@ async def create_job(
     # request bodies. The wait is now I/O (a worker's answer) rather than
     # GIL-held RDKit, but blocking the loop is just as total either way.
     fmt, molecules = await run_in_threadpool(
-        _parse_or_400, data, settings.MAX_BATCH_SIZE, kind
+        _parse_or_400, data, settings.MAX_BATCH_SIZE, options.kind
     )
 
-    return admit_and_dispatch(
-        ip, molecules, fmt.value, best_effort, verify, kind, strip_salts
-    )
+    return admit_and_dispatch(ip, molecules, fmt.value, options)
 
 
 # A job in one of these has stopped doing work and can be deleted. "cancelled"
@@ -734,6 +708,12 @@ def _csv_safe(value):
     return value
 
 
+# Rows per streamed chunk: Starlette moves each chunk of a sync generator
+# through a threadpool hop (~60 us measured), so one per row cost 0.6 s per
+# 10,000 rows; one per page of redis_store.iter_all_rows costs ~nothing.
+_STREAM_PAGE = 500
+
+
 def _finished_status(job_id: str) -> str:
     """The status of a job whose results may be downloaded: done or failed.
 
@@ -788,13 +768,15 @@ def job_results_csv(request: Request, job_id: str) -> StreamingResponse:
             buffer, fieldnames=CSV_COLUMNS, extrasaction="ignore"
         )
         writer.writeheader()
-        yield buffer.getvalue()
-        # Stream page by page: a 10,000-row job is never held in memory.
-        for row in redis_store.iter_all_rows(job_id):
-            buffer.seek(0)
-            buffer.truncate(0)
+        # Page by page: a 10,000-row job is never held in memory, and one
+        # chunk per page costs one threadpool hop, not one per row.
+        for n, row in enumerate(redis_store.iter_all_rows(job_id), 1):
             writer.writerow({k: _csv_safe(v) for k, v in row.items()})
-            yield buffer.getvalue()
+            if n % _STREAM_PAGE == 0:
+                yield buffer.getvalue()
+                buffer.seek(0)
+                buffer.truncate(0)
+        yield buffer.getvalue()
 
     return _download(job_id, status, generate(), "text/csv", "csv")
 
@@ -804,8 +786,15 @@ def job_results_sdf(request: Request, job_id: str) -> StreamingResponse:
     """The finished job as SDF, one record per row. Same rules as the CSV."""
     check_download_allowed(client_ip(request))
     status = _finished_status(job_id)
-    body = (sdf_record(row) for row in redis_store.iter_all_rows(job_id))
-    return _download(job_id, status, body, "chemical/x-mdl-sdfile", "sdf")
+    def body():
+        page: list[str] = []
+        for row in redis_store.iter_all_rows(job_id):
+            page.append(sdf_record(row))
+            if len(page) == _STREAM_PAGE:
+                yield "".join(page)
+                page = []
+        yield "".join(page)
+    return _download(job_id, status, body(), "chemical/x-mdl-sdfile", "sdf")
 
 
 @router.post("/api/jobs/{job_id}/cancel", response_model=JobStatusResponse)

@@ -277,3 +277,17 @@ def test_explain_and_from_name_forget_their_results(redis_client, monkeypatch):
     n2s = {"smiles": "CCO", "canonical_smiles": "CCO", "inchi": None, "inchikey": None,
            "molblock": None, "depiction_svg": None, "warnings": [], "error": None}
     assert _forgotten_after(monkeypatch, "name_to_smiles", "get", "/api/iupac-to-smiles", params={"name": "ethanol"}, reply=n2s) == [True]
+
+
+def test_a_row_after_a_check_time_limit_never_reached_the_engine(monkeypatch):
+    # The limit fired in the CHECK of row 0, after it was named: row 1 was
+    # never in flight, so it must not carry a SMILES (a "Report" row).
+    def slow(smiles, name):
+        raise SoftTimeLimitExceeded()
+
+    monkeypatch.setattr(name_check, "check_pair", slow)
+    with pytest.raises(tasks._ChunkTimedOut) as caught:
+        tasks._name_prepared([_pair(0, "CCO", "ethanol"), _pair(1, "CO", "methanol")], True, True)
+    rows, _ = tasks._timed_out_rows(caught.value)
+    assert rows[1]["error"] == "Timed out"
+    assert rows[1]["smiles"] is None

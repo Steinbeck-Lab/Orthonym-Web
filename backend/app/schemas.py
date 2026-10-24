@@ -10,6 +10,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 from .engine_info import ENGINE_COMMIT, ENGINE_VERSION
+from .name_check import MAX_CLAIMED_NAME_LENGTH, Verdict
 
 
 Status = Literal["pin", "fallback", "best_effort", "abstain", "error"]
@@ -155,16 +156,14 @@ class OpsinWarning(BaseModel):
 
 class NameCheckRequest(BaseModel):
     smiles: str = Field(min_length=1, max_length=2000)
-    name: str = Field(min_length=1, max_length=2000)
+    name: str = Field(min_length=1, max_length=MAX_CLAIMED_NAME_LENGTH)
 
 
 class NameCheckResponse(BaseModel):
     """Does `name` describe `smiles`? A verdict about STRUCTURE only (see
     app/name_check.py), with the engine's own name and tier beside it."""
 
-    verdict: Literal[
-        "same", "protonation", "stereo", "stereo_protonation", "different", "unreadable", "uncomparable",
-    ]
+    verdict: Verdict
     verdict_text: str
     claimed_smiles: Optional[str] = None
     input_inchikey: Optional[str] = None
@@ -270,7 +269,7 @@ class BatchRow(BaseModel):
     # the verdict on STRUCTURE, and what OPSIN read the name as. None on a
     # naming job's row.
     claimed_name: Optional[str] = None
-    verdict: Optional[str] = None
+    verdict: Optional[Verdict] = None
     verdict_text: Optional[str] = None
     claimed_smiles: Optional[str] = None
     # OPSIN's warnings on the claimed name, "TYPE: message; ...", or None.
@@ -282,6 +281,31 @@ class BatchRow(BaseModel):
     # As on ResultItem: built in the batch worker, so the engine that named it.
     engine_version: str = ENGINE_VERSION
     engine_commit: Optional[str] = ENGINE_COMMIT
+
+
+# Every BatchRow field a download writes, in file order: the CSV columns, and
+# (minus the index and the SMILES the molblock carries) the SD tags. One list,
+# so the two exports cannot drift apart again.
+EXPORT_FIELDS: list[str] = [
+    "index", "input", "input_id", "smiles", "name", "status", "tier",
+    "roundtrip_smiles", "roundtrip_match", "formula", "limit_code", "error",
+    "stripped_from", "removed", "strip_skipped",
+    "claimed_name", "verdict", "verdict_text", "claimed_smiles", "opsin_warnings",
+    "engine_version", "engine_commit",
+]
+
+
+class JobOptions(BaseModel):
+    """How a batch job is named: every switch a job is created with, in one
+    place, so a new switch is one field here rather than a new argument on
+    every function a job passes through. redis_store.create_job stores them
+    and GET /api/jobs/{id} echoes them."""
+
+    best_effort: bool = True
+    verify: bool = True
+    # "check": a smiles,name CSV whose rows get a name-check verdict.
+    kind: Literal["name", "check"] = "name"
+    strip_salts: bool = False
 
 
 class JobEnvelope(BaseModel):

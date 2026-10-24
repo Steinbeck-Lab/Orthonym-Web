@@ -26,6 +26,7 @@ from rdkit import Chem
 from rdkit import RDLogger
 
 from app import cdk_bridge
+from app.name_check import MAX_CLAIMED_NAME_LENGTH, one_line
 
 # RDKit writes parse failures to stderr by default, which turns a file with
 # a few bad records into pages of noise. We report each failure on its own
@@ -312,9 +313,6 @@ def _parse_csv(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
     return rows
 
 
-MAX_CLAIMED_NAME_LENGTH = 2000
-
-
 def parse_check_csv(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
     """A name-check job's input: a CSV with a `smiles` and a `name` column
     (case and spaces ignored) and an optional `id` column.
@@ -341,7 +339,7 @@ def parse_check_csv(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
             raise TooManyMolecules(max_molecules, partial=rows)
         name = (record.get(lowered["name"]) or "").strip()
         input_id = ((record.get(id_col) or "").strip() if id_col else "") or None
-        if any(ord(ch) < 32 or ord(ch) == 127 for ch in name):
+        if not one_line(name):
             # Never handed to OPSIN (app/name_check.one_line); kept so the
             # row still shows what was given.
             row = ParsedMolecule(len(rows), smiles, input_id, None, "A name must be one line")
