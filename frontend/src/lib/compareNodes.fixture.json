@@ -1,0 +1,187 @@
+{
+ "propan-1-ol": {
+  "name": "propan-1-ol",
+  "nodes": [
+   {
+    "id": "n0",
+    "parent": null,
+    "kind": "parent",
+    "label": "propan",
+    "span": [
+     0,
+     6
+    ]
+   },
+   {
+    "id": "n1",
+    "parent": null,
+    "kind": "suffix",
+    "label": "ol",
+    "span": [
+     7,
+     11
+    ]
+   },
+   {
+    "id": "n2",
+    "parent": "n1",
+    "kind": "locant",
+    "label": "1",
+    "span": [
+     7,
+     8
+    ]
+   }
+  ]
+ },
+ "propan-2-ol": {
+  "name": "propan-2-ol",
+  "nodes": [
+   {
+    "id": "n0",
+    "parent": null,
+    "kind": "parent",
+    "label": "propan",
+    "span": [
+     0,
+     6
+    ]
+   },
+   {
+    "id": "n1",
+    "parent": null,
+    "kind": "suffix",
+    "label": "ol",
+    "span": [
+     7,
+     11
+    ]
+   },
+   {
+    "id": "n2",
+    "parent": "n1",
+    "kind": "locant",
+    "label": "2",
+    "span": [
+     7,
+     8
+    ]
+   }
+  ]
+ },
+ "2-methylbutane": {
+  "name": "2-methylbutane",
+  "nodes": [
+   {
+    "id": "n0",
+    "parent": null,
+    "kind": "substituent",
+    "label": "methyl",
+    "span": [
+     2,
+     8
+    ]
+   },
+   {
+    "id": "n1",
+    "parent": "n0",
+    "kind": "locant",
+    "label": "2",
+    "span": [
+     0,
+     1
+    ]
+   },
+   {
+    "id": "n2",
+    "parent": null,
+    "kind": "parent",
+    "label": "butane",
+    "span": [
+     8,
+     14
+    ]
+   }
+  ]
+ },
+ "2,2-dimethylbutane": {
+  "name": "2,2-dimethylbutane",
+  "nodes": [
+   {
+    "id": "n0",
+    "parent": null,
+    "kind": "substituent",
+    "label": "methyl",
+    "span": [
+     6,
+     12
+    ]
+   },
+   {
+    "id": "n1",
+    "parent": "n0",
+    "kind": "locant",
+    "label": "2",
+    "span": [
+     0,
+     1
+    ]
+   },
+   {
+    "id": "n2",
+    "parent": "n0",
+    "kind": "locant",
+    "label": "2",
+    "span": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "n3",
+    "parent": "n0",
+    "kind": "multiplier",
+    "label": "di",
+    "span": [
+     4,
+     6
+    ]
+   },
+   {
+    "id": "n4",
+    "parent": null,
+    "kind": "parent",
+    "label": "butane",
+    "span": [
+     12,
+     18
+    ]
+   }
+  ]
+ },
+ "ethanol": {
+  "name": "ethanol",
+  "nodes": [
+   {
+    "id": "n0",
+    "parent": null,
+    "kind": "parent",
+    "label": "ethan",
+    "span": [
+     0,
+     5
+    ]
+   },
+   {
+    "id": "n1",
+    "parent": null,
+    "kind": "suffix",
+    "label": "ol",
+    "span": [
+     5,
+     7
+    ]
+   }
+  ]
+ }
+}
