@@ -254,6 +254,12 @@ class BatchRow(BaseModel):
     formula: Optional[str] = None
     limit_code: Optional[str] = None
     error: Optional[str] = None
+    # A name-check job's row (app/name_check.py): the name the visitor gave,
+    # the verdict on STRUCTURE, and what OPSIN read the name as. None on a
+    # naming job's row.
+    claimed_name: Optional[str] = None
+    verdict: Optional[str] = None
+    claimed_smiles: Optional[str] = None
     # As on ResultItem: built in the batch worker, so the engine that named it.
     engine_version: str = ENGINE_VERSION
     engine_commit: Optional[str] = ENGINE_COMMIT
@@ -294,6 +300,8 @@ class JobStatusResponse(BaseModel):
     # a job created before they were recorded.
     best_effort: Optional[bool] = None
     verify: Optional[bool] = None
+    # "check" for a name-check job (rows carry a verdict), else "name".
+    kind: Literal["name", "check"] = "name"
 
 
 class JobResultsResponse(BaseModel):

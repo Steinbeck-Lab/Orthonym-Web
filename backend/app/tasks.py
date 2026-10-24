@@ -175,7 +175,35 @@ def _name_prepared(
         rows.append(_row(index, item["raw_input"], item["input_id"], named))
         if named["status"] == "error":
             failed += 1
+    _check_rows(prepared, rows)
     return rows, failed
+
+
+def _check_rows(prepared: list[dict], rows: list[dict]) -> None:
+    """A name-check job's verdicts, merged into the rows already named.
+
+    Per row, inside its own guard, apart from naming: the verdict and the
+    engine's name are independent, so one failing never loses the other. A
+    naming job's items carry no claimed_name, so this does nothing for them.
+    """
+    from app.name_check import check_pair
+
+    for item, row in zip(prepared, rows):
+        claimed = item.get("claimed_name")
+        if not claimed:
+            continue
+        row["claimed_name"] = claimed
+        if item["smiles"] is None:
+            continue
+        try:
+            result = check_pair(item["smiles"], claimed)
+        except SoftTimeLimitExceeded:
+            raise
+        except Exception:  # noqa: BLE001 - one row's check, not the chunk
+            logger.exception("Name check failed for %s", item["smiles"])
+            continue
+        row["verdict"] = result["verdict"]
+        row["claimed_smiles"] = result["claimed_smiles"]
 
 
 def _timed_out_rows(timeout: _ChunkTimedOut) -> tuple[list[dict], int]:
@@ -705,7 +733,7 @@ def dispatch_batch(
     return len(chunks)
 
 @celery_app.task(name="app.tasks.parse_input")
-def parse_input(data: bytes, max_molecules: int) -> dict:
+def parse_input(data: bytes, max_molecules: int, kind: str = "name") -> dict:
     """Sniff and parse an uploaded body, in a WORKER rather than the web process.
 
     Spec section 13a / audit item parse-cost-aggregate. Parsing is RDKit work,
@@ -730,11 +758,15 @@ def parse_input(data: bytes, max_molecules: int) -> dict:
     Returns a plain dict rather than raising, because an HTTPException cannot
     cross the broker: the web process re-raises the right status from `error`.
     """
-    from app.inputs import TooManyMolecules, parse, sniff
+    from app.inputs import InputFormat, TooManyMolecules, parse, parse_check_csv, sniff
 
-    fmt = sniff(data)
+    # A name-check job's input is always a smiles,name CSV.
+    fmt = InputFormat.CSV if kind == "check" else sniff(data)
     try:
-        molecules = parse(data, fmt, max_molecules)
+        molecules = (
+            parse_check_csv(data, max_molecules) if kind == "check"
+            else parse(data, fmt, max_molecules)
+        )
     except TooManyMolecules as exc:
         return {"error": "too_many", "limit": exc.limit, "fmt": fmt.value}
     except ValueError as exc:
