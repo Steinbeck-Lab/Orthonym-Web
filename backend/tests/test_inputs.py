@@ -355,3 +355,12 @@ def test_the_wire_form_carries_the_claimed_name():
 
     (item,) = prepared_payload(parse_check_csv(b"smiles,name\nCCO,ethanol\n", 10))
     assert item["claimed_name"] == "ethanol"
+
+
+def test_an_over_long_name_is_an_error_row_not_an_opsin_call():
+    # The single check caps a name at 2000 characters (NameCheckRequest);
+    # the batch must not let a longer one reach OPSIN.
+    (row,) = parse_check_csv(b"smiles,name\nCCO," + b"x" * 2001 + b"\n", 10)
+    assert row.smiles is None
+    assert row.claimed_name is None
+    assert "2000" in row.error

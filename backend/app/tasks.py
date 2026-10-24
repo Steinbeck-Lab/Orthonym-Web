@@ -186,6 +186,7 @@ def _check_rows(prepared: list[dict], rows: list[dict]) -> None:
     engine's name are independent, so one failing never loses the other. A
     naming job's items carry no claimed_name, so this does nothing for them.
     """
+    from app.inputs import MAX_CLAIMED_NAME_LENGTH
     from app.name_check import check_pair
 
     for item, row in zip(prepared, rows):
@@ -193,7 +194,8 @@ def _check_rows(prepared: list[dict], rows: list[dict]) -> None:
         if not claimed:
             continue
         row["claimed_name"] = claimed
-        if item["smiles"] is None:
+        # The parser already refuses these; a second gate before OPSIN.
+        if item["smiles"] is None or len(claimed) > MAX_CLAIMED_NAME_LENGTH:
             continue
         try:
             result = check_pair(item["smiles"], claimed)

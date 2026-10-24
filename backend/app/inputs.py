@@ -312,6 +312,9 @@ def _parse_csv(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
     return rows
 
 
+MAX_CLAIMED_NAME_LENGTH = 2000
+
+
 def parse_check_csv(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
     """A name-check job's input: a CSV with a `smiles` and a `name` column
     (case and spaces ignored) and an optional `id` column.
@@ -338,7 +341,14 @@ def parse_check_csv(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
             raise TooManyMolecules(max_molecules, partial=rows)
         name = (record.get(lowered["name"]) or "").strip()
         input_id = ((record.get(id_col) or "").strip() if id_col else "") or None
-        if name:
+        if len(name) > MAX_CLAIMED_NAME_LENGTH:
+            # The single check's cap (NameCheckRequest): never hand OPSIN more.
+            row = ParsedMolecule(
+                len(rows), smiles, input_id, None,
+                f"Name exceeds {MAX_CLAIMED_NAME_LENGTH} characters",
+            )
+            name = ""
+        elif name:
             row = _canonical_or_error(len(rows), smiles, smiles, input_id)
         else:
             row = ParsedMolecule(len(rows), smiles, input_id, None, "No name to check")
