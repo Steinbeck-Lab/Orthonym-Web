@@ -1,6 +1,9 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ExplainView from '../components/ExplainView'
+import Switch from '../components/Switch'
+import { hiddenAt, revealSteps } from '../lib/classroom'
+import { sliceName } from '../lib/nameTargets'
 import useExplain, { TIER_SETTINGS } from '../lib/useExplain'
 import { useKetcher } from '../lib/useKetcher'
 import './Explain.css'
@@ -45,6 +48,10 @@ function Explain() {
   )
   const { phase, data, apiError, fetchError, tierRow, resultMode, shareFields, run } = useExplain()
   const [validationNote, setValidationNote] = useState(null)
+  // Classroom mode: the name hidden, revealed one part at a time. `step` is
+  // how many parts are showing; every new result starts again at 0.
+  const [classroom, setClassroom] = useState(false)
+  const [step, setStep] = useState(0)
   // enabled only on the Draw tab: the iframe does not exist otherwise, and an
   // armed readiness clock would time out against nothing and report the editor
   // broken before the user ever opened it.
@@ -85,9 +92,13 @@ function Explain() {
   useShareLink((fields) => {
     const linkMode = fields.name ? 'name' : fields.smiles ? 'smiles' : null
     if (!linkMode) return
+    // Before the run, so a classroom link never shows the name first.
+    const teachingLink = fields.classroom === '1'
+    if (teachingLink) setClassroom(true)
     const value = fields[linkMode].trim()
     setMode(linkMode)
-    setSmilesInput(value)
+    // A classroom link to a NAME must not print the answer in the input box.
+    setSmilesInput(teachingLink && linkMode === 'name' ? '' : value)
     runExplain(value, linkMode)
   })
 
@@ -98,6 +109,7 @@ function Explain() {
   // this function's `mode` closure until the next render, so a caller that
   // sets the tab in the same tick must pass one too.)
   function runExplain(value, requestMode = mode) {
+    setStep(0)
     run(value, requestMode)
   }
 
@@ -129,6 +141,45 @@ function Explain() {
   }
 
   const isLoading = phase === 'loading'
+  const steps = useMemo(
+    () => (data?.name ? revealSteps(sliceName(data.name, data.nodes || []), data.nodes || []) : []),
+    [data]
+  )
+  const teaching = classroom && phase === 'success' && steps.length > 0
+  const hidden = teaching ? hiddenAt(steps, step) : null
+
+  // Left and right arrows step while focus is in the controls.
+  function stepKeys(event) {
+    if (event.key === 'ArrowRight') setStep((s) => Math.min(s + 1, steps.length))
+    if (event.key === 'ArrowLeft') setStep((s) => Math.max(s - 1, 0))
+  }
+
+  const stepControls = teaching ? (
+    <div className="classroom" role="group" aria-label="Reveal the name part by part" onKeyDown={stepKeys}>
+      <button type="button" className="classroom__btn" onClick={() => setStep((s) => s - 1)} disabled={step === 0}>
+        Back
+      </button>
+      <span className="classroom__count" aria-live="polite">
+        {step} of {steps.length}
+      </span>
+      <button
+        type="button"
+        className="classroom__btn classroom__btn--next"
+        onClick={() => setStep((s) => s + 1)}
+        disabled={step === steps.length}
+      >
+        Next
+      </button>
+      <button
+        type="button"
+        className="classroom__btn"
+        onClick={() => setStep(steps.length)}
+        disabled={step === steps.length}
+      >
+        Reveal all
+      </button>
+    </div>
+  ) : null
 
   return (
     <>
@@ -243,6 +294,23 @@ function Explain() {
             )}
           </div>
 
+          <Switch
+            id="classroom-mode"
+            checked={classroom}
+            onChange={(on) => {
+              setClassroom(on)
+              setStep(0)
+            }}
+            label="Classroom mode"
+            onWord="On"
+            offWord="Off"
+            hint={
+              classroom
+                ? 'The name starts hidden. Press Next to reveal it one part at a time.'
+                : 'Shows the whole name at once.'
+            }
+          />
+
           {/* Hidden on the Draw tab: there is nothing to paste a chip INTO
               there, and handing a drawn-structure user a text example would
               mean silently leaving the tab to run it. */}
@@ -338,7 +406,10 @@ function Explain() {
                 resultMode={resultMode}
                 tierRow={tierRow}
                 apiError={apiError}
-                shareFields={shareFields}
+                shareFields={classroom && shareFields ? { ...shareFields, classroom: '1' } : shareFields}
+                hidden={hidden}
+                forcedId={teaching && step > 0 ? steps[step - 1] : null}
+                afterName={stepControls}
               />
             </div>
           )}

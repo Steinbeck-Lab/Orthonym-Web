@@ -23,11 +23,29 @@ import ChemName, { Pieces } from './Typeset'
  * `marks` (/compare): a Set of node ids the other name does not have. A
  * marked part gets a grey highlight and a spoken "differs" -- never a line,
  * because every line style under a name is already a confidence tier.
+ *
+ * Classroom mode (/explain): `hidden` is a Set of node ids not yet revealed;
+ * their pieces render as dots, with no text in the DOM. `forcedId` lights the
+ * newest revealed part. The tier waits until nothing is hidden. `afterName`
+ * is a slot under the name for the step controls.
  */
-export default function ExplainView({ data, resultMode, tierRow, apiError, shareFields, marks = null }) {
+export default function ExplainView({
+  data,
+  resultMode,
+  tierRow,
+  apiError,
+  shareFields,
+  marks = null,
+  hidden = null,
+  forcedId = null,
+  afterName = null,
+}) {
   const [hoveredId, setHoveredId] = useState(null)
   const [pinnedId, setPinnedId] = useState(null)
-  const activeId = pinnedId ?? hoveredId
+  const activeId = forcedId ?? pinnedId ?? hoveredId
+  // Classroom mode: some parts are still hidden. Nothing on screen or in the
+  // accessibility tree may give their text away.
+  const veiled = Boolean(hidden?.size)
 
   function toggleId(id) {
     setPinnedId((current) => (current === id ? null : id))
@@ -73,7 +91,11 @@ export default function ExplainView({ data, resultMode, tierRow, apiError, share
                 <Fragment key={index}>
                   {index > 0 && /[)\]},]/.test(name[piece.start - 1] || '') &&
                     !'-,)]}'.includes(name[piece.start] || 'x') && <wbr />}
-                  {node === null ? (
+                  {node !== null && hidden?.has(node.id) ? (
+                    <span className="explain-name__part explain-name__part--hidden" role="img" aria-label="Hidden part">
+                      {'·'.repeat(piece.end - piece.start)}
+                    </span>
+                  ) : node === null ? (
                     <span><Pieces pieces={applyRuns(name, nameStyle, piece.start, piece.end)} /></span>
                   ) : (
                     <span
@@ -101,9 +123,10 @@ export default function ExplainView({ data, resultMode, tierRow, apiError, share
             {shareFields && <ShareButton fields={shareFields} />}
           </p>
         )}
-        {unplaced.length > 0 && (
+        {afterName}
+        {unplaced.some((node) => !hidden?.has(node.id)) && (
           <ul className="explain-unplaced" role="list" aria-label="Parts not placed in the name">
-            {unplaced.map((node) => (
+            {unplaced.filter((node) => !hidden?.has(node.id)).map((node) => (
               <li key={node.id}>
                 <button
                   type="button"
@@ -131,7 +154,7 @@ export default function ExplainView({ data, resultMode, tierRow, apiError, share
             whether it is a PIN. Saying so plainly is the honest
             option; inventing a tier mark would misrepresent
             confidence, which the product forbids. */}
-        {verdictKindFor(resultMode) === 'user-supplied' ? (
+        {veiled ? null : verdictKindFor(resultMode) === 'user-supplied' ? (
           <p className="explain-tier-note">
             This breakdown is of the name <em>you</em> supplied, so there is no
             Orthonym confidence tier for it. Draw or paste a structure instead, or
@@ -160,7 +183,7 @@ export default function ExplainView({ data, resultMode, tierRow, apiError, share
       {/* A success phase can still be a molecule Orthonym would not
           name: uranium trioxide lands here with a drawn structure and
           an abstain tier row, not in the error branch. */}
-      <ReportLink row={tierRow} where="Explain" settings={TIER_SETTINGS} />
+      {!veiled && <ReportLink row={tierRow} where="Explain" settings={TIER_SETTINGS} />}
 
       {(data?.svg || nodes.length > 0) && (
         <div className="explain-result__body">
@@ -168,7 +191,7 @@ export default function ExplainView({ data, resultMode, tierRow, apiError, share
             <div
               className="explain-result__diagram"
               role="img"
-              aria-label={`2D structure diagram of ${name}`}
+              aria-label={veiled ? '2D structure diagram' : `2D structure diagram of ${name}`}
               ref={svgWrapperRef}
             />
           )}
@@ -181,7 +204,8 @@ export default function ExplainView({ data, resultMode, tierRow, apiError, share
                     <ChemName name={activeNode.label} />
                   </h3>
                   <p className="explain-detail__explanation">{activeNode.line}</p>
-                  {notes.partLabel && (
+                  {/* Classroom mode: naming a part still hidden would give it away. */}
+                  {notes.partLabel && !(activePart && hidden?.has(activePart.id)) && (
                     <p className="explain-detail__note">
                       Part of <ChemName name={notes.partLabel} />.
                     </p>

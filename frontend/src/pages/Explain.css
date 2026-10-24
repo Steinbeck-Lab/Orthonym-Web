@@ -706,3 +706,65 @@
     }
   }
 }
+
+/* ---------- classroom mode ----------
+   A hidden part is dots, one per character: the reader sees how long the
+   part is, never what it says (the text is not in the DOM). Muted, no hover,
+   no pointer: there is nothing to point at yet. */
+.explain-name__part--hidden {
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  cursor: default;
+}
+
+.classroom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-xs) var(--s-sm);
+  margin: var(--s-sm) 0 0;
+}
+
+.classroom__count {
+  min-width: 7ch;
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--body);
+}
+
+.classroom__btn {
+  padding: 6px 14px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 999px;
+  background: var(--card);
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  letter-spacing: var(--track-caption);
+  text-transform: uppercase;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.classroom__btn:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.classroom__btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.classroom__btn:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+/* Next is the step a reader takes most: ink-filled. */
+.classroom__btn--next:not(:disabled) {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--card);
+}
