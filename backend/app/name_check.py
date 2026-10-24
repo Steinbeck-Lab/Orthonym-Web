@@ -33,3 +33,38 @@ def compare_keys(input_key: Optional[str], claimed_key: Optional[str]) -> Verdic
     if a[0] == b[0]:
         return "stereo"
     return "different"
+
+
+def _inchikey(mol) -> Optional[str]:
+    from rdkit import Chem
+
+    try:
+        return Chem.MolToInchiKey(mol) or None
+    except Exception:  # noqa: BLE001 - no InChI means "could not compare"
+        return None
+
+
+def check_pair(smiles: str, name: str) -> dict:
+    """The verdict for `name` against `smiles`, with what it rests on.
+
+    Needs the in-process JVM (OPSIN), so it runs in a worker.
+    """
+    from orthonym.validation.opsin_roundtrip import opsin_parse
+    from rdkit import Chem
+
+    input_mol = Chem.MolFromSmiles(smiles)
+    raw = opsin_parse(name)
+    claimed_mol = Chem.MolFromSmiles(raw) if raw else None
+    input_key = _inchikey(input_mol) if input_mol is not None else None
+    if claimed_mol is None:
+        verdict, claimed_key = "unreadable", None
+    else:
+        claimed_key = _inchikey(claimed_mol)
+        verdict = compare_keys(input_key, claimed_key)
+    return {
+        "verdict": verdict,
+        "verdict_text": VERDICT_TEXT[verdict],
+        "claimed_smiles": raw if claimed_mol is not None else None,
+        "input_inchikey": input_key,
+        "claimed_inchikey": claimed_key,
+    }

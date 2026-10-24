@@ -46,3 +46,75 @@ def test_every_verdict_has_its_words():
         "unreadable": "OPSIN cannot read this name",
         "uncomparable": "Could not compare",
     }
+
+
+# --- check_pair and the endpoint: OPSIN in-process, Celery eager ---------
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from app.core.config import get_settings  # noqa: E402
+from app.main import app  # noqa: E402
+from app.name_check import check_pair  # noqa: E402
+
+client = TestClient(app)
+
+
+def test_a_name_for_the_structure_is_the_same_structure():
+    result = check_pair("CCO", "ethanol")
+    assert result["verdict"] == "same"
+    assert result["input_inchikey"] == result["claimed_inchikey"]
+
+
+def test_a_name_for_another_molecule_is_different():
+    result = check_pair("CCO", "methanol")
+    assert result["verdict"] == "different"
+    assert Chem.MolToSmiles(Chem.MolFromSmiles(result["claimed_smiles"])) == "CO"
+
+
+def test_a_name_opsin_cannot_read_is_unreadable():
+    result = check_pair("CCO", "not a name at all")
+    assert result["verdict"] == "unreadable"
+    assert result["claimed_smiles"] is None
+    assert result["claimed_inchikey"] is None
+
+
+def test_the_wrong_enantiomer_differs_in_stereo():
+    assert check_pair("C[C@@H](C(=O)O)N", "(2R)-2-aminopropanoic acid")["verdict"] == "stereo"
+
+
+def test_the_endpoint_answers_with_the_verdict_and_the_engines_name(redis_client):
+    response = client.post("/api/name-check", json={"smiles": "CCO", "name": "ethanol"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["verdict"] == "same"
+    assert body["verdict_text"] == "Same structure"
+    assert body["engine"]["name"] == "ethanol"
+    assert body["engine"]["status"] == "pin"
+    assert body["claimed_svg"].startswith("data:image/svg+xml")
+
+
+def test_a_smiles_rdkit_cannot_read_is_a_400(redis_client):
+    response = client.post("/api/name-check", json={"smiles": "C1CC", "name": "ethanol"})
+    assert response.status_code == 400
+    assert response.json()["detail"]
+
+
+def test_name_check_spends_the_fast_bucket(redis_client, monkeypatch):
+    monkeypatch.setattr(get_settings(), "RATE_LIMIT_FAST_PER_MINUTE", 1)
+    body = {"smiles": "CCO", "name": "ethanol"}
+    assert client.post("/api/name-check", json=body).status_code == 200
+    assert client.post("/api/name-check", json=body).status_code == 429
+
+
+def test_an_empty_field_is_a_422(redis_client):
+    assert client.post("/api/name-check", json={"smiles": "CCO", "name": ""}).status_code == 422
+
+
+def test_a_warning_from_opsin_travels_with_the_verdict(redis_client):
+    # OPSIN reads "ethylpyridine" but warns it is ambiguous; the verdict uses
+    # what OPSIN returned, and the warning must not be dropped.
+    body = client.post(
+        "/api/name-check", json={"smiles": "CCc1ccccn1", "name": "ethylpyridine"}
+    ).json()
+    assert [w["type"] for w in body["warnings"]] == ["APPEARS_AMBIGUOUS"]
+    assert body["verdict"] in ("same", "different")

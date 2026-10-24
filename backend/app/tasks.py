@@ -658,6 +658,30 @@ def name_to_smiles(name: str) -> dict:
     }
 
 
+@celery_app.task(name="app.tasks.check_name")
+def check_name(smiles: str, name: str) -> dict:
+    """POST /api/name-check: the verdict, OPSIN's warnings and picture for
+    the name, and the engine's own name for the structure (through the cache,
+    as Home would name it). The two halves are independent."""
+    from rdkit import Chem
+
+    from app.depiction import structure_svg_data_uri
+    from app.name_check import check_pair
+
+    result = check_pair(smiles, name)
+    claimed = result["claimed_smiles"]
+    result["warnings"] = _opsin_warnings(name) if claimed else []
+    result["claimed_svg"] = (
+        structure_svg_data_uri(claimed, Chem.MolFromSmiles(claimed)) if claimed else None
+    )
+    cached = name_cache.get_cached(smiles, True, True)
+    engine = cached if cached is not None else translate_one(smiles, best_effort=True, verify=True)
+    if cached is None:
+        name_cache.put_cached(engine, True, True)
+    result["engine"] = engine.model_dump()
+    return result
+
+
 def dispatch_batch(
     job_id: str, prepared: list[dict], best_effort: bool, chunk_size: int,
     verify: bool = True

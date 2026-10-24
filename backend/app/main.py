@@ -31,12 +31,14 @@ from .schemas import (
     HealthLimits,
     HealthResponse,
     IupacToSmilesResponse,
+    NameCheckRequest,
+    NameCheckResponse,
     JobEnvelope,
     ResultItem,
     TranslateRequest,
     TranslateResponse,
 )
-from .tasks import explain_iupac_name, explain_smiles, name_to_smiles, translate_fast
+from .tasks import check_name, explain_iupac_name, explain_smiles, name_to_smiles, translate_fast
 
 # Verified live against the real Orthonym engine -- do not invent
 # different examples.
@@ -317,6 +319,28 @@ def iupac_to_smiles(
     except CeleryTimeoutError as exc:
         raise _timeout_504(settings) from exc
     return IupacToSmilesResponse(**result)
+
+
+@app.post("/api/name-check", response_model=NameCheckResponse)
+def name_check(request: Request, body: NameCheckRequest) -> NameCheckResponse:
+    """Does a claimed name describe a structure? POST, so neither the name nor
+    the SMILES reaches the access log as a query string."""
+    settings = get_settings()
+    check_fast_allowed(client_ip(request))
+    require_a_live_jvm()
+
+    # The same gate every naming path takes: a length cap before RDKit, and
+    # the parser's own message for a SMILES it cannot read.
+    (molecule,) = _canonicalize([body.smiles], 1)
+    if molecule.smiles is None:
+        raise HTTPException(status_code=400, detail=molecule.error)
+    try:
+        result = check_name.apply_async(
+            args=[molecule.smiles, body.name], queue="fast"
+        ).get(timeout=settings.FAST_PATH_TIMEOUT)
+    except CeleryTimeoutError as exc:
+        raise _timeout_504(settings) from exc
+    return NameCheckResponse(**result)
 
 
 @app.get("/api/explain", response_model=ExplainResponse)

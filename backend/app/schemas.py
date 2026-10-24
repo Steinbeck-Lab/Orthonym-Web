@@ -7,7 +7,7 @@ frontend that depends on it.
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .engine_info import ENGINE_COMMIT, ENGINE_VERSION
 
@@ -155,6 +155,25 @@ class OpsinWarning(BaseModel):
     # STEREOCHEMISTRY_IGNORED in OPSIN 2.9.0.
     type: str
     message: str
+
+
+class NameCheckRequest(BaseModel):
+    smiles: str = Field(min_length=1, max_length=2000)
+    name: str = Field(min_length=1, max_length=2000)
+
+
+class NameCheckResponse(BaseModel):
+    """Does `name` describe `smiles`? A verdict about STRUCTURE only (see
+    app/name_check.py), with the engine's own name and tier beside it."""
+
+    verdict: Literal["same", "protonation", "stereo", "different", "unreadable", "uncomparable"]
+    verdict_text: str
+    claimed_smiles: Optional[str] = None
+    input_inchikey: Optional[str] = None
+    claimed_inchikey: Optional[str] = None
+    warnings: list[OpsinWarning] = []
+    claimed_svg: Optional[str] = None
+    engine: ResultItem
 
 
 class IupacToSmilesResponse(BaseModel):
