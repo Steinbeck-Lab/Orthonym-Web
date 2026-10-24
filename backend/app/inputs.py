@@ -341,7 +341,11 @@ def parse_check_csv(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
             raise TooManyMolecules(max_molecules, partial=rows)
         name = (record.get(lowered["name"]) or "").strip()
         input_id = ((record.get(id_col) or "").strip() if id_col else "") or None
-        if len(name) > MAX_CLAIMED_NAME_LENGTH:
+        if any(ord(ch) < 32 or ord(ch) == 127 for ch in name):
+            # Never handed to OPSIN (app/name_check.one_line); kept so the
+            # row still shows what was given.
+            row = ParsedMolecule(len(rows), smiles, input_id, None, "A name must be one line")
+        elif len(name) > MAX_CLAIMED_NAME_LENGTH:
             # The single check's cap (NameCheckRequest): never hand OPSIN more.
             row = ParsedMolecule(
                 len(rows), smiles, input_id, None,

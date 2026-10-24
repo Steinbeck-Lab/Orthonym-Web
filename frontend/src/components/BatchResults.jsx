@@ -149,9 +149,10 @@ function SortBar({ sort, order, onSort }) {
   )
 }
 
-/** The confidence mark, in the same grammar the tiles use. */
 // A name-check row: the name the visitor gave and the verdict on structure,
 // in plain words. No tier colour: the verdict is not a confidence tier.
+// OPSIN's warnings ride along, because a warned reading (an ambiguous
+// locant) can turn a fair name into "Different structure".
 function CheckCell({ row }) {
   if (!row.claimed_name) return <span className="batch__note">—</span>
   return (
@@ -160,10 +161,14 @@ function CheckCell({ row }) {
       <span className="batch__verdict">
         {row.verdict ? VERDICT_TEXT[row.verdict] ?? row.verdict : 'Not checked'}
       </span>
+      {row.opsin_warnings && (
+        <span className="limit-reason">OPSIN warned: {row.opsin_warnings}</span>
+      )}
     </>
   )
 }
 
+/** The confidence mark, in the same grammar the tiles use. */
 function NameCell({ row }) {
   const stateClass = STATE_CLASS[row.status] ?? 'error'
   const label = stateLabelFor(row)

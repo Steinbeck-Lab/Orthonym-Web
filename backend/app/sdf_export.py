@@ -24,6 +24,7 @@ SDF_TAGS: list[tuple[str, str]] = [
     ("CLAIMED_NAME", "claimed_name"),
     ("VERDICT", "verdict"),
     ("CLAIMED_SMILES", "claimed_smiles"),
+    ("OPSIN_WARNINGS", "opsin_warnings"),
     ("ENGINE_VERSION", "engine_version"),
     ("ENGINE_COMMIT", "engine_commit"),
 ]

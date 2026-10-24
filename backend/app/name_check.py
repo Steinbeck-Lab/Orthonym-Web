@@ -35,6 +35,37 @@ def compare_keys(input_key: Optional[str], claimed_key: Optional[str]) -> Verdic
     return "different"
 
 
+def opsin_warnings(name: str) -> list[dict]:
+    """OPSIN's warnings for a name it parsed (APPEARS_AMBIGUOUS,
+    STEREOCHEMISTRY_IGNORED). The engine's opsin_parse keeps only the SMILES,
+    as the CLI does, so a name OPSIN read with a warning looked like a clean
+    parse. Same NameToStructure and CLI config opsin_parse uses; raises rather
+    than returning [] when the JVM is missing, because an empty list here
+    claims OPSIN raised no warning.
+    """
+    from orthonym import jvm_bridge
+
+    # ponytail: a second parse of the same name (a few ms); fold into one
+    # call if the engine ever exposes the OpsinResult itself.
+    if not jvm_bridge._ensure_jvm():
+        raise RuntimeError("OPSIN warnings need the in-process JVM")
+    with jvm_bridge._LOCK:
+        jvm_bridge._attach_thread()
+        result = jvm_bridge._n2s().parseChemicalName(name, jvm_bridge._cfg(False))
+        return [
+            {"type": str(w.getType()), "message": str(w.getMessage())}
+            for w in result.getWarnings()
+        ]
+
+
+def one_line(name: str) -> bool:
+    """A name OPSIN can be asked about in-process. With a line break or other
+    control character the engine's opsin_parse falls back to a `java -jar`
+    subprocess that reads only the LAST line: a false verdict, at about 70x
+    the cost."""
+    return not any(ord(ch) < 32 or ord(ch) == 127 for ch in name)
+
+
 def _inchikey(mol) -> Optional[str]:
     from rdkit import Chem
 
@@ -67,4 +98,5 @@ def check_pair(smiles: str, name: str) -> dict:
         "claimed_smiles": raw if claimed_mol is not None else None,
         "input_inchikey": input_key,
         "claimed_inchikey": claimed_key,
+        "warnings": opsin_warnings(name) if claimed_mol is not None else [],
     }

@@ -97,6 +97,7 @@ CSV_COLUMNS = [
     "claimed_name",
     "verdict",
     "claimed_smiles",
+    "opsin_warnings",
     "engine_version",
     "engine_commit",
 ]

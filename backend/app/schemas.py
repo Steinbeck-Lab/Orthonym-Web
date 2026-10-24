@@ -260,6 +260,8 @@ class BatchRow(BaseModel):
     claimed_name: Optional[str] = None
     verdict: Optional[str] = None
     claimed_smiles: Optional[str] = None
+    # OPSIN's warnings on the claimed name, "TYPE: message; ...", or None.
+    opsin_warnings: Optional[str] = None
     # As on ResultItem: built in the batch worker, so the engine that named it.
     engine_version: str = ENGINE_VERSION
     engine_commit: Optional[str] = ENGINE_COMMIT

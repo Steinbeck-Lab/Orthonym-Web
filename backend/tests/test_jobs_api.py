@@ -1744,7 +1744,9 @@ def test_the_check_columns_are_in_the_csv(redis_client):
     job_id = _submit_check().json()["job_id"]
     header, first = client.get(f"/api/jobs/{job_id}/results.csv").text.splitlines()[:2]
     cols = header.split(",")
-    assert cols[-5:] == ["claimed_name", "verdict", "claimed_smiles", "engine_version", "engine_commit"]
+    assert cols[-6:] == [
+        "claimed_name", "verdict", "claimed_smiles", "opsin_warnings", "engine_version", "engine_commit",
+    ]
     assert "ethanol" in first and "same" in first
 
 

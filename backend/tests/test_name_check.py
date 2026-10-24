@@ -153,3 +153,75 @@ def test_both_pictures_come_with_the_answer(redis_client):
     again = client.post("/api/name-check", json={"smiles": "CCO", "name": "ethanol"}).json()
     assert again["input_svg"].startswith("data:image/svg+xml")
     assert again["engine"]["depiction_svg"].startswith("data:image/svg+xml")
+
+
+# --- review fixes -----------------------------------------------------------
+
+import pytest  # noqa: E402
+from celery.exceptions import SoftTimeLimitExceeded  # noqa: E402
+
+from app import name_check, tasks  # noqa: E402
+
+
+def _pair(i, smiles, name):
+    return {"index": i, "raw_input": smiles, "input_id": None, "smiles": smiles,
+            "error": None, "claimed_name": name}
+
+
+def test_a_time_limit_in_the_check_keeps_the_rows_already_checked(monkeypatch):
+    real = name_check.check_pair
+    calls = []
+
+    def slow(smiles, name):
+        calls.append(name)
+        if len(calls) == 2:
+            raise SoftTimeLimitExceeded()
+        return real(smiles, name)
+
+    monkeypatch.setattr(name_check, "check_pair", slow)
+    with pytest.raises(tasks._ChunkTimedOut) as caught:
+        tasks._name_prepared([_pair(0, "CCO", "ethanol"), _pair(1, "CO", "methanol")], True, True)
+    timeout = caught.value
+    # The row whose check ran out of time is still named and kept, without a
+    # verdict; nothing after it was touched.
+    assert [r["verdict"] for r in timeout.rows] == ["same", None]
+    assert [r["name"] for r in timeout.rows] == ["ethanol", "methanol"]
+    assert timeout.remaining == []
+    rows, _ = tasks._timed_out_rows(timeout)
+    assert [r["claimed_name"] for r in rows] == ["ethanol", "methanol"]
+
+
+def test_a_timed_out_row_keeps_its_claimed_name():
+    timeout = tasks._ChunkTimedOut([], 0, [_pair(0, "CCO", "ethanol"), _pair(1, None, "x") | {"raw_input": "C1CC", "error": "bad"}])
+    rows, _ = tasks._timed_out_rows(timeout)
+    assert [r["claimed_name"] for r in rows] == ["ethanol", "x"]
+
+
+def test_the_single_check_survives_an_engine_crash(redis_client, monkeypatch):
+    def boom(*args, **kwargs):
+        raise ValueError("namer exploded")
+
+    monkeypatch.setattr(tasks, "translate_one", boom)
+    response = client.post("/api/name-check", json={"smiles": "CCCCO", "name": "butan-1-ol"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["verdict"] == "same"
+    assert body["engine"]["status"] == "error"
+    assert body["input_svg"]
+
+
+@pytest.mark.parametrize("smiles", ["CCO\nCO", "   ", "CCO CO"])
+def test_more_or_less_than_one_smiles_is_a_400(redis_client, smiles):
+    response = client.post("/api/name-check", json={"smiles": smiles, "name": "ethanol"})
+    assert response.status_code == 400, response.text
+
+
+def test_a_name_on_two_lines_is_refused(redis_client):
+    response = client.post("/api/name-check", json={"smiles": "CCO", "name": "ethanol\nmethanol"})
+    assert response.status_code == 400
+    assert "one line" in response.json()["detail"]
+
+
+def test_a_batch_row_keeps_opsins_warning(redis_client):
+    (row,), _ = tasks._name_prepared([_pair(0, "CCc1cccnc1", "ethylpyridine")], True, True)
+    assert "APPEARS_AMBIGUOUS" in row["opsin_warnings"]

@@ -364,3 +364,10 @@ def test_an_over_long_name_is_an_error_row_not_an_opsin_call():
     assert row.smiles is None
     assert row.claimed_name is None
     assert "2000" in row.error
+
+
+def test_a_name_on_two_lines_is_an_error_row():
+    (row,) = parse_check_csv(b'smiles,name\nCCO,"ethanol\nmethanol"\n', 10)
+    assert row.smiles is None
+    assert row.error == "A name must be one line"
+    assert row.claimed_name == "ethanol\nmethanol"

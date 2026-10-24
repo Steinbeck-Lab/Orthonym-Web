@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { checkName, createJob, parsePreview } from '../lib/api'
 import { latestOnly } from '../lib/batchJob'
+import { verdictHow } from '../lib/verdicts'
 import useShareLink from '../lib/useShareLink'
 import BatchResults from '../components/BatchResults'
 import Dropzone from '../components/Dropzone'
@@ -31,9 +32,7 @@ function Verdict({ result, smiles }) {
         <ShareButton fields={{ smiles, name: result.name }} />
       </div>
       <p className="check-verdict__how">
-        {unreadable
-          ? 'OPSIN could not read this name, so there is no structure to compare.'
-          : 'OPSIN read your name; the two structures were compared by InChIKey.'}
+        {verdictHow(result)}
       </p>
       <OpsinWarnings warnings={result.warnings} />
       <div className="check-verdict__figures">
@@ -66,6 +65,9 @@ function Check() {
   const [fetchError, setFetchError] = useState(null)
   const [note, setNote] = useState(null)
   const track = useRef(latestOnly())
+  // The file preview's own guard: picking file A then B must never leave A's
+  // count beside B, or a count after Remove.
+  const trackPreview = useRef(latestOnly())
   // 'pair' checks one SMILES and name; 'file' starts a name-check job from a
   // smiles,name CSV, shown in the batch table with a verdict column.
   const [mode, setMode] = useState('pair')
@@ -85,6 +87,9 @@ function Check() {
     try {
       const envelope = await createJob({ file, kind: 'check' })
       // Not remembered in jobStore: that list is Home's to restore.
+      // A new job replaces the file: one file, one run.
+      setFile(null)
+      setPreview(null)
       setJob({
         jobId: envelope.job_id,
         ownerToken: envelope.owner_token,
@@ -180,14 +185,20 @@ function Check() {
                   setFile(chosen)
                   setPreview(null)
                   setNote(null)
-                  if (!chosen) return
+                  if (!chosen) {
+                    trackPreview.current(Promise.resolve(null))
+                    return
+                  }
                   try {
-                    setPreview(await parsePreview({ file: chosen }))
+                    const { stale, value } = await trackPreview.current(parsePreview({ file: chosen }))
+                    if (!stale) setPreview(value)
                   } catch (err) {
                     setNote(`Could not read that file: ${err?.message ?? 'unknown error'}`)
                   }
                 }}
                 onRemove={() => {
+                  // Retires any preview still in flight for the removed file.
+                  trackPreview.current(Promise.resolve(null))
                   setFile(null)
                   setPreview(null)
                 }}
@@ -196,8 +207,8 @@ function Check() {
               />
               <p className="check-panel__help">
                 A CSV with a <code>smiles</code> column and a <code>name</code> column; an{' '}
-                <code>id</code> column is optional. Every row gets a verdict and Orthonym&rsquo;s own
-                name.
+                <code>id</code> column is optional. Each row with a readable SMILES and a one-line
+                name gets a verdict and Orthonym&rsquo;s own name.
               </p>
               <div className="check-panel__actions">
                 <button type="submit" className="btn btn--accent" disabled={starting || !file}>
@@ -284,7 +295,7 @@ function Check() {
         {mode === 'file' ? (
           <section className={`check-results${job ? ' check-results--job' : ''}`} aria-label="Checked rows">
             {job ? (
-              <BatchResults job={job} persist={false} onForget={() => setJob(null)} />
+              <BatchResults key={job.jobId} job={job} persist={false} onForget={() => setJob(null)} />
             ) : (
               <p className="check-results__empty">
                 No file checked yet. Each row is compared on structure only: a name can describe the
