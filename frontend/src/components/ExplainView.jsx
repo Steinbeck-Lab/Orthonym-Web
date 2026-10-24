@@ -148,7 +148,7 @@ export default function ExplainView({
         )}
         {/* /api/explain returns the name and its decomposition but
             no confidence tier. For a STRUCTURE the tier is a real
-            Orthonym verdict, so runExplain fetches it from
+            Orthonym verdict, so useExplain fetches it from
             /api/translate alongside and it is shown here -- PRODUCT.md
             principle 3 requires it wherever a name appears.
 
@@ -173,7 +173,7 @@ export default function ExplainView({
         )}
       </div>
 
-      {/* A partial result is a real case (see runExplain): the backend
+      {/* A partial result is a real case (see lib/useExplain.js): the backend
           can name and draw a molecule and still fail to decompose that
           name, and it then carries `error` alongside `name`/`svg`.
           Shown as a notice rather than a blocking error, so nothing

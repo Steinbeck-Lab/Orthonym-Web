@@ -10,26 +10,23 @@ many records as the job has rows and the reason travels with it.
 from rdkit import Chem
 from rdkit.Chem import rdDepictor
 
-# (SD tag, row key), in file order.
+from app.schemas import EXPORT_FIELDS
+
+# SD tag names where they are not just the field in capitals: the engine's
+# own verdict fields carry the ORTHONYM_ prefix.
+_SD_NAME = {
+    "name": "ORTHONYM_NAME",
+    "status": "ORTHONYM_STATUS",
+    "tier": "ORTHONYM_TIER",
+    "limit_code": "ORTHONYM_LIMIT_CODE",
+}
+
+# (SD tag, row key), in file order: EXPORT_FIELDS minus the index and the
+# SMILES, which the molblock itself carries.
 SDF_TAGS: list[tuple[str, str]] = [
-    ("ORTHONYM_NAME", "name"),
-    ("ORTHONYM_STATUS", "status"),
-    ("ORTHONYM_TIER", "tier"),
-    ("ORTHONYM_LIMIT_CODE", "limit_code"),
-    ("ROUNDTRIP_SMILES", "roundtrip_smiles"),
-    ("ROUNDTRIP_MATCH", "roundtrip_match"),
-    ("INPUT", "input"),
-    ("INPUT_ID", "input_id"),
-    ("ERROR", "error"),
-    ("STRIPPED_FROM", "stripped_from"),
-    ("REMOVED", "removed"),
-    ("CLAIMED_NAME", "claimed_name"),
-    ("VERDICT", "verdict"),
-    ("VERDICT_TEXT", "verdict_text"),
-    ("CLAIMED_SMILES", "claimed_smiles"),
-    ("OPSIN_WARNINGS", "opsin_warnings"),
-    ("ENGINE_VERSION", "engine_version"),
-    ("ENGINE_COMMIT", "engine_commit"),
+    (_SD_NAME.get(key, key.upper()), key)
+    for key in EXPORT_FIELDS
+    if key not in ("index", "smiles")
 ]
 
 
@@ -48,14 +45,21 @@ def _value(value) -> str:
     return " " + text if text.startswith(("$$$$", ">")) else text
 
 
+def molblock_2d(mol) -> str:
+    """A 2D V2000 molblock. Coordinates are computed on a COPY:
+    Compute2DCoords mutates the molecule it is given, and a caller may still
+    draw from it. Shared with /from-name's SDF (tasks.name_to_smiles)."""
+    copy = Chem.Mol(mol)
+    rdDepictor.Compute2DCoords(copy)
+    return Chem.MolToMolBlock(copy)
+
+
 def _molblock(smiles: str | None, title: str) -> str:
     mol = Chem.MolFromSmiles(smiles) if smiles else None
     if mol is None:
         mol = Chem.Mol()
-    else:
-        rdDepictor.Compute2DCoords(mol)
     mol.SetProp("_Name", title)
-    return Chem.MolToMolBlock(mol)
+    return molblock_2d(mol)
 
 
 def sdf_record(row: dict) -> str:

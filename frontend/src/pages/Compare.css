@@ -7,12 +7,6 @@
    because every line style under a name already means a confidence tier.
    ============================================================ */
 
-/* Two classes, so this beats App.css's one-class `.workspace` rules, which
-   load after this file. */
-.workspace.compare {
-  grid-template-columns: minmax(0, 1fr);
-}
-
 .compare-panel form {
   display: flex;
   flex-direction: column;
@@ -38,10 +32,6 @@
   gap: var(--s-md);
 }
 
-.compare-input__head .check-mode {
-  margin-bottom: 0;
-}
-
 .compare-input__label,
 .compare-side__label {
   margin: 0;
@@ -59,36 +49,19 @@
   gap: var(--s-md);
 }
 
-.compare-panel__note,
-.compare-side__empty {
+/* Not a card (workspace__bare): one line on the ground between the rows. */
+.compare-legend {
   margin: 0;
-  font-family: var(--font-body);
-  font-size: var(--t-body-sm);
-  line-height: 1.5;
-  color: var(--body);
-}
-
-/* Not a card: one line on the ground between the two cards' rows. */
-.workspace > .compare-legend {
-  margin: 0;
-  padding: 0;
-  background: none;
-  border: none;
-  box-shadow: none;
   font-family: var(--font-body);
   font-size: var(--t-body-sm);
   color: var(--body);
 }
 
-/* The results row gives up the cell's card chrome: each side is the card. */
-.workspace > .compare-results {
+/* The results row is bare (workspace__bare): each side is the card. */
+.compare-results {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 28rem), 1fr));
   gap: var(--gap);
-  padding: 0;
-  background: none;
-  border: none;
-  box-shadow: none;
 }
 
 .compare-side {

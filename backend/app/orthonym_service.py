@@ -211,8 +211,8 @@ def _roundtrip_check(name: str, mol: Chem.Mol) -> tuple[Optional[str], Optional[
     if roundtrip_mol is None:
         return raw, False
 
-    original_key = _inchikey(mol)
-    roundtrip_key = _inchikey(roundtrip_mol)
+    original_key = inchikey(mol)
+    roundtrip_key = inchikey(roundtrip_mol)
     if original_key is None or roundtrip_key is None:
         # RDKit's InChI support can decline a molecule (unusual valences,
         # some organometallics). Falling back to canonical SMILES keeps a
@@ -224,7 +224,7 @@ def _roundtrip_check(name: str, mol: Chem.Mol) -> tuple[Optional[str], Optional[
     return raw, original_key == roundtrip_key
 
 
-def _inchikey(mol: Chem.Mol) -> Optional[str]:
+def inchikey(mol: Chem.Mol) -> Optional[str]:
     """The full standard InChIKey, or None if RDKit will not compute one.
 
     RDKit logs and returns an empty string rather than raising for some

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import useCopy from '../lib/useCopy'
 import Icon from './Icon'
 
 /**
@@ -11,22 +11,7 @@ import Icon from './Icon'
  * not told "copied" on a control they did not just operate.
  */
 export default function CopyButton({ text, label = 'Copy name', icon = 'copy', className = '' }) {
-  const [copied, setCopied] = useState(false)
-  const timer = useRef(null)
-
-  useEffect(() => () => clearTimeout(timer.current), [])
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-      clearTimeout(timer.current)
-      timer.current = setTimeout(() => setCopied(false), 1400)
-    } catch {
-      // Clipboard blocked (insecure context, denied permission). Nothing to do
-      // but leave the icon unchanged -- a failed copy must not claim success.
-    }
-  }
+  const [copied, copy] = useCopy(text)
 
   return (
     <button

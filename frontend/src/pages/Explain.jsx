@@ -36,7 +36,6 @@ const EXAMPLES = [
 ]
 
 
-// phase: 'idle' | 'loading' | 'success' | 'error' (mirrors IupacToSmiles.jsx)
 // Classroom mode's default step: every part shown (clamped to the count).
 const ALL = Infinity
 

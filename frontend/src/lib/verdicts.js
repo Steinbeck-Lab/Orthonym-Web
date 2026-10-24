@@ -1,16 +1,6 @@
-// The name-check verdict words, keyed as backend/app/name_check.py keys them.
-// A batch row carries only the key; the single check carries the words too.
-// About STRUCTURE only: never "correct", which would claim the name is the
-// preferred IUPAC name.
-export const VERDICT_TEXT = Object.freeze({
-  same: 'Same structure',
-  protonation: 'Same skeleton; protonation differs',
-  stereo: 'Same skeleton; stereo or isotopes differ',
-  stereo_protonation: 'Same skeleton; stereo or isotopes and protonation differ',
-  different: 'Different structure',
-  unreadable: 'OPSIN cannot read this name',
-  uncomparable: 'Could not compare',
-})
+// The words for a name-check verdict live on the server: every answer and
+// every batch row carries `verdict_text`. This file holds only the line that
+// says what the check actually did.
 
 /** The one line under a verdict saying what was actually done: true for
  *  every verdict, including the two where no comparison ran. */

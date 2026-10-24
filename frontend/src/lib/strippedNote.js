@@ -9,3 +9,17 @@ export function strippedNote(row) {
   }
   return row?.stripped_from && row.removed ? `Named after removing: ${row.removed}` : null
 }
+
+/** What the visitor typed: after salt stripping, `smiles` is the kept
+ *  fragment and `stripped_from` the input. */
+export function typedInput(row) {
+  return row.stripped_from ?? row.smiles
+}
+
+/** The tail of a result picture's alt text: the picture is of the named
+ *  structure, which after stripping is only part of what was typed. */
+export function structureAlt(row) {
+  return row.stripped_from
+    ? `named: the largest fragment of "${row.stripped_from}"`
+    : `you entered, "${row.smiles}"`
+}

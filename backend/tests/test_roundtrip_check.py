@@ -21,7 +21,7 @@ import pytest
 from rdkit import Chem
 
 from app import orthonym_service
-from app.orthonym_service import _inchikey, _roundtrip_check
+from app.orthonym_service import _roundtrip_check, inchikey
 
 
 def _check(name: str, smiles: str):
@@ -120,16 +120,16 @@ def test_an_unreadable_opsin_answer_is_a_mismatch_not_a_pass(monkeypatch):
 
 def test_a_declined_inchikey_is_none_not_an_empty_string(monkeypatch):
     """RDKit returns "" for a molecule it declines. Two empty strings compare
-    equal and would read as a passing round trip, so _inchikey reports None."""
+    equal and would read as a passing round trip, so inchikey reports None."""
     mol = Chem.MolFromSmiles("CCO")
     monkeypatch.setattr(orthonym_service, "MolToInchiKey", lambda m: "")
-    assert _inchikey(mol) is None
+    assert inchikey(mol) is None
 
     def boom(m):
         raise ValueError("declined")
 
     monkeypatch.setattr(orthonym_service, "MolToInchiKey", boom)
-    assert _inchikey(mol) is None
+    assert inchikey(mol) is None
 
 
 def test_declined_keys_fall_back_to_canonical_smiles(monkeypatch):

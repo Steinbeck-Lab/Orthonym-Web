@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { bibtex, bibtexLines, referenceAuthors } from './citation.js'
+import { bibtex, citationEntries, referenceAuthors } from './citation.js'
 
 const LIVE = { version: '1.0.9', commit: '81ba930abcdef' }
 
@@ -36,12 +36,12 @@ test('authors in CITATION.cff order', () => {
   assert.equal(referenceAuthors(), 'Rajan, K.; Zielesny, A.; Steinbeck, C.')
 })
 
-test('bibtexLines splits the text into entry, field and closing lines, losing nothing', () => {
-  const lines = bibtexLines(LIVE)
-  assert.equal(lines.map((l) => l.text).join('\n'), bibtex(LIVE))
-  assert.deepEqual(lines[0], { kind: 'entry', text: '@article{rajan2026orthonym,', type: '@article', key: 'rajan2026orthonym' })
-  const doi = lines.find((l) => l.kind === 'field' && l.name === 'doi')
-  assert.equal(doi.value, '10.26434/chemrxiv.15009769/v1')
-  assert.ok(lines.some((l) => l.kind === 'close'))
-  assert.ok(lines.some((l) => l.kind === 'blank'))
+test('the entries are the data the BibTeX text is written from', () => {
+  const [paper, software] = citationEntries(LIVE)
+  assert.equal(paper.type, 'article')
+  assert.equal(paper.key, 'rajan2026orthonym')
+  assert.deepEqual(paper.fields.find(([n]) => n === 'doi'), ['doi', '10.26434/chemrxiv.15009769/v1'])
+  assert.equal(software.fields.find(([n]) => n === 'version')[1], '1.0.9')
+  // A field with no value is left out, not written empty.
+  assert.equal(citationEntries({}).at(1).fields.some(([n]) => n === 'version' || n === 'note'), false)
 })

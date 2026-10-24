@@ -29,6 +29,7 @@ from .schemas import (
     ExamplesResponse,
     ExplainResponse,
     HealthResponse,
+    JobOptions,
     IupacToSmilesResponse,
     NameCheckRequest,
     NameCheckResponse,
@@ -177,11 +178,22 @@ def _fast_result(task, args: list, settings) -> dict:
         result = async_result.get(timeout=settings.FAST_PATH_TIMEOUT)
     except CeleryTimeoutError as exc:
         raise _timeout_504(settings) from exc
+    _forget(async_result)
+    return result
+
+
+def _forget(async_result) -> None:
+    """Drop a read result from Celery's backend, which would otherwise keep it
+    (the visitor's input and a drawing) for JOB_RESULT_TTL_SECONDS."""
     try:
         async_result.forget()
     except Exception:  # noqa: BLE001 - cleanup must not fail a served request
         logger.debug("Could not forget a fast-path result", exc_info=True)
-    return result
+
+
+def _job_options(body: TranslateRequest) -> JobOptions:
+    """The job a /api/translate request becomes: its switches, unchanged."""
+    return JobOptions.model_validate(body.model_dump(include=set(JobOptions.model_fields)))
 
 
 def _canonicalize(smiles_list: list[str], max_molecules: int):
@@ -262,10 +274,7 @@ def translate(request: Request, body: TranslateRequest):
         # used to live inside admit_and_dispatch, strictly after this).
         check_job_allowed(ip)
         molecules = _canonicalize(non_blank, settings.MAX_BATCH_SIZE)
-        return admit_and_dispatch(
-            ip, molecules, "smiles_list", body.best_effort, body.verify,
-            strip_salts=body.strip_salts,
-        )
+        return admit_and_dispatch(ip, molecules, "smiles_list", _job_options(body))
 
     # Crash-loop fix (final review): this branch used to hand raw,
     # unbounded user text straight to translate_fast -> translate_one ->
@@ -297,10 +306,7 @@ def translate(request: Request, body: TranslateRequest):
         # `molecules` is already canonicalized above -- no need to pay for
         # it twice.
         check_job_allowed(ip)
-        return admit_and_dispatch(
-            ip, molecules, "smiles_list", body.best_effort, body.verify,
-            strip_salts=body.strip_salts,
-        )
+        return admit_and_dispatch(ip, molecules, "smiles_list", _job_options(body))
     # Forget the backend entry. Celery's redis backend SETEXs every result for
     # JOB_RESULT_TTL_SECONDS (24 h) and .get() never removes it -- and
     # translate_fast's results are full ResultItems, depiction_svg included.
@@ -308,10 +314,7 @@ def translate(request: Request, body: TranslateRequest):
     # leaving them there quietly reinstates most of the 7-day cache bloat that
     # excluding the picture from name_cache was meant to remove. Nobody reads a
     # fast-path result twice: the caller is holding it.
-    try:
-        async_result.forget()
-    except Exception:  # noqa: BLE001 - cleanup must not fail a served request
-        logger.debug("Could not forget fast-path result", exc_info=True)
+    _forget(async_result)
     return TranslateResponse(results=[ResultItem.model_validate(r) for r in results])
 
 

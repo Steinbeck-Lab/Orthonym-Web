@@ -966,8 +966,10 @@ def test_the_fast_job_path_attaches_an_errback_like_the_batch_path_does(
     molecules = [
         ParsedMolecule(index=0, raw_input="CCO", input_id=None, smiles="CCO", error=None)
     ]
+    from app.schemas import JobOptions
+
     jobs_api.admit_and_dispatch(
-        "203.0.113.56", molecules, "smiles_list", True, False
+        "203.0.113.56", molecules, "smiles_list", JobOptions(best_effort=True, verify=False)
     )
 
     errback = captured.get("link_error")
@@ -1003,9 +1005,9 @@ def test_an_uploaded_file_can_turn_best_effort_off(redis_client, monkeypatch):
     """
     seen: dict = {}
 
-    def _capture(ip, molecules, fmt, best_effort, verify=True, *_later_switches):
-        seen["best_effort"] = best_effort
-        seen["verify"] = verify
+    def _capture(ip, molecules, fmt, options):
+        seen["best_effort"] = options.best_effort
+        seen["verify"] = options.verify
         from app.schemas import JobEnvelope
 
         return JobEnvelope(
@@ -1038,9 +1040,9 @@ def test_an_uploaded_file_still_defaults_to_best_effort(redis_client, monkeypatc
     """
     seen: dict = {}
 
-    def _capture(ip, molecules, fmt, best_effort, verify=True, *_later_switches):
-        seen["best_effort"] = best_effort
-        seen["verify"] = verify
+    def _capture(ip, molecules, fmt, options):
+        seen["best_effort"] = options.best_effort
+        seen["verify"] = options.verify
         from app.schemas import JobEnvelope
 
         return JobEnvelope(
@@ -1744,9 +1746,9 @@ def test_the_check_columns_are_in_the_csv(redis_client):
     job_id = _submit_check().json()["job_id"]
     header, first = client.get(f"/api/jobs/{job_id}/results.csv").text.splitlines()[:2]
     cols = header.split(",")
-    assert cols[-7:] == [
+    assert cols[-9:] == [
         "claimed_name", "verdict", "verdict_text", "claimed_smiles", "opsin_warnings",
-        "engine_version", "engine_commit",
+        "tier", "strip_skipped", "engine_version", "engine_commit",
     ]
     assert "ethanol" in first and "same" in first
 

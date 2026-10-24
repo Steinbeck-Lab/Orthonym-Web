@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import ChoicePills from '../components/ChoicePills'
 import ExplainView from '../components/ExplainView'
 import Icon from '../components/Icon'
 import ReportLink from '../components/ReportLink'
@@ -7,9 +8,8 @@ import TransportNotice from '../components/TransportNotice'
 import { compareMarks, compareShareFields } from '../lib/compareNodes'
 import useExplain, { TIER_SETTINGS } from '../lib/useExplain'
 import useShareLink from '../lib/useShareLink'
-// Explain.css styles ExplainView; Check.css holds the two-choice switch.
+// Explain.css styles ExplainView.
 import './Explain.css'
-import './Check.css'
 import './Compare.css'
 
 const EXAMPLES = [
@@ -23,24 +23,17 @@ function SideInput({ id, label, value, onValue, mode, onMode, disabled }) {
     <div className="compare-input">
       <div className="compare-input__head">
         <span className="compare-input__label">{label}</span>
-        <div className="check-mode" role="radiogroup" aria-label={`${label}: name or SMILES`}>
-          {[
+        <ChoicePills
+          name={`${id}-mode`}
+          label={`${label}: name or SMILES`}
+          options={[
             ['name', 'Name'],
             ['smiles', 'SMILES'],
-          ].map(([v, text]) => (
-            <label key={v} className={`check-mode__opt${mode === v ? ' check-mode__opt--on' : ''}`}>
-              <input
-                type="radio"
-                name={`${id}-mode`}
-                value={v}
-                checked={mode === v}
-                onChange={() => onMode(v)}
-                disabled={disabled}
-              />
-              {text}
-            </label>
-          ))}
-        </div>
+          ]}
+          value={mode}
+          onChange={onMode}
+          disabled={disabled}
+        />
       </div>
       <div className="field field--framed">
         <label htmlFor={id} className="field__label">
@@ -73,11 +66,11 @@ function SideResult({ label, explain, marks }) {
           <TransportNotice error={fetchError} />
         </p>
       )}
-      {phase === 'idle' && !fetchError && <p className="compare-side__empty">Nothing here yet.</p>}
-      {phase === 'loading' && <p className="compare-side__empty">Naming and decomposing…</p>}
+      {phase === 'idle' && !fetchError && <p className="panel-note">Nothing here yet.</p>}
+      {phase === 'loading' && <p className="panel-note">Naming and decomposing…</p>}
       {phase === 'error' && (
         <div role="alert">
-          <p className="compare-side__empty">{apiError || 'Could not explain this molecule'}</p>
+          <p className="panel-note">{apiError || 'Could not explain this molecule'}</p>
           <ReportLink row={tierRow} where="Compare" settings={TIER_SETTINGS} />
         </div>
       )}
@@ -143,7 +136,7 @@ function Compare() {
         </p>
       </section>
 
-      <main className="workspace compare" aria-label="Compare two names">
+      <main className="workspace workspace--single compare" aria-label="Compare two names">
         <section className="compare-panel" aria-label="The two molecules">
           <form
             onSubmit={(event) => {
@@ -163,7 +156,7 @@ function Compare() {
               </button>
               {shareFields && <ShareButton fields={shareFields} />}
               {note && (
-                <p className="compare-panel__note" role="status">
+                <p className="panel-note" role="status">
                   {note}
                 </p>
               )}
@@ -195,18 +188,18 @@ function Compare() {
         </section>
 
         {both && !marks && (
-          <p className="compare-legend">
+          <p className="compare-legend workspace__bare">
             One side has no breakdown of its name, so no parts are marked.
           </p>
         )}
         {marks && (
-          <p className="compare-legend">
+          <p className="compare-legend workspace__bare">
             <span className="explain-name__part--differs">Grey</span> marks a part the other name
             does not have.
           </p>
         )}
 
-        <div className="compare-results">
+        <div className="compare-results workspace__bare">
           <SideResult label="A" explain={left} marks={marks?.a ?? null} />
           <SideResult label="B" explain={right} marks={marks?.b ?? null} />
         </div>

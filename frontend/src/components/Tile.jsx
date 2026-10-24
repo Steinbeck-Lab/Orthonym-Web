@@ -1,5 +1,5 @@
 import { limitReasonFor } from '../lib/limitReasons'
-import { strippedNote } from '../lib/strippedNote'
+import { strippedNote, structureAlt, typedInput } from '../lib/strippedNote'
 import { NAMED_STATUSES, STATE_CLASS, VERIFIED_STATUSES, isMismatchHere, isUncheckedHere, stateLabelFor } from '../lib/statuses'
 import useDepiction from '../lib/useDepiction'
 import CopyButton from './CopyButton'
@@ -89,8 +89,8 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
       <div className="tile__head">
         {/* What the visitor typed: after salt stripping `smiles` is the kept
             fragment, and the note in the foot says what went. */}
-        <code className="tile__smiles" title={row.stripped_from ?? smiles}>
-          {row.stripped_from ?? smiles}
+        <code className="tile__smiles" title={typedInput(row)}>
+          {typedInput(row)}
         </code>
       </div>
 
@@ -109,11 +109,7 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
         {!isPending && NAMED_STATUSES.has(status) && depiction_svg && (
           <div className="tile__depictions">
             <figure className="tile__depiction">
-              <img src={depiction_svg} alt={
-                row.stripped_from
-                  ? `2D structure named: the largest fragment of "${row.stripped_from}"`
-                  : `2D structure you entered, "${smiles}"`
-              } />
+              <img src={depiction_svg} alt={`2D structure ${structureAlt(row)}`} />
               <figcaption className="tile__depiction-cap">Input</figcaption>
             </figure>
             {roundtrip_smiles && (

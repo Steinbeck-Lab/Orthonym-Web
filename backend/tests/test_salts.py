@@ -2,7 +2,13 @@
 
 from rdkit import Chem
 
-from app.salts import strip_salts
+from app.salts import strip
+
+
+def strip_salts(smiles):
+    """(kept, removed) from the production `strip`, for readable asserts."""
+    kept, notes = strip(smiles)
+    return kept, notes.get("removed")
 
 
 def test_one_fragment_is_unchanged():
@@ -148,7 +154,11 @@ def test_a_fast_engine_error_keeps_the_note(redis_client, monkeypatch):
 
 
 def test_a_timed_out_row_names_the_fragment_it_ran_on():
-    timeout = tasks._ChunkTimedOut([], 0, [dict(_SALT)])
+    # The loop hands over what the engine was given (test_name_check covers
+    # that path end to end); the handler only labels it.
+    timeout = tasks._ChunkTimedOut(
+        [], 0, [dict(_SALT)], named_as=("CCO", {"stripped_from": "CCO.Cl", "removed": "Cl"})
+    )
     (row,), _ = tasks._timed_out_rows(timeout)
     assert (row["smiles"], row["stripped_from"], row["removed"]) == ("CCO", "CCO.Cl", "Cl")
 

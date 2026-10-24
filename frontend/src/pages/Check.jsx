@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react'
 import { checkName, createJob, parsePreview } from '../lib/api'
-import { latestOnly } from '../lib/batchJob'
+import { jobEntryFromEnvelope, latestOnly } from '../lib/batchJob'
 import { verdictHow } from '../lib/verdicts'
 import useShareLink from '../lib/useShareLink'
 import BatchResults from '../components/BatchResults'
+import ChoicePills from '../components/ChoicePills'
 import Dropzone from '../components/Dropzone'
 import Icon from '../components/Icon'
 import OpsinWarnings from '../components/OpsinWarnings'
@@ -23,15 +24,15 @@ const EXAMPLES = [
 
 // The verdict is about STRUCTURE only. It borrows no tier and no tier colour:
 // the engine's own tier sits below it, in the tile Home uses.
-function Verdict({ result, smiles }) {
+function Verdict({ result }) {
   const unreadable = result.verdict === 'unreadable'
   return (
     <div className="check-verdict">
       <div className="check-verdict__head">
-        <p className={`check-verdict__text check-verdict__text--${result.verdict}`}>{result.verdict_text}</p>
-        <ShareButton fields={{ smiles, name: result.name }} />
+        <p className="check-verdict__text">{result.verdict_text}</p>
+        <ShareButton fields={{ smiles: result.smiles, name: result.name }} />
       </div>
-      <p className="check-verdict__how">
+      <p className="panel-note">
         {verdictHow(result)}
       </p>
       <OpsinWarnings warnings={result.warnings} />
@@ -90,12 +91,7 @@ function Check() {
       // A new job replaces the file: one file, one run.
       setFile(null)
       setPreview(null)
-      setJob({
-        jobId: envelope.job_id,
-        ownerToken: envelope.owner_token,
-        moleculeCount: envelope.molecule_count,
-        status: envelope.status ?? 'queued',
-      })
+      setJob(jobEntryFromEnvelope(envelope))
     } catch (err) {
       // The server's own sentence: no name column, too many rows, a busy cap.
       setNote(err?.message || 'Could not start the check.')
@@ -153,27 +149,20 @@ function Check() {
 
       <main className="workspace check" aria-label="Check a name">
         <section className="check-panel" aria-label="Structure and name">
-          <div className="check-mode" role="radiogroup" aria-label="What to check">
-            {[
+          <ChoicePills
+            name="check-mode"
+            label="What to check"
+            options={[
               ['pair', 'One pair'],
               ['file', 'Upload CSV'],
-            ].map(([value, label]) => (
-              <label key={value} className={`check-mode__opt${mode === value ? ' check-mode__opt--on' : ''}`}>
-                <input
-                  type="radio"
-                  name="check-mode"
-                  value={value}
-                  checked={mode === value}
-                  onChange={() => {
-                    setMode(value)
-                    setNote(null)
-                  }}
-                  disabled={busy || starting}
-                />
-                {label}
-              </label>
-            ))}
-          </div>
+            ]}
+            value={mode}
+            onChange={(value) => {
+              setMode(value)
+              setNote(null)
+            }}
+            disabled={busy || starting}
+          />
 
           {mode === 'file' ? (
             <form onSubmit={startJob} noValidate>
@@ -205,7 +194,7 @@ function Check() {
                 onReject={setNote}
                 disabled={starting}
               />
-              <p className="check-panel__help">
+              <p className="panel-note">
                 A CSV with a <code>smiles</code> column and a <code>name</code> column; an{' '}
                 <code>id</code> column is optional. Each row with a readable SMILES and a one-line
                 name gets a verdict and Orthonym&rsquo;s own name.
@@ -293,7 +282,7 @@ function Check() {
         </section>
 
         {mode === 'file' ? (
-          <section className={`check-results${job ? ' check-results--job' : ''}`} aria-label="Checked rows">
+          <section className={`check-results${job ? ' workspace__bare' : ''}`} aria-label="Checked rows">
             {job ? (
               <BatchResults key={job.jobId} job={job} persist={false} onForget={() => setJob(null)} />
             ) : (
@@ -319,7 +308,7 @@ function Check() {
           {busy && <p className="check-results__empty">Reading the name…</p>}
           {phase === 'done' && result && (
             <>
-              <Verdict result={result} smiles={result.smiles} />
+              <Verdict result={result} />
               <h2 className="check-results__engine">Orthonym&rsquo;s own name for this structure</h2>
               <ul className="sampler" role="list">
                 <Tile row={result.engine} phase="done" />

@@ -16,7 +16,7 @@ import {
   translateBatch,
   TranslateJobQueuedError,
 } from '../lib/api'
-import { needsJob } from '../lib/batchJob'
+import { jobEntryFromEnvelope, needsJob } from '../lib/batchJob'
 import { forgetJob, readJobs, rememberJob } from '../lib/jobStore'
 import { MAX_ROWS, parseSmilesLines } from '../lib/parseSmiles'
 import useShareLink from '../lib/useShareLink'
@@ -300,12 +300,7 @@ function Home() {
       const envelope = await createJob({ file: chosenFile, text, bestEffort, verify, stripSalts })
       // Remember it BEFORE anything else can fail: owner_token is returned
       // exactly once, and losing it means the job can never be stopped.
-      const entry = {
-        jobId: envelope.job_id,
-        ownerToken: envelope.owner_token,
-        moleculeCount: envelope.molecule_count ?? count,
-        status: envelope.status ?? 'queued',
-      }
+      const entry = jobEntryFromEnvelope(envelope, count)
       rememberJob(entry)
       setJob(entry)
       setRows([])

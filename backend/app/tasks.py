@@ -41,42 +41,53 @@ class _ChunkTimedOut(Exception):
     holding them is about to be discarded.
     """
 
-    def __init__(self, rows: list[dict], failed: int, remaining: list[dict]):
+    def __init__(
+        self,
+        rows: list[dict],
+        failed: int,
+        remaining: list[dict],
+        in_flight: bool = True,
+        named_as: tuple[str, dict] | None = None,
+    ):
         super().__init__("chunk exceeded its soft time limit")
         self.rows = rows
         self.failed = failed
         self.remaining = remaining
+        # Whether remaining[0] was being NAMED when the limit fired. False when
+        # it fired in a name check, after the row was named and kept.
+        self.in_flight = in_flight
+        # (SMILES given to the engine, the row's notes) for remaining[0]: the
+        # kept fragment when stripping finished, the input when it did not.
+        self.named_as = named_as
 
 
-def name_one(smiles: str, best_effort: bool, verify: bool = True) -> dict:
-    """Name one molecule, consulting the cache first.
+def _named_item(smiles: str, best_effort: bool, verify: bool, depict: bool) -> ResultItem:
+    """The engine's ResultItem for `smiles`, from the shared name cache when
+    it has one, else named now and stored. The one place cache behaviour
+    lives: the batch path, the fast path and the name check all come here, so
+    a molecule named by any of them answers instantly on the others.
 
-    Returns the ResultItem fields a BatchRow needs, minus depiction_svg.
-    The fast path and the batch path share this, so a molecule named by a
-    batch answers instantly on Home and vice versa.
+    A cached item carries no picture (name_cache excludes it); callers that
+    need one draw it themselves.
     """
     cached = name_cache.get_cached(smiles, best_effort, verify)
     if cached is not None:
-        item = cached
-    else:
-        # depict=False: the dict below drops depiction_svg and name_cache
-        # excludes it, so drawing one here would be measured waste (see
-        # translate_one). The fast path draws its own, from the same cache.
-        item = translate_one(
-            smiles, best_effort=best_effort, depict=False, verify=verify
-        )
-        name_cache.put_cached(item, best_effort, verify)
-    return {
-        "smiles": item.smiles,
-        "name": item.name,
-        "status": item.status,
-        "tier": item.tier,
-        "roundtrip_smiles": item.roundtrip_smiles,
-        "roundtrip_match": item.roundtrip_match,
-        "formula": item.formula,
-        "limit_code": item.limit_code,
-        "error": item.error,
-    }
+        return cached
+    item = translate_one(smiles, best_effort=best_effort, depict=depict, verify=verify)
+    name_cache.put_cached(item, best_effort, verify)
+    return item
+
+
+_ROW_FIELDS = {
+    "smiles", "name", "status", "tier", "roundtrip_smiles", "roundtrip_match",
+    "formula", "limit_code", "error",
+}
+
+
+def name_one(smiles: str, best_effort: bool, verify: bool = True) -> dict:
+    """The ResultItem fields a BatchRow needs (no picture). depict=False: the
+    batch row drops the picture, so drawing one would be measured waste."""
+    return _named_item(smiles, best_effort, verify, depict=False).model_dump(include=_ROW_FIELDS)
 
 
 def _row(index: int, raw_input: str, input_id: str | None, named: dict) -> dict:
@@ -148,21 +159,24 @@ def _name_prepared(
     for offset, item in enumerate(prepared):
         index = item["index"]
         if item["smiles"] is None:
-            rows.append(_with_claim(_unparsed_row(item), item))
+            rows.append(_annotate(_unparsed_row(item), item))
             failed += 1
             continue
-        smiles, removed = item["smiles"], None
+        smiles, notes = item["smiles"], {}
         try:
             # Stripped BEFORE the cache: the kept fragment is named as if it
             # were typed alone, so its cache entry is the plain molecule's.
-            smiles, removed = _stripped(item)
+            smiles, notes = _to_name(item)
             named = name_one(smiles, best_effort, verify)
         except SoftTimeLimitExceeded as exc:
             # MUST come before the broad handler: SoftTimeLimitExceeded
             # subclasses Exception, so `except Exception` would swallow the
             # timeout and the loop would run on past the limit until the
-            # hard limit killed the child mid-chunk.
-            raise _ChunkTimedOut(rows, failed, list(prepared[offset:])) from exc
+            # hard limit killed the child mid-chunk. What the engine was given
+            # travels with it, so the handler never re-runs RDKit work.
+            raise _ChunkTimedOut(
+                rows, failed, list(prepared[offset:]), named_as=(smiles, notes)
+            ) from exc
         except Exception as exc:  # noqa: BLE001 - one molecule, not the chunk
             logger.exception("Naming failed for %s", item["smiles"])
             row = _error_row(
@@ -180,48 +194,38 @@ def _name_prepared(
             row = _row(index, item["raw_input"], item["input_id"], named)
             if named["status"] == "error":
                 failed += 1
-        if removed is not None:
-            # After the cache, never in it (app/name_cache.py stores the item).
-            row.update(stripped_from=item["smiles"], removed=removed)
-        row["strip_skipped"] = _strip_skipped(item)
+        _annotate(row, item, notes)
         # A name-check row's verdict, per row and inside the loop, so a time
         # limit hands _ChunkTimedOut rows that already carry their verdicts.
         try:
             _check_row(item, row)
         except SoftTimeLimitExceeded as exc:
             rows.append(row)
-            raise _ChunkTimedOut(rows, failed, list(prepared[offset + 1:])) from exc
+            raise _ChunkTimedOut(
+                rows, failed, list(prepared[offset + 1:]), in_flight=False
+            ) from exc
         rows.append(row)
     return rows, failed
 
 
-def _with_claim(row: dict, item: dict) -> dict:
-    """A row keeps the visitor's claimed name whatever happened to it."""
+def _to_name(item: dict) -> tuple[str, dict]:
+    """The SMILES to name for a prepared item, and the notes its row carries
+    (app/salts.strip); ({}) when the switch is off."""
+    if not item.get("strip_salts"):
+        return item["smiles"], {}
+    from app.salts import strip
+
+    return strip(item["smiles"])
+
+
+def _annotate(row: dict, item: dict, notes: dict | None = None) -> dict:
+    """The one place a row gets what is not the engine's: the salt-stripping
+    notes and the visitor's claimed name. Applied AFTER the cache, so neither
+    can ever be stored in it (app/name_cache.py stores the item)."""
+    row.update(notes or {})
     if item.get("claimed_name"):
         row["claimed_name"] = item["claimed_name"]
     return row
-
-
-def _stripped(item: dict) -> tuple[str, str | None]:
-    """The SMILES to name for a prepared item, and what salt stripping removed
-    (None when the switch is off or there was nothing to strip)."""
-    if not item.get("strip_salts"):
-        return item["smiles"], None
-    from app.salts import strip_salts
-
-    return strip_salts(item["smiles"])
-
-
-def _strip_skipped(item: dict) -> bool:
-    """The switch was on, the input has fragments, but RDKit cannot read it
-    (a structure only CDK rescued), so nothing could be stripped. The row says
-    so rather than staying silent about a switch that did nothing."""
-    if not item.get("strip_salts") or "." not in (item["smiles"] or ""):
-        return False
-    from rdkit import Chem, rdBase
-
-    with rdBase.BlockLogs():
-        return Chem.MolFromSmiles(item["smiles"]) is None
 
 
 def _check_row(item: dict, row: dict) -> None:
@@ -233,14 +237,9 @@ def _check_row(item: dict, row: dict) -> None:
     time limit propagates; the caller turns it into _ChunkTimedOut.
     """
     from app import name_check
-    from app.inputs import MAX_CLAIMED_NAME_LENGTH
 
     claimed = item.get("claimed_name")
     if not claimed:
-        return
-    row["claimed_name"] = claimed
-    # The parser already refuses these; a second gate before OPSIN.
-    if len(claimed) > MAX_CLAIMED_NAME_LENGTH or not name_check.one_line(claimed):
         return
     try:
         result = name_check.check_pair(item["smiles"], claimed)
@@ -269,34 +268,31 @@ def _timed_out_rows(timeout: _ChunkTimedOut) -> tuple[list[dict], int]:
     rows = list(timeout.rows)
     failed = timeout.failed
     for position, item in enumerate(timeout.remaining):
-        # remaining[0] was being named when the limit fired: name it as the
-        # engine saw it (the kept fragment, when stripped), with the note.
-        smiles, removed = _stripped(item) if position == 0 and item["smiles"] else (None, None)
         if item["smiles"] is None:
             # This one had already failed to PARSE, before any time ran out.
             # Keep that reason: relabelling it "Timed out" told the visitor a
             # retry could help an input that can never be read.
-            rows.append(_with_claim(_unparsed_row(item), item))
+            rows.append(_annotate(_unparsed_row(item), item))
             failed += 1
             continue
+        # Only remaining[0], and only if it was in flight, reached the engine:
+        # it alone carries the structure (as the engine saw it -- the kept
+        # fragment, when stripped), which is what makes it -- and only it -- a
+        # "Report SMILES on GitHub" row (frontend/src/lib/github.js). Claiming
+        # the engine failed on a molecule it never tried is a report nobody
+        # can reproduce.
+        named = position == 0 and timeout.in_flight
+        smiles, notes = (timeout.named_as or (item["smiles"], {})) if named else (None, {})
         rows.append(
-            _with_claim(_error_row(
-                item["index"],
-                item["raw_input"],
-                item["input_id"],
-                "Timed out",
-                # Only remaining[0] was being named when the limit fired; the
-                # rest never reached the engine. So only it carries the
-                # structure, which is what makes it -- and only it -- a
-                # "Report SMILES on GitHub" row (frontend/src/lib/github.js). Claiming
-                # the engine failed on a molecule it never tried is a report
-                # nobody can reproduce.
-                smiles=smiles,
-                limit_code=TIMEOUT,
-            ), item)
+            _annotate(
+                _error_row(
+                    item["index"], item["raw_input"], item["input_id"], "Timed out",
+                    smiles=smiles, limit_code=TIMEOUT,
+                ),
+                item,
+                notes,
+            )
         )
-        if removed is not None:
-            rows[-1].update(stripped_from=item["smiles"], removed=removed)
         failed += 1
     return rows, failed
 
@@ -579,16 +575,10 @@ def translate_fast(
             rows.append(_fast_error_item(item["raw_input"], item["error"]))
             continue
 
-        removed = None
-        smiles = item["smiles"]
+        smiles, notes = item["smiles"], {}
         try:
-            smiles, removed = _stripped(item)
-            cached = name_cache.get_cached(smiles, best_effort, verify)
-            result_item = cached if cached is not None else translate_one(
-                smiles, best_effort=best_effort, verify=verify
-            )
-            if cached is None:
-                name_cache.put_cached(result_item, best_effort, verify)
+            smiles, notes = _to_name(item)
+            result_item = _named_item(smiles, best_effort, verify, depict=True)
         except SoftTimeLimitExceeded:
             # MUST precede the broad handler: SoftTimeLimitExceeded subclasses
             # Exception DIRECTLY, so `except Exception` would swallow Celery's
@@ -607,11 +597,8 @@ def translate_fast(
             # per-row error. The last upstream tier rename made classify()
             # raise on live rows; the next one will too.
             logger.exception("Naming failed for %s", smiles)
-            error_item = _fast_error_item(smiles, f"Naming failed: {exc}", limit_code=ENGINE_ERROR)
-            if removed is not None:
-                # `smiles` is the kept fragment the engine ran on: say so.
-                error_item.update(stripped_from=item["smiles"], removed=removed)
-            rows.append(error_item)
+            # `smiles` is the kept fragment the engine ran on; the notes say so.
+            rows.append(_fast_error_item(smiles, f"Naming failed: {exc}", limit_code=ENGINE_ERROR) | notes)
             continue
         if result_item.depiction_svg is None and result_item.status in (
             "pin",
@@ -633,14 +620,8 @@ def translate_fast(
             )
             if svg is not None:
                 result_item = result_item.model_copy(update={"depiction_svg": svg})
-        if removed is not None:
-            # After put_cached above: a stripped row's note never enters the cache.
-            result_item = result_item.model_copy(
-                update={"stripped_from": item["smiles"], "removed": removed}
-            )
-        if _strip_skipped(item):
-            result_item = result_item.model_copy(update={"strip_skipped": True})
-        rows.append(result_item.model_dump())
+        # After the cache (_named_item): a row's notes never enter it.
+        rows.append(result_item.model_dump() | notes)
     return rows
 
 
@@ -674,36 +655,14 @@ def _quietly(produce):
         return None
 
 
-def _molblock_2d(mol):
-    """A 2D V2000 molblock for the SDF download.
-
-    Coordinates are computed on a COPY: Compute2DCoords mutates the molecule
-    it is given, and `mol` is also what the depiction is drawn from. The two
-    steps share one guard because a molblock without coordinates parses but
-    renders as a flat pile in every viewer -- worse than no file at all.
-    """
-    from rdkit import Chem
-    from rdkit.Chem import AllChem
-
-    copy = Chem.Mol(mol)
-    AllChem.Compute2DCoords(copy)
-    return Chem.MolToMolBlock(copy)
-
-
-def _opsin_warnings(name: str) -> list[dict]:
-    """OPSIN's warnings for a name; lives in app/name_check.py, where the
-    name check needs it without importing this module."""
-    from app.name_check import opsin_warnings
-
-    return opsin_warnings(name)
-
-
 @celery_app.task(name="app.tasks.name_to_smiles")
 def name_to_smiles(name: str) -> dict:
     from orthonym.validation.opsin_roundtrip import opsin_parse
     from rdkit import Chem
 
     from app.depiction import structure_svg_data_uri
+    from app.name_check import opsin_warnings
+    from app.sdf_export import molblock_2d
 
     raw = opsin_parse(name)
     mol = Chem.MolFromSmiles(raw) if raw else None
@@ -723,7 +682,7 @@ def name_to_smiles(name: str) -> dict:
     # `mol` (MolToInchiKey) -- both run RDKit's InChI canonicalization from
     # scratch, so computing it twice was ~2x the cost for the same answer
     # (measured: 0.124 ms/molecule vs 0.060 ms/molecule over 5 molecules x
-    # 500 iterations). `app.orthonym_service._inchikey(mol)` looks like the
+    # 500 iterations). `app.orthonym_service.inchikey(mol)` looks like the
     # natural helper to reuse here, but it takes a Mol and would recompute
     # the InChI internally -- that's the exact waste this avoids, so this
     # path deliberately does not call it.
@@ -733,9 +692,9 @@ def name_to_smiles(name: str) -> dict:
         "canonical_smiles": _quietly(lambda: Chem.MolToSmiles(mol)),
         "inchi": inchi,
         "inchikey": inchikey,
-        "molblock": _quietly(lambda: _molblock_2d(mol)),
+        "molblock": _quietly(lambda: molblock_2d(mol)),
         "depiction_svg": structure_svg_data_uri(raw, mol),
-        "warnings": _opsin_warnings(name),
+        "warnings": opsin_warnings(name),
         "error": None,
     }
 
@@ -759,10 +718,7 @@ def check_name(smiles: str, name: str) -> dict:
     # error row beside the verdict, never a 500 that throws the verdict away
     # (translate_fast guards the same way).
     try:
-        cached = name_cache.get_cached(smiles, True, True)
-        engine = cached if cached is not None else translate_one(smiles, best_effort=True, verify=True)
-        if cached is None:
-            name_cache.put_cached(engine, True, True)
+        engine = _named_item(smiles, True, True, depict=True)
     except SoftTimeLimitExceeded:
         raise
     except Exception as exc:  # noqa: BLE001 - the verdict must survive

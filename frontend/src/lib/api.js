@@ -317,9 +317,9 @@ export async function parsePreview({ file = null, text = '', bestEffort = true, 
  * longer be cancelled or deleted; it only expires. Whoever is merely shown a
  * results URL does not hold it, which is the entire ownership model here (no
  * accounts).
+ * `kind: 'check'` starts a name-check job from a smiles,name CSV.
  * @returns {Promise<{job_id:string, molecule_count:number, status:string, owner_token:string}>}
  */
-/** `kind: 'check'` starts a name-check job from a smiles,name CSV. */
 export async function createJob({
   file = null,
   text = '',

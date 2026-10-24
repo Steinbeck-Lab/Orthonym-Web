@@ -3,7 +3,7 @@ import useDepiction from '../lib/useDepiction'
 import CopyButton from './CopyButton'
 import ShareButton from './ShareButton'
 import { limitReasonFor } from '../lib/limitReasons'
-import { strippedNote } from '../lib/strippedNote'
+import { strippedNote, structureAlt, typedInput } from '../lib/strippedNote'
 import ReportLink from './ReportLink'
 import ChemName from './Typeset'
 import TierLamp from './TierLamp'
@@ -50,15 +50,11 @@ function ResultRow({ row, index }) {
       <tr className="results-row">
         <td className="results-cell--num">{index + 1}</td>
         <td className="results-cell--smiles">
-          <code title={row.stripped_from ?? smiles}>{row.stripped_from ?? smiles}</code>
+          <code title={typedInput(row)}>{typedInput(row)}</code>
         </td>
         <td className="results-cell--pic">
           {depiction_svg ? (
-            <img src={depiction_svg} alt={
-                row.stripped_from
-                  ? `Structure named: the largest fragment of "${row.stripped_from}"`
-                  : `Structure you entered, "${smiles}"`
-              } />
+            <img src={depiction_svg} alt={`Structure ${structureAlt(row)}`} />
           ) : (
             <span className="results-cell__none">—</span>
           )}
