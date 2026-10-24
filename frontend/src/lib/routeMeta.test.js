@@ -32,3 +32,7 @@ test("index.html's own title and description are Home's, so the first response a
   assert.ok(html.includes(`content="${description}"`))
   assert.ok(html.includes(`<meta property="og:title" content="${title}" />`))
 })
+
+test('the name-check page has its own head entry', () => {
+  assert.match(ROUTE_META['/check'].title, /Orthonym/)
+})

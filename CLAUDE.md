@@ -126,9 +126,9 @@ Things the repo does not tell you, or tells you only after they cost time.
   `SystemExit` stops a worker booting.
 
 **Frontend**
-- Seven routes (`/`, `/from-name`, `/explain`, `/about`, `/imprint`, `/privacy`, `/terms`) plus
-  redirects and a `*` catch-all, all in `App.jsx`. Home uses the `.workbench` shell, `/from-name` and
-  `/explain` use `.workspace`, `/about` uses `.about`, and the three legal pages use `.legal`. There
+- Eight routes (`/`, `/from-name`, `/explain`, `/check`, `/about`, `/imprint`, `/privacy`, `/terms`)
+  plus redirects and a `*` catch-all, all in `App.jsx`. Home uses the `.workbench` shell, `/from-name`,
+  `/explain` and `/check` use `.workspace`, `/about` uses `.about`, and the three legal pages use `.legal`. There
   is exactly one `.workspace` rule in `App.css`; a second copy is a stale leftover that wins the
   cascade.
 - **Page stylesheets are imported BEFORE `./App.css` in `App.jsx`**, so a page rule at equal

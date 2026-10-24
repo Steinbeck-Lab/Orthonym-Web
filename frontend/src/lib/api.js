@@ -198,6 +198,22 @@ export async function explainName(name) {
   return getJson(`/api/explain-name?name=${encodeURIComponent(name)}`, 'GET /api/explain-name')
 }
 
+/**
+ * Does `name` describe `smiles`? A POST, so neither reaches the access log.
+ * The answer is a verdict about structure only, plus the engine's own name
+ * for the SMILES (`engine`, a full ResultItem). Non-2xx rejects with
+ * httpError (a SMILES RDKit cannot read is a 400 with the parser's reason).
+ */
+export async function checkName(smiles, name) {
+  const res = await fetch('/api/name-check', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ smiles, name }),
+  })
+  if (!res.ok) throw await httpError(res, 'POST /api/name-check')
+  return res.json()
+}
+
 /* ------------------------------------------------------------------ *
  * The job layer
  * ------------------------------------------------------------------ */
