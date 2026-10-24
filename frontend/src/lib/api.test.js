@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { afterEach, test } from 'node:test'
 
-import { checkName, createJob, explainMolecule, explainName, fetchJobResults, jobResultsCsvUrl, jobResultsSdfUrl } from './api.js'
+import { checkName, createJob, explainMolecule, explainName, fetchJobResults, jobResultsCsvUrl, jobResultsSdfUrl, translateBatch } from './api.js'
 import { VERDICT_TEXT } from './verdicts.js'
 
 const REAL = JSON.parse(readFileSync(new URL('./explainResponses.fixture.json', import.meta.url), 'utf8'))
@@ -122,4 +122,21 @@ test('the verdict words match the backend, one per verdict', () => {
     unreadable: 'OPSIN cannot read this name',
     uncomparable: 'Could not compare',
   })
+})
+
+test('the strip switch travels on every naming request, off by default', async () => {
+  const seen = []
+  globalThis.fetch = async (url, init) => {
+    seen.push(init)
+    const body = url === '/api/translate' ? { results: [] } : { job_id: 'j' }
+    return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })
+  }
+  await translateBatch(['CCO'])
+  assert.equal(JSON.parse(seen[0].body).strip_salts, false)
+  await translateBatch(['CCO.Cl'], { stripSalts: true })
+  assert.equal(JSON.parse(seen[1].body).strip_salts, true)
+  await createJob({ file: new Blob(['CCO.Cl\n']), stripSalts: true })
+  assert.equal(seen[2].body.get('strip_salts'), 'true')
+  await createJob({ text: 'CCO' })
+  assert.equal(JSON.parse(seen[3].body).strip_salts, false)
 })

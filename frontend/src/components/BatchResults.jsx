@@ -21,6 +21,7 @@ import {
 } from '../lib/batchJob'
 import { outcomeMessage, tierTally } from '../lib/batchTally'
 import { limitReasonFor } from '../lib/limitReasons'
+import { strippedNote } from '../lib/strippedNote'
 import { VERDICT_TEXT } from '../lib/verdicts'
 import { forgetJob, rememberJob } from '../lib/jobStore'
 import { STATE_CLASS, STATE_SHORT, VERIFIED_STATUSES, stateLabelFor } from '../lib/statuses'
@@ -737,6 +738,7 @@ function BatchResults({ job, onForget, persist = true }) {
                         </td>
                         <td>
                           <NameCell row={row} />
+                          {strippedNote(row) && <span className="limit-reason">{strippedNote(row)}</span>}
                           {/* In the Name cell, not beside Draw: an unnamed row
                               has no name to squeeze, while a pill in the last
                               column widened it for EVERY row on the page. */}

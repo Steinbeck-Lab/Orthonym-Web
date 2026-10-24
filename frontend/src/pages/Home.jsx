@@ -124,6 +124,9 @@ function Home() {
   // engine's own tier is kept), so the switch trades proof for speed and says
   // so on every tile.
   const [verify, setVerify] = useState(true)
+  // Opt-in: name only the largest organic fragment. Off by default; every
+  // stripped row says what was removed (lib/strippedNote.js).
+  const [stripSalts, setStripSalts] = useState(false)
   const [validationNote, setValidationNote] = useState(null)
   const [fetchError, setFetchError] = useState(null)
   const reduceMotion = useReducedMotion()
@@ -219,7 +222,7 @@ function Home() {
     setRows(lines.map(emptyRow))
     setIsSubmitting(true)
 
-    translateBatch(lines, { bestEffort, verify })
+    translateBatch(lines, { bestEffort, verify, stripSalts })
       .then((named) => {
         setIsSubmitting(false)
         // The switches THIS submission used, on the row itself: they may be
@@ -294,7 +297,7 @@ function Home() {
     setValidationNote(null)
     setFetchError(null)
     try {
-      const envelope = await createJob({ file: chosenFile, text, bestEffort, verify })
+      const envelope = await createJob({ file: chosenFile, text, bestEffort, verify, stripSalts })
       // Remember it BEFORE anything else can fail: owner_token is returned
       // exactly once, and losing it means the job can never be stopped.
       const entry = {
@@ -695,12 +698,12 @@ function Home() {
               </div>
             )}
 
-            {/* The two switches sit SIDE BY SIDE, not stacked. They are one
-                decision in two halves -- how hard to try (best-effort) and
+            {/* The switches sit SIDE BY SIDE, not stacked. The first two are
+                one decision in two halves -- how hard to try (best-effort) and
                 whether to prove it (verify) -- and stacking them read as two
                 unrelated settings while costing ~90px of a one-screen budget.
-                The row wraps to a column below 640px, where two switches plus
-                their hints will not fit across. */}
+                Strip salts (off by default) wraps onto the next line; the row
+                becomes a column below 640px. */}
             <div className="workbench__switches">
               <Switch
                 id="opsin-verify"
@@ -733,6 +736,21 @@ function Home() {
                   bestEffort
                     ? 'Unnameable molecules get a second, broader pass.'
                     : 'Strict: no second pass. A molecule the first pass declines abstains.'
+                }
+              />
+
+              <Switch
+                id="strip-salts"
+                checked={stripSalts}
+                onChange={setStripSalts}
+                disabled={isSubmitting}
+                label="Strip salts"
+                onWord="On"
+                offWord="Off"
+                hint={
+                  stripSalts
+                    ? 'Keeps the largest organic fragment; each result says what was removed.'
+                    : 'Names the whole input, counter-ions included.'
                 }
               />
             </div>

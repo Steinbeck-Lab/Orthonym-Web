@@ -110,7 +110,7 @@ export class TranslateJobQueuedError extends Error {
  * @throws {TranslateJobQueuedError} when the backend queues the submission
  *   as a background job instead of returning results directly (see above).
  */
-export async function translateBatch(smilesList, { bestEffort = true, verify = true } = {}) {
+export async function translateBatch(smilesList, { bestEffort = true, verify = true, stripSalts = false } = {}) {
   const res = await fetch('/api/translate', {
     method: 'POST',
     headers: JSON_HEADERS,
@@ -118,7 +118,7 @@ export async function translateBatch(smilesList, { bestEffort = true, verify = t
     // omits it keeps the shipped behaviour. False stops after the primary
     // namer: no second, escalated pass. (The primary namer can still return
     // tier best_effort for some names.)
-    body: JSON.stringify({ smiles: smilesList, best_effort: bestEffort, verify }),
+    body: JSON.stringify({ smiles: smilesList, best_effort: bestEffort, verify, strip_salts: stripSalts }),
   })
   if (!res.ok) {
     throw await httpError(res, 'POST /api/translate')
@@ -277,20 +277,21 @@ async function jobFailure(res, jobId) {
  * file as JSON, or text as multipart, both 400 — see _read_input in
  * backend/app/jobs_api.py.
  */
-function inputRequest({ file, text, bestEffort, verify = true, kind = 'name' }) {
+function inputRequest({ file, text, bestEffort, verify = true, kind = 'name', stripSalts = false }) {
   if (file) {
     const form = new FormData()
     form.append('file', file)
     form.append('best_effort', String(bestEffort))
     form.append('verify', String(verify))
     form.append('kind', kind)
+    form.append('strip_salts', String(stripSalts))
     // No Content-Type header: the browser has to set the multipart boundary.
     return { method: 'POST', body: form }
   }
   return {
     method: 'POST',
     headers: JSON_HEADERS,
-    body: JSON.stringify({ text, best_effort: bestEffort, verify, kind }),
+    body: JSON.stringify({ text, best_effort: bestEffort, verify, kind, strip_salts: stripSalts }),
   }
 }
 
@@ -319,8 +320,15 @@ export async function parsePreview({ file = null, text = '', bestEffort = true, 
  * @returns {Promise<{job_id:string, molecule_count:number, status:string, owner_token:string}>}
  */
 /** `kind: 'check'` starts a name-check job from a smiles,name CSV. */
-export async function createJob({ file = null, text = '', bestEffort = true, verify = true, kind = 'name' } = {}) {
-  const res = await fetch('/api/jobs', inputRequest({ file, text, bestEffort, verify, kind }))
+export async function createJob({
+  file = null,
+  text = '',
+  bestEffort = true,
+  verify = true,
+  kind = 'name',
+  stripSalts = false,
+} = {}) {
+  const res = await fetch('/api/jobs', inputRequest({ file, text, bestEffort, verify, kind, stripSalts }))
   if (!res.ok) throw await jobFailure(res)
   return res.json()
 }
