@@ -325,7 +325,7 @@ export async function fetchJobStatus(jobId) {
  */
 export async function fetchJobResults(
   jobId,
-  { offset = 0, limit = 50, sort = 'index', order = 'asc' } = {}
+  { offset = 0, limit = 50, sort = 'index', order = 'asc', statuses = [] } = {}
 ) {
   // `sort` and `order` are sent always, not only when non-default, so the
   // server's own default can never silently disagree with this one.
@@ -335,6 +335,8 @@ export async function fetchJobResults(
     sort,
     order,
   })
+  // One `status` per tier the table is filtered to; none means every row.
+  for (const status of statuses) query.append('status', status)
   const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/results?${query}`)
   if (!res.ok) throw await jobFailure(res, jobId)
   return res.json()
