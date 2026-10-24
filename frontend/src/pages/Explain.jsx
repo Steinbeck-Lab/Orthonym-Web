@@ -1,18 +1,14 @@
-import { Fragment, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import ConfidenceReport from '../components/ConfidenceReport'
-import { verdictKindFor } from '../lib/explainVerdict'
-import { explainMolecule, explainName, translateBatch } from '../lib/api'
-import { isPart, partOf, sliceName, unplacedNodes } from '../lib/nameTargets'
-import { detailNotes, explainPhase, pieceMark, tabStops } from '../lib/explainView'
-import { nameRuns, applyRuns } from '../lib/nameTypography'
-import ChemName, { Pieces } from '../components/Typeset'
-import { useAtomHighlight } from '../lib/useAtomHighlight'
+import ExplainView from '../components/ExplainView'
+import Switch from '../components/Switch'
+import { hiddenAt, revealSteps } from '../lib/classroom'
+import { sliceName } from '../lib/nameTargets'
+import useExplain, { TIER_SETTINGS } from '../lib/useExplain'
 import { useKetcher } from '../lib/useKetcher'
 import './Explain.css'
 import Icon from '../components/Icon'
 import ReportLink from '../components/ReportLink'
-import ShareButton from '../components/ShareButton'
 import useShareLink from '../lib/useShareLink'
 import TransportNotice from '../components/TransportNotice'
 
@@ -39,10 +35,6 @@ const EXAMPLES = [
   { label: 'benzene', name: 'benzene', smiles: 'c1ccccc1' },
 ]
 
-// The switches the tier row is fetched with -- Home's defaults, since this
-// page has no switches of its own. Named once so the request and the report
-// link cannot state different settings.
-const TIER_SETTINGS = { bestEffort: true, verify: true }
 
 // phase: 'idle' | 'loading' | 'success' | 'error' (mirrors IupacToSmiles.jsx)
 function Explain() {
@@ -54,38 +46,17 @@ function Explain() {
   const [mode, setMode] = useState(
     () => (new URLSearchParams(window.location.search).get('input') === 'draw' ? 'draw' : 'name')
   )
-  const [phase, setPhase] = useState('idle')
-  const [data, setData] = useState(null)
-  const [apiError, setApiError] = useState(null)
-  const [fetchError, setFetchError] = useState(null)
+  const { phase, data, apiError, fetchError, tierRow, resultMode, shareFields, run } = useExplain()
   const [validationNote, setValidationNote] = useState(null)
-  const [hoveredId, setHoveredId] = useState(null)
-  const [pinnedId, setPinnedId] = useState(null)
-  // The confidence tier for a molecule Orthonym itself named. /api/explain does
-  // not return one, so it comes from /api/translate alongside -- see
-  // runExplain. Null in 'name' mode on purpose: the user supplied the name,
-  // so there is no Orthonym verdict on it to report.
-  const [tierRow, setTierRow] = useState(null)
-  // The mode the DISPLAYED result was fetched with, not the tab currently
-  // selected: the tier disclosure below must not rewrite its verdict when the
-  // tab changes after a result has landed (PRODUCT.md principle 3 requires the
-  // tier wherever a name appears). Set by runExplain alongside the request it
-  // describes.
-  const [resultMode, setResultMode] = useState(null)
-  // What the displayed result was asked for, as share-link fields: `name` for
-  // a typed name, `smiles` for a typed or drawn structure.
-  const [shareFields, setShareFields] = useState(null)
-  // Which runExplain is current. The tier fetch below settles on its own
-  // clock, after the explain request has already released the form, so a
-  // reply from an EARLIER molecule could land after the next submit and pin
-  // its tier -- and its "Report SMILES on GitHub" link -- under the new result.
-  const latestRun = useRef(0)
+  // Classroom mode: the name hidden, revealed one part at a time. `step` is
+  // how many parts are showing; every new result starts again at 0.
+  const [classroom, setClassroom] = useState(false)
+  const [step, setStep] = useState(0)
   // enabled only on the Draw tab: the iframe does not exist otherwise, and an
   // armed readiness clock would time out against nothing and report the editor
   // broken before the user ever opened it.
   const { iframeRef, editorState, handleFrameLoad, handleFrameError, getKetcher } =
     useKetcher({ enabled: mode === 'draw' })
-  const activeId = pinnedId ?? hoveredId
 
   // Reads the drawing and hands the SMILES to the SAME runExplain the typed
   // paths use, so a drawn molecule and a pasted one cannot diverge -- that
@@ -121,86 +92,25 @@ function Explain() {
   useShareLink((fields) => {
     const linkMode = fields.name ? 'name' : fields.smiles ? 'smiles' : null
     if (!linkMode) return
+    // Before the run, so a classroom link never shows the name first.
+    const teachingLink = fields.classroom === '1'
+    if (teachingLink) setClassroom(true)
     const value = fields[linkMode].trim()
     setMode(linkMode)
-    setSmilesInput(value)
+    // A classroom link to a NAME must not print the answer in the input box.
+    setSmilesInput(teachingLink && linkMode === 'name' ? '' : value)
     runExplain(value, linkMode)
   })
 
-  function toggleId(id) {
-    setPinnedId((current) => (current === id ? null : id))
-  }
-
-  // The handlers a name piece and an unplaced-part button share: hover or focus
-  // previews a node, click pins it.
-  function hoverProps(id) {
-    return {
-      onMouseEnter: () => setHoveredId(id),
-      onMouseLeave: () => setHoveredId(null),
-      onFocus: () => setHoveredId(id),
-      onBlur: () => setHoveredId(null),
-      onClick: () => toggleId(id),
-    }
-  }
-
   // requestMode defaults to the current tab, but a caller whose tab does not
-  // NAME an endpoint must pass one explicitly. `handleDraw` is that caller: a drawing is a structure once Ketcher hands back its
-  // SMILES, so it asks for 'smiles' while `mode` still reads 'draw'.
-  // (setMode() is not visible to this function's `mode` closure until the next
-  // render, so a caller that sets the tab in the same tick must pass one too.)
+  // NAME an endpoint must pass one explicitly. `handleDraw` is that caller: a
+  // drawing is a structure once Ketcher hands back its SMILES, so it asks for
+  // 'smiles' while `mode` still reads 'draw'. (setMode() is not visible to
+  // this function's `mode` closure until the next render, so a caller that
+  // sets the tab in the same tick must pass one too.)
   function runExplain(value, requestMode = mode) {
-    setFetchError(null)
-    setPhase('loading')
-    setPinnedId(null)
-    setHoveredId(null)
-
-    const request = requestMode === 'name' ? explainName(value) : explainMolecule(value)
-
-    // A drawn or typed STRUCTURE is something Orthonym names itself, so its
-    // confidence tier is a real verdict and PRODUCT.md principle 3 requires it
-    // wherever that name appears. /api/explain carries no tier, so fetch it
-    // alongside.
-    //
-    // Fired in parallel, not chained: the breakdown is the point of this page
-    // and must not wait on a second request. A tier that fails to arrive
-    // leaves tierRow null and the breakdown still renders; a breakdown is
-    // never blocked by the tier.
-    setTierRow(null)
-    setResultMode(requestMode)
-    setShareFields(requestMode === 'name' ? { name: value } : { smiles: value })
-    const run = ++latestRun.current
-    if (requestMode !== 'name') {
-      translateBatch([value], TIER_SETTINGS)
-        .then((rows) => run === latestRun.current && setTierRow(rows?.[0] ?? null))
-        .catch(() => run === latestRun.current && setTierRow(null))
-    }
-
-    request
-      .then((result) => {
-        // A PARTIAL result is a real case, not a contradiction: the
-        // structure-in path can name a molecule and render it, yet fail to
-        // decompose the name. Verified live -- the Orthonym engine names TNT's
-        // SMILES "2,4,6-trinitrotoluene", which OPSIN itself rejects ("Multiple
-        // locants without a multiplier"). That response carries `name` and
-        // `svg` alongside `error`. Throwing it away would hide a structure
-        // we successfully drew, so keep the data and show the error beside
-        // it. Only a result with nothing to show is a bare error.
-        // Only a result with no drawing is a bare error (spec 7: one message,
-        // no partial result). A typed name OPSIN cannot read comes back with
-        // `name` (the user's text) and `error`, and nothing to hover.
-        setApiError(result.error || null)
-        if (explainPhase(result) === 'error') {
-          setData(null)
-          setPhase('error')
-        } else {
-          setData(result)
-          setPhase('success')
-        }
-      })
-      .catch((err) => {
-        setFetchError(err ?? new Error('unknown network error'))
-        setPhase('idle')
-      })
+    setStep(0)
+    run(value, requestMode)
   }
 
   function handleSubmit(event) {
@@ -230,22 +140,48 @@ function Explain() {
     runExplain(value)
   }
 
-  const svgWrapperRef = useAtomHighlight(data, activeId)
-
   const isLoading = phase === 'loading'
-  const name = data?.name
-  const nodes = useMemo(() => data?.nodes || [], [data])
-  const byId = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes])
-  // Every part node has a span (the corpus gate proves it), so the name is
-  // always the hover surface. Nodes OPSIN gave no position are listed under
-  // it instead of blanking anything (per-node honesty).
-  const unplaced = unplacedNodes(nodes)
-  const nameStyle = name ? nameRuns(name) : []
-  const activeNode = byId.get(activeId) ?? null
-  const activePart = partOf(nodes, activeId)
-  const notes = detailNotes(nodes, activeId)
-  const pieces = name ? sliceName(name, nodes) : []
-  const stops = tabStops(pieces)
+  const steps = useMemo(
+    () => (data?.name ? revealSteps(sliceName(data.name, data.nodes || []), data.nodes || []) : []),
+    [data]
+  )
+  const teaching = classroom && phase === 'success' && steps.length > 0
+  const hidden = teaching ? hiddenAt(steps, step) : null
+
+  // Left and right arrows step while focus is in the controls.
+  function stepKeys(event) {
+    if (event.key === 'ArrowRight') setStep((s) => Math.min(s + 1, steps.length))
+    if (event.key === 'ArrowLeft') setStep((s) => Math.max(s - 1, 0))
+  }
+
+  // aria-disabled, not disabled: a button that disables itself under the
+  // keyboard drops focus to <body>, and the arrow keys stop working.
+  const back = () => setStep((s) => Math.max(s - 1, 0))
+  const next = () => setStep((s) => Math.min(s + 1, steps.length))
+  const stepButton = (label, onClick, off, extra = '') => (
+    <button
+      type="button"
+      className={`classroom__btn${extra}`}
+      onClick={off ? undefined : onClick}
+      aria-disabled={off}
+    >
+      {label}
+    </button>
+  )
+  const stepControls = teaching ? (
+    <div className="classroom" role="group" aria-label="Reveal the name part by part" onKeyDown={stepKeys}>
+      {stepButton('Back', back, step === 0)}
+      <span className="classroom__count" aria-live="polite">
+        {step} of {steps.length}
+      </span>
+      {stepButton('Next', next, step === steps.length, ' classroom__btn--next')}
+      {stepButton('Reveal all', () => setStep(steps.length), step === steps.length)}
+    </div>
+  ) : classroom && phase === 'success' ? (
+    <p className="classroom__none">
+      This result has no parts to reveal, so the whole name is shown.
+    </p>
+  ) : null
 
   return (
     <>
@@ -360,6 +296,23 @@ function Explain() {
             )}
           </div>
 
+          <Switch
+            id="classroom-mode"
+            checked={classroom}
+            onChange={(on) => {
+              setClassroom(on)
+              setStep(0)
+            }}
+            label="Classroom mode"
+            onWord="On"
+            offWord="Off"
+            hint={
+              classroom
+                ? 'The name starts hidden. Press Next to reveal it one part at a time.'
+                : 'Shows the whole name at once.'
+            }
+          />
+
           {/* Hidden on the Draw tab: there is nothing to paste a chip INTO
               there, and handing a drawn-structure user a text example would
               mean silently leaving the tab to run it. */}
@@ -449,154 +402,20 @@ function Explain() {
 
           {phase === 'success' && (
             <div className="explain-patch">
-              <div className="explain-result">
-                <div className="explain-result__name-row">
-                  <span className="explain-result__name-label">Name</span>
-                  {name && (
-                    <p className="explain-result__name explain-name" aria-live="polite">
-                      {pieces.map((piece, index) => {
-                        const node = byId.get(piece.nodeId) ?? null
-                        const mark = pieceMark(piece, activeId, activePart)
-                        return (
-                          <Fragment key={index}>
-                            {index > 0 && /[)\]},]/.test(name[piece.start - 1] || '') &&
-                              !'-,)]}'.includes(name[piece.start] || 'x') && <wbr />}
-                            {node === null ? (
-                              <span><Pieces pieces={applyRuns(name, nameStyle, piece.start, piece.end)} /></span>
-                            ) : (
-                              <span
-                                className={`explain-name__part${isPart(node) ? '' : ' explain-name__part--ref'}${
-                                  mark ? ` explain-name__part--${mark}` : ''
-                                }`}
-                                {...hoverProps(node.id)}
-                                onKeyDown={(event) => {
-                                  if (event.key === 'Enter' || event.key === ' ') {
-                                    event.preventDefault()
-                                    toggleId(node.id)
-                                  }
-                                }}
-                                tabIndex={stops.has(index) ? 0 : -1}
-                                role="button"
-                                aria-label={node.label}
-                                aria-pressed={pinnedId === node.id}
-                              >
-                                <Pieces pieces={applyRuns(name, nameStyle, piece.start, piece.end)} breaks={false} />
-                              </span>
-                            )}
-                          </Fragment>
-                        )
-                      })}
-                      {shareFields && <ShareButton fields={shareFields} />}
-                    </p>
-                  )}
-                  {unplaced.length > 0 && (
-                    <ul className="explain-unplaced" role="list" aria-label="Parts not placed in the name">
-                      {unplaced.map((node) => (
-                        <li key={node.id}>
-                          <button
-                            type="button"
-                            className={`explain-unplaced__item${activeId === node.id ? ' explain-unplaced__item--active' : ''}`}
-                            {...hoverProps(node.id)}
-                            aria-pressed={pinnedId === node.id}
-                          >
-                            {node.label} <span className="explain-unplaced__note">— not placed in the name</span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {/* /api/explain returns the name and its decomposition but
-                      no confidence tier. For a STRUCTURE the tier is a real
-                      Orthonym verdict, so runExplain fetches it from
-                      /api/translate alongside and it is shown here -- PRODUCT.md
-                      principle 3 requires it wherever a name appears.
-
-                      For a name the USER typed there is no verdict to report:
-                      Orthonym did not produce that name, so it has no opinion on
-                      whether it is a PIN. Saying so plainly is the honest
-                      option; inventing a tier mark would misrepresent
-                      confidence, which the product forbids. */}
-                  {verdictKindFor(resultMode) === 'user-supplied' ? (
-                    <p className="explain-tier-note">
-                      This breakdown is of the name <em>you</em> supplied, so there is no
-                      Orthonym confidence tier for it. Draw or paste a structure instead, or
-                      run the molecule through{' '}
-                      <Link to="/" className="about-link">
-                        Translate
-                      </Link>
-                      , to see whether Orthonym&rsquo;s own name for it is a verified PIN, a
-                      fallback, or a best effort.
-                    </p>
-                  ) : (
-                    <ConfidenceReport row={tierRow} />
-                  )}
-                </div>
-
-                {/* A partial result is a real case (see runExplain): the backend
-                    can name and draw a molecule and still fail to decompose that
-                    name, and it then carries `error` alongside `name`/`svg`.
-                    Shown as a notice rather than a blocking error, so nothing
-                    that WAS drawn gets hidden. */}
-                {apiError && (
-                  <p className="notice" role="status">
-                    {apiError}
-                  </p>
-                )}
-                {/* A success phase can still be a molecule Orthonym would not
-                    name: uranium trioxide lands here with a drawn structure and
-                    an abstain tier row, not in the error branch. */}
-                <ReportLink row={tierRow} where="Explain" settings={TIER_SETTINGS} />
-
-                {(data?.svg || nodes.length > 0) && (
-                  <div className="explain-result__body">
-                    {data?.svg && (
-                      <div
-                        className="explain-result__diagram"
-                        role="img"
-                        aria-label={`2D structure diagram of ${name}`}
-                        ref={svgWrapperRef}
-                      />
-                    )}
-
-                    {nodes.length > 0 && (
-                      <div className="explain-detail">
-                        {activeNode ? (
-                          <>
-                            <h3 className="explain-detail__label">
-                              <ChemName name={activeNode.label} />
-                            </h3>
-                            <p className="explain-detail__explanation">{activeNode.line}</p>
-                            {notes.partLabel && (
-                              <p className="explain-detail__note">
-                                Part of <ChemName name={notes.partLabel} />.
-                              </p>
-                            )}
-                            {notes.notation && (
-                              <p className="explain-detail__note">
-                                Notation — it points at atoms, and names none of its own.
-                              </p>
-                            )}
-                            {notes.nothingLights && (
-                              <p className="explain-detail__note">
-                                Nothing lights up: Orthonym points to no single atom for it.
-                              </p>
-                            )}
-                            {notes.unmapped && (
-                              <p className="explain-detail__note">
-                                Orthonym could not pin this part to exact atoms in this structure, so nothing lights up. The rest of the name is unaffected.
-                              </p>
-                            )}
-                          </>
-                        ) : (
-                          <p className="explain-detail__hint">
-                            Move your pointer across the name above to see what each part means.
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+              <ExplainView
+                key={`${resultMode}:${data?.smiles}:${data?.name}`}
+                data={data}
+                resultMode={resultMode}
+                tierRow={tierRow}
+                apiError={apiError}
+                // A classroom link carries the STRUCTURE, never the name: a
+                // name in the link would be the answer, in the address bar.
+                shareFields={classroom && data?.smiles ? { smiles: data.smiles, classroom: '1' } : shareFields}
+                hidden={hidden}
+                // Once everything shows, hover and pin work again.
+                forcedId={teaching && step > 0 && step < steps.length ? steps[step - 1] : null}
+                afterName={stepControls}
+              />
             </div>
           )}
         </div>

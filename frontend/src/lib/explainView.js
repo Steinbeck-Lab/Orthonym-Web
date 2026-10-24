@@ -65,3 +65,9 @@ export function tabStops(pieces) {
   })
   return stops
 }
+
+/** The part to light and explain, unless classroom mode still hides it: a
+ *  pin or hover from before a reveal (or a Back past it) must not show it. */
+export function revealedActive(wanted, hidden) {
+  return wanted && hidden?.has(wanted) ? null : wanted ?? null
+}
