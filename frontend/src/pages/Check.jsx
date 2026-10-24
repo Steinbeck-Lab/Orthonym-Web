@@ -1,7 +1,9 @@
 import { useRef, useState } from 'react'
-import { checkName } from '../lib/api'
+import { checkName, createJob, parsePreview } from '../lib/api'
 import { latestOnly } from '../lib/batchJob'
 import useShareLink from '../lib/useShareLink'
+import BatchResults from '../components/BatchResults'
+import Dropzone from '../components/Dropzone'
 import Icon from '../components/Icon'
 import OpsinWarnings from '../components/OpsinWarnings'
 import ShareButton from '../components/ShareButton'
@@ -64,6 +66,38 @@ function Check() {
   const [fetchError, setFetchError] = useState(null)
   const [note, setNote] = useState(null)
   const track = useRef(latestOnly())
+  // 'pair' checks one SMILES and name; 'file' starts a name-check job from a
+  // smiles,name CSV, shown in the batch table with a verdict column.
+  const [mode, setMode] = useState('pair')
+  const [file, setFile] = useState(null)
+  const [preview, setPreview] = useState(null)
+  const [job, setJob] = useState(null)
+  const [starting, setStarting] = useState(false)
+
+  async function startJob(event) {
+    event.preventDefault()
+    if (!file) {
+      setNote('Choose a CSV with a smiles column and a name column.')
+      return
+    }
+    setNote(null)
+    setStarting(true)
+    try {
+      const envelope = await createJob({ file, kind: 'check' })
+      // Not remembered in jobStore: that list is Home's to restore.
+      setJob({
+        jobId: envelope.job_id,
+        ownerToken: envelope.owner_token,
+        moleculeCount: envelope.molecule_count,
+        status: envelope.status ?? 'queued',
+      })
+    } catch (err) {
+      // The server's own sentence: no name column, too many rows, a busy cap.
+      setNote(err?.message || 'Could not start the check.')
+    } finally {
+      setStarting(false)
+    }
+  }
 
   async function run(s, n) {
     const pair = { smiles: s.trim(), name: n.trim() }
@@ -114,6 +148,70 @@ function Check() {
 
       <main className="workspace check" aria-label="Check a name">
         <section className="check-panel" aria-label="Structure and name">
+          <div className="check-mode" role="radiogroup" aria-label="What to check">
+            {[
+              ['pair', 'One pair'],
+              ['file', 'Upload CSV'],
+            ].map(([value, label]) => (
+              <label key={value} className={`check-mode__opt${mode === value ? ' check-mode__opt--on' : ''}`}>
+                <input
+                  type="radio"
+                  name="check-mode"
+                  value={value}
+                  checked={mode === value}
+                  onChange={() => {
+                    setMode(value)
+                    setNote(null)
+                  }}
+                  disabled={busy || starting}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+
+          {mode === 'file' ? (
+            <form onSubmit={startJob} noValidate>
+              <Dropzone
+                inputId="check-file"
+                file={file}
+                preview={preview}
+                onFile={async (chosen) => {
+                  setFile(chosen)
+                  setPreview(null)
+                  setNote(null)
+                  if (!chosen) return
+                  try {
+                    setPreview(await parsePreview({ file: chosen }))
+                  } catch (err) {
+                    setNote(`Could not read that file: ${err?.message ?? 'unknown error'}`)
+                  }
+                }}
+                onRemove={() => {
+                  setFile(null)
+                  setPreview(null)
+                }}
+                onReject={setNote}
+                disabled={starting}
+              />
+              <p className="check-panel__help">
+                A CSV with a <code>smiles</code> column and a <code>name</code> column; an{' '}
+                <code>id</code> column is optional. Every row gets a verdict and Orthonym&rsquo;s own
+                name.
+              </p>
+              <div className="check-panel__actions">
+                <button type="submit" className="btn btn--accent" disabled={starting || !file}>
+                  <Icon name="upload" />
+                  {starting ? 'Starting…' : 'Check every row'}
+                </button>
+              </div>
+              {note && (
+                <p className="check-panel__note" role="status">
+                  {note}
+                </p>
+              )}
+            </form>
+          ) : (
           <form onSubmit={handleSubmit} noValidate>
             <div className="field field--framed">
               <label htmlFor="check-smiles" className="field__label">
@@ -180,8 +278,21 @@ function Check() {
               </ul>
             </div>
           </form>
+          )}
         </section>
 
+        {mode === 'file' ? (
+          <section className={`check-results${job ? ' check-results--job' : ''}`} aria-label="Checked rows">
+            {job ? (
+              <BatchResults job={job} persist={false} onForget={() => setJob(null)} />
+            ) : (
+              <p className="check-results__empty">
+                No file checked yet. Each row is compared on structure only: a name can describe the
+                right molecule and still not be its preferred IUPAC name.
+              </p>
+            )}
+          </section>
+        ) : (
         <section className="check-results" aria-label="Result" aria-live="polite" aria-busy={busy}>
           {fetchError && (
             <p className="notice" role="alert">
@@ -205,6 +316,7 @@ function Check() {
             </>
           )}
         </section>
+        )}
       </main>
     </>
   )

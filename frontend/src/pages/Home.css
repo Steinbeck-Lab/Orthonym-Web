@@ -1974,6 +1974,11 @@
 }
 
 .batch__table-wrap {
+  /* The containing block for the header's .sr-only label, which is
+     absolutely positioned: without this it escapes the scroll box and widens
+     the PAGE whenever the table is wider than the card (measured on /check's
+     six columns at 390px: 456px of page). */
+  position: relative;
   overflow-x: auto;
   /* See .sampler: the card around this is a scroll container too, and a
      table that has hit its last row must not start scrolling the card. */
@@ -2328,4 +2333,15 @@
   .first-load .info__bulb-dot {
     animation-name: first-fade;
   }
+}
+
+/* A name-check row's verdict, under the claimed name. Plain ink words: the
+   verdict is about structure, never a confidence tier. */
+.batch__verdict {
+  display: block;
+  margin-top: var(--s-xxs);
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.45;
+  color: var(--ink);
 }

@@ -21,6 +21,7 @@ import {
 } from '../lib/batchJob'
 import { outcomeMessage, tierTally } from '../lib/batchTally'
 import { limitReasonFor } from '../lib/limitReasons'
+import { VERDICT_TEXT } from '../lib/verdicts'
 import { forgetJob, rememberJob } from '../lib/jobStore'
 import { STATE_CLASS, STATE_SHORT, VERIFIED_STATUSES, stateLabelFor } from '../lib/statuses'
 import CopyButton from './CopyButton'
@@ -149,6 +150,20 @@ function SortBar({ sort, order, onSort }) {
 }
 
 /** The confidence mark, in the same grammar the tiles use. */
+// A name-check row: the name the visitor gave and the verdict on structure,
+// in plain words. No tier colour: the verdict is not a confidence tier.
+function CheckCell({ row }) {
+  if (!row.claimed_name) return <span className="batch__note">—</span>
+  return (
+    <>
+      <ChemName name={row.claimed_name} />
+      <span className="batch__verdict">
+        {row.verdict ? VERDICT_TEXT[row.verdict] ?? row.verdict : 'Not checked'}
+      </span>
+    </>
+  )
+}
+
 function NameCell({ row }) {
   const stateClass = STATE_CLASS[row.status] ?? 'error'
   const label = stateLabelFor(row)
@@ -296,10 +311,13 @@ function RoundTripCell({ row }) {
   return <span className="batch__rt batch__rt--none">—</span>
 }
 
-function BatchResults({ job, onForget }) {
+// `persist` false keeps the job out of jobStore, which is Home's list to
+// restore on load: a name-check job (/check) must not reappear on Home.
+function BatchResults({ job, onForget, persist = true }) {
   const { jobId, ownerToken, moleculeCount } = job
 
   const [status, setStatus] = useState(null)
+  const isCheck = status?.kind === 'check'
   const [rows, setRows] = useState([])
   const [page, setPage] = useState(0)
   const [error, setError] = useState(null)
@@ -355,7 +373,7 @@ function BatchResults({ job, onForget }) {
         // write the stored expiry stays null forever and jobStore's pruning
         // can never fire, which measured out as expiresAt: null in
         // localStorage after a completed job.
-        if (Number.isFinite(next.expires_at) && storedExpiryRef.current !== next.expires_at) {
+        if (persist && Number.isFinite(next.expires_at) && storedExpiryRef.current !== next.expires_at) {
           // Guarded by a ref, not by the prop: the prop does not change when
           // localStorage does, so comparing against it would rewrite the
           // entry on every single poll.
@@ -383,7 +401,7 @@ function BatchResults({ job, onForget }) {
       liveRef.current = false
       window.clearTimeout(timer)
     }
-  }, [jobId, job])
+  }, [jobId, job, persist])
 
   // --- rows -----------------------------------------------------------
   // `retrievable` comes from the RESULTS response, not the status one -- only
@@ -699,6 +717,7 @@ function BatchResults({ job, onForget }) {
                   <th scope="col">#</th>
                   <th scope="col">Input</th>
                   <th scope="col">Name</th>
+                  {isCheck && <th scope="col">Claimed name</th>}
                   <th scope="col">Round-trip</th>
                   <th scope="col">
                     <span className="sr-only">Structure</span>
@@ -727,6 +746,11 @@ function BatchResults({ job, onForget }) {
                             settings={jobSettings}
                           />
                         </td>
+                        {isCheck && (
+                          <td>
+                            <CheckCell row={row} />
+                          </td>
+                        )}
                         <td>
                           <RoundTripCell row={row} />
                         </td>
@@ -745,7 +769,7 @@ function BatchResults({ job, onForget }) {
                       </tr>
                       {isDrawn && (
                         <tr className="batch__drawn-row">
-                          <td colSpan={5}>
+                          <td colSpan={isCheck ? 6 : 5}>
                             {drawn.loading && <span className="batch__note">Drawing…</span>}
                             {drawn.error && <span className="batch__note">{drawn.error}</span>}
                             {drawn.svg && (

@@ -4,7 +4,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { afterEach, test } from 'node:test'
 
-import { checkName, explainMolecule, explainName, fetchJobResults, jobResultsCsvUrl, jobResultsSdfUrl } from './api.js'
+import { checkName, createJob, explainMolecule, explainName, fetchJobResults, jobResultsCsvUrl, jobResultsSdfUrl } from './api.js'
+import { VERDICT_TEXT } from './verdicts.js'
 
 const REAL = JSON.parse(readFileSync(new URL('./explainResponses.fixture.json', import.meta.url), 'utf8'))
 const RESPONSE_KEYS = ['atom_points', 'error', 'name', 'nodes', 'smiles', 'svg', 'total_atoms']
@@ -98,4 +99,27 @@ test('checkName POSTs the pair as JSON, never in the URL', async () => {
 test('checkName rejects a non-2xx with its status', async () => {
   stub({ detail: 'Could not parse' }, 400)
   await assert.rejects(checkName('C1CC', 'x'), (err) => err.status === 400)
+})
+
+test('createJob sends the job kind, name by default', async () => {
+  const seen = []
+  globalThis.fetch = async (url, init) => {
+    seen.push(init)
+    return new Response(JSON.stringify({ job_id: 'j' }), { status: 200, headers: { 'content-type': 'application/json' } })
+  }
+  await createJob({ text: 'CCO' })
+  assert.equal(JSON.parse(seen[0].body).kind, 'name')
+  await createJob({ file: new Blob(['smiles,name\nCCO,ethanol\n']), kind: 'check' })
+  assert.equal(seen[1].body.get('kind'), 'check')
+})
+
+test('the verdict words match the backend, one per verdict', () => {
+  assert.deepEqual(VERDICT_TEXT, {
+    same: 'Same structure',
+    protonation: 'Same skeleton; protonation differs',
+    stereo: 'Same skeleton; stereo or isotopes differ',
+    different: 'Different structure',
+    unreadable: 'OPSIN cannot read this name',
+    uncomparable: 'Could not compare',
+  })
 })
