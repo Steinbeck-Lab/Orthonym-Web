@@ -19,7 +19,7 @@ import {
 import { needsJob } from '../lib/batchJob'
 import { forgetJob, readJobs, rememberJob } from '../lib/jobStore'
 import { MAX_ROWS, parseSmilesLines } from '../lib/parseSmiles'
-import { readShareHash } from '../lib/shareLink'
+import useShareLink from '../lib/useShareLink'
 import useKetcher from '../lib/useKetcher'
 import useReducedMotion from '../lib/useReducedMotion'
 import TransportNotice from '../components/TransportNotice'
@@ -171,21 +171,14 @@ function Home() {
     if (mostRecent) setJob(mostRecent)
   }, [])
 
-  // A share link (lib/shareLink.js) is named once on arrival. The ref stops
-  // StrictMode's second mount from naming it twice. More SMILES than the fast
-  // path takes are left in the box, not sent as a job nobody asked for.
-  const sharedRef = useRef(false)
-  useEffect(() => {
-    if (sharedRef.current) return
-    sharedRef.current = true
-    const smiles = readShareHash(window.location.hash)?.smiles
+  // A share link is named on arrival. More SMILES than the fast path takes
+  // are left in the box, not sent as a job nobody asked for.
+  useShareLink(({ smiles }) => {
     if (!smiles) return
     setSmilesText(smiles)
     const { lines, total } = parseSmilesLines(smiles)
     if (lines.length && !needsJob(total, MAX_ROWS)) runTranslate(lines)
-    // Once, on arrival: a link is read when the page opens, never again.
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  })
 
   const timersRef = useRef([])
 

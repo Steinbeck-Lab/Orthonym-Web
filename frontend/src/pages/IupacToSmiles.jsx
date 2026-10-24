@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { fetchStructureFromName } from '../lib/api'
 import { MAX_NAMES, parseNameLines, convertNames } from '../lib/nameBatch'
 import { rowsToSdf, downloadText } from '../lib/molExport'
-import { readShareHash } from '../lib/shareLink'
+import useShareLink from '../lib/useShareLink'
 import ShareButton from '../components/ShareButton'
 import './IupacToSmiles.css'
 import Icon from '../components/Icon'
@@ -44,19 +44,12 @@ function IupacToSmiles() {
   // `nameText` here would still see the value from BEFORE the click. Passing
   // the text explicitly is what lets the chip "submit through this same
   // path" without a second lookup function.
-  // A share link (lib/shareLink.js) is converted once on arrival. The ref
-  // stops StrictMode's second mount from converting it twice.
-  const sharedRef = useRef(false)
-  useEffect(() => {
-    if (sharedRef.current) return
-    sharedRef.current = true
-    const name = readShareHash(window.location.hash)?.name
+  // A share link is converted on arrival.
+  useShareLink(({ name }) => {
     if (!name) return
     setNameText(name)
     convert(name)
-    // Once, on arrival: a link is read when the page opens, never again.
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  })
 
   async function convert(text) {
     if (phase === 'converting') return

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ConfidenceReport from '../components/ConfidenceReport'
 import { verdictKindFor } from '../lib/explainVerdict'
@@ -13,7 +13,7 @@ import './Explain.css'
 import Icon from '../components/Icon'
 import ReportLink from '../components/ReportLink'
 import ShareButton from '../components/ShareButton'
-import { readShareHash } from '../lib/shareLink'
+import useShareLink from '../lib/useShareLink'
 import TransportNotice from '../components/TransportNotice'
 
 // Curated structures spanning what the decomposition really does now that
@@ -116,21 +116,16 @@ function Explain() {
     runExplain(structure, 'smiles')
   }
 
-  // A share link (lib/shareLink.js) is explained once on arrival; a name wins
-  // over a SMILES when a link carries both. The ref stops StrictMode's second
-  // mount from asking twice.
-  const sharedRef = useRef(false)
-  useEffect(() => {
-    if (sharedRef.current) return
-    sharedRef.current = true
-    const fields = readShareHash(window.location.hash)
-    const linkMode = fields?.name ? 'name' : fields?.smiles ? 'smiles' : null
+  // A share link is explained on arrival; a name wins over a SMILES when a
+  // link carries both.
+  useShareLink((fields) => {
+    const linkMode = fields.name ? 'name' : fields.smiles ? 'smiles' : null
     if (!linkMode) return
     const value = fields[linkMode].trim()
     setMode(linkMode)
     setSmilesInput(value)
     runExplain(value, linkMode)
-  }, [])
+  })
 
   function toggleId(id) {
     setPinnedId((current) => (current === id ? null : id))
