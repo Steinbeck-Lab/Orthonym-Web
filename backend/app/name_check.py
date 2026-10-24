@@ -81,18 +81,23 @@ def check_pair(smiles: str, name: str) -> dict:
     from orthonym.validation.opsin_roundtrip import opsin_parse
     from rdkit import Chem
 
-    from app.orthonym_service import _inchikey
+    from app.orthonym_service import inchikey
+
+    # The gate before OPSIN, for every caller: a name with a line break would
+    # go to a subprocess that reads only its last line (see one_line), and the
+    # length is the single check's own cap. Refused, not answered: no verdict
+    # may say OPSIN cannot read a name OPSIN was never asked about.
+    if not one_line(name) or len(name) > MAX_CLAIMED_NAME_LENGTH:
+        raise ValueError("A claimed name must be one line of at most 2000 characters")
 
     input_mol = Chem.MolFromSmiles(smiles)
-    # The one gate before OPSIN: a name with a line break would go to a
-    # subprocess that reads only its last line (see one_line).
-    raw = opsin_parse(name) if one_line(name) else None
+    raw = opsin_parse(name)
     claimed_mol = Chem.MolFromSmiles(raw) if raw else None
-    input_key = _inchikey(input_mol) if input_mol is not None else None
+    input_key = inchikey(input_mol) if input_mol is not None else None
     if claimed_mol is None:
         verdict, claimed_key = "unreadable", None
     else:
-        claimed_key = _inchikey(claimed_mol)
+        claimed_key = inchikey(claimed_mol)
         verdict = compare_keys(input_key, claimed_key)
     return {
         "verdict": verdict,

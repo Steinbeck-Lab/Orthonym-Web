@@ -42,7 +42,12 @@ class _ChunkTimedOut(Exception):
     """
 
     def __init__(
-        self, rows: list[dict], failed: int, remaining: list[dict], in_flight: bool = True
+        self,
+        rows: list[dict],
+        failed: int,
+        remaining: list[dict],
+        in_flight: bool = True,
+        named_as: tuple[str, dict] | None = None,
     ):
         super().__init__("chunk exceeded its soft time limit")
         self.rows = rows
@@ -51,6 +56,9 @@ class _ChunkTimedOut(Exception):
         # Whether remaining[0] was being NAMED when the limit fired. False when
         # it fired in a name check, after the row was named and kept.
         self.in_flight = in_flight
+        # (SMILES given to the engine, the row's notes) for remaining[0]: the
+        # kept fragment when stripping finished, the input when it did not.
+        self.named_as = named_as
 
 
 def _named_item(smiles: str, best_effort: bool, verify: bool, depict: bool) -> ResultItem:
@@ -164,8 +172,11 @@ def _name_prepared(
             # MUST come before the broad handler: SoftTimeLimitExceeded
             # subclasses Exception, so `except Exception` would swallow the
             # timeout and the loop would run on past the limit until the
-            # hard limit killed the child mid-chunk.
-            raise _ChunkTimedOut(rows, failed, list(prepared[offset:])) from exc
+            # hard limit killed the child mid-chunk. What the engine was given
+            # travels with it, so the handler never re-runs RDKit work.
+            raise _ChunkTimedOut(
+                rows, failed, list(prepared[offset:]), named_as=(smiles, notes)
+            ) from exc
         except Exception as exc:  # noqa: BLE001 - one molecule, not the chunk
             logger.exception("Naming failed for %s", item["smiles"])
             row = _error_row(
@@ -271,7 +282,7 @@ def _timed_out_rows(timeout: _ChunkTimedOut) -> tuple[list[dict], int]:
         # the engine failed on a molecule it never tried is a report nobody
         # can reproduce.
         named = position == 0 and timeout.in_flight
-        smiles, notes = _to_name(item) if named else (None, {})
+        smiles, notes = (timeout.named_as or (item["smiles"], {})) if named else (None, {})
         rows.append(
             _annotate(
                 _error_row(
@@ -671,7 +682,7 @@ def name_to_smiles(name: str) -> dict:
     # `mol` (MolToInchiKey) -- both run RDKit's InChI canonicalization from
     # scratch, so computing it twice was ~2x the cost for the same answer
     # (measured: 0.124 ms/molecule vs 0.060 ms/molecule over 5 molecules x
-    # 500 iterations). `app.orthonym_service._inchikey(mol)` looks like the
+    # 500 iterations). `app.orthonym_service.inchikey(mol)` looks like the
     # natural helper to reuse here, but it takes a Mol and would recompute
     # the InChI internally -- that's the exact waste this avoids, so this
     # path deliberately does not call it.

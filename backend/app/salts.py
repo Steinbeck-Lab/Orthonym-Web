@@ -52,9 +52,3 @@ def strip(smiles: str) -> tuple[str, dict]:
         others.remove(chosen)
         kept, removed = chosen, ".".join(others)
     return kept, {"stripped_from": smiles, "removed": removed}
-
-
-def strip_salts(smiles: str) -> tuple[str, str | None]:
-    """(kept, removed); `removed` is None when nothing was stripped."""
-    kept, notes = strip(smiles)
-    return kept, notes.get("removed")

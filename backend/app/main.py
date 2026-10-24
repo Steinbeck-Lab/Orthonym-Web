@@ -193,7 +193,7 @@ def _forget(async_result) -> None:
 
 def _job_options(body: TranslateRequest) -> JobOptions:
     """The job a /api/translate request becomes: its switches, unchanged."""
-    return JobOptions(best_effort=body.best_effort, verify=body.verify, strip_salts=body.strip_salts)
+    return JobOptions.model_validate(body.model_dump(include=set(JobOptions.model_fields)))
 
 
 def _canonicalize(smiles_list: list[str], max_molecules: int):

@@ -169,7 +169,7 @@ def _pair(i, smiles, name):
             "error": None, "claimed_name": name}
 
 
-def test_a_time_limit_in_the_check_keeps_the_rows_already_checked(monkeypatch):
+def test_a_time_limit_in_the_check_keeps_the_rows_already_checked(redis_client, monkeypatch):
     real = name_check.check_pair
     calls = []
 
@@ -279,7 +279,7 @@ def test_explain_and_from_name_forget_their_results(redis_client, monkeypatch):
     assert _forgotten_after(monkeypatch, "name_to_smiles", "get", "/api/iupac-to-smiles", params={"name": "ethanol"}, reply=n2s) == [True]
 
 
-def test_a_row_after_a_check_time_limit_never_reached_the_engine(monkeypatch):
+def test_a_row_after_a_check_time_limit_never_reached_the_engine(redis_client, monkeypatch):
     # The limit fired in the CHECK of row 0, after it was named: row 1 was
     # never in flight, so it must not carry a SMILES (a "Report" row).
     def slow(smiles, name):
@@ -291,3 +291,55 @@ def test_a_row_after_a_check_time_limit_never_reached_the_engine(monkeypatch):
     rows, _ = tasks._timed_out_rows(caught.value)
     assert rows[1]["error"] == "Timed out"
     assert rows[1]["smiles"] is None
+
+
+# --- code review fixes --------------------------------------------------------
+
+
+@pytest.mark.parametrize("bad", ["ethanol\nmethanol", "x" * 2001])
+def test_check_pair_refuses_a_name_opsin_must_not_see(bad):
+    # Never "OPSIN cannot read this name" for a name OPSIN was never asked about.
+    with pytest.raises(ValueError):
+        name_check.check_pair("CCO", bad)
+
+
+def test_a_timed_out_row_is_not_stripped_again(redis_client, monkeypatch):
+    # The name the engine was given travels with the timeout; the handler
+    # must not re-run RDKit fragment work after the soft limit fired.
+    from app import salts
+
+    calls = []
+    real = salts.strip
+    monkeypatch.setattr(salts, "strip", lambda s: calls.append(s) or real(s))
+
+    def slow(*a, **k):
+        raise SoftTimeLimitExceeded()
+
+    monkeypatch.setattr(tasks, "name_one", slow)
+    item = {"index": 0, "raw_input": "CCO.Cl", "input_id": None, "smiles": "CCO.Cl",
+            "error": None, "strip_salts": True}
+    with pytest.raises(tasks._ChunkTimedOut) as caught:
+        tasks._name_prepared([item], True, True)
+    (row,), _ = tasks._timed_out_rows(caught.value)
+    assert (row["smiles"], row["stripped_from"], row["removed"]) == ("CCO", "CCO.Cl", "Cl")
+    assert calls == ["CCO.Cl"]
+
+
+def test_translate_hands_every_switch_to_the_job():
+    from app.main import _job_options
+    from app.schemas import TranslateRequest
+
+    opts = _job_options(TranslateRequest(smiles=["C"], best_effort=False, verify=False, strip_salts=True))
+    assert (opts.best_effort, opts.verify, opts.strip_salts, opts.kind) == (False, False, True, "name")
+
+
+def test_the_csv_keeps_every_older_column_where_it_was():
+    from app.jobs_api import CSV_COLUMNS
+
+    before = [
+        "index", "input", "input_id", "smiles", "name", "status", "roundtrip_smiles",
+        "roundtrip_match", "formula", "limit_code", "error", "stripped_from", "removed",
+        "claimed_name", "verdict", "verdict_text", "claimed_smiles", "opsin_warnings",
+    ]
+    assert CSV_COLUMNS[: len(before)] == before
+    assert CSV_COLUMNS[-2:] == ["engine_version", "engine_commit"]

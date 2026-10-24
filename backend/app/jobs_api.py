@@ -768,15 +768,16 @@ def job_results_csv(request: Request, job_id: str) -> StreamingResponse:
             buffer, fieldnames=CSV_COLUMNS, extrasaction="ignore"
         )
         writer.writeheader()
-        # Page by page: a 10,000-row job is never held in memory, and one
-        # chunk per page costs one threadpool hop, not one per row.
-        for n, row in enumerate(redis_store.iter_all_rows(job_id), 1):
-            writer.writerow({k: _csv_safe(v) for k, v in row.items()})
+        # The header at once, then page by page: a 10,000-row job is never
+        # held in memory, and a page costs one threadpool hop, not one per row.
+        for n, row in enumerate(redis_store.iter_all_rows(job_id)):
             if n % _STREAM_PAGE == 0:
                 yield buffer.getvalue()
                 buffer.seek(0)
                 buffer.truncate(0)
-        yield buffer.getvalue()
+            writer.writerow({k: _csv_safe(v) for k, v in row.items()})
+        if buffer.tell():
+            yield buffer.getvalue()
 
     return _download(job_id, status, generate(), "text/csv", "csv")
 
@@ -793,7 +794,8 @@ def job_results_sdf(request: Request, job_id: str) -> StreamingResponse:
             if len(page) == _STREAM_PAGE:
                 yield "".join(page)
                 page = []
-        yield "".join(page)
+        if page:
+            yield "".join(page)
     return _download(job_id, status, body(), "chemical/x-mdl-sdfile", "sdf")
 
 

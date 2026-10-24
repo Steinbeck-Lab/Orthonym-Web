@@ -286,11 +286,14 @@ class BatchRow(BaseModel):
 # Every BatchRow field a download writes, in file order: the CSV columns, and
 # (minus the index and the SMILES the molblock carries) the SD tags. One list,
 # so the two exports cannot drift apart again.
+# New fields go just before the engine pair, so every older CSV column keeps
+# its position for a script that reads by position.
 EXPORT_FIELDS: list[str] = [
-    "index", "input", "input_id", "smiles", "name", "status", "tier",
+    "index", "input", "input_id", "smiles", "name", "status",
     "roundtrip_smiles", "roundtrip_match", "formula", "limit_code", "error",
-    "stripped_from", "removed", "strip_skipped",
+    "stripped_from", "removed",
     "claimed_name", "verdict", "verdict_text", "claimed_smiles", "opsin_warnings",
+    "tier", "strip_skipped",
     "engine_version", "engine_commit",
 ]
 
