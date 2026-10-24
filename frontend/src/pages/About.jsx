@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { checkHealth } from '../lib/api'
 import Icon from '../components/Icon'
 import BrushCross from '../components/BrushCross'
@@ -8,7 +8,6 @@ import RoundTripLoop from '../components/RoundTripLoop'
 import TierLamp from '../components/TierLamp'
 import TierRule from '../components/TierRule'
 import BuddyRoam from '../components/BuddyRoam'
-import ApiSection from '../components/ApiSection'
 import CitationBox from '../components/CitationBox'
 import useHealth from '../lib/useHealth'
 import './About.css'
@@ -223,6 +222,13 @@ const CREDITS = [
 function About() {
   // The live engine, not a version typed into the page: the engine tracks main.
   const engineVersion = useHealth()?.engine_version
+  // /about#cite is an address people share. The browser's own
+  // jump runs before React has drawn the section, so it lands at the top;
+  // jump again once the section exists.
+  const { hash } = useLocation()
+  useEffect(() => {
+    if (hash) document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView()
+  }, [hash])
   return (
     <main className="about">
       <BuddyRoam />
@@ -406,8 +412,6 @@ function About() {
       </section>
 
       <CitationBox />
-
-      <ApiSection />
     </main>
   )
 }

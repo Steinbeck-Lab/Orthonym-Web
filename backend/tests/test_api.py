@@ -36,36 +36,3 @@ def test_existing_smiles_endpoint_still_works():
     assert sorted(a for n in parts for a in n["owns"]) == [0, 1, 2]
     assert all(set(n) >= {"id", "parent", "span", "owns", "lights", "line"} for n in body["nodes"])
     assert body["total_atoms"] == 3 and body["svg"]
-
-
-_LIMIT_FIELDS = {
-    "fast_per_minute": "RATE_LIMIT_FAST_PER_MINUTE",
-    "jobs_per_hour": "RATE_LIMIT_JOBS_PER_HOUR",
-    "max_concurrent_jobs": "RATE_LIMIT_MAX_CONCURRENT_JOBS",
-    "download_per_minute": "RATE_LIMIT_DOWNLOAD_PER_MINUTE",
-    "max_batch_size": "MAX_BATCH_SIZE",
-    "fast_path_max_molecules": "FAST_PATH_MAX_MOLECULES",
-    "max_file_size_mb": "MAX_FILE_SIZE_MB",
-}
-
-
-def test_health_reports_this_deployments_limits():
-    # The API section on About shows these: the numbers this server enforces,
-    # not ones typed into the page.
-    from app.core.config import get_settings
-
-    limits = client.get("/api/health").json()["limits"]
-    settings = get_settings()
-    assert limits == {field: getattr(settings, name) for field, name in _LIMIT_FIELDS.items()}
-
-
-def test_health_follows_a_changed_limit(monkeypatch):
-    from app.core.config import get_settings
-
-    monkeypatch.setenv("RATE_LIMIT_FAST_PER_MINUTE", "7")
-    get_settings.cache_clear()
-    try:
-        assert client.get("/api/health").json()["limits"]["fast_per_minute"] == 7
-    finally:
-        monkeypatch.delenv("RATE_LIMIT_FAST_PER_MINUTE")
-        get_settings.cache_clear()

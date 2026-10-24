@@ -28,12 +28,13 @@ SDF_TAGS: list[tuple[str, str]] = [
 
 def _value(value) -> str:
     """One line, always. A blank line ends an SD data block, so a newline in
-    a pasted input or a multi-line error would corrupt every later record."""
+    a pasted input or a multi-line error would corrupt every later record.
+    Only line breaks are folded: spaces and tabs inside a line are data."""
     if value is None:
         return ""
     if isinstance(value, bool):
         return "true" if value else "false"
-    text = " ".join(str(value).split())
+    text = " ".join(line for line in str(value).splitlines() if line.strip())
     # A line of "$$$$" ends a record and one starting ">" opens a tag, and
     # input, input_id and error are user text: a leading space keeps such a
     # value data. The cost is one leading space on such a value.

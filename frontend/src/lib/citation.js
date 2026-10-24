@@ -1,13 +1,13 @@
-// How to cite the Orthonym engine, as BibTeX and RIS.
+// How to cite the Orthonym engine, as BibTeX.
 //
 // Copied from the engine's CITATION.cff (github.com/Steinbeck-Lab/Orthonym,
 // read 2026-10-24 at engine 1.0.9): its preferred-citation (the ChemRxiv
-// paper) and the software record (the Zenodo DOI). Change these only from a
-// newer CITATION.cff; never add a field the file does not have. The running
-// version and commit come from /api/health, so the software entry names the
-// engine this deployment actually runs.
+// paper) and the software record (the Zenodo concept DOI). Change these only
+// from a newer CITATION.cff; never add a field the file does not have. The
+// running version and commit come from /api/health, so the software entry
+// names the engine this deployment actually runs.
 
-const AUTHORS = Object.freeze([
+export const AUTHORS = Object.freeze([
   ['Rajan', 'Kohulan'],
   ['Zielesny', 'Achim'],
   ['Steinbeck', 'Christoph'],
@@ -29,9 +29,9 @@ export const SOFTWARE = Object.freeze({
   license: 'MIT',
 })
 
-function note({ version, commit } = {}) {
-  if (!version) return null
-  return commit ? `Version ${version}, commit ${commit.slice(0, 7)}` : `Version ${version}`
+/** "Rajan, K.; Zielesny, A.; Steinbeck, C." for the printed reference. */
+export function referenceAuthors() {
+  return AUTHORS.map(([family, given]) => `${family}, ${given[0]}.`).join('; ')
 }
 
 function bibEntry(type, key, fields) {
@@ -42,7 +42,9 @@ function bibEntry(type, key, fields) {
   return `@${type}{${key},\n${body}\n}`
 }
 
-/** The paper, then the software at `{version, commit}`, as BibTeX. */
+/** The paper, then the software at `{version, commit}`, as BibTeX. The
+ *  version has its own field; the note carries only the commit, since two
+ *  builds of one version can differ (the engine tracks main). */
 export function bibtex(engine = {}) {
   const author = AUTHORS.map(([family, given]) => `${family}, ${given}`).join(' and ')
   return [
@@ -62,38 +64,25 @@ export function bibtex(engine = {}) {
       ['doi', SOFTWARE.doi],
       ['url', SOFTWARE.url],
       ['license', SOFTWARE.license],
-      ['note', note(engine)],
+      ['note', engine.commit ? `Commit ${engine.commit.slice(0, 7)}` : null],
     ]),
   ].join('\n\n')
 }
 
-function risRecord(lines) {
-  return [...lines.filter(([, value]) => value != null), ['ER', '']]
-    .map(([tag, value]) => `${tag}  - ${value}`)
-    .join('\n')
-}
+const ENTRY = /^(@\w+)\{(.*),$/
+const FIELD = /^ {2}(\w+) = \{(.*)\},?$/
 
-/** The same two records as RIS. */
-export function ris(engine = {}) {
-  const au = AUTHORS.map(([family, given]) => ['AU', `${family}, ${given}`])
-  return [
-    risRecord([
-      ['TY', 'JOUR'],
-      ...au,
-      ['TI', PAPER.title],
-      ['JO', PAPER.journal],
-      ['PY', PAPER.year],
-      ['DO', PAPER.doi],
-      ['UR', PAPER.url],
-    ]),
-    risRecord([
-      ['TY', 'COMP'],
-      ...au,
-      ['TI', SOFTWARE.title],
-      ['ET', engine.version || null],
-      ['DO', SOFTWARE.doi],
-      ['UR', SOFTWARE.url],
-      ['N1', note(engine)],
-    ]),
-  ].join('\n\n') + '\n'
+/** bibtex() as typed lines, so the page can set keys and values in two
+ *  tones. Joining every `text` with "\n" gives bibtex() back exactly. */
+export function bibtexLines(engine = {}) {
+  return bibtex(engine)
+    .split('\n')
+    .map((text) => {
+      const entry = text.match(ENTRY)
+      if (entry) return { kind: 'entry', text, type: entry[1], key: entry[2] }
+      const field = text.match(FIELD)
+      if (field) return { kind: 'field', text, name: field[1], value: field[2], comma: text.endsWith(',') }
+      if (text === '}') return { kind: 'close', text }
+      return { kind: 'blank', text }
+    })
 }

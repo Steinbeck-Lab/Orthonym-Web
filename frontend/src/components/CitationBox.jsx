@@ -1,39 +1,118 @@
-import { bibtex, ris } from '../lib/citation'
+import { useEffect, useRef, useState } from 'react'
+import { PAPER, SOFTWARE, bibtex, bibtexLines, referenceAuthors } from '../lib/citation'
 import useHealth from '../lib/useHealth'
-import CopyButton from './CopyButton'
+import Icon from './Icon'
 
-// The paper first, then the software at the version this deployment runs.
-// Until /api/health answers, the software entry simply has no version.
+// A white About card. Left, the paper set as a printed reference and the
+// exact engine to pin; right, the BibTeX, keys and values in two tones, with
+// the surface's one primary button to copy it.
 export default function CitationBox() {
   const health = useHealth()
   const engine = { version: health?.engine_version, commit: health?.engine_commit }
-  const formats = [
-    ['BibTeX', bibtex(engine)],
-    ['RIS', ris(engine)],
-  ]
+  const text = bibtex(engine)
+  const lines = bibtexLines(engine)
+  const [copied, setCopied] = useState(false)
+  // Bumped on every copy, so the sweep restarts even on a second click
+  // (a reused animation name would not replay).
+  const [sweep, setSweep] = useState(0)
+  const timer = useRef(null)
+
+  useEffect(() => () => clearTimeout(timer.current), [])
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      return // Clipboard blocked: claim nothing.
+    }
+    setCopied(true)
+    setSweep((n) => n + 1)
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => setCopied(false), 1800)
+  }
 
   return (
     <section className="cite card" id="cite" aria-labelledby="cite-title">
-      <div className="about-section__head">
+      <div className="cite__reference">
         <h2 className="about-section__title" id="cite-title">
           Cite Orthonym
         </h2>
-        <p className="about-section__note">
-          Please cite the paper. To pin the exact engine, cite the software too.
-        </p>
-      </div>
-      <div className="cite__formats">
-        {formats.map(([label, text]) => (
-          <div className="cite__format" key={label}>
-            <div className="cite__head">
-              <h3 className="cite__label">{label}</h3>
-              <CopyButton text={text} label={`Copy ${label}`} />
+
+        <figure className="cite__paper">
+          <p className="cite__paper-title">{PAPER.title}</p>
+          <figcaption className="cite__paper-meta">
+            <span className="cite__authors">{referenceAuthors()}</span>
+            <span className="cite__venue">
+              <em>{PAPER.journal}</em> {PAPER.year}
+            </span>
+            <a className="cite__doi" href={PAPER.url} target="_blank" rel="noopener noreferrer">
+              doi:{PAPER.doi}
+            </a>
+          </figcaption>
+        </figure>
+
+        <div className="cite__pin">
+          <p className="cite__pin-lead">To pin the exact engine, cite the software too.</p>
+          <dl className="cite__pin-list">
+            <div>
+              <dt>Version</dt>
+              <dd>{engine.version ? `v${engine.version}` : '—'}</dd>
             </div>
-            <pre className="about-code" tabIndex={0} aria-label={`${label} citation`}>
-              {text}
-            </pre>
-          </div>
-        ))}
+            <div>
+              <dt>Commit</dt>
+              <dd>{engine.commit ? engine.commit.slice(0, 7) : '—'}</dd>
+            </div>
+            <div>
+              <dt>Software DOI</dt>
+              <dd>
+                <a href={`https://doi.org/${SOFTWARE.doi}`} target="_blank" rel="noopener noreferrer">
+                  {SOFTWARE.doi}
+                </a>
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+
+      <div className="cite__bib">
+        <div className="cite__bib-head">
+          <span className="cite__bib-label">BibTeX</span>
+          <button type="button" className="btn btn--accent btn--sm cite__copy" onClick={copy}>
+            <Icon name={copied ? 'check' : 'copy'} />
+            {copied ? 'Copied' : 'Copy BibTeX'}
+          </button>
+          <span className="sr-only" role="status">
+            {copied ? 'BibTeX copied to the clipboard' : ''}
+          </span>
+        </div>
+        <pre className="cite__code" tabIndex={0} aria-label="BibTeX for the paper and the software">
+          <code>
+            {lines.map((line, i) => (
+              <span className={`cite__line cite__line--${line.kind}`} key={i}>
+                {line.kind === 'entry' && (
+                  <>
+                    <span className="cite__type">{line.type}</span>
+                    {'{'}
+                    <span className="cite__key">{line.key}</span>,
+                  </>
+                )}
+                {line.kind === 'field' && (
+                  <>
+                    {'  '}
+                    <span className="cite__field">{line.name}</span>
+                    {' = {'}
+                    <span className="cite__value">{line.value}</span>
+                    {'}'}
+                    {line.comma ? ',' : ''}
+                  </>
+                )}
+                {(line.kind === 'close' || line.kind === 'blank') && line.text}
+                {'\n'}
+              </span>
+            ))}
+          </code>
+          {sweep > 0 && <span className="cite__sweep" key={sweep} aria-hidden="true" />}
+        </pre>
       </div>
     </section>
   )

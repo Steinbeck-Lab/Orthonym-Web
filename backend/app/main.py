@@ -28,7 +28,6 @@ from .ratelimit import check_fast_allowed, check_job_allowed, client_ip
 from .schemas import (
     ExamplesResponse,
     ExplainResponse,
-    HealthLimits,
     HealthResponse,
     IupacToSmilesResponse,
     NameCheckRequest,
@@ -190,21 +189,11 @@ def health() -> HealthResponse:
     # is where every other response shape lives, and an OpenAPI consumer
     # should see the "opsin" field documented like any other.
     opsin_ok = redis_store.any_worker_has_opsin()
-    settings = get_settings()
     return HealthResponse(
         status="OK" if opsin_ok else "DEGRADED",
         opsin="available" if opsin_ok else "no worker has a live JVM",
         engine_version=ENGINE_VERSION,
         engine_commit=ENGINE_COMMIT,
-        limits=HealthLimits(
-            fast_per_minute=settings.RATE_LIMIT_FAST_PER_MINUTE,
-            jobs_per_hour=settings.RATE_LIMIT_JOBS_PER_HOUR,
-            max_concurrent_jobs=settings.RATE_LIMIT_MAX_CONCURRENT_JOBS,
-            download_per_minute=settings.RATE_LIMIT_DOWNLOAD_PER_MINUTE,
-            max_batch_size=settings.MAX_BATCH_SIZE,
-            fast_path_max_molecules=settings.FAST_PATH_MAX_MOLECULES,
-            max_file_size_mb=settings.MAX_FILE_SIZE_MB,
-        ),
     )
 
 
