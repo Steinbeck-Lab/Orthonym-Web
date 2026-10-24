@@ -334,12 +334,19 @@ def name_check(request: Request, body: NameCheckRequest) -> NameCheckResponse:
     (molecule,) = _canonicalize([body.smiles], 1)
     if molecule.smiles is None:
         raise HTTPException(status_code=400, detail=molecule.error)
+    async_result = check_name.apply_async(
+        args=[molecule.smiles, body.name], queue="fast"
+    )
     try:
-        result = check_name.apply_async(
-            args=[molecule.smiles, body.name], queue="fast"
-        ).get(timeout=settings.FAST_PATH_TIMEOUT)
+        result = async_result.get(timeout=settings.FAST_PATH_TIMEOUT)
     except CeleryTimeoutError as exc:
         raise _timeout_504(settings) from exc
+    # As /api/translate does: the backend would keep this result, the
+    # visitor's SMILES and name included, for JOB_RESULT_TTL_SECONDS.
+    try:
+        async_result.forget()
+    except Exception:  # noqa: BLE001 - cleanup must not fail a served request
+        logger.debug("Could not forget name-check result", exc_info=True)
     return NameCheckResponse(**result)
 
 

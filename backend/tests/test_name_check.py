@@ -118,3 +118,25 @@ def test_a_warning_from_opsin_travels_with_the_verdict(redis_client):
     ).json()
     assert [w["type"] for w in body["warnings"]] == ["APPEARS_AMBIGUOUS"]
     assert body["verdict"] in ("same", "different")
+
+
+def test_the_answer_is_not_left_in_the_result_backend(redis_client, monkeypatch):
+    # Celery's backend keeps every result for 24 h; this one carries the
+    # visitor's SMILES and name. /api/translate forgets its result; so must this.
+    from app import main
+
+    forgotten = []
+
+    class _Result:
+        def get(self, timeout):
+            return {
+                "verdict": "same", "verdict_text": "Same structure",
+                "engine": {"smiles": "CCO", "status": "pin"},
+            }
+
+        def forget(self):
+            forgotten.append(True)
+
+    monkeypatch.setattr(main.check_name, "apply_async", lambda *a, **k: _Result())
+    assert client.post("/api/name-check", json={"smiles": "CCO", "name": "ethanol"}).status_code == 200
+    assert forgotten == [True]
