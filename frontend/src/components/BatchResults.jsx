@@ -7,6 +7,7 @@ import {
   fetchJobResults,
   fetchJobStatus,
   jobResultsCsvUrl,
+  jobResultsSdfUrl,
 } from '../lib/api'
 import {
   PAGE_SIZE,
@@ -663,6 +664,9 @@ function BatchResults({ job, onForget }) {
         <div className="batch__downloads">
           <a className="batch__csv" href={jobResultsCsvUrl(jobId)}>
             {filter.length ? 'Download CSV (all rows)' : 'Download CSV'}
+          </a>
+          <a className="batch__csv" href={jobResultsSdfUrl(jobId)}>
+            {filter.length ? 'Download SDF (all rows)' : 'Download SDF'}
           </a>
           {/* The one sentence that stops a results link reading as permanent. */}
           {expiry && (
