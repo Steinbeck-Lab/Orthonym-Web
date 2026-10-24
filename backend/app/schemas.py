@@ -113,6 +113,19 @@ class TranslateResponse(BaseModel):
     results: list[ResultItem]
 
 
+class HealthLimits(BaseModel):
+    """The per-IP limits and sizes this deployment enforces (its profile and
+    environment, resolved). About's API section shows them."""
+
+    fast_per_minute: int
+    jobs_per_hour: int
+    max_concurrent_jobs: int
+    download_per_minute: int
+    max_batch_size: int
+    fast_path_max_molecules: int
+    max_file_size_mb: int
+
+
 class HealthResponse(BaseModel):
     status: str
     # Whether at least one Celery worker has reported a live JVM. See
@@ -124,6 +137,7 @@ class HealthResponse(BaseModel):
     # The engine tracks main, so two builds can share a version.
     engine_version: str
     engine_commit: Optional[str] = None
+    limits: HealthLimits
 
 
 class ExampleItem(BaseModel):
