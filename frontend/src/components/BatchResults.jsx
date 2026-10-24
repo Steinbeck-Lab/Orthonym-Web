@@ -244,14 +244,10 @@ function BatchTally({ counts, finished, filter = [], onToggle = null, onClear, t
                 aria-pressed={filter.includes(row.status)}
                 onClick={() => onToggle(row.status)}
               >
-                <span className="batch__tally-count">{row.count}</span>
-                <span className="batch__tally-label">{row.label}</span>
+                <TallyCount row={row} />
               </button>
             ) : (
-              <>
-                <span className="batch__tally-count">{row.count}</span>
-                <span className="batch__tally-label">{row.label}</span>
-              </>
+              <TallyCount row={row} />
             )}
           </li>
         ))}
@@ -264,6 +260,15 @@ function BatchTally({ counts, finished, filter = [], onToggle = null, onClear, t
         )}
       </ul>
     </div>
+  )
+}
+
+function TallyCount({ row }) {
+  return (
+    <>
+      <span className="batch__tally-count">{row.count}</span>
+      <span className="batch__tally-label">{row.label}</span>
+    </>
   )
 }
 
@@ -384,14 +389,15 @@ function BatchResults({ job, onForget }) {
   // first. Until the first page lands, `total` is the best guess available.
   const [retrievable, setRetrievable] = useState(null)
   // The tiers the table is filtered to (empty = every row), and how many rows
-  // they hold. A filtered view pages against `matched`, not `retrievable`.
+  // they hold. Pages count against `matched`, which the server sets equal to
+  // `retrievable` when nothing is filtered.
   const [filter, setFilter] = useState([])
   const [matched, setMatched] = useState(null)
   // Quick toggles send overlapping requests; only the newest may fill the table.
   const trackPage = useRef(latestOnly())
   const tallyRef = useRef(null)
   const finished = status ? isTerminal(status.status) : false
-  const countable = filter.length ? (matched ?? 0) : (retrievable ?? status?.total ?? 0)
+  const countable = matched ?? retrievable ?? status?.total ?? 0
   const pages = pageCount(countable)
   // Rows are only worth offering when the server says some can be read back.
   // `retrievable` starts null (nothing fetched yet) and a job that closed
@@ -476,6 +482,9 @@ function BatchResults({ job, onForget }) {
   }
   // "Show all" removes itself, so focus moves to the first tier toggle rather
   // than falling back to the page.
+  const filterNote = filter.length
+    ? `, showing only ${filter.map((s) => STATE_SHORT[s] ?? s).join(' and ')}`
+    : ''
   const clearFilter = () => {
     setFilter([])
     setPage(0)
@@ -675,7 +684,7 @@ function BatchResults({ job, onForget }) {
                 Batch results, page {page + 1} of {pages}, sorted by{' '}
                 {SORT_COLUMNS.find((c) => c.key === sort)?.sr}
                 {order === 'desc' ? ', reversed' : ''}
-                {filter.length ? `, showing only ${filter.map((s) => STATE_SHORT[s] ?? s).join(' and ')}` : ''}. Every name carries its
+                {filterNote}. Every name carries its
                 confidence mark.
               </caption>
               <thead>
