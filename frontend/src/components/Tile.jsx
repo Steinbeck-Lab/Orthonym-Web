@@ -1,3 +1,4 @@
+import { limitReasonFor } from '../lib/limitReasons'
 import { NAMED_STATUSES, STATE_CLASS, VERIFIED_STATUSES, isMismatchHere, isUncheckedHere, stateLabelFor } from '../lib/statuses'
 import useDepiction from '../lib/useDepiction'
 import CopyButton from './CopyButton'
@@ -19,6 +20,7 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
   // result only ships the INPUT's picture, so this one is drawn on demand from
   // roundtrip_smiles. A null roundtrip (no round trip ran) is a no-op fetch.
   const retrans = useDepiction(roundtrip_smiles)
+  const reason = limitReasonFor(row)
   const isPending = phase === 'pending'
   const isActive = phase === 'active'
   const animateName = isActive && !reduceMotion
@@ -192,6 +194,9 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
                 : 'Built partly or wholly by the general engine, not the strict PIN rules.'}
           </span>
         )}
+        {/* Why the engine declined (lib/limitReasons.js). Abstain only: an
+            error row's own message already says what went wrong. */}
+        {!isPending && reason && <span className="tile__origin">{reason}</span>}
         {!isPending && status === 'abstain' && formula && (
           <span className="tile__formula">
             Formula: <ChemFormula formula={formula} />

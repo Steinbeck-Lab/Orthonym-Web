@@ -19,6 +19,7 @@ import {
   stateLabel,
 } from '../lib/batchJob'
 import { outcomeMessage, tierTally } from '../lib/batchTally'
+import { limitReasonFor } from '../lib/limitReasons'
 import { forgetJob, rememberJob } from '../lib/jobStore'
 import { STATE_CLASS, STATE_SHORT, VERIFIED_STATUSES, stateLabelFor } from '../lib/statuses'
 import CopyButton from './CopyButton'
@@ -150,6 +151,7 @@ function SortBar({ sort, order, onSort }) {
 function NameCell({ row }) {
   const stateClass = STATE_CLASS[row.status] ?? 'error'
   const label = stateLabelFor(row)
+  const reason = limitReasonFor(row)
   if (row.name) {
     return (
       <div className={`batch__name batch__name--${stateClass}`}>
@@ -189,6 +191,7 @@ function NameCell({ row }) {
             <ChemFormula formula={row.formula} />
           </>
         ) : null}
+        {reason && <span className="limit-reason">{reason}</span>}
       </span>
     </div>
   )
