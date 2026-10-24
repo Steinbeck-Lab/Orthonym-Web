@@ -137,3 +137,12 @@ test('real responses: every placed node keeps at least one keyboard stop, punctu
 test('unplaced nodes are still listed on real responses', () => {
   for (const [, r] of OK) assert.deepEqual(unplacedNodes(r.nodes), r.nodes.filter((n) => !n.span))
 })
+
+test('a pin or hover on a part still hidden lights nothing', async () => {
+  const { revealedActive } = await import('./explainView.js')
+  const hidden = new Set(['n0', 'n1'])
+  assert.equal(revealedActive('n0', hidden), null)
+  assert.equal(revealedActive('n2', hidden), 'n2')
+  assert.equal(revealedActive('n0', null), 'n0')
+  assert.equal(revealedActive(null, hidden), null)
+})

@@ -103,10 +103,16 @@
   border: var(--card-border);
 }
 
-/* The differs mark. A highlight with its own small radius; it sits under the
-   hover/pin glow, which still wins while a part is active. */
+/* The differs mark: a grey fill inside an outline, never a line under the
+   name (every underline style is a confidence tier). The outline is
+   --muted, 4.7:1 on the white card, so the mark clears WCAG 1.4.11's 3:1.
+   While a part is active or in context, the glow fill wins and the outline
+   stays, so the pin is still visible on a differing part. */
 .explain-name__part--differs {
-  background: var(--surface-elevated);
   border-radius: 3px;
-  box-shadow: 0 0 0 2px var(--surface-elevated);
+  box-shadow: 0 0 0 1.5px var(--muted);
+}
+
+.explain-name__part--differs:not(.explain-name__part--active):not(.explain-name__part--context) {
+  background: var(--surface-elevated);
 }

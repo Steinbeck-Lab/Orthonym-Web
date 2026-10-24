@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { verdictKindFor } from '../lib/explainVerdict'
 import { isPart, partOf, sliceName, unplacedNodes } from '../lib/nameTargets'
-import { detailNotes, pieceMark, tabStops } from '../lib/explainView'
+import { detailNotes, pieceMark, revealedActive, tabStops } from '../lib/explainView'
 import { nameRuns, applyRuns } from '../lib/nameTypography'
 import { useAtomHighlight } from '../lib/useAtomHighlight'
 import { TIER_SETTINGS } from '../lib/useExplain'
@@ -42,7 +42,9 @@ export default function ExplainView({
 }) {
   const [hoveredId, setHoveredId] = useState(null)
   const [pinnedId, setPinnedId] = useState(null)
-  const activeId = forcedId ?? pinnedId ?? hoveredId
+  // A pin or hover left over from before a reveal (or a Back) must never
+  // light or explain a part that is hidden again.
+  const activeId = revealedActive(forcedId ?? pinnedId ?? hoveredId, hidden)
   // Classroom mode: some parts are still hidden. Nothing on screen or in the
   // accessibility tree may give their text away.
   const veiled = Boolean(hidden?.size)

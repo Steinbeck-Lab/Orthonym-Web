@@ -4,7 +4,7 @@ import Icon from '../components/Icon'
 import ReportLink from '../components/ReportLink'
 import ShareButton from '../components/ShareButton'
 import TransportNotice from '../components/TransportNotice'
-import { diffNodes } from '../lib/compareNodes'
+import { compareMarks, compareShareFields } from '../lib/compareNodes'
 import useExplain, { TIER_SETTINGS } from '../lib/useExplain'
 import useShareLink from '../lib/useShareLink'
 // Explain.css styles ExplainView; Check.css holds the two-choice switch.
@@ -128,12 +128,11 @@ function Compare() {
     compare(fields.a, fields.b, ma, mb)
   })
 
-  // Marks only when both sides have an answer to compare.
+  // Marks only when both sides have a breakdown to compare.
   const both = left.phase === 'success' && right.phase === 'success'
-  const { a: marksA, b: marksB } = both
-    ? diffNodes(left.data.nodes ?? [], right.data.nodes ?? [])
-    : { a: null, b: null }
-  const shareFields = both && { a: a.trim(), am: modeA, b: b.trim(), bm: modeB }
+  const marks = both ? compareMarks(left.data, right.data) : null
+  // What was compared, from each side's own request -- not the inputs now.
+  const shareFields = both ? compareShareFields(left.shareFields, right.shareFields) : null
 
   return (
     <>
@@ -195,7 +194,12 @@ function Compare() {
           </form>
         </section>
 
-        {both && (
+        {both && !marks && (
+          <p className="compare-legend">
+            One side has no breakdown of its name, so no parts are marked.
+          </p>
+        )}
+        {marks && (
           <p className="compare-legend">
             <span className="explain-name__part--differs">Grey</span> marks a part the other name
             does not have.
@@ -203,8 +207,8 @@ function Compare() {
         )}
 
         <div className="compare-results">
-          <SideResult label="A" explain={left} marks={marksA} />
-          <SideResult label="B" explain={right} marks={marksB} />
+          <SideResult label="A" explain={left} marks={marks?.a ?? null} />
+          <SideResult label="B" explain={right} marks={marks?.b ?? null} />
         </div>
       </main>
     </>

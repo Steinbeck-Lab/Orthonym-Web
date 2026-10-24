@@ -748,7 +748,7 @@
   cursor: pointer;
 }
 
-.classroom__btn:hover:not(:disabled) {
+.classroom__btn:hover:not([aria-disabled='true']) {
   border-color: var(--ink);
 }
 
@@ -757,14 +757,21 @@
   outline-offset: 2px;
 }
 
-.classroom__btn:disabled {
+/* Next is the step a reader takes most: ink-filled. */
+.classroom__btn--next:not([aria-disabled='true']) {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--card);
+}
+
+.classroom__btn[aria-disabled='true'] {
   color: var(--muted);
   cursor: default;
 }
 
-/* Next is the step a reader takes most: ink-filled. */
-.classroom__btn--next:not(:disabled) {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--card);
+.classroom__none {
+  margin: var(--s-sm) 0 0;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  color: var(--body);
 }

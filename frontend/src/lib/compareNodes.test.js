@@ -37,3 +37,18 @@ test('a node with no span is matched after every placed one', () => {
   const B = [{ id: 'z', kind: 'locant', label: '1', span: [3, 4] }]
   assert.deepEqual(ids(diffNodes(A, B).a), ['x'])
 })
+
+test('no marks unless both sides have a breakdown', async () => {
+  const { compareMarks } = await import('./compareNodes.js')
+  assert.equal(compareMarks({ nodes: [] }, { nodes: nodes('ethanol') }), null)
+  assert.equal(compareMarks({ name: 'x' }, { nodes: nodes('ethanol') }), null)
+  assert.deepEqual(ids(compareMarks({ nodes: nodes('propan-1-ol') }, { nodes: nodes('propan-2-ol') }).b), ['n2'])
+})
+
+test('the share link names what was compared, not what is typed now', async () => {
+  const { compareShareFields } = await import('./compareNodes.js')
+  assert.deepEqual(compareShareFields({ name: 'propan-1-ol' }, { smiles: 'CC(C)O' }), {
+    a: 'propan-1-ol', am: 'name', b: 'CC(C)O', bm: 'smiles',
+  })
+  assert.equal(compareShareFields(null, { smiles: 'C' }), null)
+})

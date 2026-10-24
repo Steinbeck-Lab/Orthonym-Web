@@ -29,3 +29,21 @@ function unmatched(mine, theirs) {
 export function diffNodes(nodesA, nodesB) {
   return { a: unmatched(nodesA, nodesB), b: unmatched(nodesB, nodesA) }
 }
+
+/** The marks for two answers, or null when either has no breakdown: an empty
+ *  side would mark every part of the other, and the legend would then claim
+ *  the other name lacks them all. */
+export function compareMarks(dataA, dataB) {
+  if (!dataA?.nodes?.length || !dataB?.nodes?.length) return null
+  return diffNodes(dataA.nodes, dataB.nodes)
+}
+
+/** Share fields for what was COMPARED (each side's request, as useExplain
+ *  recorded it), never the inputs as they are now. */
+export function compareShareFields(left, right) {
+  if (!left || !right) return null
+  const side = (f) => (f.name ? [f.name, 'name'] : [f.smiles, 'smiles'])
+  const [a, am] = side(left)
+  const [b, bm] = side(right)
+  return { a, am, b, bm }
+}

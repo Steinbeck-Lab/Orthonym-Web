@@ -154,31 +154,33 @@ function Explain() {
     if (event.key === 'ArrowLeft') setStep((s) => Math.max(s - 1, 0))
   }
 
+  // aria-disabled, not disabled: a button that disables itself under the
+  // keyboard drops focus to <body>, and the arrow keys stop working.
+  const back = () => setStep((s) => Math.max(s - 1, 0))
+  const next = () => setStep((s) => Math.min(s + 1, steps.length))
+  const stepButton = (label, onClick, off, extra = '') => (
+    <button
+      type="button"
+      className={`classroom__btn${extra}`}
+      onClick={off ? undefined : onClick}
+      aria-disabled={off}
+    >
+      {label}
+    </button>
+  )
   const stepControls = teaching ? (
     <div className="classroom" role="group" aria-label="Reveal the name part by part" onKeyDown={stepKeys}>
-      <button type="button" className="classroom__btn" onClick={() => setStep((s) => s - 1)} disabled={step === 0}>
-        Back
-      </button>
+      {stepButton('Back', back, step === 0)}
       <span className="classroom__count" aria-live="polite">
         {step} of {steps.length}
       </span>
-      <button
-        type="button"
-        className="classroom__btn classroom__btn--next"
-        onClick={() => setStep((s) => s + 1)}
-        disabled={step === steps.length}
-      >
-        Next
-      </button>
-      <button
-        type="button"
-        className="classroom__btn"
-        onClick={() => setStep(steps.length)}
-        disabled={step === steps.length}
-      >
-        Reveal all
-      </button>
+      {stepButton('Next', next, step === steps.length, ' classroom__btn--next')}
+      {stepButton('Reveal all', () => setStep(steps.length), step === steps.length)}
     </div>
+  ) : classroom && phase === 'success' ? (
+    <p className="classroom__none">
+      This result has no parts to reveal, so the whole name is shown.
+    </p>
   ) : null
 
   return (
@@ -406,9 +408,12 @@ function Explain() {
                 resultMode={resultMode}
                 tierRow={tierRow}
                 apiError={apiError}
-                shareFields={classroom && shareFields ? { ...shareFields, classroom: '1' } : shareFields}
+                // A classroom link carries the STRUCTURE, never the name: a
+                // name in the link would be the answer, in the address bar.
+                shareFields={classroom && data?.smiles ? { smiles: data.smiles, classroom: '1' } : shareFields}
                 hidden={hidden}
-                forcedId={teaching && step > 0 ? steps[step - 1] : null}
+                // Once everything shows, hover and pin work again.
+                forcedId={teaching && step > 0 && step < steps.length ? steps[step - 1] : null}
                 afterName={stepControls}
               />
             </div>
