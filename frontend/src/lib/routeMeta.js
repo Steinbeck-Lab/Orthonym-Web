@@ -26,6 +26,11 @@ export const ROUTE_META = {
     description:
       'Paste a structure and a name. OPSIN reads the name and Orthonym compares the two structures by InChIKey, beside its own name and confidence tier.',
   },
+  '/compare': {
+    title: 'Compare two IUPAC names, part by part · Orthonym',
+    description:
+      'Explain two molecules side by side. Orthonym marks the parts of the two names that differ and lights the atoms each part describes.',
+  },
   '/about': {
     title: 'About Orthonym — how it names molecules and how accurate it is',
     description:

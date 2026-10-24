@@ -36,3 +36,7 @@ test("index.html's own title and description are Home's, so the first response a
 test('the name-check page has its own head entry', () => {
   assert.match(ROUTE_META['/check'].title, /Orthonym/)
 })
+
+test('the compare page has its own head entry', () => {
+  assert.match(ROUTE_META['/compare'].title, /Orthonym/)
+})

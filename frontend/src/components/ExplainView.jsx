@@ -19,8 +19,12 @@ import ChemName, { Pieces } from './Typeset'
  *
  * It owns its own hover and pin. The page renders it with a `key` per result,
  * so both reset on each new answer, as Explain's runExplain used to reset them.
+ *
+ * `marks` (/compare): a Set of node ids the other name does not have. A
+ * marked part gets a grey highlight and a spoken "differs" -- never a line,
+ * because every line style under a name is already a confidence tier.
  */
-export default function ExplainView({ data, resultMode, tierRow, apiError, shareFields }) {
+export default function ExplainView({ data, resultMode, tierRow, apiError, shareFields, marks = null }) {
   const [hoveredId, setHoveredId] = useState(null)
   const [pinnedId, setPinnedId] = useState(null)
   const activeId = pinnedId ?? hoveredId
@@ -75,7 +79,7 @@ export default function ExplainView({ data, resultMode, tierRow, apiError, share
                     <span
                       className={`explain-name__part${isPart(node) ? '' : ' explain-name__part--ref'}${
                         mark ? ` explain-name__part--${mark}` : ''
-                      }`}
+                      }${marks?.has(node.id) ? ' explain-name__part--differs' : ''}`}
                       {...hoverProps(node.id)}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' || event.key === ' ') {
@@ -85,7 +89,7 @@ export default function ExplainView({ data, resultMode, tierRow, apiError, share
                       }}
                       tabIndex={stops.has(index) ? 0 : -1}
                       role="button"
-                      aria-label={node.label}
+                      aria-label={marks?.has(node.id) ? `${node.label}, differs` : node.label}
                       aria-pressed={pinnedId === node.id}
                     >
                       <Pieces pieces={applyRuns(name, nameStyle, piece.start, piece.end)} breaks={false} />
@@ -103,11 +107,14 @@ export default function ExplainView({ data, resultMode, tierRow, apiError, share
               <li key={node.id}>
                 <button
                   type="button"
-                  className={`explain-unplaced__item${activeId === node.id ? ' explain-unplaced__item--active' : ''}`}
+                  className={`explain-unplaced__item${activeId === node.id ? ' explain-unplaced__item--active' : ''}${
+                    marks?.has(node.id) ? ' explain-name__part--differs' : ''
+                  }`}
                   {...hoverProps(node.id)}
                   aria-pressed={pinnedId === node.id}
                 >
                   {node.label} <span className="explain-unplaced__note">— not placed in the name</span>
+                  {marks?.has(node.id) && <span className="sr-only">, differs</span>}
                 </button>
               </li>
             ))}

@@ -57,6 +57,8 @@ const NAV_LINKS = [
   { to: '/explain', label: 'Explain' },
   // Does a claimed name describe a structure? A verdict on structure only.
   { to: '/check', label: 'Check' },
+  // Two explanations side by side, the differing parts marked.
+  { to: '/compare', label: 'Compare' },
   // Health Check folded into /about as a compact board (Task 18) rather than
   // its own page; /health now redirects there (App.jsx), so the nav no
   // longer needs a separate item. The sliding pill below is measured off the
