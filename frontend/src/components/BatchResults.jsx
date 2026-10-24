@@ -150,6 +150,7 @@ function SortBar({ sort, order, onSort }) {
 function NameCell({ row }) {
   const stateClass = STATE_CLASS[row.status] ?? 'error'
   const label = stateLabelFor(row)
+  const reason = limitReasonFor(row)
   if (row.name) {
     return (
       <div className={`batch__name batch__name--${stateClass}`}>
@@ -189,9 +190,7 @@ function NameCell({ row }) {
             <ChemFormula formula={row.formula} />
           </>
         ) : null}
-        {row.status === 'abstain' && limitReasonFor(row) && (
-          <span className="batch__reason">{limitReasonFor(row)}</span>
-        )}
+        {reason && <span className="limit-reason">{reason}</span>}
       </span>
     </div>
   )

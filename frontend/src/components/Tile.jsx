@@ -19,6 +19,7 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
   // result only ships the INPUT's picture, so this one is drawn on demand from
   // roundtrip_smiles. A null roundtrip (no round trip ran) is a no-op fetch.
   const retrans = useDepiction(roundtrip_smiles)
+  const reason = limitReasonFor(row)
   const isPending = phase === 'pending'
   const isActive = phase === 'active'
   const animateName = isActive && !reduceMotion
@@ -193,9 +194,7 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
         )}
         {/* Why the engine declined (lib/limitReasons.js). Abstain only: an
             error row's own message already says what went wrong. */}
-        {!isPending && status === 'abstain' && limitReasonFor(row) && (
-          <span className="tile__origin">{limitReasonFor(row)}</span>
-        )}
+        {!isPending && reason && <span className="tile__origin">{reason}</span>}
         {!isPending && status === 'abstain' && formula && (
           <span className="tile__formula">
             Formula: <ChemFormula formula={formula} />

@@ -38,6 +38,7 @@ export default function ResultsTable({ rows }) {
 function ResultRow({ row, index }) {
   const { smiles, status, name, error, depiction_svg, roundtrip_smiles, roundtrip_match } = row
   const retrans = useDepiction(roundtrip_smiles)
+  const reason = limitReasonFor(row)
   const named = NAMED_STATUSES.has(status)
   const stateClass = STATE_CLASS[status] || status
 
@@ -68,9 +69,7 @@ function ResultRow({ row, index }) {
               {status === 'error' ? error || 'Could not parse this SMILES string' : stateLabelFor(row)}
             </span>
           )}
-          {status === 'abstain' && limitReasonFor(row) && (
-            <span className="results-cell__reason">{limitReasonFor(row)}</span>
-          )}
+          {reason && <span className="limit-reason">{reason}</span>}
           <ReportLink row={row} where="Home" settings={row.settings} />
         </td>
         <td className="results-cell--pic">

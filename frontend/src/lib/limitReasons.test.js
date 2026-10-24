@@ -6,7 +6,6 @@ import { limitReasonFor } from './limitReasons.js'
 test('every known code gets its sentence', () => {
   assert.match(limitReasonFor({ status: 'abstain', limit_code: 'UNSUPPORTED_RING_SYSTEM' }), /declines rather than guess/)
   assert.match(limitReasonFor({ status: 'abstain', limit_code: 'withheld_unchecked' }), /Turn best effort on/)
-  assert.match(limitReasonFor({ status: 'error', limit_code: 'timeout' }), /too long/)
   for (const code of [
     'WILDCARD_ATOMS',
     'UNSUPPORTED_ELEMENT',
@@ -14,7 +13,6 @@ test('every known code gets its sentence', () => {
     'STRUCTURE_TOO_LARGE',
     'UNNAMEABLE',
     'NO_VERIFIED_PIN',
-    'engine_error',
   ]) {
     const reason = limitReasonFor({ status: 'abstain', limit_code: code })
     assert.ok(reason && !reason.startsWith('Reason code'), code)
@@ -23,6 +21,10 @@ test('every known code gets its sentence', () => {
 
 test('an unknown code shows the raw code, never nothing', () => {
   assert.equal(limitReasonFor({ status: 'abstain', limit_code: 'NEW_CODE' }), 'Reason code: NEW_CODE')
+})
+
+test('an error row gets no reason: its own message already says what failed', () => {
+  assert.equal(limitReasonFor({ status: 'error', limit_code: 'timeout' }), null)
 })
 
 test('a named row or a row with no code gets no reason', () => {

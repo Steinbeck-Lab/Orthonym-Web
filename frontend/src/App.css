@@ -2735,11 +2735,13 @@ input.field__control {
   color: var(--muted);
 }
 
-/* Why the engine declined (lib/limitReasons.js), under the abstain label. */
-.results-cell__reason {
+/* Why the engine declined (lib/limitReasons.js), on its own line under an
+   abstain label in Home's table and the batch table. The body face: it is a
+   sentence, not a code. */
+.limit-reason {
   display: block;
   margin-top: var(--s-xxs);
-  max-width: 44ch;
+  max-width: 52ch;
   font-family: var(--font-body);
   font-size: var(--t-body-sm);
   line-height: 1.45;

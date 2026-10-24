@@ -1,4 +1,5 @@
-// Why a row has no name, in one plain sentence, keyed on its `limit_code`.
+// Why the engine declined to name a molecule (an abstain row), in one plain
+// sentence keyed on its `limit_code`.
 //
 // Upper-case codes are the Orthonym engine's own (orthonym/errors.py,
 // LIMIT_CATALOG); lower-case ones are this app's (backend/app/schemas.py).
@@ -16,14 +17,11 @@ const REASONS = Object.freeze({
   NO_VERIFIED_PIN: 'The engine built a name, but not a verified preferred IUPAC name, so it is not shown.',
   withheld_unchecked:
     'The engine found a name, but no round trip checked it and best effort is off, so it is not shown. Turn best effort on to see it.',
-  timeout: 'Naming took too long and was stopped.',
-  engine_error: 'The engine stopped with an internal error on this structure.',
 })
 
-const UNNAMED = new Set(['abstain', 'error'])
-
-/** The reason sentence for an abstain or error row, or null. */
+/** The reason sentence for an abstain row, or null. An error row gets none:
+ *  its own message already says what failed. */
 export function limitReasonFor(row) {
-  if (!row?.limit_code || !UNNAMED.has(row.status)) return null
+  if (row?.status !== 'abstain' || !row.limit_code) return null
   return REASONS[row.limit_code] ?? `Reason code: ${row.limit_code}`
 }
