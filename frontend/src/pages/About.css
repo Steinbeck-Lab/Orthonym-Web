@@ -1411,7 +1411,7 @@
 }
 
 /* A long line scrolls inside its block, never the page. */
-.about-code {
+.cite__code {
   margin: 0;
   padding: var(--s-md);
   overflow-x: auto;
@@ -1425,74 +1425,7 @@
   white-space: pre;
 }
 
-.about-code:focus-visible {
+.cite__code:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
-}
-
-/* -------------------- api -------------------- */
-.api {
-  padding: clamp(var(--s-lg), 3.5vw, var(--s-xl));
-}
-
-.api__limits {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-xs) var(--s-lg);
-  margin: 0 0 var(--s-lg);
-  padding: 0;
-  list-style: none;
-  font-family: var(--font-mono);
-  font-size: var(--t-caption);
-  color: var(--body);
-}
-
-.api__list {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.api__row {
-  min-width: 0;
-  padding: var(--s-md) 0;
-  border-top: 1px solid var(--hairline);
-}
-
-.api__name {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: var(--t-body-sm);
-  font-weight: 400;
-  color: var(--ink);
-  overflow-wrap: anywhere;
-  /* A path is code and case-sensitive: undo the heading's uppercase and
-     tracking. */
-  text-transform: none;
-  letter-spacing: normal;
-}
-
-.api__method {
-  font-weight: 700;
-}
-
-.api__summary {
-  margin: var(--s-xxs) 0 var(--s-xs);
-  font-family: var(--font-body);
-  font-size: var(--t-body-sm);
-  line-height: 1.5;
-  color: var(--body);
-}
-
-.api__example {
-  display: flex;
-  align-items: center;
-  gap: var(--s-xs);
-  min-width: 0;
-}
-
-.api__example .about-code {
-  flex: 1;
-  min-width: 0;
 }
