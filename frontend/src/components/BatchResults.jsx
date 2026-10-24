@@ -13,6 +13,7 @@ import {
   clampPage,
   expiryLabel,
   isTerminal,
+  latestOnly,
   pageCount,
   progressPercent,
   stateLabel,
@@ -214,11 +215,11 @@ function NameCell({ row }) {
  *      job's declared total, which would report work-in-progress as a
  *      shortfall.
  */
-function BatchTally({ counts, finished, filter = [], onToggle = null, onClear }) {
+function BatchTally({ counts, finished, filter = [], onToggle = null, onClear, tallyRef }) {
   const rows = tierTally(counts)
   if (rows.length === 0) return null
   return (
-    <div className="batch__tally">
+    <div className="batch__tally" ref={tallyRef}>
       {/* The reading in words, so nobody has to add the chips up. It is
           role="status" because the panel's job is to report an outcome and a
           screen-reader user gets the numbers here rather than by walking a
@@ -386,6 +387,9 @@ function BatchResults({ job, onForget }) {
   // they hold. A filtered view pages against `matched`, not `retrievable`.
   const [filter, setFilter] = useState([])
   const [matched, setMatched] = useState(null)
+  // Quick toggles send overlapping requests; only the newest may fill the table.
+  const trackPage = useRef(latestOnly())
+  const tallyRef = useRef(null)
   const finished = status ? isTerminal(status.status) : false
   const countable = filter.length ? (matched ?? 0) : (retrievable ?? status?.total ?? 0)
   const pages = pageCount(countable)
@@ -397,13 +401,16 @@ function BatchResults({ job, onForget }) {
   const loadPage = useCallback(
     async (which) => {
       try {
-        const data = await fetchJobResults(jobId, {
-          offset: which * PAGE_SIZE,
-          limit: PAGE_SIZE,
-          sort,
-          order,
-          statuses: filter,
-        })
+        const { stale, value: data } = await trackPage.current(
+          fetchJobResults(jobId, {
+            offset: which * PAGE_SIZE,
+            limit: PAGE_SIZE,
+            sort,
+            order,
+            statuses: filter,
+          })
+        )
+        if (stale) return null
         setRows(data.rows ?? [])
         if (Number.isFinite(data.retrievable)) setRetrievable(data.retrievable)
         if (Number.isFinite(data.matched)) setMatched(data.matched)
@@ -467,9 +474,12 @@ function BatchResults({ job, onForget }) {
     )
     setPage(0)
   }
+  // "Show all" removes itself, so focus moves to the first tier toggle rather
+  // than falling back to the page.
   const clearFilter = () => {
     setFilter([])
     setPage(0)
+    requestAnimationFrame(() => tallyRef.current?.querySelector('.batch__tally-toggle')?.focus())
   }
 
   // --- controls -------------------------------------------------------
@@ -594,6 +604,7 @@ function BatchResults({ job, onForget }) {
         filter={filter}
         onToggle={finished && hasRows ? toggleTier : null}
         onClear={clearFilter}
+        tallyRef={tallyRef}
       />
 
       {error && (
