@@ -292,6 +292,7 @@ def prepared_payload(molecules) -> list[dict]:
             "input_id": m.input_id,
             "smiles": m.smiles,
             "error": m.error,
+            "claimed_name": m.claimed_name,
         }
         for m in molecules
     ]
