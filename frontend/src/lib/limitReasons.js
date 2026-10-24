@@ -9,11 +9,11 @@ const REASONS = Object.freeze({
   WILDCARD_ATOMS: 'The structure has wildcard atoms (*), which no IUPAC name can express.',
   UNSUPPORTED_ELEMENT: 'The structure has an element the engine does not name yet, such as a metal.',
   ISOLATED_ATOM: 'The structure is a single atom or a fragment too small to name as a compound.',
-  STRUCTURE_TOO_LARGE: 'The engine found no name for this structure, which is above its heavy-atom limit.',
+  STRUCTURE_TOO_LARGE: 'The engine found no name for this structure, which has more than 125 heavy atoms.',
   UNSUPPORTED_RING_SYSTEM:
     'The engine knows this ring system but cannot name it correctly yet, so it declines rather than guess.',
   UNNAMEABLE: 'The engine has no rule that names this structure yet.',
-  NO_VERIFIED_PIN: 'The engine built a name but could not verify it, so it is not shown.',
+  NO_VERIFIED_PIN: 'The engine built a name, but not a verified preferred IUPAC name, so it is not shown.',
   withheld_unchecked:
     'The engine found a name, but no round trip checked it and best effort is off, so it is not shown. Turn best effort on to see it.',
   timeout: 'Naming took too long and was stopped.',
