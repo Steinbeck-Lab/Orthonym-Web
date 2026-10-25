@@ -1,5 +1,85 @@
 # Changelog
 
+## [0.6.0](https://github.com/Steinbeck-Lab/Orthonym-Web/compare/v0.5.0...v0.6.0) (2026-10-25)
+
+
+### Features
+
+* **about:** a citation box with BibTeX and RIS ([83500a6](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/83500a6c4b162b4907948a202d2d1df880dbb1e4))
+* **about:** document the public API ([93e41f9](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/93e41f979a124cb8ca3052c9e770f3fa7085fd70))
+* **about:** redesign the citation card, BibTeX only ([0c74246](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/0c74246ea14ed7750d56f34fab4c3b3589bf9bc0))
+* **abstain:** plain-language reason for each limit code ([5e6485c](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/5e6485c245e49a8a828edbbefdafa06f79346439))
+* **abstain:** show why the engine declined ([4e37930](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/4e379300831d70b95d50a6afff473dafc7679030))
+* **abstain:** show why the engine declined on tiles and batch rows ([23cde82](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/23cde827fec020b6f754983036003d8fe3908ad5))
+* **batch:** download a finished job as SDF ([be6db00](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/be6db0084c9253a4e0d536a90d63a3d74ee38eea))
+* **batch:** filter batch results by tier ([bc5336a](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/bc5336a2b1a0d5cdb917f30233c56921e7ab61f8))
+* **batch:** filter job results by tier ([72e2696](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/72e2696566ae33f41300fea00d98ed823dded77e))
+* **batch:** link the SDF download ([8df77fa](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/8df77faed24763078e9edf114f9f10e003ab7676))
+* **batch:** tier counts filter the results table ([1904d41](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/1904d41d942e2cc79f6117d6b936293e069093b9))
+* **check:** batch name-check jobs ([529950a](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/529950a576ec5793665b819eaec83075479b3a3d))
+* **check:** compare two InChIKeys block by block ([f0cf7c5](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/f0cf7c50534ea00fca6b7b9462558ba61f7b0463))
+* **check:** parse smiles,name pairs ([5c877d3](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/5c877d39281b9fad0fda4c18472dac22a26cc8dd))
+* **check:** POST /api/name-check ([b222f9b](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/b222f9bf8f55dadcce5828030bfea2f230d07e31))
+* **check:** the /check page ([e5111dd](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/e5111dd10d2a5e30780fc9c66df69115c2ddebbc))
+* **check:** upload a CSV of pairs ([fb0ce04](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/fb0ce044f78ae5d62cf01d23433de5c44bdd5936))
+* **classroom:** reveal a name one part at a time ([46e2985](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/46e2985b9debb4fe3281fa7ae3fcbc21ebecb889))
+* **classroom:** start with the whole name shown ([1777fc0](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/1777fc053642e87e87b1ba6c922d38ad1ab05309))
+* **classroom:** the reveal order of a name ([0d9675e](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/0d9675e3fcbf3f6e48ae65506f11edb7dc87e633))
+* **compare:** diff two explain node lists ([4919fb9](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/4919fb96081da2e744dac61c2b069290f8f78d2e))
+* **compare:** explain two molecules side by side ([4e9708e](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/4e9708ec7a10c9a13cc17d4b20665942fe6de8d0))
+* **from-name:** show OPSIN warnings ([13b013d](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/13b013d33516ec7f95278e57d843a52ec91ed8e8))
+* **from-name:** show OPSIN's warnings ([a9e321d](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/a9e321d33abe6035ecb7bcbc9b114a7cb6d2d3dc))
+* **health:** report the deployment's limits ([f109471](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/f109471823b088d1392d9747e48dcbc19e60dc2d))
+* **nav:** link the engine's GitHub repo in the header ([281ec2d](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/281ec2d8752159d077fadd34895ad98e4ac16d5d))
+* **nav:** link the engine's GitHub repo in the header ([326d4ac](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/326d4ac91f9f74a057cd5db73b66805040670ad0))
+* new link-preview image ([6bf1d44](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/6bf1d4455b42fb259724a79df760435c42a53a30))
+* new link-preview image ([7f10186](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/7f10186b0cd5ec13211ed8fde42dc3f2cda686b5))
+* phase 2 — batch SDF, citation card, abstain reason ([cfa76dd](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/cfa76ddee9adacd94f8ff6c7dbdc4bd8e63d930a))
+* phase 3 — check a name against a structure ([73be0b2](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/73be0b2a19f0e15601397a845c51ef26b37aedce))
+* phase 4 — opt-in salt stripping ([9fc841c](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/9fc841c20366cd447b8b263342c6f104cd14d67c))
+* phase 5 — compare two molecules, classroom mode ([bf1ea03](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/bf1ea035d998d961e00ef5181502bf1dc897e68c))
+* **salts:** jobs, CSV and SDF carry the strip switch ([b604a5b](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/b604a5bb9e247cd84f92ef80fadad20cfc55d52c))
+* **salts:** pick the largest organic fragment ([58aeb58](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/58aeb58bafb8c53fd093750c6b822c9a1965e9ff))
+* **salts:** strip in the worker, never in the cache ([e4ded69](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/e4ded69df495a9fdcbb59301f44d7b7a408b1d68))
+* **salts:** the strip switch and the row note ([6bee9cc](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/6bee9cc250e3c76d88d54790fe4d3e17661d4bf5))
+* **share:** fragment share-link helper ([ced4b15](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/ced4b1598f00c1ebe821f43b846941be80ae8dd4))
+* **share:** open and copy share links on Home, Explain and From-name ([ccb5e7a](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/ccb5e7aa511a41448306fddd3bb2268de18b392a))
+* **share:** share links on Home, Explain and From-name ([6681b14](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/6681b1436c27f5bf8dfb9a8e98bbab2372d1502b))
+
+
+### Bug Fixes
+
+* **abstain:** name the round-trip-mismatch abstain ([fbc2e92](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/fbc2e9269498ee8752bb39d2e2e14e100b6effed))
+* **abstain:** size and PIN reasons claim no more than the engine ([76e03f7](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/76e03f768d89b01820551bd43e3a3a123f8bb45c))
+* **batch:** drop stale result pages and keep focus on Show all ([b6c2c3b](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/b6c2c3b9555243adb76b38f034bedd050f44c113))
+* **batch:** keep user text from ending an SD record ([1f690ce](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/1f690cee8fe7cb420c7bdf9a29fad7135bb5c2da))
+* **check:** cap a batch claimed name at 2000 characters ([8b55339](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/8b553399d448a71f63af6115f8de906125d91f08))
+* **check:** forget the name-check result after reading it ([135e8eb](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/135e8eb2738dc04fbdf7f49f346e118e3f18e895))
+* **check:** review fixes for the name check ([86ccc3f](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/86ccc3f0a87b949e134b5a6109898a5630a3582f))
+* code-review findings on the simplify pass ([9438bad](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/9438bad12c2b1d405b184bd1b384d798a1f0d7f7))
+* **phase-2:** review fixes ([9256900](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/92569007dbf721070d930e26119b46ff5d488f96))
+* **phase-5:** review fixes for compare and classroom ([d170476](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/d1704768a6cb0ba3acb9e50019404f51213fdb19))
+* **share:** no chip for a link too long to read back ([e67c27d](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/e67c27db3e2de67b9eef80d4b4ce60e24c0c069c))
+* the small things left from phases 2-5 ([afc2fc5](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/afc2fc5cfb66467ea927725362ceb0bc39fcdf96))
+* the small things left from phases 2-5 ([b2e55b8](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/b2e55b8b2642ad9911a98ad982357ee7ff33d508))
+
+
+### Refactoring
+
+* **abstain:** one lookup per row and one reason style ([a15c929](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/a15c92972e012dcb63e90451725d8c7d490cb2ab))
+* **backend:** one place for row notes, the cache, job options and exports ([39794a3](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/39794a36a6e2da7ae2d80892fce75a85270d35f1))
+* **batch:** one tally count markup; pages always count matched ([4fd3118](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/4fd31188b8fdc81c7338a4bff58e392d8e03eb66))
+* **explain:** split the view and the fetch out of the page ([7cd8124](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/7cd81243b2a4e1665dd8bb37df7e89b351da6204))
+* **frontend:** shared pieces for the new pages ([4367d53](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/4367d53e2bea936a37ca56d1d5f30145fc506902))
+* **share:** one useShareLink hook; the chip is a CopyButton ([a870ad1](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/a870ad155ae48e50de2688fc931f0aac69a85e6a))
+* simplify the phase 2-5 code ([8b01344](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/8b013449309ca0b44ae174a3d13d8538e899c083))
+
+
+### Documentation
+
+* **check:** privacy and API entries for name check ([0a3e78a](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/0a3e78aa0b4bfea36713540d2557372104b06230))
+* **privacy:** a job records three naming switches ([e8d5520](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/e8d5520415335a8d794a6d7b0d350cc7d6c36713))
+
 ## [0.5.0](https://github.com/Steinbeck-Lab/Orthonym-Web/compare/v0.4.2...v0.5.0) (2026-10-11)
 
 
