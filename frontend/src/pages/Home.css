@@ -223,6 +223,44 @@
   font-size: var(--t-body-md);
   line-height: 1.5;
   color: var(--body-strong);
+  /* Room for the gold rule below: .home-hero clips its overflow, so the rule
+     has to sit inside the tagline's own box. */
+  padding-bottom: 18px;
+}
+
+/* A gold rule with a small diamond under the tagline (2026-10-25). */
+.home-hero__tagline::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 5px;
+  width: 140px;
+  height: 1px;
+  transform: translateX(-50%);
+  /* The rule breaks around the diamond: a clear band at the centre, so the
+     gap shows whatever is behind the hero. */
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--gold) 18%,
+    var(--gold-hi) 44%,
+    transparent 44% 56%,
+    var(--gold-hi) 56%,
+    var(--gold) 82%,
+    transparent
+  );
+}
+
+.home-hero__tagline::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  z-index: 1;
+  width: 6px;
+  height: 6px;
+  transform: translateX(-50%) rotate(45deg);
+  background: var(--gold-bright);
 }
 
 /* -------------------- the mosaic -------------------- */
@@ -293,7 +331,8 @@
      paint source and nothing can mismatch. */
   background: var(--card);
   border-radius: var(--r-card);
-  box-shadow: var(--card-shadow);
+  /* Welded to its tabs and INFO tab: one object, so no gold edge. */
+  box-shadow: var(--card-lift);
   border: var(--card-border);
   /* The top border is drawn OVER the card's own fill, so it reads as a pale
      hairline along the whole top edge -- the white line visible beside the

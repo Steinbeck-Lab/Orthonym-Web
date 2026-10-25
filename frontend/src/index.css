@@ -56,11 +56,11 @@
      2.85:1 on white and fails. --muted-soft is therefore darkened to
      #757575 (4.61:1) and is restricted to text sitting directly on
      --canvas -- never on a surface, where it would drop below AA. */
-  --ink: #000000; /* 21.00:1 — headlines, primary text, outlines */
-  --body: #333333; /* 12.63:1 — running body copy */
-  --body-strong: #1a1a1a; /* 17.40:1 — lead paragraphs */
-  --muted: #666666; /* 5.74:1 — captions, metadata, dates, labels */
-  --muted-soft: #757575; /* 4.61:1 — fine print. CANVAS ONLY. */
+  --ink: #161213; /* 18.12:1 on --card — warm near-black: headlines, primary text, outlines */
+  --body: #3a3335; /* 12.01:1; 8.54:1 on --ground — running body copy */
+  --body-strong: #221c1d; /* 16.36:1 — lead paragraphs */
+  --muted: #6b6264; /* 5.76:1; 5.11:1 on --card-soft — captions, metadata, dates, labels */
+  --muted-soft: #727272; /* 4.69:1 on --card, 4.81:1 on --canvas — fine print. CARD/CANVAS ONLY. */
   --on-primary: #ffffff; /* text on an inked fill */
 
   /* -- the two justified non-monochrome tokens --
@@ -86,32 +86,20 @@
      primary action button, inline links, the focus ring, and a faint footer
      glow. It is NEVER used on a confidence tier — confidence stays a
      monochrome rule beneath the name, which is the product's whole point.
-     #c41e3a is 5.84:1 on --canvas (AA for text and UI, and as a filled
-     button with white text); --accent-deep is the hover/press depth. */
-  --accent: #c41e3a; /* 5.84:1 on white */
-  --accent-deep: #9d1830; /* 8.06:1 — hover/press */
-  --accent-wash: #faedef; /* crimson 8% over white — active pill / focus tint */
-  --accent-line: rgba(196, 30, 58, 0.16); /* faint crimson keyline / glow */
+     2026-10-25, owner's pick ("Ruby and gold"): the crimson moved one step
+     deeper and cooler, to ruby. #b3173f is 6.58:1 on --card and 6.75:1 under
+     a white label; --accent-deep is the hover/press depth. */
+  --accent: #b3173f; /* 6.58:1 on --card, 4.68:1 on --ground */
+  --accent-deep: #8e1232; /* 8.97:1, 6.38:1 on --ground — hover/press */
+  --accent-wash: #f7ecee; /* ruby ~8% over the card — active pill / focus tint; --accent on it 5.85:1 */
+  --accent-line: rgba(179, 23, 63, 0.16); /* faint ruby keyline / glow */
 
-  /* Inline anchors are crimson now (was a desaturated blue), so the one
-     accent stays consistent everywhere it appears. 5.84:1 = AA for body. */
-  --link: #c41e3a;
+  /* Inline anchors take the accent (was a desaturated blue), so the one
+     accent stays consistent everywhere it appears. 6.58:1 on --card. */
+  --link: #b3173f;
 
-  /* -- a SECOND accent, for /explain's action (2026-09-02) --------------
-     By instruction ("explain button can be dark orange"). This is a real
-     departure from the one-accent rule and it is deliberately narrow: it
-     dresses ONE button variant, never a confidence tier, never chrome, and
-     never the header.
-     The value was CHOSEN BY MEASUREMENT, and the first attempt failed. Any
-     dark orange has to survive two composites, not one: the button's fill is
-     90% over a white card, and the gloss highlight then lays ~5% more white
-     over the label's cap heights. #a8480c is 5.84:1 solid and 4.82:1 at 90%
-     -- both fine -- but 4.44:1 once the highlight is counted, which is under
-     AA. The probe caught it on /explain.
-     #9c4109 clears every step: 6.44:1 solid, 5.28:1 at 90%, and 4.90:1 under
-     the highlight. Do not lighten it without redoing all three. */
-  --accent-amber: #9c4109; /* 6.44:1 solid, 4.90:1 as glossy 90% fill */
-  --accent-amber-deep: #7d3407; /* hover/press depth */
+  /* Dark amber: the best-effort tier accent and one text colour. */
+  --accent-amber: #9c4109; /* 6.45:1 on --card */
   /* Olive drab for the verification verdict (PIN + round-trip) that sits under a
      result name: a calm "confirmed" green, distinct from the crimson accent,
      5.95:1 on white. Owner instruction 2026-09-03. */
@@ -151,9 +139,9 @@
      feature cards for punch. The crimson accent is kept (user's choice).
      This supersedes the "flat / no shadow / radius 0" body rules; the
      header/footer glass already fit this language. */
-  --ground: #d5d8dc; /* cool light-grey page floor; shows in the gaps between cards */
-  --card: #ffffff; /* the default white card */
-  --card-soft: #edeff2; /* a quieter grey card, for secondary cells */
+  --ground: #dcd6ce; /* warm stone page floor (was cool grey #d5d8dc); shows in the gaps between cards */
+  --card: #fdfcfa; /* the default card, a touch of ivory (was #ffffff) */
+  --card-soft: #f1eeea; /* a quieter warm card, for secondary cells */
   --card-dark: #1b1c20; /* near-black feature card */
   --on-dark: #f5f6f8; /* text on a dark card (16.5:1 on --card-dark) */
   --muted-on-dark: #a9adb4; /* secondary text on a dark card (5.3:1) */
@@ -162,7 +150,30 @@
   --r-card: 22px; /* the card radius — matches the reference's generous round */
   --r-card-sm: 14px; /* inner tiles, small controls */
   --gap: 14px; /* the bento gap — modest, per "minimum gap, no whitespace" */
-  --card-shadow: 0 1px 2px rgba(17, 18, 20, 0.05), 0 12px 30px -14px rgba(17, 18, 20, 0.14);
+  /* Every card is gilded: a 1px gold edge in front of its lift. A card welded
+     to tabs or a notch (Home's input card, the INFO panel) is one object with
+     them and uses --card-lift, or the edge would stop where the tab starts. */
+  --card-lift: 0 1px 2px rgba(60, 32, 24, 0.05), 0 14px 32px -16px rgba(60, 32, 24, 0.2);
+  --card-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--gold-bright) 36%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--gold-hi) 55%, transparent), var(--card-lift);
+  /* -- gold (2026-10-25): a metal for edges, rims and small labels. Never a
+     confidence tier, never under a name. */
+  --gold: #8a6a34; /* 4.89:1 on --card, text-safe */
+  --gold-bright: #b08d4a; /* 3.03:1 — lines and rims only, never text */
+  --gold-hi: #d9bd7f; /* the highlight stop in a gold gradient */
+  /* -- porcelain glazes, one source each. The white labels on the ruby glaze
+     are measured in App.css (buttons). */
+  --glaze-white: linear-gradient(180deg, #ffffff 0%, #f6f4f1 55%, #e9e5e0 100%);
+  --glaze-ruby: linear-gradient(180deg, #c21f48 0%, var(--accent) 52%, #96143a 100%);
+  --glaze-ruby-press: linear-gradient(180deg, var(--accent) 0%, #a01539 52%, var(--accent-deep) 100%);
+  --glaze-pebble: radial-gradient(120% 140% at 50% 0%, #ffffff 0%, #f4f1ed 45%, #e2ddd7 100%);
+  --edge-ruby: #7a0f2b; /* the fired edge of the ruby glaze */
+  --edge-glaze: color-mix(in srgb, var(--ink) 14%, transparent);
+  --shadow-pebble:
+    inset 0 1px 0 #ffffff, inset 0 -2px 3px rgba(90, 70, 60, 0.14),
+    0 4px 9px -5px rgba(60, 40, 30, 0.28);
+  --shadow-pebble-press: inset 0 2px 4px rgba(90, 70, 60, 0.22);
   --card-border: 1px solid rgba(17, 18, 20, 0.05);
 
   /* -- semantic: Bugatti reserves these for technical callouts and they
@@ -428,8 +439,8 @@ button {
   background: var(--muted);
 }
 
-/* One focus ring for the whole surface: the crimson accent, offset. Crimson
-   is 5.84:1 on canvas, well above the 3:1 a focus indicator needs. */
+/* One focus ring for the whole surface: the ruby accent, offset. Ruby is
+   6.58:1 on --card, well above the 3:1 a focus indicator needs. */
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
