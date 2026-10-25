@@ -41,33 +41,14 @@ result is shown next to the name.
 appears. The shape of the mark carries the tier and the colour only agrees, so the five stay five
 in greyscale and for every common colour deficiency.
 
-## See it working
-
-<img src="docs/screenshots/results.png" alt="Six molecules on the Translate page, one per state: ethanol, a Preferred IUPAC Name; a fused polycyclic, a verified fallback; retinol, a best-effort name from the general engine; sphingosine, a name not checked here because no round-trip result came back; uranium trioxide, not named; and an unreadable SMILES, an error." width="100%">
-
-<sub>Real results from the Translate page: one molecule for every state a result can be in.</sub>
-
-<br><br>
-
-<img src="docs/screenshots/explain.png" alt="The Explain page taking caffeine's name apart, with one part of the name hovered and the atoms it describes lit in the structure" width="100%">
-
-<sub>Explain takes a name apart and lights the atoms each part describes. A part it cannot place is left unlit, never guessed.</sub>
-
-## When it cannot name a molecule
-
-<img src="docs/screenshots/report.png" alt="A result card for uranium trioxide: Could not confidently name this, the formula O3U, and a Report SMILES on GitHub button" width="100%">
-
-It says so, and declines rather than guess. The card then offers **Report SMILES on GitHub**,
-which opens a new issue here with the SMILES, the engine's reason and the settings already
-filled in. The label names what leaves the page, and the privacy policy says exactly what the
-link carries.
-
 ## Six tools, one engine
 
-<a href="https://orthonym.decimer.ai"><picture>
+<a href="https://orthonym.decimer.ai">
+<picture>
   <source media="(max-width: 700px)" srcset="docs/readme/tools-narrow.svg">
   <img src="docs/readme/tools.svg" alt="Six tools, each shown on a real molecule. Explain: in caffeine's name, 1,3,7-trimethyl-3,7-dihydro-1H-purine-2,6-dione, the part 2,6-dione is pointed at and its two C=O groups light up in the structure. Check: the SMILES of L-alanine with the name D-alanine gives the verdict Same skeleton; stereo or isotopes differ, because the two InChIKeys differ only in their stereo block. Compare: propan-1-ol against propan-2-ol, with the locants 1 and 2 marked as the parts the other name does not have. Classroom mode: caffeine's name with the first five of fifteen parts shown and the rest hidden. Name to structure: 2-(acetyloxy)benzoic acid parsed by OPSIN into aspirin. Batch jobs: .sdf, .mol, .csv or SMILES in, CSV or SDF out, every row on one of five tiers." width="100%">
-</picture></a>
+</picture>
+</a>
 
 <p align="center"><sub>
 <a href="https://orthonym.decimer.ai/">Translate</a> &nbsp;·&nbsp;
@@ -89,6 +70,21 @@ Built on [the Orthonym engine](#the-engine) · [OPSIN 2.9.0](https://github.com/
 [RDKit](https://www.rdkit.org/) · [CDK 2.12](https://cdk.github.io/) ·
 [Ketcher](https://github.com/epam/ketcher) · FastAPI · Celery · Redis · React 19
 
+## See it working
+
+<img src="docs/screenshots/results.png" alt="Six molecules on the Translate page, one per state: ethanol, a Preferred IUPAC Name; a fused polycyclic, a verified fallback; retinol, a best-effort name from the general engine; sphingosine, a name not checked here because no round-trip result came back; uranium trioxide, not named; and an unreadable SMILES, an error." width="100%">
+
+<sub>Real results from the Translate page: one molecule for every state a result can be in.</sub>
+
+## When it cannot name a molecule
+
+<img src="docs/screenshots/report.png" alt="A result card for uranium trioxide: Could not confidently name this, the formula O3U, and a Report SMILES on GitHub button" width="100%">
+
+It says so, and declines rather than guess. The card then offers **Report SMILES on GitHub**,
+which opens a new issue here with the SMILES, the engine's reason and the settings already
+filled in. The label names what leaves the page, and the privacy policy says exactly what the
+link carries.
+
 ## Run it yourself
 
 ```bash
@@ -108,10 +104,12 @@ Deployment, sizing profiles and the batch-job API are in **[INSTALL.md](INSTALL.
 
 ## The paper
 
-<a href="https://doi.org/10.26434/chemrxiv.15009769/v1"><picture>
+<a href="https://doi.org/10.26434/chemrxiv.15009769/v1">
+<picture>
   <source media="(max-width: 700px)" srcset="docs/readme/paper-narrow.svg">
   <img src="docs/readme/paper.svg" alt="The paper: Orthonym: verified IUPAC names for chemical structures in the wild. Kohulan Rajan, Achim Zielesny, Christoph Steinbeck. ChemRxiv preprint, October 2026, doi 10.26434/chemrxiv.15009769/v1. Read the paper." width="100%">
-</picture></a>
+</picture>
+</a>
 
 ## How to cite
 
