@@ -288,7 +288,7 @@ function Explain() {
           <div className="explain-panel__actions">
             <button
               type={mode === 'draw' ? 'button' : 'submit'}
-              className="btn btn--amber"
+              className="btn btn--accent"
               onClick={mode === 'draw' ? handleDraw : undefined}
               disabled={isLoading || (mode === 'draw' && editorState !== 'ready')}
             >
