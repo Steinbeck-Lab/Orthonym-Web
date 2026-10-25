@@ -505,6 +505,283 @@ def partners():
               + product_line(wn / 2, 72, size, spacing, 40, tail, fill, hair), css)
 
 
+# ------------------------------------------------------------------ text width
+# Advance widths per 1000 units, measured in Chrome from the site's own woff2
+# subsets (canvas measureText). An SVG drawn for an <img> cannot measure its
+# own text, and a highlight behind one part of a chemical name has to land on
+# that part. Each marked run is set as its own <tspan x=...>, so the browser's
+# kerning inside a run cannot drift the next run off its mark.
+_PS = dict(zip(
+    " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~·",
+    (243, 251, 426, 603, 659, 904, 709, 248, 303, 309, 394, 555, 242, 378, 225, 351, 612, 407, 596, 630, 629,
+     641, 623, 601, 648, 625, 226, 240, 546, 555, 546, 521, 831, 710, 671, 689, 694, 621, 594, 733, 766, 283,
+     389, 682, 578, 886, 754, 734, 637, 748, 677, 670, 594, 701, 673, 954, 688, 607, 637, 303, 351, 303, 473,
+     518, 219, 553, 597, 544, 597, 567, 396, 623, 577, 248, 263, 562, 303, 865, 577, 566, 596, 596, 391, 506,
+     389, 581, 504, 780, 565, 535, 481, 328, 263, 332, 568, 230)))
+_SC = dict(zip(
+    " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    (192, 209, 294, 526, 418, 636, 529, 166, 246, 246, 406, 484, 194, 309, 194, 290, 484, 274, 436, 423, 468,
+     439, 476, 403, 490, 476, 194, 194, 484, 484, 484, 361, 683, 494, 492, 400, 497, 433, 408, 483, 527, 220,
+     250, 481, 379, 665, 528, 518, 465, 518, 493, 443, 413, 514, 462, 691, 484, 433, 424)))
+_SC.update(zip("abcdefghijklmnopqrstuvwxyz", (425, 450, 351, 450, 428, 281, 450, 453, 196, 196, 408, 196, 689, 453, 439,
+                                               450, 450, 285, 377, 273, 453, 405, 612, 411, 453, 373)))
+
+
+def width(text, size, face="body", spacing=0):
+    if face == "mono":
+        return len(text) * (size * .6 + spacing)
+    table = _SC if face == "disp" else _PS
+    return sum(table[c] for c in text) * size / 1000 + len(text) * spacing
+
+
+def runs(x, y, parts, size, fill=INK):
+    """A name set as consecutive runs [(text, kind)], each at its own x.
+    kind None is plain ink; "active" wears the hovered part's glow wash and ink
+    underline (Explain.css .explain-name__part--active); "differs" is /compare's
+    grey fill inside a muted outline; "hidden" is classroom mode's muted dot
+    per letter; "italic" is an italic H. Returns (svg, x after the last run)."""
+    marks, text = "", ""
+    for t, kind in parts:
+        w = width(t, size, spacing=size * .08 if kind == "hidden" else 0)
+        if kind == "active":
+            marks += (f'<rect x="{x - 3:.1f}" y="{y - size * .86:.1f}" width="{w + 6:.1f}" height="{size * 1.12:.1f}" rx="3" fill="#fff3b8"/>'
+                      f'<line x1="{x - 3:.1f}" y1="{y + size * .26:.1f}" x2="{x + w + 3:.1f}" y2="{y + size * .26:.1f}" stroke="{INK}" stroke-width="2"/>')
+        if kind == "hidden":
+            # Drawn, not typed: one muted dot per hidden letter, on the
+            # advance the site gives it ('·' plus .08em), centred at
+            # x-height, so the run reads as letters held back.
+            marks += "".join(f'<circle cx="{x + (i + .5) * w / len(t):.1f}" cy="{y - size * .3:.1f}" r="{size * .08:.1f}" fill="{MUTED}"/>'
+                             for i in range(len(t)))
+            x += w
+            continue
+        if kind == "differs":
+            marks += (f'<rect x="{x - 4:.1f}" y="{y - size * .84:.1f}" width="{w + 8:.1f}" height="{size * 1.1:.1f}" rx="4" '
+                      f'fill="#e0e0e0" stroke="{MUTED}" stroke-width="2"/>')
+        style = ' font-style="italic"' if kind == "italic" else ""
+        text += f'<tspan x="{x:.1f}"{style}>{t}</tspan>'
+        x += w
+    return marks + f'<text class="body" y="{y}" font-size="{size}" fill="{fill}">{text}</text>', x
+
+
+def lit_depiction(smiles, w, h, x, y, lights=(), font=20):
+    """depiction(), with Explain's pointer glow on the atoms a part lights:
+    --glow (#ffd400) discs behind those atoms, as the app draws them."""
+    d = rdMolDraw2D.MolDraw2DSVG(w, h)
+    o = d.drawOptions()
+    o.clearBackground = False
+    o.useBWAtomPalette()
+    o.bondLineWidth = 2
+    o.fixedFontSize = font
+    o.padding = 0.1
+    o.highlightRadius = .42
+    o.fillHighlights = True
+    o.continuousHighlight = False
+    lights = list(lights)
+    d.DrawMolecule(Chem.MolFromSmiles(smiles), highlightAtoms=lights,
+                   highlightAtomColors={i: (1, .83, 0) for i in lights}, highlightBonds=[])
+    d.FinishDrawing()
+    svg = re.sub(r"<\?xml[^>]*>", "", d.GetDrawingText())
+    svg = re.sub(r"<rect[^>]*/>", "", svg, count=1)
+    return svg.replace("<svg ", f"<svg x='{x}' y='{y}' overflow='visible' ", 1)
+
+
+# ------------------------------------------------------------------ the tools
+# Six tools, each shown doing its job on a real molecule: every name, atom set,
+# InChIKey and verdict below is the app's own output (explain_iupac_name and
+# check_pair, engine 1.0.9), not a mock. Tiles share one width so the wide
+# figure (two across) and the phone figure (one column) are the same drawings.
+TILE_W = 748
+CARD_SHADOW = ('<filter id="lift" x="-10%" y="-10%" width="120%" height="130%">'
+               '<feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#1b1c20" flood-opacity=".09"/></filter>')
+
+
+def tile(title, route, lede, h, body, title_parts=None):
+    w = TILE_W
+    head = (title_parts or f'<text class="disp" x="40" y="80" font-size="48" letter-spacing="3" fill="{INK}">{title}</text>')
+    assert width(lede, 26) < w - 80, lede
+    return h, (f'<rect width="{w}" height="{h}" rx="30" fill="#fff" filter="url(#lift)"/>'
+               f'{head}<text class="mono" x="{w - 40}" y="78" font-size="22" text-anchor="end" fill="{MUTED}">{route}</text>'
+               f'<text class="body" x="40" y="126" font-size="26" fill="{BODY}">{lede}</text>{body}')
+
+
+CAF_TRACED = "CN1C(N(C=2N=CN(C2C1=O)C)C)=O"   # OPSIN's own atom order for the name
+
+
+def tool_explain():
+    line1, _ = runs(40, 206, [("1,3,7-trimethyl-3,7-dihydro-", None)], 36)
+    line2, _ = runs(40, 254, [("1", None), ("H", "italic"), ("-purine-", None), ("2,6-dione", "active")], 36)
+    body = (line1 + line2
+            + lit_depiction(CAF_TRACED, 460, 290, 144, 270, lights=(2, 9, 10, 13), font=22)
+            + '<rect x="40" y="572" width="668" height="56" rx="14" fill="#edeff2"/>'
+            + f'<text class="body" x="60" y="608" font-size="23" fill="{BODY}">The “dione” ending means a C=O group (a carbonyl).</text>')
+    return tile("EXPLAIN", "/explain", "Point at a part of the name; its atoms light up.", 660, body)
+
+
+def tool_check():
+    a, b = "QNAYBMKLOCPYGJ-REOHCLBHSA-N", "QNAYBMKLOCPYGJ-UWTATZPHSA-N"
+
+    def key(y, k):
+        # The stereo block is the part that differs: marked as /compare marks
+        # a differing part, grey inside an outline -- never a tier's line.
+        x0, cw = 40 + 15 * 24 * .6, 24 * .6
+        return (f'<rect x="{x0 - 2:.1f}" y="{y - 22}" width="{10 * cw + 4:.1f}" height="30" rx="4" fill="#e0e0e0" stroke="{MUTED}" stroke-width="2"/>'
+                f'<text class="mono" x="40" y="{y}" font-size="24" fill="{INK}">{k}</text>')
+    name, _ = runs(40, 306, [("D", None), ("-alanine", None)], 36)
+    body = (f'<text class="mono" x="40" y="186" font-size="19" letter-spacing="3" fill="{MUTED}">STRUCTURE</text>'
+            f'<text class="mono" x="40" y="222" font-size="26" fill="{INK}">C[C@H](N)C(=O)O</text>'
+            f'<text class="mono" x="40" y="268" font-size="19" letter-spacing="3" fill="{MUTED}">THE NAME IT WAS GIVEN</text>'
+            + name
+            + f'<line x1="40" y1="344" x2="708" y2="344" stroke="{HAIR}" stroke-width="1.6"/>'
+            f'<text class="disp" x="40" y="410" font-size="46" letter-spacing="2" fill="{INK}">SAME SKELETON;</text>'
+            f'<text class="disp" x="40" y="462" font-size="46" letter-spacing="2" fill="{INK}">STEREO OR ISOTOPES DIFFER</text>'
+            f'<text class="body" x="40" y="520" font-size="21" fill="{MUTED}">InChIKey of your structure</text>'
+            + key(554, a)
+            + f'<text class="body" x="40" y="600" font-size="21" fill="{MUTED}">InChIKey of what OPSIN read from the name</text>'
+            + key(634, b))
+    return tile("CHECK", "/check", "A structure, and the name it was given.", 680, body)
+
+
+def tool_compare():
+    out = ""
+    for i, (side, smi, loc) in enumerate((("A", "OCCC", "1"), ("B", "CC(O)C", "2"))):
+        x = 40 + i * 354
+        nm, _ = runs(x + 44, 214, [("propan-", None), (loc, "differs"), ("-ol", None)], 38)
+        out += (f'<text class="disp" x="{x}" y="214" font-size="44" fill="{INK}">{side}</text>' + nm
+                + f'<rect x="{x}" y="250" width="314" height="250" rx="14" fill="#edeff2"/>'
+                + depiction(smi, 274, 210, x + 20, 270, font=22))
+    out += f'<text class="body" x="40" y="556" font-size="22" fill="{MUTED}">Grey marks a part the other name does not have.</text>'
+    return tile("COMPARE", "/compare", "Two molecules side by side, by name or SMILES.", 600, out)
+
+
+def tool_classroom():
+    l1, _ = runs(40, 206, [("1,3,7-tri", None), ("methyl", "active"), ("-", None), ("·", "hidden"), (",", None),
+                           ("·", "hidden"), ("-", None), ("·" * 7, "hidden"), ("-", None)], 36)
+    l2, _ = runs(40, 254, [("··", "hidden"), ("-", None), ("·" * 6, "hidden"), ("-", None),
+                           ("·", "hidden"), (",", None), ("·", "hidden"), ("-", None), ("·" * 5, "hidden")], 36)
+    pills, x = "", 40
+    for label, framed in (("Hide all", True), ("Back", True), ("5 of 15", False), ("Next", True), ("Reveal all", True)):
+        w = width(label, 20, "mono") + (36 if framed else 12)
+        if framed:
+            pills += f'<rect x="{x}" y="528" width="{w:.0f}" height="46" rx="23" fill="#fff" stroke="#c5c5c5" stroke-width="1.6"/>'
+        pills += f'<text class="mono" x="{x + w / 2:.1f}" y="558" font-size="20" text-anchor="middle" fill="{INK if framed else MUTED}">{label}</text>'
+        x += w + 12
+    body = l1 + l2 + lit_depiction(CAF_TRACED, 380, 230, 184, 280, lights=(0, 11, 12), font=20) + pills
+    return tile("CLASSROOM MODE", "/explain", "The name revealed one part at a time, for teaching.", 600, body)
+
+
+def tool_from_name():
+    arrow_w = 54
+    w1 = width("NAME", 48, "disp", 3)
+    title = (f'<text class="disp" x="40" y="80" font-size="48" letter-spacing="3" fill="{INK}">NAME</text>'
+             f'<path d="M{40 + w1 + 8:.0f} 64 h{arrow_w - 16} m-12 -10 l12 10 l-12 10" fill="none" stroke="{INK}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'
+             f'<text class="disp" x="{40 + w1 + arrow_w:.0f}" y="80" font-size="48" letter-spacing="3" fill="{INK}">STRUCTURE</text>')
+    nm, end = runs(40, 236, [("2-(acetyloxy)benzoic acid", None)], 36)
+    body = (nm + f'<text class="mono" x="40" y="290" font-size="21" fill="{MUTED}">CC(=O)Oc1ccccc1C(=O)O</text>'
+            + arrow('M486 220 L530 220', 'M520 210 L530 220 L520 230', '')
+            + depiction("CC(=O)Oc1ccccc1C(=O)O", 200, 200, 528, 152, font=18))
+    return tile("", "/from-name", "OPSIN parses a name back into a structure.", 400, body, title_parts=title)
+
+
+def tool_batch():
+    def chips(y, label, items):
+        out, x = f'<text class="mono" x="40" y="{y + 30}" font-size="19" letter-spacing="3" fill="{MUTED}">{label}</text>', 130
+        for it in items:
+            w = width(it, 21, "mono") + 32
+            out += (f'<rect x="{x}" y="{y}" width="{w:.0f}" height="44" rx="22" fill="#fff" stroke="#c5c5c5" stroke-width="1.6"/>'
+                    f'<text class="mono" x="{x + w / 2:.1f}" y="{y + 29}" font-size="21" text-anchor="middle" fill="{INK}">{it}</text>')
+            x += w + 12
+        return out
+    lamps, x = "", 40
+    for t in TIERS:
+        lamps += lamp(t[0], x + 13, 324, 26, uid="tb") + f'<text class="mono" x="{x + 34}" y="330" font-size="16" fill="{MUTED}">{t[1]}</text>'
+        x += 34 + width(t[1], 16, "mono") + 22
+    assert x - 22 < TILE_W - 40, x
+    body = chips(160, "IN", (".sdf", ".mol", ".csv", "SMILES")) + chips(222, "OUT", ("CSV", "SDF")) + lamps
+    return tile("BATCH JOBS", "/", "More than ten molecules run as a job, tallied by tier.", 400, body)
+
+
+def tools():
+    tiles = [tool_explain(), tool_check(), tool_compare(), tool_classroom(), tool_from_name(), tool_batch()]
+    css = font_css("disp", "body", "ital", "mono") + "@font-face{font-family:'Public Sans';font-style:italic;src:url(data:font/woff2;base64," + b64(FONTS / "public-sans-i3.woff2") + ") format('woff2');}"
+    pad, gap = 40, 24
+    # Wide: two across, each row as tall as its taller tile.
+    w = pad * 2 + TILE_W * 2 + gap
+    inner, y = "", pad
+    for left, right in zip(tiles[::2], tiles[1::2]):
+        row = max(left[0], right[0])
+        for i, (h, body) in enumerate((left, right)):
+            inner += f'<g transform="translate({pad + i * (TILE_W + gap)},{y})">{body.replace(f"height=\"{h}\" rx=\"30\"", f"height=\"{row}\" rx=\"30\"", 1)}</g>'
+        y += row + gap
+    h = y - gap + pad
+    write("tools.svg", w, h, f"<defs>{CARD_SHADOW}</defs>{bench('t', w, h, 36)}{inner}", css)
+    # Narrow: one column, the same tiles.
+    wn = pad * 2 + TILE_W
+    inner, y = "", pad
+    for h_, body in tiles:
+        inner += f'<g transform="translate({pad},{y})">{body}</g>'
+        y += h_ + gap
+    hn = y - gap + pad
+    write("tools-narrow.svg", wn, hn, f"<defs>{CARD_SHADOW}</defs>{bench('tn', wn, hn, 36)}{inner}", css)
+
+
+# ------------------------------------------------------------------ the paper
+PAPER_TITLE = ("Orthonym: verified IUPAC names for", "chemical structures in the wild")
+PAPER_AUTHORS = "Kohulan Rajan, Achim Zielesny, Christoph Steinbeck"
+PAPER_META = "CHEMRXIV  ·  PREPRINT  ·  OCTOBER 2026"
+PAPER_DOI = "doi.org/10.26434/chemrxiv.15009769/v1"
+
+
+def paper_figure(x, y, w, h, uid):
+    """The paper's subject in one cell: caffeine, its name, the double rule
+    and lit lamp of a verified PIN -- the round trip's outcome, in a soft frame."""
+    nm = (f'<text class="body" x="{x + 32}" y="{y + h - 126}" font-size="26" fill="{INK}">{NAME[0]}</text>'
+          f'<text class="body" x="{x + 32}" y="{y + h - 92}" font-size="26" fill="{INK}">{NAME[1]}</text>')
+    return (f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="22" fill="#edeff2"/>'
+            + depiction(CAF, w - 120, h - 190, x + 60, y + 16, font=18) + nm
+            + rule("pin", x + 32, y + h - 74, 300)
+            + lamp("pin", x + 46, y + h - 34, 26, uid=uid, glow_cls="breath")
+            + f'<text class="mono" x="{x + 70}" y="{y + h - 27}" font-size="18" letter-spacing="2" fill="{INK}">PIN</text>')
+
+
+def paper_link(x, y):
+    label = "READ THE PAPER"
+    w = width(label, 22, "mono", 4) + 84
+    return (f'<rect x="{x}" y="{y}" width="{w:.0f}" height="58" rx="29" fill="#fff" stroke="#c5c5c5" stroke-width="2"/>'
+            f'<text class="mono" x="{x + 30}" y="{y + 37}" font-size="22" letter-spacing="4" fill="{INK}">{label}</text>'
+            f'<path d="M{x + w - 44:.0f} {y + 38} l14 -14 m-10 0 h10 v10" fill="none" stroke="{INK}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>')
+
+
+def paper():
+    css = font_css("disp", "body", "ital", "mono") + MOTION + ".breath{animation-delay:.4s}" + REDUCED
+    w, h = 1600, 600
+    for t in PAPER_TITLE:
+        assert width(t, 60, "disp", 1) < 900, t
+    write("paper.svg", w, h, f"""<defs>{CARD_SHADOW}</defs>{bench('p', w, h, 36)}
+<rect x="40" y="40" width="{w - 80}" height="{h - 80}" rx="30" fill="#fff" filter="url(#lift)"/>
+<text class="disp" x="96" y="168" font-size="60" letter-spacing="1" fill="{INK}">{PAPER_TITLE[0]}</text>
+<text class="disp" x="96" y="238" font-size="60" letter-spacing="1" fill="{INK}">{PAPER_TITLE[1]}</text>
+<text class="body" x="96" y="304" font-size="28" fill="{BODY}">{PAPER_AUTHORS}</text>
+<line x1="96" y1="352" x2="980" y2="352" stroke="{HAIR}" stroke-width="1.6"/>
+<text class="mono" x="96" y="398" font-size="21" letter-spacing="3" fill="{MUTED}">{PAPER_META}</text>
+<text class="mono" x="96" y="434" font-size="21" fill="{MUTED}">{PAPER_DOI}</text>
+{paper_link(96, 458)}
+{paper_figure(1040, 84, 476, 432, 'p')}
+""", css)
+    wn, hn = 800, 1180
+    write("paper-narrow.svg", wn, hn, f"""<defs>{CARD_SHADOW}</defs>{bench('pn', wn, hn, 36)}
+<rect x="32" y="32" width="{wn - 64}" height="{hn - 64}" rx="30" fill="#fff" filter="url(#lift)"/>
+<text class="disp" x="80" y="140" font-size="58" letter-spacing="1" fill="{INK}">Orthonym: verified IUPAC</text>
+<text class="disp" x="80" y="206" font-size="58" letter-spacing="1" fill="{INK}">names for chemical</text>
+<text class="disp" x="80" y="272" font-size="58" letter-spacing="1" fill="{INK}">structures in the wild</text>
+<text class="body" x="80" y="336" font-size="30" fill="{BODY}">Kohulan Rajan, Achim Zielesny,</text>
+<text class="body" x="80" y="376" font-size="30" fill="{BODY}">Christoph Steinbeck</text>
+<line x1="80" y1="416" x2="{wn - 80}" y2="416" stroke="{HAIR}" stroke-width="1.6"/>
+<text class="mono" x="80" y="462" font-size="24" letter-spacing="3" fill="{MUTED}">{PAPER_META}</text>
+<text class="mono" x="80" y="500" font-size="22" fill="{MUTED}">{PAPER_DOI}</text>
+{paper_link(80, 530)}
+{paper_figure(80, 628, wn - 160, 480, 'pn')}
+""", css)
+
 if __name__ == "__main__":
     banner()
     banner_narrow()
@@ -514,3 +791,5 @@ if __name__ == "__main__":
     pill("run.svg", "RUN IT YOURSELF", 460, False)
     roundtrip()
     roundtrip_narrow()
+    tools()
+    paper()
