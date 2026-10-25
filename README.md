@@ -64,10 +64,12 @@ link carries.
 
 | Page | What it does |
 |:--|:--|
-| **Translate** | Paste SMILES, upload `.sdf`, `.mol` or `.csv`, or draw in Ketcher. Up to ten molecules answer at once; more run as a job with progress, a tally by tier and a CSV. |
+| **Translate** | Paste SMILES, upload `.sdf`, `.mol` or `.csv`, or draw in Ketcher. Up to ten molecules answer at once; more run as a job with progress, a tally by tier, and a CSV or SDF download. An opt-in switch strips salts: the largest organic fragment is named, and the row says what was removed. |
 | **Name → Structure** | The reverse, on OPSIN: a name in, a structure out. |
-| **Explain** | A name taken apart; each part it can place is mapped onto its atoms, and the rest are marked, never guessed. |
-| **About** | How a name is built and checked, and a live board of the service's health. |
+| **Explain** | A name taken apart; each part it can place is mapped onto its atoms, and the rest are marked, never guessed. Classroom mode reveals the name one part at a time, and a shared classroom link starts with the name hidden. |
+| **Check** | A structure and the name it was given, one pair or a whole CSV. OPSIN reads the name and the two structures are compared by InChIKey: same structure, same skeleton with stereo or protonation differing, different structure, or a name OPSIN cannot read. The verdict is about structure only, beside the name Orthonym would give. |
+| **Compare** | Two molecules explained side by side, by name or SMILES; the parts one name has and the other does not are marked. |
+| **About** | How a name is built and checked, a live board of the service's health, and how to cite Orthonym, with the engine version this site runs. |
 
 Built on [the Orthonym engine](#the-engine) · [OPSIN 2.9.0](https://github.com/dan2097/opsin) ·
 [RDKit](https://www.rdkit.org/) · [CDK 2.12](https://cdk.github.io/) ·
@@ -94,8 +96,8 @@ Deployment, sizing profiles and the batch-job API are in **[INSTALL.md](INSTALL.
 
 If you use Orthonym, please cite the paper, a preprint on ChemRxiv:
 
-> Rajan, K., Zielesny, A., & Steinbeck, C. (2026). Orthonym: verified IUPAC names for chemical
-> structures in the wild. *ChemRxiv*. https://doi.org/10.26434/chemrxiv.15009769/v1
+> Rajan, K., Zielesny, A., & Steinbeck, C. (2026, October). Orthonym: verified IUPAC names for
+> chemical structures in the wild. *ChemRxiv*. https://doi.org/10.26434/chemrxiv.15009769/v1
 
 ```bibtex
 @article{rajan2026orthonym,
@@ -103,9 +105,24 @@ If you use Orthonym, please cite the paper, a preprint on ChemRxiv:
   title   = {Orthonym: verified IUPAC names for chemical structures in the wild},
   journal = {ChemRxiv},
   year    = {2026},
+  month   = {10},
   note    = {Preprint},
   doi     = {10.26434/chemrxiv.15009769/v1},
   url     = {https://doi.org/10.26434/chemrxiv.15009769/v1}
+}
+```
+
+To cite the naming engine itself, use its Zenodo DOI,
+[10.5281/zenodo.23044199](https://doi.org/10.5281/zenodo.23044199), and give the version you ran.
+The About page of the running site gives this entry with its engine version and commit filled in.
+
+```bibtex
+@software{orthonym,
+  author  = {Rajan, Kohulan and Zielesny, Achim and Steinbeck, Christoph},
+  title   = {Orthonym},
+  doi     = {10.5281/zenodo.23044199},
+  url     = {https://github.com/Steinbeck-Lab/Orthonym},
+  license = {MIT}
 }
 ```
 
