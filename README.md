@@ -13,11 +13,13 @@
 
 **A chemical structure goes in. An IUPAC name comes out, with the confidence it has actually earned.**
 
-[![Licence: MIT](https://img.shields.io/badge/licence-MIT-c41e3a?style=flat-square)](LICENSE)
+[![Paper](https://img.shields.io/badge/paper-ChemRxiv-c41e3a?style=flat-square)](https://doi.org/10.26434/chemrxiv.15009769/v1)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-1a1a1a?style=flat-square)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/Steinbeck-Lab/Orthonym-Web?style=flat-square&color=1a1a1a&label=release)](https://github.com/Steinbeck-Lab/Orthonym-Web/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/Steinbeck-Lab/Orthonym-Web/ci.yml?branch=main&style=flat-square&label=ci&color=2f6b28)](https://github.com/Steinbeck-Lab/Orthonym-Web/actions/workflows/ci.yml)
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.23036568-1a1a1a?style=flat-square)](https://doi.org/10.5281/zenodo.23036568)
-[![Paper](https://img.shields.io/badge/paper-ChemRxiv-c41e3a?style=flat-square)](https://doi.org/10.26434/chemrxiv.15009769/v1)
+
+<sub><a href="#how-every-name-is-checked">How it works</a> &nbsp;·&nbsp; <a href="#six-tools-one-engine">The tools</a> &nbsp;·&nbsp; <a href="#run-it-yourself">Run it</a> &nbsp;·&nbsp; <a href="#the-paper">The paper</a> &nbsp;·&nbsp; <a href="#how-to-cite">Cite</a></sub>
 
 </div>
 
@@ -39,17 +41,40 @@ result is shown next to the name.
 appears. The shape of the mark carries the tier and the colour only agrees, so the five stay five
 in greyscale and for every common colour deficiency.
 
+## Six tools, one engine
+
+<a href="https://orthonym.decimer.ai">
+<picture>
+  <source media="(max-width: 700px)" srcset="docs/readme/tools-narrow.svg">
+  <img src="docs/readme/tools.svg" alt="Six tools, each shown on a real molecule. Explain: in caffeine's name, 1,3,7-trimethyl-3,7-dihydro-1H-purine-2,6-dione, the part 2,6-dione is pointed at and its two C=O groups light up in the structure. Check: the SMILES of L-alanine with the name D-alanine gives the verdict Same skeleton; stereo or isotopes differ, because the two InChIKeys differ only in their stereo block. Compare: propan-1-ol against propan-2-ol, with the locants 1 and 2 marked as the parts the other name does not have. Classroom mode: caffeine's name with the first five of fifteen parts shown and the rest hidden. Name to structure: 2-(acetyloxy)benzoic acid parsed by OPSIN into aspirin. Batch jobs: .sdf, .mol, .csv or SMILES in, CSV or SDF out, every row on one of five tiers." width="100%">
+</picture>
+</a>
+
+<p align="center"><sub>
+<a href="https://orthonym.decimer.ai/">Translate</a> &nbsp;·&nbsp;
+<a href="https://orthonym.decimer.ai/from-name">Name → Structure</a> &nbsp;·&nbsp;
+<a href="https://orthonym.decimer.ai/explain">Explain</a> &nbsp;·&nbsp;
+<a href="https://orthonym.decimer.ai/check">Check</a> &nbsp;·&nbsp;
+<a href="https://orthonym.decimer.ai/compare">Compare</a> &nbsp;·&nbsp;
+<a href="https://orthonym.decimer.ai/about">About</a>
+</sub></p>
+
+**Translate** names up to ten molecules at once, from SMILES, a drawing in Ketcher or an `.sdf`,
+`.mol` or `.csv` file; more run as a job with progress, a tally by tier and a CSV or SDF download.
+An opt-in switch strips salts, names the largest organic fragment and says what it removed.
+**Check** never calls a name correct: its verdict is about structure only, and it sits beside
+the name Orthonym would give. **About** has a live board of the service's health and the citation
+for the engine version the site runs.
+
+Built on [the Orthonym engine](#the-engine) · [OPSIN 2.9.0](https://github.com/dan2097/opsin) ·
+[RDKit](https://www.rdkit.org/) · [CDK 2.12](https://cdk.github.io/) ·
+[Ketcher](https://github.com/epam/ketcher) · FastAPI · Celery · Redis · React 19
+
 ## See it working
 
 <img src="docs/screenshots/results.png" alt="Six molecules on the Translate page, one per state: ethanol, a Preferred IUPAC Name; a fused polycyclic, a verified fallback; retinol, a best-effort name from the general engine; sphingosine, a name not checked here because no round-trip result came back; uranium trioxide, not named; and an unreadable SMILES, an error." width="100%">
 
 <sub>Real results from the Translate page: one molecule for every state a result can be in.</sub>
-
-<br><br>
-
-<img src="docs/screenshots/explain.png" alt="The Explain page taking caffeine's name apart, with one part of the name hovered and the atoms it describes lit in the structure" width="100%">
-
-<sub>Explain takes a name apart and lights the atoms each part describes. A part it cannot place is left unlit, never guessed.</sub>
 
 ## When it cannot name a molecule
 
@@ -59,21 +84,6 @@ It says so, and declines rather than guess. The card then offers **Report SMILES
 which opens a new issue here with the SMILES, the engine's reason and the settings already
 filled in. The label names what leaves the page, and the privacy policy says exactly what the
 link carries.
-
-## What's inside
-
-| Page | What it does |
-|:--|:--|
-| **Translate** | Paste SMILES, upload `.sdf`, `.mol` or `.csv`, or draw in Ketcher. Up to ten molecules answer at once; more run as a job with progress, a tally by tier, and a CSV or SDF download. An opt-in switch strips salts: the largest organic fragment is named, and the row says what was removed. |
-| **Name → Structure** | The reverse, on OPSIN: a name in, a structure out. |
-| **Explain** | A name taken apart; each part it can place is mapped onto its atoms, and the rest are marked, never guessed. Classroom mode reveals the name one part at a time, and a shared classroom link starts with the name hidden. |
-| **Check** | A structure and the name it was given, one pair or a whole CSV. OPSIN reads the name and the two structures are compared by InChIKey: same structure, same skeleton with stereo or protonation differing, different structure, or a name OPSIN cannot read. The verdict is about structure only, beside the name Orthonym would give. |
-| **Compare** | Two molecules explained side by side, by name or SMILES; the parts one name has and the other does not are marked. |
-| **About** | How a name is built and checked, a live board of the service's health, and how to cite Orthonym, with the engine version this site runs. |
-
-Built on [the Orthonym engine](#the-engine) · [OPSIN 2.9.0](https://github.com/dan2097/opsin) ·
-[RDKit](https://www.rdkit.org/) · [CDK 2.12](https://cdk.github.io/) ·
-[Ketcher](https://github.com/epam/ketcher) · FastAPI · Celery · Redis · React 19
 
 ## Run it yourself
 
@@ -92,9 +102,18 @@ curl -s http://127.0.0.1:8000/api/health
 
 Deployment, sizing profiles and the batch-job API are in **[INSTALL.md](INSTALL.md)**.
 
+## The paper
+
+<a href="https://doi.org/10.26434/chemrxiv.15009769/v1">
+<picture>
+  <source media="(max-width: 700px)" srcset="docs/readme/paper-narrow.svg">
+  <img src="docs/readme/paper.svg" alt="The paper: Orthonym: verified IUPAC names for chemical structures in the wild. Kohulan Rajan, Achim Zielesny, Christoph Steinbeck. ChemRxiv preprint, October 2026, doi 10.26434/chemrxiv.15009769/v1. Read the paper." width="100%">
+</picture>
+</a>
+
 ## How to cite
 
-If you use Orthonym, please cite the paper, a preprint on ChemRxiv:
+If you use Orthonym, please cite the paper:
 
 > Rajan, K., Zielesny, A., & Steinbeck, C. (2026, October). Orthonym: verified IUPAC names for
 > chemical structures in the wild. *ChemRxiv*. https://doi.org/10.26434/chemrxiv.15009769/v1
@@ -112,9 +131,14 @@ If you use Orthonym, please cite the paper, a preprint on ChemRxiv:
 }
 ```
 
-To cite the naming engine itself, use its Zenodo DOI,
-[10.5281/zenodo.23044199](https://doi.org/10.5281/zenodo.23044199), and give the version you ran.
-The About page of the running site gives this entry with its engine version and commit filled in.
+<details>
+<summary><b>Citing the software</b>: the Orthonym engine and this web app each have a Zenodo DOI</summary>
+
+<br>
+
+**The engine.** Cite [10.5281/zenodo.23044199](https://doi.org/10.5281/zenodo.23044199) and give
+the version you ran. The About page of the running site gives this entry with its engine version
+and commit filled in.
 
 ```bibtex
 @software{orthonym,
@@ -126,10 +150,9 @@ The About page of the running site gives this entry with its engine version and 
 }
 ```
 
-To cite this web app as software, use its Zenodo DOI,
-[10.5281/zenodo.23036568](https://doi.org/10.5281/zenodo.23036568). That DOI covers every release
-and resolves to the latest; each release also has its own DOI, listed on the
-[Zenodo record](https://doi.org/10.5281/zenodo.23036568).
+**This web app.** Cite [10.5281/zenodo.23036568](https://doi.org/10.5281/zenodo.23036568). That
+DOI covers every release and resolves to the latest; each release also has its own DOI, listed on
+the [Zenodo record](https://doi.org/10.5281/zenodo.23036568).
 
 > Rajan, K., Zielesny, A., & Steinbeck, C. *Orthonym-Web* [Computer software]. Zenodo.
 > https://doi.org/10.5281/zenodo.23036568
@@ -143,6 +166,8 @@ and resolves to the latest; each release also has its own DOI, listed on the
   url       = {https://doi.org/10.5281/zenodo.23036568}
 }
 ```
+
+</details>
 
 GitHub's **Cite this repository** button, built from [`CITATION.cff`](CITATION.cff), gives the
 paper in APA and BibTeX, and lists the software and the Orthonym engine it builds on.
