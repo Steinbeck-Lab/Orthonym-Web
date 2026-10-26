@@ -184,15 +184,14 @@
 }
 
 /* -------------------- site header (notch islands) -------------------- */
-/* Three white islands hang off the top edge of the window: brand at the
-   left, routes in the middle, GitHub at the right. Each is welded to the
-   edge by a pair of concave fillets (.notch__wing), so the row reads as
-   shapes CARVED OUT of the top of the page rather than a bar floating over
-   it. Ported by shape only from an adaptive-notch navigation component the
-   owner pinned on 2026-09-02; none of its code is here, and it replaced
-   ChemAudit's floating glass bar (which is why the glass tokens now have one
-   consumer left, the mobile menu panel). Pure CSS, no JS deps -- the only
-   script in the header is the measurement behind the sliding pill. */
+/* One island hangs off the top edge of the window, welded to the edge by a
+   pair of concave fillets, so it reads as a shape CARVED OUT of the top of
+   the page rather than a bar floating over it. Ported by shape only from an
+   adaptive-notch navigation component the owner pinned on 2026-09-02; none
+   of its code is here. Since 2026-10-26 it is onyx lacquer with gold lines,
+   and the island and both fillets are drawn as ONE SVG outline
+   (<NotchShape>, sized by a ResizeObserver) so no seam can show. The CSS
+   .notch__wing fillets below remain for Home's INFO tab and OpsinNote. */
 
 .site-head {
   position: sticky;
@@ -223,11 +222,11 @@
   gap: var(--s-md);
   height: var(--notch-h);
   padding-inline: var(--s-lg);
-  background: var(--card);
-  border-end-start-radius: var(--r-notch);
-  border-end-end-radius: var(--r-notch);
-  /* A gold edge under the header island (2026-10-25). */
-  box-shadow: inset 0 -1px 0 var(--gold-bright);
+  /* Paints nothing itself. <NotchShape> draws the island, both fillets and
+     the gold lines as ONE SVG outline behind the content, so one glaze, one
+     rim and one shadow cover the whole notch (2026-10-26). `isolation` keeps
+     the outline's z-index: -1 inside the island. */
+  isolation: isolate;
   pointer-events: auto;
 }
 
@@ -369,7 +368,7 @@
   width: 1px;
   height: 20px;
   flex: none;
-  background: color-mix(in srgb, var(--gold-bright) 60%, transparent);
+  background: linear-gradient(180deg, transparent, var(--gold-hi), transparent);
 }
 
 /* The fillet. A square of card-white with a quarter-disc masked out of it,
@@ -407,6 +406,22 @@
   mask: radial-gradient(circle var(--notch-wing) at 100% 100%, transparent 98%, #000 100%);
 }
 
+/* The header island's one outline (Navigation.jsx). It starts one fillet to
+   the left of the island and is sized from the island's measured box. */
+.notch__shape {
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  left: calc(-1 * var(--notch-wing));
+  max-width: none; /* the global img/svg cap would cut both fillets off */
+  overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 1px rgba(20, 15, 15, 0.25)) drop-shadow(0 8px 12px rgba(20, 15, 15, 0.35));
+  /* Its own layer, so the hover transitions drawn over it do not make the
+     shadows recompute. */
+  will-change: transform;
+}
+
 /* -------------------- brand -------------------- */
 /* The pint mark + the Orthonym wordmark in the display face. */
 .brand {
@@ -417,15 +432,26 @@
   flex: none;
 }
 
+/* The black pint sits in a pearl disc so it stays black on the onyx island.
+   32px, so the disc's gold ring (outline, 3px out) stays 3px clear of the
+   island's inner gold line even on the 52px phone notch (5px on desktop),
+   and the hover turns it without scaling it for the same reason. */
 .brand__mark {
   display: block;
-  width: auto;
-  height: 30px; /* the pint is taller than wide (959:1102), so height sets its size */
+  width: 32px;
+  height: 32px;
+  padding: 5.5px;
+  object-fit: contain;
+  border-radius: 50%;
+  background: var(--glaze-pebble);
+  outline: 1px solid var(--gold-bright);
+  outline-offset: 2px;
+  box-shadow: var(--shadow-pebble);
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .brand:hover .brand__mark {
-  transform: rotate(-6deg) scale(1.06);
+  transform: rotate(-6deg);
 }
 
 .brand__word {
@@ -435,7 +461,7 @@
   line-height: 1;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: var(--ink);
+  color: var(--on-onyx);
   margin-right: -0.26em; /* pull back the trailing tracking */
 }
 
@@ -481,8 +507,23 @@
   width: var(--pill-w);
   transform: translate(var(--pill-x), -50%);
   border-radius: var(--r-pill);
-  background: var(--accent-wash);
+  background: var(--glaze-gold);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -3px 4px rgba(90, 60, 20, 0.3),
+    0 1px 1px rgba(0, 0, 0, 0.3),
+    0 5px 10px -4px rgba(0, 0, 0, 0.6);
   pointer-events: none;
+}
+
+/* The lit upper edge, as on the porcelain buttons. */
+.site-nav__pill::after {
+  content: '';
+  position: absolute;
+  inset: 1px 10% auto;
+  height: 50%;
+  border-radius: var(--r-pill) var(--r-pill) 40% 40% / var(--r-pill) var(--r-pill) 100% 100%;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
 }
 
 .site-nav__pill--slides {
@@ -512,7 +553,7 @@
   line-height: 1;
   letter-spacing: var(--track-nav);
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--on-onyx);
   text-decoration: none;
   white-space: nowrap;
   transition:
@@ -521,13 +562,13 @@
 }
 
 .site-nav__link:hover {
-  color: var(--ink);
-  background: var(--surface-soft);
+  color: #ffffff;
+  background: var(--onyx-hover);
   text-decoration: none;
 }
 
-/* The active route is marked three ways: the crimson colour step, the faint
-   crimson pill sliding in behind it, and a crimson dot — plus aria-current
+/* The active route is marked three ways: the ink label, the gold pill
+   sliding in behind it, and an ink dot — plus aria-current
    from the NavLink. The dot is decorative (empty content), never read aloud.
    The link paints no background of its own any more; .site-nav__pill is the
    background, and z-index keeps the label above it. */
@@ -538,7 +579,7 @@
 
 .site-nav__link--active,
 .site-nav__link--active:hover {
-  color: var(--accent);
+  color: var(--ink); /* on the gold pill */
   background: transparent;
 }
 
@@ -547,13 +588,12 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--gold-bright);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 45%, transparent);
+  background: var(--ink);
   flex: none;
 }
 
 /* Arriving somewhere. The pill slides to the new route and, for one beat, the
-   crimson dot is drawn out into a short dash and released. Same draw-in motif
+   active dot is drawn out into a short dash and released. Same draw-in motif
    as the footer's joining mark, which is what makes it a signature and not a
    trick. transform only, so it costs nothing, and the dot keeps its own
    centre while it stretches. */
@@ -589,7 +629,7 @@
   line-height: 1;
   letter-spacing: var(--track-nav);
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--on-onyx);
   text-decoration: none;
   transition:
     color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
@@ -608,8 +648,8 @@
    backgrounds, one clipped to the padding box (the pill's own fill) and one
    to the border box (the gradient), with a transparent border between them.
    At 200% width the gradient can then be slid on hover, which is the sheen.
-   ONE hue: --accent through --accent-deep and back, so the sweep reads as
-   light moving across crimson rather than as a second colour arriving.
+   ONE hue: dark gold through gold-hi and back, so the sweep reads as light
+   moving across gold rather than as a second colour arriving.
 
    No `filter: blur()` for the bloom, per DESIGN.md -- a radial gradient is
    already seamless and costs nothing. */
@@ -617,15 +657,8 @@
   position: relative;
   border: 1px solid transparent;
   background:
-    linear-gradient(var(--card), var(--card)) padding-box,
-    linear-gradient(
-        90deg,
-        var(--accent-line),
-        var(--accent),
-        var(--accent-deep),
-        var(--accent),
-        var(--accent-line)
-      )
+    var(--glaze-onyx) padding-box,
+    linear-gradient(90deg, var(--gold-lo), var(--gold-hi), var(--gold-bright), var(--gold-hi), var(--gold-lo))
       border-box;
   background-size:
     auto,
@@ -654,7 +687,7 @@
   border-radius: 50%;
   background: radial-gradient(
     ellipse,
-    color-mix(in srgb, var(--accent) 55%, transparent) 0%,
+    color-mix(in srgb, var(--gold-hi) 45%, transparent) 0%,
     transparent 70%
   );
   opacity: 0;
@@ -664,9 +697,9 @@
 
 .site-head__ext:hover,
 .site-head__ext:focus-visible {
-  color: var(--accent-deep);
+  color: var(--gold-hi);
   text-decoration: none;
-  /* Slides the 200% gradient one full width: the crimson sheen crosses the
+  /* Slides the 200% gradient one full width: the gold sheen crosses the
      border once per hover. */
   background-position:
     0 0,
@@ -721,13 +754,13 @@
   background: transparent;
   border: none;
   border-radius: 10px;
-  color: var(--ink);
+  color: var(--on-onyx);
   cursor: pointer;
   transition: background-color 0.18s ease;
 }
 
 .site-nav__toggle:hover {
-  background: var(--surface-soft);
+  background: var(--onyx-hover);
 }
 
 .site-nav__toggle svg {
@@ -750,12 +783,11 @@
   pointer-events: auto;
   margin-top: var(--s-xs);
   padding: var(--s-sm);
-  background: var(--glass-bg-scrolled);
-  -webkit-backdrop-filter: blur(16px) saturate(1.4);
-  backdrop-filter: blur(16px) saturate(1.4);
-  border: 1px solid var(--hairline);
+  /* The same onyx lacquer as the island it drops from. */
+  background: var(--glaze-onyx);
+  border: 1px solid var(--gold-bright);
   border-radius: var(--r-panel);
-  box-shadow: var(--glass-shadow);
+  box-shadow: 0 1px 1px rgba(20, 15, 15, 0.25), 0 10px 24px -8px rgba(20, 15, 15, 0.45);
 }
 
 @media (min-width: 960px) {
@@ -775,18 +807,18 @@
   line-height: 1;
   letter-spacing: var(--track-nav);
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--on-onyx);
   text-decoration: none;
 }
 
 .site-nav__mlink:hover {
-  color: var(--ink);
-  background: var(--surface-soft);
+  color: #ffffff;
+  background: var(--onyx-hover);
 }
 
 .site-nav__mlink--active {
-  color: var(--accent);
-  background: var(--accent-wash);
+  color: var(--ink);
+  background: var(--glaze-gold);
 }
 
 .site-nav__mlink--active::before {
@@ -794,7 +826,7 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--ink);
   flex: none;
 }
 
@@ -807,7 +839,12 @@
 .site-nav__mobile-sep {
   height: 1px;
   margin: var(--s-xs) var(--s-sm);
-  background: var(--hairline);
+  background: color-mix(in srgb, var(--gold-bright) 45%, transparent);
+}
+
+/* Ruby on onyx is under 3:1, so focus inside the dark header rings in gold. */
+.site-head {
+  --focus-ring: var(--gold-hi);
 }
 
 /* -------------------- workspace bento -------------------- */
@@ -1116,7 +1153,7 @@
 }
 
 .btn:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -2513,7 +2550,7 @@ input.field__control {
 }
 
 .copy-btn:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -4232,13 +4269,11 @@ input.field__control {
 
 /* -------------------- the issue tab and its buddy -------------------- */
 
-/* A crimson tab on the left edge that opens a new issue (IssueBuddy.jsx).
+/* A blush porcelain tab on the left edge that opens a new issue (IssueBuddy.jsx).
    The buddy waits off-screen behind it; pointing at the tab or focusing it
    brings the buddy out. Everything is slow and eased at both ends (sine
    curves, no overshoot) by owner instruction: it glides, it never jumps.
-   Desktop only -- below 960px the header's menu carries the same link. The
-   accent is legal here for the reason it is legal in the header: this is
-   chrome, and it names no confidence tier. */
+   Desktop only -- below 960px the header's menu carries the same link. */
 .issue-buddy {
   display: none;
   /* A <button> since it opens IssueDialog; none of a button's own chrome. */
@@ -4273,9 +4308,34 @@ input.field__control {
   place-items: center;
   gap: 6px;
   padding-block: 12px;
-  background: var(--accent);
+  /* Blush porcelain turned on its side: lit along the outer edge, a gold rim
+     with a clear gap (2026-10-26; owner: not red, not white). */
+  background: var(--glaze-blush);
+  color: var(--on-blush);
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-left: 0;
   border-radius: 0 14px 14px 0;
-  transition: background-color 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  outline: 1px solid var(--gold-bright);
+  outline-offset: 2px;
+  box-shadow:
+    inset -1px 0 0 #ffffff,
+    inset 3px 0 4px rgba(120, 40, 60, 0.16),
+    0 2px 2px rgba(90, 30, 45, 0.08),
+    0 8px 16px -7px rgba(120, 30, 50, 0.32);
+  transition:
+    filter 200ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* The gloss: a band of light down the outer half, under the label. */
+.issue-buddy__tab::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 6% 2px 6% 48%;
+  border-radius: 0 12px 12px 0 / 0 40% 40% 0;
+  background: linear-gradient(to left, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0));
+  pointer-events: none;
 }
 
 .issue-buddy__tab svg {
@@ -4292,7 +4352,8 @@ input.field__control {
 }
 
 .issue-buddy:hover .issue-buddy__tab {
-  background: var(--accent-deep);
+  filter: brightness(0.97);
+  transform: translateX(1px);
 }
 
 .issue-buddy:focus-visible {

@@ -90,6 +90,7 @@
      deeper and cooler, to ruby. #b3173f is 6.58:1 on --card and 6.75:1 under
      a white label; --accent-deep is the hover/press depth. */
   --accent: #b3173f; /* 6.58:1 on --card, 4.68:1 on --ground */
+  --focus-ring: var(--accent); /* .site-head sets gold: ruby on onyx is under 3:1 */
   --accent-deep: #8e1232; /* 8.97:1, 6.38:1 on --ground — hover/press */
   --accent-wash: #f7ecee; /* ruby ~8% over the card — active pill / focus tint; --accent on it 5.85:1 */
   --accent-line: rgba(179, 23, 63, 0.16); /* faint ruby keyline / glow */
@@ -109,17 +110,12 @@
      label, never white -- see .btn--pastel in App.css. */
   --accent-pastel: #ff6961;
 
-  /* -- glass: the ChemAudit header floats as a blurred panel over the
-     canvas. This is the one place a shadow and a >0 radius are allowed;
-     the rest of the system stays flat with radius 0. */
-  --glass-bg: color-mix(in srgb, #ffffff 74%, transparent);
-  --glass-bg-scrolled: color-mix(in srgb, #ffffff 86%, transparent);
-  --glass-shadow: 0 8px 32px rgba(26, 24, 21, 0.08), 0 2px 6px rgba(26, 24, 21, 0.04);
   --r-panel: 16px; /* the mobile menu panel radius — ChemAudit's rounded-2xl, softened */
 
   /* -- the notch header (2026-09-02) ----------------------------------
-     Three white islands hanging off the top edge of the window, each
-     welded to it by a pair of concave fillets. --notch-wing is BOTH the
+     One island hanging off the top edge of the window, welded to it by a
+     pair of concave fillets (drawn with it as one SVG outline since
+     2026-10-26). --notch-wing is BOTH the
      fillet's size and its arc radius; they are the same number by
      definition, which is why there is one token and not two. */
   --notch-h: 52px; /* the brand and GitHub islands */
@@ -162,11 +158,27 @@
   --gold: #8a6a34; /* 4.89:1 on --card, text-safe */
   --gold-bright: #b08d4a; /* 3.03:1 — lines and rims only, never text */
   --gold-hi: #d9bd7f; /* the highlight stop in a gold gradient */
+
+  /* Onyx lacquer (2026-10-26): the header island only. A black piano glaze
+     with gold lines, ivory labels and a gold-glaze active pill. */
+  --onyx-hi: #3b3436;
+  --onyx: #1c1718;
+  --onyx-lo: #0d0a0b;
+  --on-onyx: #e4dcd4; /* labels: 12:1+ on --onyx */
+  --onyx-hover: rgba(255, 255, 255, 0.08); /* a hovered label's wash */
+  --gold-lo: #6e5530; /* the dark end of a gold border sweep */
+  /* NotchShape (Navigation.jsx) repeats these stops in SVG; keep them equal. */
+  --glaze-onyx: linear-gradient(180deg, var(--onyx-hi) 0%, var(--onyx) 52%, var(--onyx-lo) 100%);
+  --glaze-gold: linear-gradient(180deg, #ecd9a6 0%, #c9a65f 52%, #a07c3e 100%);
   /* -- porcelain glazes, one source each. The white labels on the ruby glaze
      are measured in App.css (buttons). */
   --glaze-white: linear-gradient(180deg, #ffffff 0%, #f6f4f1 55%, #e9e5e0 100%);
   --glaze-ruby: linear-gradient(180deg, #c21f48 0%, var(--accent) 52%, #96143a 100%);
   --glaze-ruby-press: linear-gradient(180deg, var(--accent) 0%, #a01539 52%, var(--accent-deep) 100%);
+  /* Blush porcelain: the page's pink wash, glazed. The Issues tab. Its
+     label is 7.7:1 at the darkest stop. */
+  --glaze-blush: linear-gradient(90deg, #ebcfd5 0%, #f6e4e7 45%, #fff7f8 100%);
+  --on-blush: #5a2b36;
   --glaze-pebble: radial-gradient(120% 140% at 50% 0%, #ffffff 0%, #f4f1ed 45%, #e2ddd7 100%);
   --edge-ruby: #7a0f2b; /* the fired edge of the ruby glaze */
   --edge-glaze: color-mix(in srgb, var(--ink) 14%, transparent);
@@ -442,7 +454,7 @@ button {
 /* One focus ring for the whole surface: the ruby accent, offset. Ruby is
    6.58:1 on --card, well above the 3:1 a focus indicator needs. */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
 }
 
