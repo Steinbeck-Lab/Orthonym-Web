@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { ENGINE_URL, GITHUB_URL, NEW_ISSUE_URL } from '../lib/github'
 
@@ -8,7 +8,7 @@ import { ENGINE_URL, GITHUB_URL, NEW_ISSUE_URL } from '../lib/github'
 // briefly three separate islands; the owner asked for one ("I don't want 3
 // notches, move [the wordmark] and github to center, keep single notch").
 //
-// AT REST it shows the crimson brand mark and the four route labels, and
+// AT REST it shows the pint mark and the four route labels, and
 // nothing else. ON HOVER (or on focus, or on any pointer that cannot hover)
 // it GROWS OUTWARD from its centre to reveal the Orthonym wordmark on the left
 // and GitHub on the right, each fenced off by a hairline "|". Confirmed with
@@ -38,10 +38,13 @@ import { ENGINE_URL, GITHUB_URL, NEW_ISSUE_URL } from '../lib/github'
 // nav, white cards on the grey ground, the one crimson accent, and no theme
 // toggle (this build is light-only).
 //
+// Since 2026-10-26 the island is onyx lacquer with gold lines, drawn as one
+// SVG outline by NotchShape below.
+//
 // The active route is marked three ways at once, and colour is only one of
-// them: aria-current (assistive tech), a crimson text step, and a crimson
-// dot — now riding a single faint pill that SLIDES between routes instead of
-// one pill per link blinking on and off. Below 960px the four routes collapse
+// them: aria-current (assistive tech), an ink label, and an ink dot, riding
+// a single gold-glaze pill that SLIDES between routes instead of one pill
+// per link blinking on and off. Below 960px the four routes collapse
 // behind a single menu button instead of wrapping onto three lines.
 
 const NAV_LINKS = [
@@ -84,17 +87,86 @@ function GitHubMark() {
   )
 }
 
-// One fillet. Two of these flank every island: a square of card-white with a
-// quarter-disc masked out of it, which leaves a concave arc sweeping from the
-// island's side up to the top edge of the window. Pure CSS mask, no SVG and
-// no image, so it inherits --card and cannot drift out of sync with the
-// island it belongs to.
-function NotchWings() {
+// The header island drawn as ONE outline: both fillets, both sides and the
+// rounded bottom are a single SVG path, so one glaze, one gold rim and one
+// shadow cover the whole notch and no seam can show between three pieces.
+// The path is rebuilt from the island's measured size, which changes while
+// the notch unfolds on hover.
+function NotchShape() {
+  const ref = useRef(null)
+  const [box, setBox] = useState(null)
+  const uid = useId()
+
+  useLayoutEffect(() => {
+    const notch = ref.current?.parentElement
+    if (!notch) return undefined
+    // The two radii are fixed tokens, so they are read once, not per frame.
+    const css = getComputedStyle(notch)
+    const f = parseFloat(css.getPropertyValue('--notch-wing'))
+    const r = parseFloat(css.getPropertyValue('--r-notch'))
+    // Fires every frame while the notch unfolds; an unchanged size keeps the
+    // same object so React skips the render.
+    const measure = () => {
+      const w = notch.offsetWidth
+      const h = notch.offsetHeight
+      setBox((prev) => (prev?.w === w && prev?.h === h ? prev : { w, h, f, r }))
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(notch)
+    return () => observer.disconnect()
+  }, [])
+
+  if (!box) return <svg ref={ref} className="notch__shape" aria-hidden="true" />
+
+  // The island spans f..x1 in the SVG; a fillet of size f sits each side.
+  const { w, h, f, r } = box
+  const x1 = f + w
+  // Outline without the top edge (the window edge is not part of the rim).
+  const rim =
+    `M 0 0 A ${f} ${f} 0 0 1 ${f} ${f} L ${f} ${h - r} ` +
+    `A ${r} ${r} 0 0 0 ${f + r} ${h} L ${x1 - r} ${h} ` +
+    `A ${r} ${r} 0 0 0 ${x1} ${h - r} L ${x1} ${f} A ${f} ${f} 0 0 1 ${x1 + f} 0`
+  const body = `${rim} Z`
+  // The inner gold line: the bottom and its two corners, d px inside, rising
+  // `fade` px up each side as it fades out.
+  const d = 3.5
+  const fade = 6
+  const ri = r - d
+  const inlay =
+    `M ${f + d} ${h - r - fade} L ${f + d} ${h - r} A ${ri} ${ri} 0 0 0 ${f + r} ${h - d} ` +
+    `L ${x1 - r} ${h - d} A ${ri} ${ri} 0 0 0 ${x1 - d} ${h - r} L ${x1 - d} ${h - r - fade}`
+
   return (
-    <>
-      <span className="notch__wing notch__wing--left" aria-hidden="true" />
-      <span className="notch__wing notch__wing--right" aria-hidden="true" />
-    </>
+    <svg
+      ref={ref}
+      className="notch__shape"
+      aria-hidden="true"
+      width={w + 2 * f}
+      height={h}
+    >
+      <defs>
+        {/* --glaze-onyx's stops: an SVG fill cannot take a CSS gradient. */}
+        <linearGradient id={`${uid}-glaze`} x1="0" y1="0" x2="0" y2={h} gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="var(--onyx-hi)" />
+          <stop offset="0.52" stopColor="var(--onyx)" />
+          <stop offset="1" stopColor="var(--onyx-lo)" />
+        </linearGradient>
+        <linearGradient id={`${uid}-gloss`} x1="0" y1="0" x2="0" y2={h} gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#fff" stopOpacity="0.13" />
+          <stop offset="0.46" stopColor="#fff" stopOpacity="0.035" />
+          <stop offset="0.465" stopColor="#fff" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id={`${uid}-inlay`} x1="0" y1={h - r - fade} x2="0" y2={h - r + fade} gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="var(--gold-hi)" stopOpacity="0" />
+          <stop offset="1" stopColor="var(--gold-hi)" stopOpacity="0.8" />
+        </linearGradient>
+      </defs>
+      <path d={body} fill={`url(#${uid}-glaze)`} />
+      <path d={body} fill={`url(#${uid}-gloss)`} />
+      <path d={rim} fill="none" stroke="var(--gold-bright)" strokeWidth="1.25" />
+      <path d={inlay} fill="none" stroke={`url(#${uid}-inlay)`} strokeWidth="1" />
+    </svg>
   )
 }
 
@@ -114,7 +186,7 @@ function Navigation() {
   const [slides, setSlides] = useState(false)
 
   // The one moment a nav can honestly celebrate: arriving somewhere. On a
-  // route change the pill slides (below) and the crimson dot is pulled into a
+  // route change the pill slides (below) and the active dot is pulled into a
   // short dash and back -- the same draw-in motif as the footer's joining
   // mark, which makes it a signature rather than a one-off trick. 380ms, and
   // the class is removed afterwards so it can fire again on the next route.
@@ -196,7 +268,7 @@ function Navigation() {
             only the brand and the menu button; the routes and the outbound
             link move into the panel below. */}
         <div className="notch notch--bar">
-          <NotchWings />
+          <NotchShape />
           <NavLink to="/" end className="brand" aria-label="Orthonym — home">
             <BrandMark />
             <span className="brand__word">Orthonym</span>
@@ -274,7 +346,7 @@ function Navigation() {
               {/* The word and the mark, nothing else -- but wearing the
                   chrome adapted from a rainbow-bordered button reference:
                   a gradient border, a sheen that crosses it on hover, and a
-                  bloom underneath. All in crimson, because a five-hue
+                  bloom underneath. All in gold, because a five-hue
                   gradient is exactly the "colour a reader could mistake for
                   a confidence tier" DESIGN.md refuses; legal here because
                   the header is CHROME, the one place the accent lives.
