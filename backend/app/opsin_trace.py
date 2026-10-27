@@ -34,8 +34,10 @@ How it works, in the order OPSIN runs:
    are read from its fragments.
 
 Every class and most methods used are package-private in OPSIN, unlocked by
-reflection against the exactly pinned jar (orthonym/jars.py fetches
-opsin-cli 2.9.0 by SHA-256). If any lookup fails the module disables itself
+reflection against the jar the engine resolves (orthonym/jars.py: the 2.9.0
+release by SHA-256, or with ORTHONYM_OPSIN=main@<commit> a jar built from that
+commit of OPSIN's main branch). TESTED_OPSIN lists the builds the census was
+run on; any other one still works but logs a warning. If any lookup fails the module disables itself
 and every call returns TraceFailure("unavailable"). Each run is also checked
 against OPSIN's PUBLIC parseToSmiles; a traced molecule that differs is
 rejected ("mismatch"), never shown.
@@ -85,7 +87,10 @@ from rdkit import Chem
 
 logger = logging.getLogger(__name__)
 
-PINNED_OPSIN_VERSION = "2.9.0"
+# NameToStructure.getVersion() of every OPSIN this module's handles and the
+# Explain census were checked on (corpus and ChEMBL 10k CLEAN on both). A main
+# build reports "<next release>-SNAPSHOT+<commit12>".
+TESTED_OPSIN = ("2.9.0", "3.0-SNAPSHOT+7bb0cbdc7db8")
 TOKEN_TAG = "stitchSpan"
 PART_TAG = "stitchPart"
 _NO_SPAN = "none"
@@ -209,10 +214,11 @@ class _Handles:
 
         self.nts = self.NameToStructure.getInstance()
         version = self.version = str(self.NameToStructure.getVersion())
-        if version != PINNED_OPSIN_VERSION:
+        logger.info("opsin_trace: OPSIN %s loaded", version)
+        if version not in TESTED_OPSIN:
             logger.warning(
-                "opsin_trace: running against OPSIN %s, pinned/tested version is %s",
-                version, PINNED_OPSIN_VERSION,
+                "opsin_trace: OPSIN %s is not one Explain was tested on (%s)",
+                version, ", ".join(TESTED_OPSIN),
             )
 
         self.parser = _unlock_field(self.NameToStructure, "parser").get(self.nts)

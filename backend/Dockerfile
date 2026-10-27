@@ -72,12 +72,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
     && apt-get purge -y --auto-remove curl \
     && rm -rf /var/lib/apt/lists/*
 
-# The Orthonym engine is installed from its GitHub main branch, not from a
-# local copy. A BuildKit git source, not the `git+https` line in
-# requirements.txt: BuildKit resolves `#main` to a commit on every build and
-# keys this layer on that commit, so a rebuild picks up a new engine commit
-# and reuses the layer when main has not moved. pip on a git URL would stay
-# cached on the first commit it ever saw.
+# The Orthonym engine is installed from GitHub, not from a local copy, at the
+# commit ORTHONYM_REF names. A BuildKit git source, not the `git+https` line
+# in requirements.txt: BuildKit resolves the ref to a commit and keys this
+# layer on it. The default is a pinned commit, so a rebuild gives the same
+# image; CI and the engine-watch job still follow main through requirements.txt.
 #
 # The engine fetches its own OPSIN 2.9.0 and centres 1.2.1 jars from their
 # official releases and checks each against a pinned SHA-256 (orthonym/jars.py).
@@ -86,13 +85,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
 # prefetch alone is best effort. They are downloaded as root and written
 # 0600, so they are made readable for the runtime user below.
 #
-# ORTHONYM_REF picks another branch, tag or commit, for when main breaks the
-# SELF-01 check below: `--build-arg ORTHONYM_REF=<commit>`.
+# ORTHONYM_REF picks another commit (full 40-character SHA), branch or tag:
+# `--build-arg ORTHONYM_REF=main` for the newest engine.
 #
 # --keep-git-dir is only there for .git/HEAD, which BuildKit leaves as the
 # resolved commit SHA. A directory install records no commit for pip, so it
 # is copied to ORTHONYM_COMMIT_FILE and /api/health reports it.
-ARG ORTHONYM_REF=main
+ARG ORTHONYM_REF=73de4d1576eb8481b29e73b767cbc9e13dbb574b
 ADD --keep-git-dir=true https://github.com/Steinbeck-Lab/Orthonym.git#${ORTHONYM_REF} /tmp/orthonym
 ENV ORTHONYM_JAR_DIR=/opt/orthonym/jars \
     ORTHONYM_COMMIT_FILE=/opt/orthonym/COMMIT
@@ -132,6 +131,39 @@ COPY scripts/verify_opsin_live.py ./scripts/verify_opsin_live.py
 # proved under the real runtime identity, not a more privileged one.
 RUN useradd --create-home --uid 10001 orthonym \
     && chown -R orthonym:orthonym /code
+
+# The OPSIN every process of this image names and explains with. The web app
+# uses a pinned commit of OPSIN's main branch, not the 2.9.0 release the
+# Python package defaults to: it reads adduct names with an em dash before a
+# locanted component (dan2097/opsin#344) and phane names. Never a bare `main`,
+# which would follow the branch tip and change names with no rebuild here.
+# `--build-arg ORTHONYM_OPSIN=2.9.0` is the rollback; the release jar is
+# already in the image, so it needs no JDK and no build.
+#
+# A main jar is compiled once, here (`orthonym --fetch-jars`, about 15 s): it
+# needs javac, so a JDK is installed for this step and purged in the same
+# layer (the JRE above stays). The engine accepts a built jar only from
+# <jar dir>/opsin-main owned by the user that runs it, mode 0700, so that
+# directory is made for uid 10001 and the build runs as that user. A jar
+# built by root would be refused at run time.
+#
+# ORTHONYM_NO_DOWNLOAD=1: at run time nothing is fetched or built. A jar that
+# is missing or fails its checks is an error, never a build per request.
+ARG ORTHONYM_OPSIN=main@7bb0cbdc7db891518a83d59e06ca2a6349152ff7
+ENV ORTHONYM_OPSIN=${ORTHONYM_OPSIN} \
+    ORTHONYM_NO_DOWNLOAD=1
+RUN test -n "$ORTHONYM_OPSIN" \
+    && case "$ORTHONYM_OPSIN" in \
+       2.9.0) ;; \
+       main@*) echo "$ORTHONYM_OPSIN" | grep -Eqx 'main@[0-9a-f]{40}' \
+          && apt-get update && apt-get install -y --no-install-recommends default-jdk-headless \
+          && install -d -o orthonym -g orthonym -m 0700 "$ORTHONYM_JAR_DIR/opsin-main" \
+          && runuser -u orthonym -- orthonym --fetch-jars \
+          && cat "$ORTHONYM_JAR_DIR"/opsin-main/opsin-main-*.json \
+          && apt-get purge -y --auto-remove default-jdk-headless \
+          && rm -rf /var/lib/apt/lists/* ;; \
+       *) echo "ORTHONYM_OPSIN must be 2.9.0 or main@<40-hex commit>, not $ORTHONYM_OPSIN" >&2; exit 1 ;; \
+       esac
 USER orthonym
 
 RUN PYTHONPATH=/code python scripts/verify_opsin_live.py

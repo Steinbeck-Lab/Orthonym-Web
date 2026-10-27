@@ -16,6 +16,7 @@ import pathlib
 import orthonym
 
 from app.core.config import get_settings
+from app.engine_info import OPSIN_VERSION
 from app.redis_store import get_redis
 from app.schemas import VERIFIED_STATUSES, ResultItem
 
@@ -128,12 +129,15 @@ def cache_key(canonical_smiles: str, best_effort: bool, verify: bool = True) -> 
     visibly: serving a verified row to a caller who asked to skip verification
     hands them proof they did not request and cannot distinguish from a
     genuinely skipped check.
+
+    The OPSIN is in it too: ORTHONYM_OPSIN can change between deploys with no
+    engine change, and a name verified by one OPSIN is not one verified by another.
     """
     flags = f"be={int(best_effort)},v={int(verify)}"
     digest = hashlib.sha256(canonical_smiles.encode("utf-8")).hexdigest()
     return (
         f"orthonym:name:{_KEY_VERSION}:{_ENGINE_VERSION}:"
-        f"{_ENGINE_FINGERPRINT}:{flags}:{digest}"
+        f"{_ENGINE_FINGERPRINT}:{OPSIN_VERSION}:{flags}:{digest}"
     )
 
 

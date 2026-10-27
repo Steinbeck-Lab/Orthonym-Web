@@ -1,4 +1,5 @@
 import { useDisclosure } from '../lib/useDisclosure'
+import useHealth from '../lib/useHealth'
 
 // THE OPSIN NOTE: the same notch-and-drawer chrome ConfidenceLegend.jsx
 // wears on Home (`.info`, `.info__notch`, `.info__drawer`, `.info__panel`,
@@ -22,6 +23,8 @@ import { useDisclosure } from '../lib/useDisclosure'
 // the same as Home's own bottom mode once results share its row.
 export default function OpsinNote() {
   const { open, panelId, rootRef, toggle, classes } = useDisclosure()
+  // The OPSIN the backend loaded ("2.9.0" or "main <commit>"), not a constant.
+  const opsin = useHealth()?.opsin_version
 
   return (
     <div className={classes.join(' ')} ref={rootRef}>
@@ -86,7 +89,7 @@ export default function OpsinNote() {
               configuration.
             </p>
             <p>
-              OPSIN 2.9.0. Lowe, D. M.; Corbett, P. T.; Murray-Rust, P.; Glen, R. C.
+              OPSIN{opsin ? ` ${opsin}` : ''}. Lowe, D. M.; Corbett, P. T.; Murray-Rust, P.; Glen, R. C.
               &ldquo;Chemical Name to Structure: OPSIN, an Open Source
               Solution.&rdquo; <i>Journal of Chemical Information and Modeling</i>{' '}
               <b>2011</b>, <i>51</i> (3), 739&ndash;753.{' '}

@@ -4,6 +4,8 @@ Existing clients depend on TranslateResponse's exact shape, so the
 completed response stays byte-compatible; only the timeout case is new.
 """
 
+import os
+
 import orthonym
 import pytest
 from fastapi.testclient import TestClient
@@ -34,8 +36,9 @@ def test_translate_response_shape_is_unchanged(redis_client):
     # The single-molecule path keeps its picture; only batch rows drop it.
     assert item["depiction_svg"]
     assert item["roundtrip_match"] is True
-    # Every name says which engine wrote it.
+    # Every name says which engine wrote it, and with which OPSIN.
     assert item["engine_version"] == orthonym.__version__
+    assert item["opsin_version"] == _configured_opsin()
 
 
 def test_an_oversized_smiles_on_the_fast_path_never_reaches_rdkit(
@@ -122,11 +125,18 @@ def test_translate_returns_empty_results_for_an_all_blank_list(
     assert response.json() == {"results": []}
 
 
+def _configured_opsin() -> str:
+    """The label ORTHONYM_OPSIN should produce: "2.9.0", or "main <commit7>"."""
+    choice = os.environ.get("ORTHONYM_OPSIN", "").strip()
+    return "2.9.0" if choice in ("", "2.9.0") else f"main {choice.removeprefix('main@')[:7]}"
+
+
 def test_health_reports_worker_opsin_status(redis_client):
     body = client.get("/api/health").json()
     assert body["status"] == "OK"
     assert body["opsin"] == "available"
     assert body["engine_version"] == orthonym.__version__
+    assert body["opsin_version"] == _configured_opsin()
 
 
 def test_health_degrades_without_a_live_jvm(redis_client, no_worker_opsin):

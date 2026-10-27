@@ -51,21 +51,33 @@ docker compose up -d --build
 
 ## The engine is not in this repo
 
-The engine is installed from `github.com/Steinbeck-Lab/Orthonym@main`, never vendored:
-`backend/requirements.txt` for a local venv, a BuildKit git source (`ADD ...Orthonym.git#${ORTHONYM_REF}`)
-in `backend/Dockerfile`. The git source matters: BuildKit re-resolves `main` on every build and keys
-the layer on the commit, where pip on a git URL would stay cached on the first commit it saw. A local
-venv does not update on its own: `uv pip install --reinstall-package orthonym -r backend/requirements.txt`.
-`--build-arg ORTHONYM_REF=<full 40-char SHA>` builds another commit; a short SHA fails to resolve.
+The engine is installed from `github.com/Steinbeck-Lab/Orthonym`, never vendored:
+`backend/requirements.txt` (`@main`) for a local venv, CI and engine-watch; a BuildKit git source
+(`ADD ...Orthonym.git#${ORTHONYM_REF}`) in `backend/Dockerfile`, where `ORTHONYM_REF` defaults to a
+pinned commit so a rebuild gives the same image. A local venv does not update on its own:
+`uv pip install --reinstall-package orthonym -r backend/requirements.txt`.
+`--build-arg ORTHONYM_REF=<full 40-char SHA or main>` builds another commit; a short SHA fails to resolve.
 
-Tracking `main` means an engine push can change a name or a tier with no commit here. The build's
-SELF-01 check (`scripts/verify_opsin_live.py`, every Home example must keep its advertised tier) and
-the backend CI job are what notice. A red one after an engine push is an engine change, not a bug here.
+CI tracking `main` means an engine push can change a name or a tier with no commit here. The backend
+CI job, engine-watch and the build's SELF-01 check (`scripts/verify_opsin_live.py`, every Home
+example must keep its advertised tier) are what notice. A red one after an engine push is an engine
+change, not a bug here.
 
 The engine fetches its own **OPSIN 2.9.0** and **centres 1.2.1** jars from their releases and
 SHA-checks them (`orthonym/jars.py`), into `$ORTHONYM_JAR_DIR` (the image sets `/opt/orthonym/jars`)
 or `~/.cache/orthonym/jars`. `orthonym --fetch-jars` is the loud version the Dockerfile and CI run. An
 installed engine carries no OPSIN source tree, so app code never reads `PROJECT_ROOT/opsin/...`.
+
+**The web app does not run OPSIN 2.9.0.** `ORTHONYM_OPSIN=main@7bb0cbdc7db8...` (image ENV, compose
+build arg, CI env) selects a pinned commit of OPSIN's main branch: it reads adduct names with an em
+dash (dan2097/opsin#344) and phane names. The engine compiles it with a JDK into
+`<jar dir>/opsin-main/`, which it trusts only when owned by the user running it, mode 0700, so the
+Dockerfile builds it as uid 10001 and purges the JDK; a root-built jar is refused at run time.
+`ORTHONYM_OPSIN=2.9.0` is the rollback. Every process must see the same value; for local runs export
+it for uvicorn, both workers and `run-tests.sh` (the trace fixture is dumped on main). Results,
+Explain and `/api/health` carry `opsin_version` from `app/engine_info.py`, and the name cache keys on
+it. `opsin_trace.TESTED_OPSIN` lists the builds the Explain census passed on; add a new commit there
+only after both censuses run CLEAN on it.
 
 **CDK** is the app's own: `backend/Dockerfile` downloads it into `backend/vendor/cdk/` and checks it
 against the SHA-256 in the tracked `backend/vendor/cdk/NOTICE`. `backend/.dockerignore` keeps

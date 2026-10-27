@@ -12,6 +12,16 @@ x-logging: &default-logging
     max-size: "10m"
     max-file: "3"
 
+# The three backend services run one image. ORTHONYM_OPSIN picks its OPSIN at
+# build time (backend/Dockerfile): unset keeps the Dockerfile's pinned OPSIN
+# main commit, `ORTHONYM_OPSIN=2.9.0` in .env (then rebuild) rolls back to the
+# release. A value without "=" is passed only when it is set.
+x-backend-build: &backend-build
+  context: ./backend
+  dockerfile: Dockerfile
+  args:
+    - ORTHONYM_OPSIN
+
 services:
   redis:
     image: redis:7-alpine
@@ -42,9 +52,7 @@ services:
       - orthonym-network
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    build: *backend-build
     container_name: orthonym-backend
     ports:
       # 127.0.0.1, NOT 0.0.0.0. This binding and TRUST_PROXY_HEADERS below
@@ -97,9 +105,7 @@ services:
   # dedicated worker is the only thing that guarantees a long batch cannot
   # occupy the last slot someone naming ethanol needs.
   worker-fast:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    build: *backend-build
     container_name: orthonym-worker-fast
     command: >
       celery -A app.celery_app worker
@@ -159,9 +165,7 @@ services:
       - orthonym-network
 
   worker-batch:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    build: *backend-build
     container_name: orthonym-worker-batch
     command: >
       celery -A app.celery_app worker

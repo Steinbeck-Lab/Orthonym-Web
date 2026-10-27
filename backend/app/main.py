@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 
 from . import redis_store
 from .core.config import get_settings
-from .engine_info import ENGINE_COMMIT, ENGINE_VERSION
+from .engine_info import ENGINE_COMMIT, ENGINE_VERSION, OPSIN_VERSION
 from .inputs import InputFormat
 from .inputs import parse as parse_molecules
 from .jobs_api import admit_and_dispatch, prepared_payload
@@ -227,6 +227,7 @@ def health() -> HealthResponse:
         opsin="available" if opsin_ok else "no worker has a live JVM",
         engine_version=ENGINE_VERSION,
         engine_commit=ENGINE_COMMIT,
+        opsin_version=OPSIN_VERSION,
     )
 
 

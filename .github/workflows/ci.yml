@@ -81,6 +81,10 @@ jobs:
   backend:
     name: backend (test against the engine's main)
     runs-on: ubuntu-latest
+    # The OPSIN the web image builds (backend/Dockerfile ORTHONYM_OPSIN), so the
+    # suite tests the names the site serves. `--fetch-jars` builds it with the JDK.
+    env:
+      ORTHONYM_OPSIN: main@7bb0cbdc7db891518a83d59e06ca2a6349152ff7
     services:
       redis:
         # The suite needs a REAL Redis -- conftest.py fails with instructions

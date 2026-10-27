@@ -23,6 +23,7 @@ from rdkit.Chem.Draw import rdMolDraw2D
 from orthonym import Orthonym
 from orthonym.errors import is_failure_name
 
+from .engine_info import OPSIN_VERSION
 from .explain_tree import build_nodes
 from .opsin_trace import TraceFailure, trace
 
@@ -78,6 +79,7 @@ def _response(smiles, name, *, svg=None, atom_points=(), total_atoms=0, nodes=()
     return {
         "smiles": smiles, "name": name, "svg": svg, "atom_points": list(atom_points),
         "total_atoms": total_atoms, "nodes": list(nodes), "error": error,
+        "opsin_version": OPSIN_VERSION,
     }
 
 

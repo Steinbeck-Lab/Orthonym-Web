@@ -18,6 +18,13 @@ def test_a_version_bump_changes_the_key(monkeypatch):
     assert name_cache.cache_key("CCO", best_effort=True) != before
 
 
+def test_the_opsin_changes_the_key(monkeypatch):
+    # ORTHONYM_OPSIN can change between deploys with no engine change.
+    before = name_cache.cache_key("CCO", best_effort=True)
+    monkeypatch.setattr(name_cache, "OPSIN_VERSION", "main 0000000", raising=True)
+    assert name_cache.cache_key("CCO", best_effort=True) != before
+
+
 def test_best_effort_changes_the_key():
     # best_effort decides whether the escalated namer runs, and therefore
     # whether a molecule can come back "best_effort" at all. Sharing a cache

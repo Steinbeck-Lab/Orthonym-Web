@@ -62,13 +62,13 @@ const THIRD_PARTY = [
     name: 'Orthonym engine 1.0.0',
     href: 'https://github.com/Steinbeck-Lab/Orthonym',
     spdx: 'MIT',
-    note: 'The rule-based SMILES-to-IUPAC naming engine this site exists to show. Installed from the main branch of its GitHub repository at image build time. © 2026 Kohulan Rajan.',
+    note: 'The rule-based SMILES-to-IUPAC naming engine this site exists to show. Installed from a pinned commit of its GitHub repository at image build time. © 2026 Kohulan Rajan.',
   },
   {
-    name: 'OPSIN 2.9.0',
-    href: 'https://github.com/dan2097/opsin',
+    name: 'OPSIN, main branch at commit 7bb0cbd',
+    href: 'https://github.com/dan2097/opsin/commit/7bb0cbdc7db891518a83d59e06ca2a6349152ff7',
     spdx: 'MIT',
-    note: 'Parses a name back into a structure. It is what makes the round-trip verdict under every name possible, and it is also the whole of /from-name. Shipped as an unmodified executable jar and invoked as a separate program. © Daniel Lowe and contributors.',
+    note: 'Parses a name back into a structure. It is what makes the round-trip verdict under every name possible, and it is also the whole of /from-name and /explain. This site uses a pinned commit of OPSIN\'s main branch, compiled unmodified from its source at image build time, because that commit reads adduct names with an em dash before a component such as 2-aminopyridine (dan2097/opsin#344) and reads phane names. The Orthonym Python package uses the 2.9.0 release by default, so a name here can differ from one the package gives; every result on this site states the OPSIN that checked it. © Daniel Lowe and contributors.',
   },
   {
     name: 'centres 1.2.1',
@@ -407,9 +407,10 @@ function Terms() {
               Orthonym-Web for the interface that produced them. Names verified by round-trip were
               checked with{' '}
               <a href="https://github.com/dan2097/opsin" target="_blank" rel="noopener noreferrer">
-                OPSIN 2.9.0
+                OPSIN
               </a>
-              , which is worth citing alongside if the verification matters to your argument.
+              {' '}(the version is stated under each result), which is worth citing alongside if
+              the verification matters to your argument.
             </p>
             <p className="legal-updated">Version 2 — 25 September 2026</p>
         </LegalSection>

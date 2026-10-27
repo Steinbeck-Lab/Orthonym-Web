@@ -24,6 +24,10 @@ permissions:
 jobs:
   watch:
     runs-on: ubuntu-latest
+    # The OPSIN the web image builds (backend/Dockerfile ORTHONYM_OPSIN), so the
+    # suite tests the names the site serves. `--fetch-jars` builds it with the JDK.
+    env:
+      ORTHONYM_OPSIN: main@7bb0cbdc7db891518a83d59e06ca2a6349152ff7
     steps:
       - uses: actions/checkout@v7
 
