@@ -8,8 +8,13 @@ build and pass a smoke test while quietly mislabelling every tier.
 
 So: name the molecule README.md nominates for this check and assert the
 verdict. A non-zero exit fails the Docker build, which is the point.
+
+It also proves the OPSIN is the one ORTHONYM_OPSIN asks for: the engine
+accepts it under this user (a built jar must sit in a private cache it owns),
+the JVM really loaded it, and the site labels it as that OPSIN.
 """
 
+import os
 import sys
 
 # A polycyclic cage, the Home "fallback" example. With a working OPSIN round
@@ -19,8 +24,30 @@ import sys
 POLYCYCLIC_CAGE = "C1C2C3C4C1C5C2C(C3C4CC5=O)O"
 
 
+def check_opsin() -> str | None:
+    """None when the OPSIN the site shows and the one the JVM loaded are both the
+    one ORTHONYM_OPSIN asks for, else what is wrong."""
+    from orthonym.opsin_build import parse_choice
+
+    from app.engine_info import OPSIN_VERSION
+    from app.opsin_trace import running_opsin_version
+
+    ref = parse_choice(os.environ.get("ORTHONYM_OPSIN"))
+    label, jvm = ("2.9.0", "2.9.0") if ref is None else (f"main {ref[:7]}", f"+{ref[:12]}")
+    loaded = running_opsin_version() or ""  # NameToStructure.getVersion() in the JVM
+    if OPSIN_VERSION != label or not loaded.endswith(jvm):
+        return f"expected OPSIN {label}; the site shows {OPSIN_VERSION!r}, the JVM loaded {loaded!r}"
+    print(f"OK: OPSIN {loaded}, shown as {OPSIN_VERSION}")
+    return None
+
+
 def main() -> int:
     from app.orthonym_service import translate_one
+
+    wrong = check_opsin()
+    if wrong:
+        print(f"FAIL: {wrong}", file=sys.stderr)
+        return 1
 
     from app.main import EXAMPLES
 

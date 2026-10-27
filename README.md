@@ -66,7 +66,7 @@ An opt-in switch strips salts, names the largest organic fragment and says what 
 the name Orthonym would give. **About** has a live board of the service's health and the citation
 for the engine version the site runs.
 
-Built on [the Orthonym engine](#the-engine) · [OPSIN 2.9.0](https://github.com/dan2097/opsin) ·
+Built on [the Orthonym engine](#the-engine) · [OPSIN](https://github.com/dan2097/opsin) (a pinned main-branch commit, see [INSTALL.md](INSTALL.md#the-orthonym-engine-dependency)) ·
 [RDKit](https://www.rdkit.org/) · [CDK 2.12](https://cdk.github.io/) ·
 [Ketcher](https://github.com/epam/ketcher) · FastAPI · Celery · Redis · React 19
 

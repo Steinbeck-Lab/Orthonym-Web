@@ -62,13 +62,13 @@ const THIRD_PARTY = [
     name: 'Orthonym engine 1.0.0',
     href: 'https://github.com/Steinbeck-Lab/Orthonym',
     spdx: 'MIT',
-    note: 'The rule-based SMILES-to-IUPAC naming engine this site exists to show. Installed from the main branch of its GitHub repository at image build time. © 2026 Kohulan Rajan.',
+    note: 'The rule-based SMILES-to-IUPAC naming engine this site exists to show. Installed from a pinned commit of its GitHub repository at image build time. © 2026 Kohulan Rajan.',
   },
   {
-    name: 'OPSIN 2.9.0',
+    name: 'OPSIN',
     href: 'https://github.com/dan2097/opsin',
     spdx: 'MIT',
-    note: 'Parses a name back into a structure. It is what makes the round-trip verdict under every name possible, and it is also the whole of /from-name. Shipped as an unmodified executable jar and invoked as a separate program. © Daniel Lowe and contributors.',
+    note: 'Parses a name back into a structure. It is what makes the round-trip verdict under every name possible, and it is also the whole of /from-name and /explain. This site builds it unmodified from a pinned commit of its main branch, which reads adduct names and phane names the 2.9.0 release cannot; the Orthonym Python package uses 2.9.0, so a name here can differ from one the package gives. Every result states the OPSIN that checked it. © Daniel Lowe and contributors.',
   },
   {
     name: 'centres 1.2.1',
@@ -407,9 +407,10 @@ function Terms() {
               Orthonym-Web for the interface that produced them. Names verified by round-trip were
               checked with{' '}
               <a href="https://github.com/dan2097/opsin" target="_blank" rel="noopener noreferrer">
-                OPSIN 2.9.0
+                OPSIN
               </a>
-              , which is worth citing alongside if the verification matters to your argument.
+              {' '}(the version is stated under each result), which is worth citing alongside if
+              the verification matters to your argument.
             </p>
             <p className="legal-updated">Version 2 — 25 September 2026</p>
         </LegalSection>

@@ -37,3 +37,25 @@ def _engine_commit() -> str | None:
 
 ENGINE_VERSION: str = orthonym.__version__
 ENGINE_COMMIT: str | None = _engine_commit()
+
+
+def _opsin() -> str | None:
+    """The OPSIN this process names and explains with: "2.9.0", or "main <commit7>"
+    for a jar built from OPSIN's main branch (ORTHONYM_OPSIN=main@<commit>).
+
+    Read from the jar the engine resolves -- the same one its JVM loads -- and
+    never built here (download=False): the image builds it, a request never does.
+    None when no jar resolves; the worker that names then fails louder than this.
+    """
+    from orthonym.jars import JarUnavailable, active_opsin
+
+    try:
+        found = active_opsin(download=False)
+    except JarUnavailable:
+        return None
+    if found["path"] is None:
+        return None
+    return f"main {found['commit'][:7]}" if found["commit"] else found["label"]
+
+
+OPSIN_VERSION: str | None = _opsin()

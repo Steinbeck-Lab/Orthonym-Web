@@ -100,9 +100,13 @@ def test_a_verified_primary_pass_name_with_a_general_tier_prefix_is_a_fallback()
     app's own demotion (no round trip here, or a failed one). If the engine
     moves this again, this test says so -- update the comments in
     orthonym_service.py and CLAUDE.md with it.
+
+    The molecule was (3-hydroxyadamantan-1-yl)acetic acid until engine
+    a2a2456 named it as a verified PIN; this one is still pin_unverified
+    (on OPSIN 2.9.0 and main 7bb0cbd alike).
     """
     item = orthonym_service.translate_one(
-        "OC(=O)CC12CC3CC(O)(CC(C3)C1)C2", best_effort=False
+        "CCNC(=O)CN1CCN(c2ccnc3c(F)ccc(F)c23)CC1", best_effort=False
     )
     assert (item.status, item.tier) == ("fallback", "pin_unverified"), item
     assert item.roundtrip_match is True

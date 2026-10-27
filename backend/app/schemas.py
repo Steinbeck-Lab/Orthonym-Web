@@ -9,7 +9,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
-from .engine_info import ENGINE_COMMIT, ENGINE_VERSION
+from .engine_info import ENGINE_COMMIT, ENGINE_VERSION, OPSIN_VERSION
 from .name_check import MAX_CLAIMED_NAME_LENGTH, Verdict
 
 
@@ -116,6 +116,8 @@ class ResultItem(BaseModel):
     # row, which is always the worker that ran the engine: the API process
     # only re-validates the worker's dict, which already carries both keys. A
     # cached row is never served across engines (name_cache keys on them).
+    # opsin_version: the OPSIN of that worker, "2.9.0" or "main <commit7>".
+    opsin_version: Optional[str] = OPSIN_VERSION
     engine_version: str = ENGINE_VERSION
     engine_commit: Optional[str] = ENGINE_COMMIT
 
@@ -135,6 +137,8 @@ class HealthResponse(BaseModel):
     # The engine tracks main, so two builds can share a version.
     engine_version: str
     engine_commit: Optional[str] = None
+    # The OPSIN the engine names with: "2.9.0" or "main <commit7>".
+    opsin_version: Optional[str] = None
 
 
 class ExampleItem(BaseModel):
@@ -234,6 +238,9 @@ class ExplainResponse(BaseModel):
     total_atoms: int = 0
     nodes: list[ExplainNode] = []
     error: Optional[str] = None
+    # The OPSIN that read the name: set by the worker that traced it
+    # (app/explain.py), since this model is built in the API process.
+    opsin_version: Optional[str] = None
 
 
 # "cancelled" is terminal like done/failed: redis_store.begin_chunk refuses to
@@ -279,6 +286,7 @@ class BatchRow(BaseModel):
     removed: Optional[str] = None
     strip_skipped: bool = False
     # As on ResultItem: built in the batch worker, so the engine that named it.
+    opsin_version: Optional[str] = OPSIN_VERSION
     engine_version: str = ENGINE_VERSION
     engine_commit: Optional[str] = ENGINE_COMMIT
 
@@ -293,7 +301,7 @@ EXPORT_FIELDS: list[str] = [
     "roundtrip_smiles", "roundtrip_match", "formula", "limit_code", "error",
     "stripped_from", "removed",
     "claimed_name", "verdict", "verdict_text", "claimed_smiles", "opsin_warnings",
-    "tier", "strip_skipped",
+    "tier", "strip_skipped", "opsin_version",
     "engine_version", "engine_commit",
 ]
 

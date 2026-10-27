@@ -37,6 +37,12 @@ jobs:
           java-version: '21'
 
       # Same jar and checksum as ci.yml: a SMILES RDKit refuses falls back to CDK.
+      - name: Use the image's OPSIN
+        # The pinned OPSIN of the web image (backend/Dockerfile ORTHONYM_OPSIN),
+        # read from there so the pin lives in one place. `--fetch-jars` below
+        # builds it with the JDK.
+        run: sed -n 's/^ARG ORTHONYM_OPSIN=/ORTHONYM_OPSIN=/p' backend/Dockerfile >> "$GITHUB_ENV"
+
       - name: Fetch CDK
         working-directory: backend
         run: |

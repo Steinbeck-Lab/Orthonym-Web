@@ -324,16 +324,17 @@ cd /opt/orthonym-web && git pull
 docker compose up -d --build
 ```
 
-The build installs the engine from its `main` branch. Docker reuses the engine layer while `main`
-has not moved and reinstalls it when it has, so this one command also picks up engine changes.
-The shared name cache clears itself: `backend/app/name_cache.py` keys every name on a fingerprint
-of the installed engine source.
+The build installs the engine at the commit `ORTHONYM_REF` pins in `backend/Dockerfile`, so a
+rebuild gives the same engine until that pin moves. The shared name cache clears itself:
+`backend/app/name_cache.py` keys every name on a fingerprint of the installed engine source and on
+the OPSIN in use.
 
-If a new engine commit breaks the build at the SELF-01 check (`verify_opsin_live.py` names every
-Home example and asserts its tier), build the last good commit until the example is fixed:
+To build another engine commit, or the newest `main`, pass it as a build arg. If it breaks the build
+at the SELF-01 check (`verify_opsin_live.py` names every Home example and asserts its tier), go back
+to the pinned commit:
 
 ```bash
-docker compose build --build-arg ORTHONYM_REF=<full 40-character commit SHA>
+docker compose build --build-arg ORTHONYM_REF=<full 40-character commit SHA, or main>
 docker compose up -d
 ```
 
@@ -422,7 +423,7 @@ caps are **2** concurrent jobs, **20** jobs/hour, **60** naming requests/min, **
 
 The Orthonym engine lives in its own repository,
 [Steinbeck-Lab/Orthonym](https://github.com/Steinbeck-Lab/Orthonym). It is not on PyPI, so it is
-installed from GitHub `main`:
+installed from GitHub:
 
 - **Locally**, `backend/requirements.txt` has
   `orthonym @ git+https://github.com/Steinbeck-Lab/Orthonym.git@main`. Re-run
@@ -430,18 +431,37 @@ installed from GitHub `main`:
   to pick up a newer commit; pip does not do that on its own for an unchanged git URL.
 - **In the image**, `backend/Dockerfile` fetches the engine with a BuildKit git source
   (`ADD https://github.com/Steinbeck-Lab/Orthonym.git#${ORTHONYM_REF}`) and installs that tree.
-  BuildKit resolves the ref to a commit on each build, so a rebuild picks up a new `main` and reuses
-  the cached layer when `main` has not moved. `--build-arg ORTHONYM_REF=<full SHA>` builds another
-  commit.
+  `ORTHONYM_REF` defaults to a pinned commit, so a rebuild gives the same image.
+  `--build-arg ORTHONYM_REF=<full SHA>` builds another commit, `main` the newest one.
 
-Because it tracks `main`, an engine push can change a name or a tier without a commit here. Two
-gates catch that: the SELF-01 check at the end of the image build, and the backend CI job.
+CI and the nightly engine-watch job install from `requirements.txt`, so they track `main`: an engine
+push can change a name or a tier without a commit here, and those jobs are what notice it before
+the image pin moves.
 
 The engine does not ship its jars. It downloads the pinned **OPSIN 2.9.0** and **centres 1.2.1**
 jars from their official releases and checks each against a SHA-256 (`orthonym/jars.py`), into
 `$ORTHONYM_JAR_DIR` (the image sets `/opt/orthonym/jars`) or else `~/.cache/orthonym/jars`. The
 install prefetches them on a best-effort basis; `orthonym --fetch-jars` fetches them and fails when
 it cannot. The Dockerfile runs it, so a missing jar fails the build.
+
+**This site's OPSIN is not 2.9.0.** The image sets `ORTHONYM_OPSIN=main@7bb0cbdc7db891518a83d59e06ca2a6349152ff7`,
+a pinned commit of OPSIN's main branch, for every backend process. That commit reads adduct names
+with an em dash before a locanted component (`benzene—2-aminopyridine (1/1)`,
+[dan2097/opsin#344](https://github.com/dan2097/opsin/issues/344)) and reads phane names, which
+2.9.0 cannot. The engine compiles it from OPSIN's source with a JDK; the Dockerfile does that once,
+at build time, as the runtime user (the engine trusts a built jar only in a `opsin-main` directory
+that user owns, mode 0700), then removes the JDK. The Python package and its CLI still default to
+2.9.0, so a name here can differ from `pip install orthonym` for some molecules. Every result and
+`/api/health` carry `opsin_version` (`main 7bb0cbd` or `2.9.0`), read from the jar the engine
+resolves. Roll back to the release with one build arg, which needs no JDK:
+
+```bash
+ORTHONYM_OPSIN=2.9.0 docker compose up -d --build   # or put ORTHONYM_OPSIN=2.9.0 in .env
+```
+
+A local venv uses the same switch: `ORTHONYM_OPSIN=main@<commit> orthonym --fetch-jars` builds the
+jar once into `~/.cache/orthonym/jars/opsin-main/`, then export `ORTHONYM_OPSIN` for uvicorn, both
+workers and the tests.
 
 **CDK** is fetched by the app, not by the engine: `backend/Dockerfile` downloads it during the build
 and checks it against the SHA-256 recorded in `backend/vendor/cdk/NOTICE`, which is tracked.

@@ -422,6 +422,8 @@ function Explain() {
                 forcedId={teaching && shown > 0 && shown < steps.length ? steps[shown - 1] : null}
                 afterName={stepControls}
               />
+              {/* The OPSIN that read the name, from the worker that traced it. */}
+              {data?.opsin_version && <p className="engine-stamp">Read by OPSIN {data.opsin_version}</p>}
             </div>
           )}
         </div>
