@@ -8,6 +8,7 @@ import os
 
 import orthonym
 import pytest
+from orthonym.opsin_build import parse_choice
 from fastapi.testclient import TestClient
 
 from app.celery_app import celery_app
@@ -127,8 +128,8 @@ def test_translate_returns_empty_results_for_an_all_blank_list(
 
 def _configured_opsin() -> str:
     """The label ORTHONYM_OPSIN should produce: "2.9.0", or "main <commit7>"."""
-    choice = os.environ.get("ORTHONYM_OPSIN", "").strip()
-    return "2.9.0" if choice in ("", "2.9.0") else f"main {choice.removeprefix('main@')[:7]}"
+    ref = parse_choice(os.environ.get("ORTHONYM_OPSIN"))
+    return "2.9.0" if ref is None else f"main {ref[:7]}"
 
 
 def test_health_reports_worker_opsin_status(redis_client):

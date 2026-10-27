@@ -81,10 +81,6 @@ jobs:
   backend:
     name: backend (test against the engine's main)
     runs-on: ubuntu-latest
-    # The OPSIN the web image builds (backend/Dockerfile ORTHONYM_OPSIN), so the
-    # suite tests the names the site serves. `--fetch-jars` builds it with the JDK.
-    env:
-      ORTHONYM_OPSIN: main@7bb0cbdc7db891518a83d59e06ca2a6349152ff7
     services:
       redis:
         # The suite needs a REAL Redis -- conftest.py fails with instructions
@@ -112,6 +108,12 @@ jobs:
           # rather than degrades.
           distribution: temurin
           java-version: '21'
+
+      - name: Use the image's OPSIN
+        # The pinned OPSIN of the web image (backend/Dockerfile ORTHONYM_OPSIN),
+        # read from there so the pin lives in one place. `--fetch-jars` below
+        # builds it with the JDK.
+        run: sed -n 's/^ARG ORTHONYM_OPSIN=/ORTHONYM_OPSIN=/p' backend/Dockerfile >> "$GITHUB_ENV"
 
       - name: Fetch CDK
         # FETCHED, not vendored: public URL, pinned SHA-256. The checksum is

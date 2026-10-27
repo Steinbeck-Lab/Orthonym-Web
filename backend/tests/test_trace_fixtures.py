@@ -42,3 +42,15 @@ def test_fixture_was_dumped_from_the_current_trace_module():
         "tests/fixtures/explain_traces.json is stale: app/opsin_trace.py changed "
         "since it was written. Re-run scripts/dump_traces.py (see its docstring)."
     )
+
+
+def test_the_image_opsin_is_one_explain_was_tested_on():
+    # A pin bump in the Dockerfile must come with a census run and a
+    # TESTED_OPSIN entry; this fails until both are done.
+    from app.opsin_trace import TESTED_OPSIN
+
+    dockerfile = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text()
+    pin = next(line.split("=", 1)[1] for line in dockerfile.splitlines()
+               if line.startswith("ARG ORTHONYM_OPSIN="))
+    commit = pin.removeprefix("main@")
+    assert any(v == pin or v.endswith("+" + commit[:12]) for v in TESTED_OPSIN), pin

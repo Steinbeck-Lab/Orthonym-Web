@@ -74,3 +74,6 @@ original-*.webp
 # overrides. Never in git -- these carry credentials and per-host addresses.
 ops/
 docker-compose.override.yml
+
+# Local settings with server addresses and limits (copy of .env.example).
+.env

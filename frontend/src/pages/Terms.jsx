@@ -65,10 +65,10 @@ const THIRD_PARTY = [
     note: 'The rule-based SMILES-to-IUPAC naming engine this site exists to show. Installed from a pinned commit of its GitHub repository at image build time. © 2026 Kohulan Rajan.',
   },
   {
-    name: 'OPSIN, main branch at commit 7bb0cbd',
-    href: 'https://github.com/dan2097/opsin/commit/7bb0cbdc7db891518a83d59e06ca2a6349152ff7',
+    name: 'OPSIN',
+    href: 'https://github.com/dan2097/opsin',
     spdx: 'MIT',
-    note: 'Parses a name back into a structure. It is what makes the round-trip verdict under every name possible, and it is also the whole of /from-name and /explain. This site uses a pinned commit of OPSIN\'s main branch, compiled unmodified from its source at image build time, because that commit reads adduct names with an em dash before a component such as 2-aminopyridine (dan2097/opsin#344) and reads phane names. The Orthonym Python package uses the 2.9.0 release by default, so a name here can differ from one the package gives; every result on this site states the OPSIN that checked it. © Daniel Lowe and contributors.',
+    note: 'Parses a name back into a structure. It is what makes the round-trip verdict under every name possible, and it is also the whole of /from-name and /explain. This site builds it unmodified from a pinned commit of its main branch, which reads adduct names and phane names the 2.9.0 release cannot; the Orthonym Python package uses 2.9.0, so a name here can differ from one the package gives. Every result states the OPSIN that checked it. © Daniel Lowe and contributors.',
   },
   {
     name: 'centres 1.2.1',

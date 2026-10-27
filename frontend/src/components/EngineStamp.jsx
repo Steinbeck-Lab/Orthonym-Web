@@ -9,8 +9,7 @@ export default function EngineStamp({ rows }) {
     ...new Set(
       rows
         .filter((r) => r.engine_version)
-        .map((r) => `v${r.engine_version}${r.engine_commit ? ` · ${r.engine_commit.slice(0, 7)}` : ''}`
-          + (r.opsin_version ? ` with OPSIN ${r.opsin_version}` : '')),
+        .map((r) => `v${r.engine_version}${r.engine_commit ? ` · ${r.engine_commit.slice(0, 7)}` : ''}${r.opsin_version ? ` with OPSIN ${r.opsin_version}` : ''}`),
     ),
   ]
   if (!engines.length) return null

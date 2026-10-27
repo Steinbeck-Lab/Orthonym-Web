@@ -104,18 +104,8 @@ RUN grep -v '^orthonym @' requirements.txt > /tmp/requirements.txt \
     && orthonym --fetch-jars \
     && chmod -R a+rX /opt/orthonym
 
-COPY config/ ./config/
-COPY app/ ./app/
-
-# `--fetch-jars` above only proves the jars are there. This proves they
-# work: the Orthonym engine's SELF-01 gate fails OPEN without a live JVM, so an image
-# that lost default-jre-headless would build fine and then mislabel every
-# confidence tier. A fused polycyclic must come back "fallback", never
-# "pin". Fail the build here rather than discover it in production.
-COPY scripts/verify_opsin_live.py ./scripts/verify_opsin_live.py
-
-# Non-root at runtime. Every step above needs root (apt, pip into system
-# site-packages); nothing below writes to disk at all -- the name
+# Non-root at runtime. The steps above need root (apt, pip into system
+# site-packages); at run time nothing writes to disk at all -- the name
 # cache, job store and rate-limit counters are all Redis.
 #
 # --create-home is load-bearing, not tidiness: fontconfig builds its cache
@@ -124,13 +114,12 @@ COPY scripts/verify_opsin_live.py ./scripts/verify_opsin_live.py
 # on every single depiction, which reads as "the site got slow" and never
 # as a permissions bug.
 #
-# The SELF-01 verification below deliberately runs AFTER this switch, as the
+# The SELF-01 verification below deliberately runs AFTER the USER switch, as the
 # same user that will serve traffic: a JVM the build can start as root but
 # the runtime user cannot is exactly the failure this gate exists to catch,
 # and it fails OPEN (an unverified name shipped as a PIN), so it must be
 # proved under the real runtime identity, not a more privileged one.
-RUN useradd --create-home --uid 10001 orthonym \
-    && chown -R orthonym:orthonym /code
+RUN useradd --create-home --uid 10001 orthonym
 
 # The OPSIN every process of this image names and explains with. The web app
 # uses a pinned commit of OPSIN's main branch, not the 2.9.0 release the
@@ -140,7 +129,8 @@ RUN useradd --create-home --uid 10001 orthonym \
 # `--build-arg ORTHONYM_OPSIN=2.9.0` is the rollback; the release jar is
 # already in the image, so it needs no JDK and no build.
 #
-# A main jar is compiled once, here (`orthonym --fetch-jars`, about 15 s): it
+# Before COPY app/, so an app edit does not rebuild it. A main jar is
+# compiled once, here (`orthonym --fetch-jars`, about 15 s): it
 # needs javac, so a JDK is installed for this step and purged in the same
 # layer (the JRE above stays). The engine accepts a built jar only from
 # <jar dir>/opsin-main owned by the user that runs it, mode 0700, so that
@@ -152,18 +142,29 @@ RUN useradd --create-home --uid 10001 orthonym \
 ARG ORTHONYM_OPSIN=main@7bb0cbdc7db891518a83d59e06ca2a6349152ff7
 ENV ORTHONYM_OPSIN=${ORTHONYM_OPSIN} \
     ORTHONYM_NO_DOWNLOAD=1
-RUN test -n "$ORTHONYM_OPSIN" \
-    && case "$ORTHONYM_OPSIN" in \
+RUN case "$ORTHONYM_OPSIN" in \
        2.9.0) ;; \
        main@*) echo "$ORTHONYM_OPSIN" | grep -Eqx 'main@[0-9a-f]{40}' \
           && apt-get update && apt-get install -y --no-install-recommends default-jdk-headless \
           && install -d -o orthonym -g orthonym -m 0700 "$ORTHONYM_JAR_DIR/opsin-main" \
           && runuser -u orthonym -- orthonym --fetch-jars \
-          && cat "$ORTHONYM_JAR_DIR"/opsin-main/opsin-main-*.json \
+          && sha256sum "$ORTHONYM_JAR_DIR"/opsin-main/opsin-main-*.jar \
           && apt-get purge -y --auto-remove default-jdk-headless \
           && rm -rf /var/lib/apt/lists/* ;; \
        *) echo "ORTHONYM_OPSIN must be 2.9.0 or main@<40-hex commit>, not $ORTHONYM_OPSIN" >&2; exit 1 ;; \
        esac
+
+COPY config/ ./config/
+COPY app/ ./app/
+
+# `--fetch-jars` above only proves the jars are there. This proves they
+# work: the Orthonym engine's SELF-01 gate fails OPEN without a live JVM, so an image
+# that lost default-jre-headless would build fine and then mislabel every
+# confidence tier. A fused polycyclic must come back "fallback", never
+# "pin". Fail the build here rather than discover it in production.
+COPY scripts/verify_opsin_live.py ./scripts/verify_opsin_live.py
+
+RUN chown -R orthonym:orthonym /code
 USER orthonym
 
 RUN PYTHONPATH=/code python scripts/verify_opsin_live.py

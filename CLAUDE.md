@@ -68,8 +68,8 @@ SHA-checks them (`orthonym/jars.py`), into `$ORTHONYM_JAR_DIR` (the image sets `
 or `~/.cache/orthonym/jars`. `orthonym --fetch-jars` is the loud version the Dockerfile and CI run. An
 installed engine carries no OPSIN source tree, so app code never reads `PROJECT_ROOT/opsin/...`.
 
-**The web app does not run OPSIN 2.9.0.** `ORTHONYM_OPSIN=main@7bb0cbdc7db8...` (image ENV, compose
-build arg, CI env) selects a pinned commit of OPSIN's main branch: it reads adduct names with an em
+**The web app does not run OPSIN 2.9.0.** `ORTHONYM_OPSIN=main@7bb0cbdc7db8...` (the Dockerfile `ARG`,
+which CI reads; compose passes only an override) selects a pinned commit of OPSIN's main branch: it reads adduct names with an em
 dash (dan2097/opsin#344) and phane names. The engine compiles it with a JDK into
 `<jar dir>/opsin-main/`, which it trusts only when owned by the user running it, mode 0700, so the
 Dockerfile builds it as uid 10001 and purges the JDK; a root-built jar is refused at run time.

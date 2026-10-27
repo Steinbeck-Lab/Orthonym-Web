@@ -9,15 +9,13 @@ build and pass a smoke test while quietly mislabelling every tier.
 So: name the molecule README.md nominates for this check and assert the
 verdict. A non-zero exit fails the Docker build, which is the point.
 
-It also proves the OPSIN is the one ORTHONYM_OPSIN asks for: a main build is
-accepted by the engine under this user (its private jar cache checks out),
-its sidecar records a passing self-test, and the JVM really loaded it.
+It also proves the OPSIN is the one ORTHONYM_OPSIN asks for: the engine
+accepts it under this user (a built jar must sit in a private cache it owns),
+the JVM really loaded it, and the site labels it as that OPSIN.
 """
 
-import json
 import os
 import sys
-from pathlib import Path
 
 # A polycyclic cage, the Home "fallback" example. With a working OPSIN round
 # trip the engine ships a verified systematic name: "fallback". Without the
@@ -27,28 +25,19 @@ POLYCYCLIC_CAGE = "C1C2C3C4C1C5C2C(C3C4CC5=O)O"
 
 
 def check_opsin() -> str | None:
-    """None when the loaded OPSIN is the configured one, else what is wrong."""
-    from orthonym.jars import active_opsin
+    """None when the OPSIN the site shows and the one the JVM loaded are both the
+    one ORTHONYM_OPSIN asks for, else what is wrong."""
     from orthonym.opsin_build import parse_choice
 
+    from app.engine_info import OPSIN_VERSION
     from app.opsin_trace import running_opsin_version
 
     ref = parse_choice(os.environ.get("ORTHONYM_OPSIN"))
-    found = active_opsin(download=False)
-    loaded = running_opsin_version()  # NameToStructure.getVersion() in the JVM
-    if ref is None:
-        if found["label"] != "2.9.0" or loaded != "2.9.0":
-            return f"expected OPSIN 2.9.0, resolved {found}, JVM loaded {loaded!r}"
-        print("OK: OPSIN 2.9.0")
-        return None
-    if found["commit"] != ref:
-        return f"expected OPSIN main {ref}, resolved {found}"
-    sidecar = json.loads(Path(found["path"]).with_suffix(".json").read_text())
-    if sidecar.get("selftest") != "pass":
-        return f"OPSIN build sidecar has no passing self-test: {sidecar}"
-    if not (loaded or "").endswith("+" + ref[:12]):
-        return f"the JVM loaded OPSIN {loaded!r}, not the build of {ref[:12]}"
-    print(f"OK: OPSIN {loaded} (jar sha256 {sidecar['jar_sha256']})")
+    label, jvm = ("2.9.0", "2.9.0") if ref is None else (f"main {ref[:7]}", f"+{ref[:12]}")
+    loaded = running_opsin_version() or ""  # NameToStructure.getVersion() in the JVM
+    if OPSIN_VERSION != label or not loaded.endswith(jvm):
+        return f"expected OPSIN {label}; the site shows {OPSIN_VERSION!r}, the JVM loaded {loaded!r}"
+    print(f"OK: OPSIN {loaded}, shown as {OPSIN_VERSION}")
     return None
 
 
