@@ -62,7 +62,7 @@ const THIRD_PARTY = [
     name: 'Orthonym engine 1.0.0',
     href: 'https://github.com/Steinbeck-Lab/Orthonym',
     spdx: 'MIT',
-    note: 'The rule-based SMILES-to-IUPAC naming engine this site exists to show. Installed from a pinned commit of its GitHub repository at image build time. © 2026 Kohulan Rajan.',
+    note: 'The rule-based SMILES-to-IUPAC naming engine this site exists to show. Installed from the main branch of its GitHub repository at image build time. © 2026 Kohulan Rajan.',
   },
   {
     name: 'OPSIN',
