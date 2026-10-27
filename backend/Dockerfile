@@ -72,11 +72,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
     && apt-get purge -y --auto-remove curl \
     && rm -rf /var/lib/apt/lists/*
 
-# The Orthonym engine is installed from GitHub, not from a local copy, at the
-# commit ORTHONYM_REF names. A BuildKit git source, not the `git+https` line
-# in requirements.txt: BuildKit resolves the ref to a commit and keys this
-# layer on it. The default is a pinned commit, so a rebuild gives the same
-# image; CI and the engine-watch job still follow main through requirements.txt.
+# The Orthonym engine is installed from its GitHub main branch, not from a
+# local copy. A BuildKit git source, not the `git+https` line in
+# requirements.txt: BuildKit resolves `#main` to a commit on every build and
+# keys this layer on that commit, so a rebuild picks up a new engine commit
+# and reuses the layer when main has not moved. pip on a git URL would stay
+# cached on the first commit it ever saw.
 #
 # The engine fetches its own OPSIN 2.9.0 and centres 1.2.1 jars from their
 # official releases and checks each against a pinned SHA-256 (orthonym/jars.py).
@@ -85,13 +86,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
 # prefetch alone is best effort. They are downloaded as root and written
 # 0600, so they are made readable for the runtime user below.
 #
-# ORTHONYM_REF picks another commit (full 40-character SHA), branch or tag:
-# `--build-arg ORTHONYM_REF=main` for the newest engine.
+# ORTHONYM_REF picks another branch, tag or commit, for when main breaks the
+# SELF-01 check below: `--build-arg ORTHONYM_REF=<commit>`.
 #
 # --keep-git-dir is only there for .git/HEAD, which BuildKit leaves as the
 # resolved commit SHA. A directory install records no commit for pip, so it
 # is copied to ORTHONYM_COMMIT_FILE and /api/health reports it.
-ARG ORTHONYM_REF=73de4d1576eb8481b29e73b767cbc9e13dbb574b
+ARG ORTHONYM_REF=main
 ADD --keep-git-dir=true https://github.com/Steinbeck-Lab/Orthonym.git#${ORTHONYM_REF} /tmp/orthonym
 ENV ORTHONYM_JAR_DIR=/opt/orthonym/jars \
     ORTHONYM_COMMIT_FILE=/opt/orthonym/COMMIT

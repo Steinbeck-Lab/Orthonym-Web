@@ -324,17 +324,16 @@ cd /opt/orthonym-web && git pull
 docker compose up -d --build
 ```
 
-The build installs the engine at the commit `ORTHONYM_REF` pins in `backend/Dockerfile`, so a
-rebuild gives the same engine until that pin moves. The shared name cache clears itself:
-`backend/app/name_cache.py` keys every name on a fingerprint of the installed engine source and on
-the OPSIN in use.
+The build installs the engine from its `main` branch. Docker reuses the engine layer while `main`
+has not moved and reinstalls it when it has, so this one command also picks up engine changes.
+The shared name cache clears itself: `backend/app/name_cache.py` keys every name on a fingerprint
+of the installed engine source and on the OPSIN in use.
 
-To build another engine commit, or the newest `main`, pass it as a build arg. If it breaks the build
-at the SELF-01 check (`verify_opsin_live.py` names every Home example and asserts its tier), go back
-to the pinned commit:
+If a new engine commit breaks the build at the SELF-01 check (`verify_opsin_live.py` names every
+Home example and asserts its tier), build the last good commit until the example is fixed:
 
 ```bash
-docker compose build --build-arg ORTHONYM_REF=<full 40-character commit SHA, or main>
+docker compose build --build-arg ORTHONYM_REF=<full 40-character commit SHA>
 docker compose up -d
 ```
 
@@ -431,12 +430,12 @@ installed from GitHub:
   to pick up a newer commit; pip does not do that on its own for an unchanged git URL.
 - **In the image**, `backend/Dockerfile` fetches the engine with a BuildKit git source
   (`ADD https://github.com/Steinbeck-Lab/Orthonym.git#${ORTHONYM_REF}`) and installs that tree.
-  `ORTHONYM_REF` defaults to a pinned commit, so a rebuild gives the same image.
-  `--build-arg ORTHONYM_REF=<full SHA>` builds another commit, `main` the newest one.
+  BuildKit resolves the ref to a commit on each build, so a rebuild picks up a new `main` and reuses
+  the cached layer when `main` has not moved. `--build-arg ORTHONYM_REF=<full SHA>` builds another
+  commit.
 
-CI and the nightly engine-watch job install from `requirements.txt`, so they track `main`: an engine
-push can change a name or a tier without a commit here, and those jobs are what notice it before
-the image pin moves.
+Because it tracks `main`, an engine push can change a name or a tier without a commit here. Two
+gates catch that: the SELF-01 check at the end of the image build, and the backend CI job.
 
 The engine does not ship its jars. It downloads the pinned **OPSIN 2.9.0** and **centres 1.2.1**
 jars from their official releases and checks each against a SHA-256 (`orthonym/jars.py`), into

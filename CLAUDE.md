@@ -51,14 +51,14 @@ docker compose up -d --build
 
 ## The engine is not in this repo
 
-The engine is installed from `github.com/Steinbeck-Lab/Orthonym`, never vendored:
-`backend/requirements.txt` (`@main`) for a local venv, CI and engine-watch; a BuildKit git source
-(`ADD ...Orthonym.git#${ORTHONYM_REF}`) in `backend/Dockerfile`, where `ORTHONYM_REF` defaults to a
-pinned commit so a rebuild gives the same image. A local venv does not update on its own:
-`uv pip install --reinstall-package orthonym -r backend/requirements.txt`.
-`--build-arg ORTHONYM_REF=<full 40-char SHA or main>` builds another commit; a short SHA fails to resolve.
+The engine is installed from `github.com/Steinbeck-Lab/Orthonym@main`, never vendored:
+`backend/requirements.txt` for a local venv, a BuildKit git source (`ADD ...Orthonym.git#${ORTHONYM_REF}`)
+in `backend/Dockerfile`. The git source matters: BuildKit re-resolves `main` on every build and keys
+the layer on the commit, where pip on a git URL would stay cached on the first commit it saw. A local
+venv does not update on its own: `uv pip install --reinstall-package orthonym -r backend/requirements.txt`.
+`--build-arg ORTHONYM_REF=<full 40-char SHA>` builds another commit; a short SHA fails to resolve.
 
-CI tracking `main` means an engine push can change a name or a tier with no commit here. The backend
+Tracking `main` means an engine push can change a name or a tier with no commit here. The backend
 CI job, engine-watch and the build's SELF-01 check (`scripts/verify_opsin_live.py`, every Home
 example must keep its advertised tier) are what notice. A red one after an engine push is an engine
 change, not a bug here.
