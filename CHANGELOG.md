@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.7.0](https://github.com/Steinbeck-Lab/Orthonym-Web/compare/v0.6.0...v0.7.0) (2026-10-27)
+
+
+### Features
+
+* the web app names and explains with OPSIN main at 7bb0cbd ([8a321f1](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/8a321f174c7fa1b0ede6971f546dbecf7deb88f4))
+* the web app names and explains with OPSIN main at 7bb0cbd ([efd3384](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/efd3384c0a989f52a1b5f001ecb2019c0cf60d5a))
+* **ui:** onyx lacquer header notch and blush porcelain issues tab ([93e1a17](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/93e1a17418d0d2339ca87289d8b85d7df204a351))
+* **ui:** onyx lacquer header notch and blush porcelain issues tab ([45bde6b](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/45bde6bd6d96ed42e6a4e36239cc220978c27148))
+* **ui:** ruby and gold palette with porcelain buttons ([d518121](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/d518121461359ca91614910f9f69e2078ff4e12d))
+* **ui:** ruby and gold palette with porcelain buttons ([678fce7](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/678fce7234bf05f5190144bf15507a818e888486))
+
+
+### Bug Fixes
+
+* **home:** the three switches share one row on a wide card ([796b567](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/796b567d26d7b1200832cb307ef5a7df0f56557f))
+* **home:** the three switches share one row on a wide card ([ff0c236](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/ff0c23618ef0f16fab1bad6ae54a552868d094dc))
+
+
+### Documentation
+
+* **readme:** a tools figure and a paper card, drawn by build.py ([d05ea62](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/d05ea621ffc8c1e2fed404075d325ea9ea19a66b))
+* **readme:** new pages and features, paper month, engine citation ([e845f42](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/e845f4239d5855df0f0ccd1d878881a3ff83ae00))
+* **readme:** new pages and features, paper month, engine citation ([fa4a622](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/fa4a6225f3d1917bea35365e5b7aaa77843e8f78))
+* **readme:** tools figure and paper card ([5b12003](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/5b12003120360a318657236105813456b0ce519b))
+* **readme:** tools section after the round trip; picture links that GitHub parses ([f5ddf04](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/f5ddf04bf6e42d537f6131d269372245200fe59d))
+
 ## [0.6.0](https://github.com/Steinbeck-Lab/Orthonym-Web/compare/v0.5.0...v0.6.0) (2026-10-25)
 
 
