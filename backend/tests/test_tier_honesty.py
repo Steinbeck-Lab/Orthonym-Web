@@ -102,11 +102,12 @@ def test_a_verified_primary_pass_name_with_a_general_tier_prefix_is_a_fallback()
     orthonym_service.py and CLAUDE.md with it.
 
     The molecule was (3-hydroxyadamantan-1-yl)acetic acid until engine
-    a2a2456 named it as a verified PIN; this one is still pin_unverified
-    (on OPSIN 2.9.0 and main 7bb0cbd alike).
+    a2a2456 named it as a verified PIN, then a difluoroquinolinyl piperazine
+    until engine d545a12 did the same. Chlorambucil is still pin_unverified
+    on engine d545a12 (OPSIN 2.9.0, main 7bb0cbd and main 42e87ac alike).
     """
     item = orthonym_service.translate_one(
-        "CCNC(=O)CN1CCN(c2ccnc3c(F)ccc(F)c23)CC1", best_effort=False
+        "OC(=O)CCCC1=CC=C(C=C1)N(CCCl)CCCl", best_effort=False
     )
     assert (item.status, item.tier) == ("fallback", "pin_unverified"), item
     assert item.roundtrip_match is True

@@ -78,13 +78,13 @@ EXAMPLES = [
         #   2. "CC1(C)CCC(C)(C)C12c1ccccc1C1(CCCC1)C2" (spiro-fused) -- named
         #      as 2,2,5,5-tetra(methan-1-yl)dispiro[...] after the 2026-08-31
         #      vendor refresh.
-        # So an ORGANIC honest-abstain example is a moving target. Uranium
-        # trioxide is stable in that role for a structural reason rather than
-        # a coverage gap: the Orthonym engine targets organic nomenclature, and it
-        # refuses here instead of guessing. Verified live to abstain on BOTH
-        # the primary and the escalated namer.
-        "label": "Uranium trioxide — outside organic nomenclature, honest abstain",
-        "smiles": "O=[U](=O)=O",
+        # So an ORGANIC honest-abstain example is a moving target.
+        #   3. "O=[U](=O)=O" (uranium trioxide) -- engine d545a12 names it
+        #      trioxouranium (fallback).
+        # Plutonium dioxide abstains with UNSUPPORTED_ELEMENT on BOTH the
+        # primary and the escalated namer (engine d545a12, OPSIN main 7bb0cbd).
+        "label": "Plutonium dioxide — element not supported, honest abstain",
+        "smiles": "O=[Pu]=O",
         "expected_status": "abstain",
     },
 ]
