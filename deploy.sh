@@ -5,24 +5,28 @@
 #
 # The choice is kept in .env as ORTHONYM_OPSIN (a build arg, backend/Dockerfile),
 # so a later plain `docker compose up -d --build` keeps it. The OPSIN main
-# choice REMOVES the line instead of writing a commit: the Dockerfile default is
-# then used, so a pin bump there is picked up without editing .env.
+# choice asks GitHub for the newest commit of OPSIN's master branch and writes
+# it as main@<commit>, so every deploy builds the newest OPSIN, pinned to one
+# commit until the next deploy.
 # After the restart it waits for /api/health to report the OPSIN it asked for.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-MAIN_PIN=$(sed -n 's/^ARG ORTHONYM_OPSIN=//p' backend/Dockerfile)
-MAIN_LABEL="main $(printf '%s' "${MAIN_PIN#main@}" | cut -c1-7)"
+# ponytail: OPSIN's default branch is master; the engine calls it "main".
+MAIN_SHA=$(git ls-remote https://github.com/dan2097/opsin.git refs/heads/master | cut -f1)
+printf '%s' "$MAIN_SHA" | grep -Eqx '[0-9a-f]{40}' \
+  || { echo "Could not read the newest OPSIN commit from GitHub." >&2; exit 1; }
+MAIN_LABEL="main $(printf '%s' "$MAIN_SHA" | cut -c1-7)"
 current=$(sed -n 's/^ORTHONYM_OPSIN=//p' .env 2>/dev/null | tail -n 1)
 
-echo "OPSIN in .env now: ${current:-not set, so the Dockerfile default ($MAIN_LABEL)}"
+echo "OPSIN in .env now: ${current:-not set, so the Dockerfile default}"
 echo
 echo "Which OPSIN should the site use?"
-echo "  1) OPSIN $MAIN_LABEL  (default) reads em-dash adduct names and phane names"
+echo "  1) OPSIN $MAIN_LABEL  (default) newest OPSIN main: em-dash adducts, phanes"
 echo "  2) OPSIN 2.9.0        the release, same as 'pip install orthonym' (rollback)"
 read -r -p "Choose 1 or 2 [1]: " pick
 case "${pick:-1}" in
-  1) opsin=""; want=$MAIN_LABEL ;;
+  1) opsin="main@$MAIN_SHA"; want=$MAIN_LABEL ;;
   2) opsin=2.9.0; want=2.9.0 ;;
   *) echo "Not 1 or 2. Nothing changed." >&2; exit 1 ;;
 esac
