@@ -2049,7 +2049,9 @@
 .batch__table td {
   padding: var(--s-sm) var(--s-sm) var(--s-sm) 0;
   border-bottom: 1px solid var(--hairline);
-  vertical-align: baseline;
+  /* Middle, not baseline: every row now carries a 120px drawing, and baseline
+     sank the text to the drawing's foot. */
+  vertical-align: middle;
 }
 
 .batch__index {
@@ -2137,22 +2139,13 @@
   color: var(--hairline-strong);
 }
 
-.batch__draw {
-  /* The pill itself is shared with "Report SMILES on GitHub" (App.css,
-     `.batch__draw, .report-link`); only what a <button> needs is here. */
-  background: transparent;
-  cursor: pointer;
-}
-
-.batch__drawn-row td {
-  padding-block: var(--s-sm);
-  background: var(--card-soft);
-}
-
+/* Sized like the 3+ results table's pictures (App.css .results-cell--pic). */
 .batch__drawn {
   display: block;
-  width: min(100%, 260px);
-  height: auto;
+  width: 180px;
+  height: 120px;
+  object-fit: contain;
+  background: var(--card-soft);
 }
 
 .batch__pager {

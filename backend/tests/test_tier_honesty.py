@@ -355,11 +355,11 @@ def test_opsin_being_genuinely_unavailable_still_refuses(monkeypatch):
 
 @pytest.mark.parametrize("example", EXAMPLES, ids=lambda e: e["expected_status"])
 def test_every_advertised_example_still_produces_the_status_it_claims(example):
-    """CC1-examples: main.EXAMPLES hardcodes four expected_status claims and
+    """CC1-examples: main.EXAMPLES hardcodes expected_status claims and
     NOTHING checked them -- `grep -rn "expected_status" backend/tests/
     backend/scripts/` returned zero hits.
 
-    These four render as the example chips on Home, the site's most visible
+    These render as the example chips on Home, the site's most visible
     surface, each labelled with the tier it is supposed to demonstrate. The
     engine improving is enough to falsify one: the abstain example has
     already been replaced TWICE for exactly that reason, both times because
@@ -367,7 +367,7 @@ def test_every_advertised_example_still_produces_the_status_it_claims(example):
     abstain.
     So these are known to drift, and until now nothing failed when they did.
 
-    verify_opsin_live.py proved exactly one of the four, against its own
+    verify_opsin_live.py proved exactly one of them, against its own
     private copy of the SMILES rather than against EXAMPLES itself.
     """
     from app.orthonym_service import translate_one
