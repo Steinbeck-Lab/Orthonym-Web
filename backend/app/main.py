@@ -54,6 +54,19 @@ EXAMPLES = [
         "smiles": "C[C@H](O)CC",
         "expected_status": "pin",
     },
+    # Two hard molecules that still get a verified PIN (engine 1.1.0, OPSIN
+    # main 7bb0cbd, 2026-11-12): a bridged fused alkaloid, and a peroxide-
+    # bridged ring system with seven stereocentres.
+    {
+        "label": "Morphine — bridged fused rings, five stereocentres, still a PIN",
+        "smiles": "CN1CC[C@]23c4c5ccc(O)c4O[C@H]2[C@@H](O)C=C[C@H]3[C@H]1C5",
+        "expected_status": "pin",
+    },
+    {
+        "label": "Artemisinin — peroxide bridge, seven stereocentres, still a PIN",
+        "smiles": "C[C@@H]1CC[C@H]2[C@H](C(=O)O[C@H]3[C@@]24[C@H]1CC[C@](O3)(OO4)C)C",
+        "expected_status": "pin",
+    },
     {
         # A pentacyclic cage. Replaced 2026-10-09: engine 1.0.6 names the
         # previous example, ellipticine (CC1=C2C=CN=CC2=C(C3=C1NC4=CC=CC=C43)C),
