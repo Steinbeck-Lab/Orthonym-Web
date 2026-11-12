@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   JobGoneError,
+  RateLimitedError,
   cancelJob,
   deleteJob,
   depictMolecule,
@@ -47,11 +48,12 @@ import ChemName, { ChemFormula } from './Typeset'
 //   3. Every row on the page is drawn (owner instruction 2026-11-12). Batch
 //      rows deliberately carry no depiction_svg -- an SVG per row would put
 //      tens of megabytes in Redis for a 5,000-row job -- so each is fetched
-//      from /api/depict, DRAW_CONCURRENCY at a time. Only successes are
-//      cached, so a failed drawing is asked for again on the next visit or
-//      on Retry. A page is up to 50 requests against a budget the small
-//      profile sets to 300 a minute: flipping 6+ new pages a minute can hit
-//      it, and those cells then say "Not drawn" with a Retry.
+//      from /api/depict, DRAW_CONCURRENCY at a time. A drawing and a
+//      drawing the server refused for good (an unreadable SMILES, over the
+//      atom cap) are cached; a failure that may pass (network, 429, 5xx) is
+//      not, and offers Retry. A page is up to 50 requests against a budget
+//      the small profile sets to 300 a minute: flipping 6+ new pages a minute
+//      can hit it, and the first 429 then stops the page's queue.
 //
 // Polling: every 1.5s while the job is live, which is 40 requests a minute
 // against a poll budget of 300 -- and it STOPS on a terminal status. It also
@@ -62,9 +64,39 @@ const POLL_MS = 1500
 // Four, not six: leaves the browser's other connections to this host for the
 // results fetch, the downloads and Stop.
 const DRAW_CONCURRENCY = 4
-// Successful drawings kept for pages revisited: ten pages' worth, so memory
-// stays bounded on a 10,000-row job.
+// Drawings (and permanent refusals) kept for pages revisited: ten pages'
+// worth, least recently used out first, so memory stays bounded on a
+// 10,000-row job. /api/depict is also browser-cached for a day; this Map is
+// what spares the request altogether.
 const DRAW_CACHE_MAX = 500
+// How long Retry waits after a 429 that names no Retry-After.
+const DRAW_PAUSE_S = 10
+
+function cacheGet(cache, smiles) {
+  const hit = cache.get(smiles)
+  // Re-inserted on a hit: a Map iterates in insertion order, so the first
+  // key is then the least recently USED, not the oldest written.
+  if (hit) {
+    cache.delete(smiles)
+    cache.set(smiles, hit)
+  }
+  return hit
+}
+
+function cachePut(cache, smiles, drawing) {
+  cache.delete(smiles)
+  cache.set(smiles, drawing)
+  if (cache.size > DRAW_CACHE_MAX) cache.delete(cache.keys().next().value)
+}
+
+/** The few visible words for a failure that asking again may fix, or null
+ *  when it will not: any other 4xx gets the same answer every time. */
+function transientReason(err) {
+  if (err instanceof RateLimitedError) return 'rate limited'
+  if (!Number.isFinite(err?.status)) return 'network error'
+  if (err.status >= 500) return 'server error'
+  return null
+}
 
 // How long to keep asking for rows that are not there yet, after a job has
 // gone terminal.
@@ -99,10 +131,10 @@ function rowKey(row) {
 // header is a two-word abbreviation of a longer idea ("Round-trip" for "did
 // OPSIN read this name back and get your structure").
 const SORT_COLUMNS = [
-  { key: 'index', label: 'Input order', sr: 'input order', first: 'asc' },
-  { key: 'name', label: 'Name', sr: 'name, A to Z', first: 'asc' },
-  { key: 'tier', label: 'Confidence', sr: 'confidence tier, strongest first', first: 'asc' },
-  { key: 'roundtrip', label: 'Round-trip', sr: 'round-trip result, confirmed first', first: 'asc' },
+  { key: 'index', label: 'Input order', sr: 'input order', first: 'asc', asc: 'first to last', desc: 'last to first' },
+  { key: 'name', label: 'Name', sr: 'name', first: 'asc', asc: 'A to Z', desc: 'Z to A' },
+  { key: 'tier', label: 'Confidence', sr: 'confidence tier', first: 'asc', asc: 'strongest first', desc: 'weakest first' },
+  { key: 'roundtrip', label: 'Round-trip', sr: 'round-trip result', first: 'asc', asc: 'confirmed first', desc: 'confirmed last' },
 ]
 
 /** The sort controls, as a group ABOVE the table rather than clickable
@@ -119,8 +151,9 @@ const SORT_COLUMNS = [
  *
  * One group of four buttons keeps all four sorts in the same idiom, leaves
  * the table structure untouched, and reads as what it is: a control, not a
- * column. The active button carries aria-pressed and states its direction in
- * its accessible name, because the arrow beside it is aria-hidden.
+ * column. The active button carries aria-pressed; its name is the column
+ * alone, because a name that stated the direction went stale on reversing.
+ * The direction is in the table's caption.
  */
 function SortBar({ sort, order, onSort }) {
   return (
@@ -137,11 +170,7 @@ function SortBar({ sort, order, onSort }) {
             className={`batch__sort${active ? ' batch__sort--active' : ''}`}
             aria-pressed={active}
             onClick={() => onSort(column)}
-            aria-label={
-              active
-                ? `Sorted by ${column.sr}. Activate to reverse.`
-                : `Sort by ${column.sr}.`
-            }
+            aria-label={`Sort by ${column.sr}`}
           >
             <span>{column.label}</span>
             {active && (
@@ -190,22 +219,26 @@ function NameCell({ row }) {
   const reason = limitReasonFor(row)
   if (row.name) {
     return (
-      <div className={`batch__name batch__name--${stateClass}`}>
-        {/* A named batch row shows NO visible tier label -- the rule under
-            the name was the whole visible signal, and 50 rows of rule is a
-            lot to read. The lamp is where this table gains most. No `fresh`:
-            fifty lamps breathing at once is a light show, not a signal. */}
-        <TierLamp row={row} />
-        <span className="batch__name-text">
-          <ChemName name={row.name} />
-        </span>
-        <span className="sr-only">{label ? ` — ${label}` : ''}</span>
-        {/* `row.name`, the data object -- NEVER the typeset DOM above it.
-            Typeset renders `0^4,9` as a superscript, and copying what the
-            reader SEES would put a name on the clipboard that no parser can
-            read back. Every copy path in this app reads the string. */}
-        <CopyButton text={row.name} />
-      </div>
+      <>
+        <div className={`batch__name batch__name--${stateClass}`}>
+          {/* No `fresh`: fifty lamps breathing at once is a light show, not
+              a signal. */}
+          <TierLamp row={row} />
+          <span className="batch__name-text">
+            <ChemName name={row.name} />
+          </span>
+          {/* `row.name`, the data object -- NEVER the typeset DOM above it.
+              Typeset renders `0^4,9` as a superscript, and copying what the
+              reader SEES would put a name on the clipboard that no parser can
+              read back. Every copy path in this app reads the string. */}
+          <CopyButton text={row.name} label={`Copy name for row ${row.index + 1}`} />
+        </div>
+        {/* The label in plain text under the rule, on every named row. With
+            only the rule and a hover tooltip, a demoted "Name not checked
+            here" row (OPSIN verify off) looked exactly like an engine
+            best-effort name: the same dots, nothing to read. */}
+        {label && <span className="batch__state-label">{label}</span>}
+      </>
     )
   }
   // No name: the abstain and error states still need their own mark, or a
@@ -259,12 +292,12 @@ function BatchTally({ counts, finished, filter = [], onToggle = null, onClear, t
   if (rows.length === 0) return null
   return (
     <div className="batch__tally" ref={tallyRef}>
-      {/* The reading in words, so nobody has to add the chips up. It is
-          role="status" because the panel's job is to report an outcome and a
-          screen-reader user gets the numbers here rather than by walking a
-          list of five counts. It states only what the tier counts support --
-          see outcomeMessage on why it makes no round-trip claim. */}
-      <p className="batch__tally-say" role="status">
+      {/* The reading in words, so nobody has to add the chips up. It states
+          only what the tier counts support -- see outcomeMessage on why it
+          makes no round-trip claim. Not a live region: it changes on every
+          poll while the job runs; the panel's own status line announces the
+          state changes instead. */}
+      <p className="batch__tally-say">
         {outcomeMessage(counts, { finished })}
       </p>
       <ul className="batch__tally-list">
@@ -333,8 +366,14 @@ function RoundTripCell({ row }) {
 
 // `persist` false keeps the job out of jobStore, which is Home's list to
 // restore on load: a name-check job (/check) must not reappear on Home.
-function BatchResults({ job, onForget, persist = true }) {
+// `onFinished(jobId)` runs once the job is over (terminal or gone), so the
+// page can tell a finished panel, which a new inline result may replace, from
+// a running one, which it must not.
+function BatchResults({ job, onForget, onFinished, persist = true }) {
   const { jobId, ownerToken, moleculeCount } = job
+  // A ref, so a new callback each render does not restart the poll below.
+  const onFinishedRef = useRef(onFinished)
+  onFinishedRef.current = onFinished
 
   const [status, setStatus] = useState(null)
   const isCheck = status?.kind === 'check'
@@ -344,11 +383,15 @@ function BatchResults({ job, onForget, persist = true }) {
   const [gone, setGone] = useState(null)
   const [cancelRequested, setCancelRequested] = useState(false)
   const [busy, setBusy] = useState(null)
-  // This page's SMILES -> { svg } or { error }. svgCache holds successes
-  // only, across pages; drawAttempt re-runs the drawing effect for Retry.
+  // This page's SMILES -> { svg } | { error } (permanent, the server's
+  // reason) | { error, reason, retry: true } (may pass if asked again).
+  // drawCache holds the first two across pages; drawQueue is the page's
+  // queue, which Retry adds to.
   const [drawings, setDrawings] = useState({})
-  const svgCache = useRef(new Map())
-  const [drawAttempt, setDrawAttempt] = useState(0)
+  const drawCache = useRef(new Map())
+  const drawQueue = useRef(null)
+  // After a 429, Retry waits this long (epoch ms); 0 when not paused.
+  const [drawPausedUntil, setDrawPausedUntil] = useState(0)
   // The sort is SERVER-SIDE: it orders the whole job, then the server slices
   // the page. Sorting the 50 rows already in `rows` would only reorder the
   // page on screen, which is not what "sort through the pages" means.
@@ -363,6 +406,14 @@ function BatchResults({ job, onForget, persist = true }) {
   // poll (the exact shape of bug that made the hero flare dispose itself).
   const liveRef = useRef(true)
   const storedExpiryRef = useRef(job.expiresAt ?? null)
+  // Stop unmounts when the job goes terminal. If it had focus then, focus
+  // goes to the state line rather than falling to <body>.
+  const stopRef = useRef(null)
+  const stateRef = useRef(null)
+  const refocusState = useRef(false)
+  const noteStopFocus = () => {
+    if (stopRef.current && document.activeElement === stopRef.current) refocusState.current = true
+  }
 
   useEffect(() => {
     liveRef.current = true
@@ -378,6 +429,7 @@ function BatchResults({ job, onForget, persist = true }) {
       try {
         const next = await fetchJobStatus(jobId)
         if (!liveRef.current) return
+        if (isTerminal(next.status)) noteStopFocus()
         setStatus(next)
         setNow(Math.floor(Date.now() / 1000))
         setError(null)
@@ -390,6 +442,7 @@ function BatchResults({ job, onForget, persist = true }) {
           // could not be dismissed at all. This session keeps its own copy
           // in React state, so Delete results still works right here.
           forgetJob(jobId)
+          onFinishedRef.current?.(jobId)
           return
         }
         // The submission envelope carries no expires_at -- only this response
@@ -411,6 +464,7 @@ function BatchResults({ job, onForget, persist = true }) {
         if (err instanceof JobGoneError) {
           setGone(err.message)
           forgetJob(jobId)
+          onFinishedRef.current?.(jobId)
           return
         }
         // A blip (or a 429) must not kill the poll: keep the last known
@@ -539,10 +593,14 @@ function BatchResults({ job, onForget, persist = true }) {
 
   // --- controls -------------------------------------------------------
   const stop = async () => {
+    // aria-disabled, not disabled, while stopping: a disabled button drops
+    // the keyboard focus it holds, so the guard lives here instead.
+    if (busy === 'cancel') return
     setBusy('cancel')
     setCancelRequested(true)
     try {
       const next = await cancelJob(jobId, ownerToken)
+      if (isTerminal(next?.status)) noteStopFocus()
       setStatus((current) => ({ ...current, ...next }))
     } catch (err) {
       setError(err.message)
@@ -570,38 +628,109 @@ function BatchResults({ job, onForget, persist = true }) {
   // per host, and a full page of depictions queued in front of the results
   // fetch, the downloads and Stop. Leaving the page aborts what is left, so a
   // page the reader has gone from stops spending the depict budget.
-  useEffect(() => {
-    const controller = new AbortController()
-    const cache = svgCache.current
-    const page = [...new Set(rows.map((row) => row.smiles).filter(Boolean))]
-    const todo = page.filter((smiles) => !cache.has(smiles))
-    setDrawings(Object.fromEntries(page.filter((smiles) => cache.has(smiles)).map((smiles) => [smiles, { svg: cache.get(smiles) }])))
-    const drawNext = async () => {
-      while (todo.length) {
-        const smiles = todo.shift()
-        let drawing
-        try {
-          const data = await depictMolecule(smiles, controller.signal)
-          drawing = data.depiction_svg ? { svg: data.depiction_svg } : { error: data.error ?? 'No drawing returned.' }
-        } catch (err) {
-          if (controller.signal.aborted) return
-          drawing = { error: err.message }
+  //
+  // Workers pull from `queue.todo` until it is empty; Retry pushes one SMILES
+  // onto the same queue and tops the workers up, so it never re-runs the page
+  // effect (which would abort what is in flight and blank every cell).
+  const runDrawQueue = useCallback((queue) => {
+    const { signal } = queue.controller
+    const work = async () => {
+      queue.active += 1
+      try {
+        while (queue.todo.length && !signal.aborted) {
+          const smiles = queue.todo.shift()
+          let drawing
+          try {
+            const data = await depictMolecule(smiles, signal)
+            if (signal.aborted) return
+            // A 2xx with `error` is the server refusing for good (unreadable,
+            // over MAX_DEPICT_ATOMS): cached, and no Retry.
+            drawing = data.depiction_svg
+              ? { svg: data.depiction_svg }
+              : { error: data.error ?? 'No drawing returned.' }
+            cachePut(drawCache.current, smiles, drawing)
+          } catch (err) {
+            if (signal.aborted) return
+            const reason = transientReason(err)
+            if (!reason) {
+              drawing = { error: err.message }
+              cachePut(drawCache.current, smiles, drawing)
+            } else if (err instanceof RateLimitedError) {
+              // The budget is spent: asking for the rest now only earns more
+              // 429s. Stop the page and mark what is left, retryable.
+              const notDrawn = { error: err.message, reason, retry: true }
+              const rest = queue.todo.splice(0)
+              setDrawPausedUntil(Date.now() + (err.retryAfterSeconds ?? DRAW_PAUSE_S) * 1000)
+              setDrawings((all) => {
+                const next = { ...all, [smiles]: notDrawn }
+                for (const other of rest) next[other] = notDrawn
+                return next
+              })
+              continue
+            } else {
+              drawing = { error: err.message, reason, retry: true }
+            }
+          }
+          setDrawings((all) => ({ ...all, [smiles]: drawing }))
         }
-        if (drawing.svg) {
-          cache.set(smiles, drawing.svg)
-          // Oldest first: a Map iterates in insertion order.
-          if (cache.size > DRAW_CACHE_MAX) cache.delete(cache.keys().next().value)
-        }
-        setDrawings((all) => ({ ...all, [smiles]: drawing }))
+      } finally {
+        queue.active -= 1
       }
     }
-    for (let i = 0; i < DRAW_CONCURRENCY; i++) void drawNext()
-    return () => controller.abort()
-  }, [rows, drawAttempt])
+    // `work` counts itself and takes its first SMILES synchronously, so this
+    // starts no more workers than there are SMILES left.
+    while (queue.active < DRAW_CONCURRENCY && queue.todo.length && !signal.aborted) void work()
+  }, [])
+
+  useEffect(() => {
+    const queue = { controller: new AbortController(), todo: [], active: 0 }
+    const ready = {}
+    for (const smiles of new Set(rows.map((row) => row.smiles).filter(Boolean))) {
+      const hit = cacheGet(drawCache.current, smiles)
+      if (hit) ready[smiles] = hit
+      else queue.todo.push(smiles)
+    }
+    setDrawings(ready)
+    drawQueue.current = queue
+    runDrawQueue(queue)
+    return () => queue.controller.abort()
+  }, [rows, runDrawQueue])
+
+  // Retry opens again when the 429's wait is over.
+  useEffect(() => {
+    if (!drawPausedUntil) return undefined
+    const timer = window.setTimeout(() => setDrawPausedUntil(0), Math.max(0, drawPausedUntil - Date.now()))
+    return () => window.clearTimeout(timer)
+  }, [drawPausedUntil])
+
+  const drawPaused = drawPausedUntil > 0
+  const retryDrawing = (smiles, cell) => {
+    const queue = drawQueue.current
+    if (drawPaused || !queue || queue.controller.signal.aborted) return
+    // The button is about to become "Drawing…": hold focus on its cell
+    // rather than let it fall to <body>.
+    cell?.focus()
+    setDrawings((all) => {
+      const next = { ...all }
+      delete next[smiles]
+      return next
+    })
+    if (!queue.todo.includes(smiles)) queue.todo.push(smiles)
+    runDrawQueue(queue)
+  }
+
+  // Focus Stop held when it unmounted goes to the state line.
+  const canCancel = Boolean(ownerToken) && Boolean(status) && !finished
+  useEffect(() => {
+    if (canCancel || !refocusState.current) return
+    refocusState.current = false
+    stateRef.current?.focus()
+  }, [canCancel])
 
   if (gone) {
     return (
       <section className="batch" aria-label="Batch job">
+        <h2 className="sr-only">Batch job</h2>
         <p className="batch__gone">{gone}</p>
         <button type="button" className="btn" onClick={() => onForget?.(jobId)}>
           <Icon name="refresh" />
@@ -614,7 +743,15 @@ function BatchResults({ job, onForget, persist = true }) {
   const total = status?.total ?? moleculeCount ?? 0
   const percent = progressPercent({ done: status?.done ?? 0, total })
   const expiry = status ? expiryLabel(status.expires_at, now) : null
-  const canCancel = Boolean(ownerToken) && status && !finished
+  const stateWord = stateLabel(status?.status ?? 'queued', { cancelRequested })
+  // What the panel's status line says: the state, and the outcome once the
+  // job is over. It changes on a state change only -- the tally under the
+  // bar changes on every poll and is not a live region.
+  const announcement = !status
+    ? ''
+    : finished
+      ? `${stateWord}. ${outcomeMessage(status.counts, { finished: true })}`
+      : stateWord
   // The switches this job was named with, for "Report SMILES on GitHub". One
   // object for the job, not one per row.
   const jobSettings = status && {
@@ -623,14 +760,19 @@ function BatchResults({ job, onForget, persist = true }) {
     stripSalts: status.strip_salts,
   }
   const canDelete = Boolean(ownerToken) && finished
+  const sortColumn = SORT_COLUMNS.find((c) => c.key === sort)
 
   return (
     <section className="batch" aria-label="Batch job">
+      {/* For jumping to results by heading; the page's own headings skip
+          from its h1 to here. */}
+      <h2 className="sr-only">Batch job</h2>
+      <p className="sr-only" role="status">
+        {announcement}
+      </p>
       <header className="batch__head">
-        <div className="batch__state">
-          <span className="batch__state-word">
-            {stateLabel(status?.status ?? 'queued', { cancelRequested })}
-          </span>
+        <div className="batch__state" ref={stateRef} tabIndex={-1}>
+          <span className="batch__state-word">{stateWord}</span>
           <span className="batch__counts">
             {status ? `${status.done} of ${total} molecules` : `${total} molecules`}
             {status?.failed && !tierTally(status?.counts).length
@@ -641,7 +783,13 @@ function BatchResults({ job, onForget, persist = true }) {
 
         <div className="batch__actions">
           {canCancel && (
-            <button type="button" className="btn" onClick={stop} disabled={busy === 'cancel'}>
+            <button
+              type="button"
+              className="btn"
+              ref={stopRef}
+              onClick={stop}
+              aria-disabled={busy === 'cancel' || undefined}
+            >
               <Icon name="stop" size={13} />
               {busy === 'cancel' ? 'Stopping…' : 'Stop'}
             </button>
@@ -748,12 +896,13 @@ function BatchResults({ job, onForget, persist = true }) {
       {finished && rows.length > 0 && (
         <>
           <SortBar sort={sort} order={order} onSort={applySort} />
-          <div className="batch__table-wrap">
+          {/* Focusable and named: it scrolls sideways, and a keyboard can only
+              scroll what it can reach. */}
+          <div className="batch__table-wrap" tabIndex={0} role="region" aria-label="Batch results table">
             <table className="batch__table">
               <caption className="sr-only">
-                Batch results, page {page + 1} of {pages}, sorted by{' '}
-                {SORT_COLUMNS.find((c) => c.key === sort)?.sr}
-                {order === 'desc' ? ', reversed' : ''}
+                Batch results, page {page + 1} of {pages}, sorted by {sortColumn?.sr},{' '}
+                {sortColumn?.[order]}
                 {filterNote}. Every name carries its
                 confidence mark.
               </caption>
@@ -775,7 +924,13 @@ function BatchResults({ job, onForget, persist = true }) {
                       <tr key={key} className="batch__row">
                         <td className="batch__index">{row.index + 1}</td>
                         <td className="batch__input">
+                          {/* With an ID from the file, the SMILES under it as
+                              secondary text: in a title alone, no keyboard or
+                              touch reader could reach it. */}
                           <code title={row.input}>{row.input_id ?? row.input}</code>
+                          {row.input_id && (
+                            <code className="batch__input-smiles">{row.input}</code>
+                          )}
                         </td>
                         <td>
                           <NameCell row={row} />
@@ -797,25 +952,35 @@ function BatchResults({ job, onForget, persist = true }) {
                         <td>
                           <RoundTripCell row={row} />
                         </td>
-                        <td className="batch__structure">
+                        {/* tabIndex -1: Retry hands focus to its cell as it
+                            turns into "Drawing…". */}
+                        <td className="batch__structure" tabIndex={-1}>
                           {row.smiles && !drawing && <span className="batch__note">Drawing…</span>}
-                          {/* A short label, the server's sentence in a
-                              title: the full 429 text in caption capitals
-                              wrapped over many lines in this 180px cell. */}
-                          {drawing?.error && (
+                          {/* A failure that may pass: a few words in caption
+                              capitals, the server's sentence in a title (the
+                              full 429 text wrapped over many lines in this
+                              180px cell). */}
+                          {drawing?.error && drawing.retry && (
                             <span className="batch__not-drawn">
                               <span className="batch__note" title={drawing.error}>
-                                Not drawn
+                                Not drawn — {drawing.reason}
                               </span>
                               <button
                                 type="button"
-                                className="batch__retry"
-                                onClick={() => setDrawAttempt((n) => n + 1)}
-                                aria-label={`Retry drawing ${row.input}`}
+                                className="batch__redraw"
+                                onClick={(event) => retryDrawing(row.smiles, event.currentTarget.closest('td'))}
+                                aria-disabled={drawPaused || undefined}
+                                aria-label={`Retry drawing the structure for row ${row.index + 1}`}
                               >
                                 Retry
                               </button>
                             </span>
+                          )}
+                          {/* A refusal for good: the server's own reason, in
+                              sentence case, and no Retry -- it would say the
+                              same again. */}
+                          {drawing?.error && !drawing.retry && (
+                            <span className="batch__draw-reason">{drawing.error}</span>
                           )}
                           {drawing?.svg && (
                             <img
@@ -838,7 +1003,7 @@ function BatchResults({ job, onForget, persist = true }) {
                 type="button"
                 className="btn"
                 onClick={() => setPage((p) => clampPage(p - 1, countable))}
-                disabled={page === 0}
+                aria-disabled={page === 0 || undefined}
               >
                 <Icon name="back" size={13} />
                 Previous
@@ -850,7 +1015,7 @@ function BatchResults({ job, onForget, persist = true }) {
                 type="button"
                 className="btn"
                 onClick={() => setPage((p) => clampPage(p + 1, countable))}
-                disabled={page + 1 >= pages}
+                aria-disabled={page + 1 >= pages || undefined}
               >
                 Next
                 <Icon name="forward" size={13} />

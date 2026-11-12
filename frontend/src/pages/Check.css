@@ -28,6 +28,18 @@
   color: var(--ink);
 }
 
+/* Always mounted, as a live region must be to be read reliably. Empty, it
+   takes no room and no flex gap: the .sr-only geometry, which keeps it in
+   the accessibility tree where display: none would not. */
+.check-panel__note:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
 .check-results {
   display: flex;
   flex-direction: column;

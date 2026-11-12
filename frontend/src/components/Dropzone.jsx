@@ -73,6 +73,8 @@ function fileSize(bytes) {
  * @param onRemove  called when the reader wants the file gone.
  * @param onReject  called with a sentence when a drop cannot be accepted.
  * @param disabled  a submission is in flight; refuse drags entirely.
+ * @param invalid   a submit failed for want of a file (aria-invalid).
+ * @param describedBy  id of the sentence saying why, for aria-describedby.
  */
 export default function Dropzone({
   inputId,
@@ -82,6 +84,8 @@ export default function Dropzone({
   onRemove,
   onReject,
   disabled = false,
+  invalid = false,
+  describedBy,
 }) {
   const [dragging, setDragging] = useState(false)
 
@@ -181,8 +185,17 @@ export default function Dropzone({
         className="dropzone__input"
         type="file"
         accept={ACCEPT_ATTRIBUTE}
-        onChange={(event) => onFile(event.target.files?.[0] ?? null)}
+        onChange={(event) => {
+          const chosen = event.target.files?.[0] ?? null
+          // Emptied at once: the File object lives on in the page's state,
+          // and an input still holding it fires no change event when the
+          // same file is picked again (after Remove, or after a submit).
+          event.target.value = ''
+          if (chosen) onFile(chosen)
+        }}
         disabled={disabled}
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
       />
 
       {file ? (
