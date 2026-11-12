@@ -419,8 +419,8 @@ export async function deleteJob(jobId, ownerToken) {
  * cannot be drawn is a normal 2xx with `error` set, not a rejection.
  * @returns {Promise<{depiction_svg:string|null, error:string|null}>}
  */
-export async function depictMolecule(smiles) {
-  const res = await fetch(`/api/depict?smiles=${encodeURIComponent(smiles)}`)
+export async function depictMolecule(smiles, signal) {
+  const res = await fetch(`/api/depict?smiles=${encodeURIComponent(smiles)}`, { signal })
   if (!res.ok) throw await jobFailure(res)
   return res.json()
 }

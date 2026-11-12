@@ -64,7 +64,7 @@ def main() -> int:
                 f"FAIL: Home advertises {example['label']!r} as "
                 f"{example['expected_status']!r} but the engine returns "
                 f"{got.status!r}. Either the engine changed and the example "
-                "must be replaced (it has happened three times), or the engine is "
+                "must be replaced (it has happened before), or the engine is "
                 "broken.",
                 file=sys.stderr,
             )

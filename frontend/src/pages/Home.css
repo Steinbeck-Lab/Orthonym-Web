@@ -2139,13 +2139,28 @@
   color: var(--hairline-strong);
 }
 
-/* Sized like the 3+ results table's pictures (App.css .results-cell--pic). */
+/* A thumbnail, smaller than the 3+ results table's 200px pictures
+   (App.css .results-cell--pic): a batch page holds up to 50 rows. */
 .batch__drawn {
   display: block;
   width: 180px;
   height: 120px;
   object-fit: contain;
   background: var(--card-soft);
+}
+
+.batch__not-drawn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-xs);
+}
+
+.batch__retry {
+  /* The pill is shared with "Report SMILES on GitHub" (App.css); only what a
+     <button> needs is here. */
+  background: transparent;
+  cursor: pointer;
 }
 
 .batch__pager {

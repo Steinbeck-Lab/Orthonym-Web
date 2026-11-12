@@ -350,7 +350,7 @@ def test_opsin_being_genuinely_unavailable_still_refuses(monkeypatch):
     )
 
 
-# --- the four examples Home advertises -------------------------------------
+# --- the examples Home advertises ------------------------------------------
 
 
 @pytest.mark.parametrize("example", EXAMPLES, ids=lambda e: e["expected_status"])
@@ -361,11 +361,10 @@ def test_every_advertised_example_still_produces_the_status_it_claims(example):
 
     These render as the example chips on Home, the site's most visible
     surface, each labelled with the tier it is supposed to demonstrate. The
-    engine improving is enough to falsify one: the abstain example has
-    already been replaced TWICE for exactly that reason, both times because
-    the Orthonym engine got better and started naming a molecule that used to
-    abstain.
-    So these are known to drift, and until now nothing failed when they did.
+    engine improving is enough to falsify one: an example has been replaced
+    several times because the Orthonym engine got better and named it
+    differently. So these are known to drift, and until now nothing failed
+    when they did.
 
     verify_opsin_live.py proved exactly one of them, against its own
     private copy of the SMILES rather than against EXAMPLES itself.
@@ -377,6 +376,27 @@ def test_every_advertised_example_still_produces_the_status_it_claims(example):
     assert result.status == example["expected_status"], (
         f"Home advertises {example['label']!r} as {example['expected_status']!r} "
         f"but the engine now returns {result.status!r}. Either the engine "
-        "changed and the example must be replaced (it has happened twice "
+        "changed and the example must be replaced (it has happened "
         "before), or something is wrong with the engine."
     )
+
+
+def test_an_unsupported_element_still_abstains():
+    """Home shows only examples that get a name (owner instruction
+    2026-11-12), so EXAMPLES no longer holds an abstain. This keeps the
+    honest-abstain path checked: an element the engine does not support must
+    come back with no name, never a guessed one or an error.
+
+    Plutonium dioxide abstained with UNSUPPORTED_ELEMENT on both passes
+    (engine d545a12, OPSIN main 7bb0cbd). If the engine learns to name it,
+    swap in another unsupported element rather than deleting this test.
+    """
+    from app.orthonym_service import translate_one
+
+    result = translate_one("O=[Pu]=O", best_effort=True)
+
+    assert result.status == "abstain", (
+        f"Plutonium dioxide returned {result.status!r} with name {result.name!r}, "
+        "not an abstain."
+    )
+    assert result.name is None
