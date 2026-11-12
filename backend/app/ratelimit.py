@@ -149,7 +149,13 @@ def client_ip(request: Request) -> str:
             if bucketed:
                 return bucketed
 
-    return request.client.host if request.client else "unknown"
+    # The TCP peer goes through _bucket too, or a direct IPv6 client (no
+    # proxy in front) got a fresh bucket per address in its /64. A peer that
+    # is not an address at all (TestClient's "testclient") is kept verbatim.
+    host = request.client.host if request.client else None
+    if not host:
+        return "unknown"
+    return _bucket(host) or host
 
 
 def _hour_key(ip: str) -> str:

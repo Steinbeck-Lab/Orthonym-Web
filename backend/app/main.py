@@ -21,7 +21,7 @@ from .core.config import get_settings
 from .engine_info import ENGINE_COMMIT, ENGINE_VERSION, OPSIN_VERSION
 from .inputs import InputFormat
 from .inputs import parse as parse_molecules
-from .jobs_api import admit_and_dispatch, prepared_payload
+from .jobs_api import _parse_or_400, admit_and_dispatch, prepared_payload
 from .jobs_api import router as jobs_router
 from .jvm_guard import require_a_live_jvm
 from .ratelimit import check_fast_allowed, check_job_allowed, client_ip
@@ -38,7 +38,7 @@ from .schemas import (
     TranslateRequest,
     TranslateResponse,
 )
-from .name_check import one_line
+from .name_check import MAX_CLAIMED_NAME_LENGTH, one_line
 from .tasks import check_name, explain_iupac_name, explain_smiles, name_to_smiles, translate_fast
 
 # Verified live against the real Orthonym engine -- do not invent
@@ -251,13 +251,21 @@ def translate(request: Request, body: TranslateRequest):
     # envelope and let the caller poll. Nothing is silently truncated any
     # more -- the old MAX_SMILES_PER_REQUEST dropped molecule 51 in silence.
     if len(non_blank) > settings.FAST_PATH_MAX_MOLECULES:
-        # Before _canonicalize, not after (round 3 review, finding 1,
+        # Before the parse, not after (round 3 review, finding 1,
         # measured: a caller over cap paid the full RDKit canonicalization
         # cost -- 48.1 s in the reviewer's measurement -- regardless of
         # whether they were admitted or 429'd, since the job-cap check
         # used to live inside admit_and_dispatch, strictly after this).
         check_job_allowed(ip)
-        molecules = _canonicalize(non_blank, settings.MAX_BATCH_SIZE)
+        # In a worker, as POST /api/jobs parses: up to MAX_BATCH_SIZE SMILES
+        # of MAX_MOLECULE_SMILES_LENGTH each is minutes of GIL-held RDKit, and
+        # in this process it stalled every other request for that long. The
+        # format is given, not sniffed: this body is a list of SMILES.
+        _, molecules = _parse_or_400(
+            "\n".join(non_blank).encode("utf-8"),
+            settings.MAX_BATCH_SIZE,
+            fmt=InputFormat.SMILES_LIST,
+        )
         return admit_and_dispatch(ip, molecules, "smiles_list", _job_options(body))
 
     # Crash-loop fix (final review): this branch used to hand raw,
@@ -304,11 +312,17 @@ def translate(request: Request, body: TranslateRequest):
 
 @app.get("/api/iupac-to-smiles", response_model=IupacToSmilesResponse)
 def iupac_to_smiles(
-    request: Request, name: str = Query(..., min_length=1)
+    request: Request,
+    name: str = Query(..., min_length=1, max_length=MAX_CLAIMED_NAME_LENGTH),
 ) -> IupacToSmilesResponse:
     settings = get_settings()
     ip = client_ip(request)
     check_fast_allowed(ip)
+    # The name-check gate: with a line break the engine's opsin_parse falls
+    # back to a `java -jar` subprocess that reads only the LAST line, so
+    # "benzene\nethanol" answered ethanol's structure.
+    if not one_line(name):
+        raise HTTPException(status_code=400, detail="A name must be one line.")
     require_a_live_jvm()
 
     result = _fast_result(name_to_smiles, [name], settings)

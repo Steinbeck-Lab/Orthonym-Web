@@ -27,6 +27,10 @@ Status = Literal["pin", "fallback", "best_effort", "abstain", "error"]
 # frontend/src/lib/statuses.js keeps its own copy -- it cannot import
 # Python -- the same accepted cross-language mirror as NAMED_STATUSES there.
 VERIFIED_STATUSES = frozenset({"pin", "fallback"})
+# The engine tiers classify() maps to those statuses. A row keeps its tier when
+# orthonym_service demotes its STATUS for a missing round trip, so the tier is
+# what still shows that a verified claim was made (name_cache reads it).
+VERIFIED_TIERS = frozenset({"pin_verified", "systematic_verified", "pin_unverified"})
 
 # The limit_codes THIS APP assigns (lowercase; the engine's own are
 # uppercase, e.g. UNNAMEABLE). frontend/src/lib/github.js keys "Report SMILES
@@ -172,7 +176,9 @@ class NameCheckResponse(BaseModel):
     claimed_smiles: Optional[str] = None
     input_inchikey: Optional[str] = None
     claimed_inchikey: Optional[str] = None
-    warnings: list[OpsinWarning] = []
+    # None: OPSIN's warnings could not be read (name_check.warnings_or_none);
+    # [] means OPSIN raised none.
+    warnings: Optional[list[OpsinWarning]] = []
     claimed_svg: Optional[str] = None
     input_svg: Optional[str] = None
     engine: ResultItem
@@ -196,8 +202,9 @@ class IupacToSmilesResponse(BaseModel):
     molblock: Optional[str] = None
     depiction_svg: Optional[str] = None
     # OPSIN parsed the name but warned: the structure is the one OPSIN chose,
-    # not the only one the name can mean. Empty on a clean parse and a failure.
-    warnings: list[OpsinWarning] = []
+    # not the only one the name can mean. Empty on a clean parse and a failure;
+    # None when the warnings could not be read (name_check.warnings_or_none).
+    warnings: Optional[list[OpsinWarning]] = []
     error: Optional[str] = None
 
 

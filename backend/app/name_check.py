@@ -6,7 +6,10 @@ OPSIN reading a name says nothing about whether it is the preferred IUPAC
 name, so no verdict here says "correct".
 """
 
+import logging
 from typing import Literal, Optional
+
+logger = logging.getLogger(__name__)
 
 # The longest claimed name the single check and a check job accept.
 MAX_CLAIMED_NAME_LENGTH = 2000
@@ -14,6 +17,10 @@ MAX_CLAIMED_NAME_LENGTH = 2000
 Verdict = Literal[
     "same", "protonation", "stereo", "stereo_protonation", "different", "unreadable", "uncomparable",
 ]
+
+# A batch row's opsin_warnings cell when they could not be read: an empty cell
+# there means OPSIN raised none, so "unknown" needs words of its own.
+WARNINGS_UNAVAILABLE = "unavailable: OPSIN's warnings could not be read"
 
 VERDICT_TEXT: dict[str, str] = {
     "same": "Same structure",
@@ -105,5 +112,24 @@ def check_pair(smiles: str, name: str) -> dict:
         "claimed_smiles": raw if claimed_mol is not None else None,
         "input_inchikey": input_key,
         "claimed_inchikey": claimed_key,
-        "warnings": opsin_warnings(name) if claimed_mol is not None else [],
+        "warnings": warnings_or_none(name) if claimed_mol is not None else [],
     }
+
+
+def warnings_or_none(name: str) -> list[dict] | None:
+    """opsin_warnings, or None when they could not be read.
+
+    The verdict is computed before this runs and stands without it, so a
+    failure here (no in-process JVM) must not throw the verdict away. None,
+    not []: an empty list claims OPSIN raised no warning. A soft time limit
+    still propagates (it subclasses Exception), so a chunk can stop on time.
+    """
+    from celery.exceptions import SoftTimeLimitExceeded
+
+    try:
+        return opsin_warnings(name)
+    except SoftTimeLimitExceeded:
+        raise
+    except Exception:  # noqa: BLE001 - the verdict must survive
+        logger.exception("Could not read OPSIN's warnings for a name")
+        return None

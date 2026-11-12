@@ -10,17 +10,20 @@ from __future__ import annotations
 import csv
 import hmac
 import io
+import json
 import logging
 import secrets
 import time
 import uuid
 from typing import Literal
 
+from celery.exceptions import SoftTimeLimitExceeded, TimeLimitExceeded
 from celery.exceptions import TimeoutError as CeleryTimeoutError
 from fastapi import (
     APIRouter,
     File,
     Form,
+    Header,
     HTTPException,
     Query,
     Request,
@@ -196,7 +199,12 @@ def _raise_for_parse_outcome(outcome: dict) -> None:
     raise HTTPException(status_code=400, detail=f"Could not read this {fmt}")
 
 
-def _parse_or_400(data: bytes, max_molecules: int, kind: str = "name"):
+def _parse_or_400(
+    data: bytes,
+    max_molecules: int,
+    kind: str = "name",
+    fmt: InputFormat | None = None,
+):
     """Parse an uploaded body in a WORKER, but block for the answer.
 
     Spec section 13a / audit item parse-cost-aggregate. RDKit does not release
@@ -220,7 +228,10 @@ def _parse_or_400(data: bytes, max_molecules: int, kind: str = "name"):
     state is the signal; once a worker has it, we wait as long as it needs.
     """
     settings = get_settings()
-    async_result = parse_input.apply_async(args=[data, max_molecules, kind], queue="batch")
+    fmt_value = fmt.value if fmt is not None else None
+    async_result = parse_input.apply_async(
+        args=[data, max_molecules, kind, fmt_value], queue="batch"
+    )
     try:
         if not _worker_picked_it_up(async_result, settings.PARSE_TIMEOUT):
             # Nobody is listening. Revoke so a worker that wakes later does
@@ -232,9 +243,23 @@ def _parse_or_400(data: bytes, max_molecules: int, kind: str = "name"):
                 "web process. This blocks other requests -- check the batch queue.",
                 settings.PARSE_TIMEOUT,
             )
-            outcome = parse_input.run(data, max_molecules, kind)
+            outcome = parse_input.run(data, max_molecules, kind, fmt_value)
         else:
-            outcome = async_result.get()
+            # Bounded: a worker that dies mid-parse (acks_late requeues the
+            # task) or never answers would otherwise hold this request, and a
+            # web thread, forever. The task's own hard time limit is the
+            # longest a real parse can run, so past it nothing is coming.
+            try:
+                outcome = async_result.get(timeout=settings.CHUNK_HARD_TIME_LIMIT)
+            except (CeleryTimeoutError, SoftTimeLimitExceeded, TimeLimitExceeded) as exc:
+                async_result.revoke()
+                raise HTTPException(
+                    status_code=504,
+                    detail=(
+                        "Reading this input took too long and was stopped. "
+                        "Try a smaller file."
+                    ),
+                ) from exc
     finally:
         # Celery's redis backend SETEXs every result for JOB_RESULT_TTL_SECONDS
         # (24 h) and .get() never removes it. Measured: 1.41 MB per realistic
@@ -405,7 +430,9 @@ async def parse_preview(
     fmt = sniff(data)
     try:
         sample_molecules, total = parse_preview_sample(data, fmt, PREVIEW_SAMPLE)
-    except ValueError as exc:
+    except (ValueError, csv.Error) as exc:
+        # csv.Error (a field past csv's 131,072-character limit) is not a
+        # ValueError; parse_input catches it too.
         raise HTTPException(
             status_code=400, detail=f"Could not read this {fmt.value}: {exc}"
         ) from exc
@@ -559,6 +586,17 @@ def _owns(meta: dict[str, str], token: str | None) -> bool:
     return hmac.compare_digest(stored, token)
 
 
+def _owner_token(header: str | None, query: str | None) -> str | None:
+    """The owner token from the X-Owner-Token header, else ?owner_token=.
+
+    The header is the way to send it: a query string lands in nginx's and
+    uvicorn's access logs, and this token is the job's only delete/cancel
+    capability. The query parameter is still read so a tab opened before the
+    frontend switched to the header can still cancel its job.
+    """
+    return header or query
+
+
 def _meta_or_error(job_id: str) -> dict[str, str]:
     meta = redis_store.read_job_meta(job_id)
     if meta is not None:
@@ -651,6 +689,41 @@ def job_status(request: Request, job_id: str) -> JobStatusResponse:
     return response
 
 
+def _view_positions(
+    job_id: str,
+    meta: dict[str, str],
+    retrievable: int,
+    sort: str,
+    order: str,
+    status: list[str] | None,
+) -> list[int]:
+    """The row-list positions of one sorted/filtered view, in view order.
+
+    Computing a view decodes the job's WHOLE row list, and the table asks for
+    it once per page; the poll budget (300/min) priced that as a Redis GET. So
+    the order is computed once per (job, sort, order, filter) and kept beside
+    the rows until the job expires: every later page is one GET plus a LINDEX
+    per row shown. Caching beat a tighter budget because paging a sorted
+    table is the ordinary use, and a download-sized budget would 429 it. The
+    row count is in the key, so a rows key evicted and never rebuilt cannot be
+    served a stale order. Rows never change once assembled, so nothing else
+    can make a cached order wrong.
+    """
+    wanted = sorted(set(status or []))
+    key = redis_store.job_view_key(job_id, sort, order, wanted, retrievable)
+    cached = redis_store.get_redis().get(key)
+    if cached is not None:
+        return json.loads(cached)
+    all_rows = list(redis_store.iter_all_rows(job_id))
+    position = {id(row): n for n, row in enumerate(all_rows)}
+    kept = [row for row in all_rows if not wanted or row.get("status") in wanted]
+    positions = [position[id(row)] for row in batch_sort.sort_rows(kept, sort, order)]
+    if retrievable:
+        ttl = max(1, int(meta["expires"]) - int(time.time()))
+        redis_store.get_redis().set(key, json.dumps(positions), ex=ttl)
+    return positions
+
+
 @router.get("/api/jobs/{job_id}/results", response_model=JobResultsResponse)
 def job_results(
     request: Request,
@@ -674,13 +747,9 @@ def job_results(
         rows = redis_store.read_rows(job_id, offset, limit)
         matched = retrievable
     else:
-        kept = list(redis_store.iter_all_rows(job_id))
-        if status:
-            wanted = set(status)
-            kept = [row for row in kept if row.get("status") in wanted]
-        ordered = batch_sort.sort_rows(kept, sort, order)
-        rows = ordered[offset : offset + limit]
-        matched = len(ordered)
+        positions = _view_positions(job_id, meta, retrievable, sort, order, status)
+        rows = redis_store.read_rows_at(job_id, positions[offset : offset + limit])
+        matched = len(positions)
     return JobResultsResponse(
         job_id=job_id,
         offset=offset,
@@ -715,7 +784,8 @@ _STREAM_PAGE = 500
 
 
 def _finished_status(job_id: str) -> str:
-    """The status of a job whose results may be downloaded: done or failed.
+    """The status of a job whose results may be downloaded: done, failed or
+    cancelled.
 
     A mid-run download would hand back a header-only or half-length file
     that is byte-indistinguishable from a complete one, and this is the
@@ -731,7 +801,11 @@ def _finished_status(job_id: str) -> str:
     """
     meta = _require_complete_meta(job_id)
     status = _actual_status(job_id, meta)
-    if status not in ("done", "failed"):
+    # `cancelled` is terminal like `failed`: nothing more will be named, and
+    # the rows named before the cancel are real results, served -partial the
+    # same way. Refusing it told the visitor to poll until "done", which a
+    # cancelled job never reaches.
+    if status not in _TERMINAL_STATUSES:
         raise HTTPException(
             status_code=409,
             detail=(
@@ -743,7 +817,7 @@ def _finished_status(job_id: str) -> str:
 
 
 def _download(job_id: str, status: str, body, media_type: str, ext: str) -> StreamingResponse:
-    suffix = "-partial" if status == "failed" else ""
+    suffix = "" if status == "done" else "-partial"
     return StreamingResponse(
         body,
         media_type=media_type,
@@ -804,6 +878,7 @@ def cancel_job(
     request: Request,
     job_id: str,
     owner_token: str | None = Query(default=None),
+    x_owner_token: str | None = Header(default=None),
 ) -> JobStatusResponse:
     """Stop a running job and free its concurrent slot.
 
@@ -826,7 +901,7 @@ def cancel_job(
     """
     check_fast_allowed(client_ip(request))
     meta = _require_complete_meta(job_id)
-    if not _owns(meta, owner_token):
+    if not _owns(meta, _owner_token(x_owner_token, owner_token)):
         raise HTTPException(
             status_code=403,
             detail=(
@@ -841,9 +916,13 @@ def cancel_job(
         # overwriting a real outcome with "cancelled".
         return _status_response(job_id, meta, status)
 
-    redis_store.set_job_status(job_id, "cancelled")
+    cancelled = redis_store.set_job_status(job_id, "cancelled")
     redis_store.remove_ip_job(meta.get("ip", "unknown"), job_id)
     meta = _require_complete_meta(job_id)
+    if not cancelled:
+        # The job reached done/failed between the read above and the CAS, so
+        # the cancel did nothing: report what it actually is.
+        return _status_response(job_id, meta, _actual_status(job_id, meta))
     return _status_response(job_id, meta, "cancelled")
 
 
@@ -852,6 +931,7 @@ def delete_job(
     request: Request,
     job_id: str,
     owner_token: str | None = Query(default=None),
+    x_owner_token: str | None = Header(default=None),
 ) -> dict[str, str]:
     """Delete a job. Requires the owner token issued when it was created.
 
@@ -871,7 +951,7 @@ def delete_job(
     """
     check_fast_allowed(client_ip(request))
     meta = _meta_or_error(job_id)
-    if not _owns(meta, owner_token):
+    if not _owns(meta, _owner_token(x_owner_token, owner_token)):
         # 403, not 404: the caller demonstrably knows a real job id, so
         # pretending it does not exist tells them nothing they did not
         # already know and makes a legitimate owner with a mistyped token
