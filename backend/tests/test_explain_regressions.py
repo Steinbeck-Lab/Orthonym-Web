@@ -1254,3 +1254,116 @@ def test_a_von_baeyer_multiplier_counts_rings_and_dicyclohexyl_counts_copies():
     assert "three" in _one(nodes, kind="multiplier", label="tri")["line"]
     t, nodes = _nodes("dicyclohexyl ether")
     assert "how many of the next group" in _one(nodes, kind="multiplier", label="di")["line"]
+
+
+# R1. a bare E/Z lights an atom only when its part holds ONE stereo double bond:
+#     two stereo-bond atoms of one part can sit on two different bonds
+def test_a_bare_e_lights_nothing_when_its_part_holds_two_stereo_double_bonds():
+    t, nodes = _nodes("(E,E)-2,5-dibenzylidenecyclopentan-1-one")
+    marks = [n for n in nodes if n["kind"] == "stereo" and n["label"] == "E"]
+    assert len(marks) == 2 and all(n["lights"] == [] for n in marks), marks
+    t, nodes = _nodes("(E)-but-2-ene")
+    assert len(_one(nodes, kind="stereo", label="E")["lights"]) == 1
+
+
+def test_the_gate_sees_two_marks_on_one_stereo_bond():
+    from scripts.explain_census import shared_stereo_marks
+    t, nodes = _nodes("(2E,5E)-2,5-dibenzylidenecyclopentan-1-one")
+    mol = Chem.MolFromSmiles(t.smiles)
+    assert shared_stereo_marks(mol, nodes) == []
+    marks = [n for n in nodes if n["kind"] == "stereo"]
+    marks[1]["lights"] = list(marks[0]["lights"])
+    assert shared_stereo_marks(mol, nodes)
+
+
+# R2. the parent's own final "e", kept before a consonant-led suffix, is the parent's
+@pytest.mark.parametrize("name,parent,suffix", [
+    ("benzenesulfonamide", "benzene", "sulfonamide"),
+    ("4-methylbenzenesulfonamide", "benzene", "sulfonamide"),
+    ("benzenesulfonic acid", "benzene", "sulfonic acid"),
+    ("naphthalenesulfonic acid", "naphthalene", "sulfonic acid"),
+    ("benzenecarboxylic acid", "benzene", "carboxylic acid"),
+    ("benzenecarbonitrile", "benzene", "carbonitrile"),
+    ("ethanesulfonamide", "ethane", "sulfonamide"),
+    ("propanoic acid", "propan", "oic acid"),
+])
+def test_an_elided_e_stays_with_its_parent(name, parent, suffix):
+    t, nodes = _nodes(name)
+    _one(nodes, kind="parent", label=parent)
+    _one(nodes, kind="suffix", label=suffix)
+
+
+def test_benzenecarbonitrile_keeps_its_suffix_line():
+    t, nodes = _nodes("benzenecarbonitrile")
+    assert "-C≡N" in _one(nodes, kind="suffix", label="carbonitrile")["line"]
+
+
+# R3. "indolyl" says which atom it hangs on only as measured: 1-indolyl hangs on N1
+@pytest.mark.parametrize("name,said", [
+    ("2-(1-indolyl)ethanol", "attached by a nitrogen"),
+    ("2-(3-indolyl)ethanol", "attached by one of its carbons"),
+])
+def test_an_indolyl_line_names_the_atom_it_is_attached_by(name, said):
+    t, nodes = _nodes(name)
+    line = _one(nodes, kind="substituent", label="indolyl")["line"]
+    assert said in line, line
+
+
+def test_the_gate_sees_an_indolyl_attached_by_the_wrong_atom():
+    t, nodes = _nodes("2-(1-indolyl)ethanol")
+    node = _one(nodes, kind="substituent", label="indolyl")
+    node["line"] = '"indolyl" is an indole ring system attached by one of its carbons.'
+    assert "HOVER_LINE_FALSE" in classify(t, nodes, assign_owners(t.tokens))
+
+
+# R4. a parent line that counts nitrogens counts the ones present: a deazapurine has three
+@pytest.mark.parametrize("name", [
+    "7-deazapurine", "7-deaza-9H-purine", "1-deazapurin-6-amine", "7-deazapurin-6-amine",
+])
+def test_a_deazapurine_is_not_said_to_hold_four_nitrogens(name):
+    t, nodes = _nodes(name)
+    (parent,) = [n for n in nodes if n["kind"] == "parent"]
+    assert "four nitrogens" not in parent["line"], parent["line"]
+
+
+def test_purine_keeps_its_four_nitrogens_and_the_gate_measures_them():
+    t, nodes = _nodes("9H-purine")
+    assert "four nitrogens" in _one(nodes, kind="parent", label="purine")["line"]
+    t, nodes = _nodes("7-deazapurine")
+    parent = _one(nodes, kind="parent", label="purine")
+    parent["line"] = ('"purine" is purine — two fused rings holding four nitrogens. '
+                      'It is the core the rest of the name is built around, and it holds 9 atoms.')
+    assert "HOVER_LINE_FALSE" in classify(t, nodes, assign_owners(t.tokens))
+
+
+# R5. an isotope label lights the atoms that carry the isotope, not every atom of its element
+@pytest.mark.parametrize("name,isotope", [("(2-13C)propane", 13), ("(3-13C)propanoic acid", 13)])
+def test_an_isotope_label_lights_only_its_isotopic_atoms(name, isotope):
+    t, nodes = _nodes(name)
+    mol = Chem.MolFromSmiles(t.smiles)
+    (node,) = [n for n in nodes if "isotope label" in n["line"]]
+    assert len(node["lights"]) == 1
+    assert mol.GetAtomWithIdx(node["lights"][0]).GetIsotope() == isotope
+
+
+def test_the_gate_sees_an_isotope_label_on_a_plain_atom():
+    t, nodes = _nodes("(2-13C)propane")
+    (node,) = [n for n in nodes if "isotope label" in n["line"]]
+    node["lights"] = [0, 1, 2]
+    assert "HOVER_LINE_FALSE" in classify(t, nodes, assign_owners(t.tokens))
+
+
+# R6. the "-" OPSIN inserts before a substituted functional-class word was never written:
+#     it goes unplaced, and the name is explained instead of refused as "reordered"
+@pytest.mark.parametrize("name", [
+    "acetone phenylhydrazone", "acetone N,N-dimethylhydrazone", "acetone 2,4-dinitrophenylhydrazone",
+    "cyclohexanone O-methyloxime", "benzaldehyde O-benzyloxime",
+])
+def test_a_hyphen_opsin_inserted_does_not_refuse_the_name(name):
+    t, nodes = _nodes(name)
+    assert all(t.text[a:b].lower() == tok.value.lower() for tok in t.tokens for a, b in [tok.span])
+    assert classify(t, nodes, assign_owners(t.tokens)) == ["CLEAN"]
+
+
+def test_a_cas_index_name_is_still_refused():
+    assert trace("acetic acid, ethyl ester").reason == "unplaced"
