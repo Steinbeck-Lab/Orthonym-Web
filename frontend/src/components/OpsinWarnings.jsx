@@ -4,6 +4,15 @@ import { warningCopy } from '../lib/opsinWarnings'
 // OPSIN's own warnings, shown with OPSIN's words. Not a verdict of this page:
 // OPSIN parsed the name and said the reading may not be the only one.
 export default function OpsinWarnings({ warnings }) {
+  // null (not []) means the backend kept its verdict but could not read
+  // OPSIN's warnings (name_check.warnings_or_none): say so rather than imply none.
+  if (warnings === null) {
+    return (
+      <p className="panel-note" role="note">
+        OPSIN&rsquo;s warnings could not be read for this name.
+      </p>
+    )
+  }
   if (!warnings?.length) return null
   return (
     <div className="opsin-warnings" role="note">

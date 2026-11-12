@@ -260,14 +260,16 @@ def _canonical_or_error(
     # (app/main.py), so a string that dies here never reaches translate_one at
     # all and a fallback added only there would be unreachable code.
     # Two consequences worth stating, since this runs in the WEB process on
-    # every /api/translate (main._canonicalize), not in a worker:
+    # every fast-path /api/translate (main._canonicalize, at most
+    # FAST_PATH_MAX_MOLECULES lines; a larger paste is parsed in a worker by
+    # jobs_api._parse_or_400):
     #  * it boots a JVM here on the first RDKit-refused molecule -- the same
     #    lazy boot GET /api/depict pays for, and the second of exactly two
     #    web-process entry points into cdk_bridge. It also makes a REJECTION
     #    cost more than an acceptance: measured, an RDKit reject is 0.045 ms
     #    and the CDK retry after it is 0.256 ms, so 10,000 unparseable lines
-    #    went from 0.47 s to 3.1 s of synchronous web-process CPU while 10,000
-    #    GOOD lines stayed at 0.28 s. That is UNBOUNDED per request -- the caps
+    #    (now in a worker) went from 0.47 s to 3.1 s of synchronous CPU while
+    #    10,000 GOOD lines stayed at 0.28 s. That is UNBOUNDED per request -- the caps
     #    here and in ratelimit.py bound molecule COUNT and request count, never
     #    per-record cost. It is left unbounded on purpose rather than by
     #    oversight: every cheap fix (cap the retries, prefilter the string)

@@ -206,7 +206,13 @@ function CheckCell({ row }) {
         {row.verdict_text ?? 'Not checked'}
       </span>
       {row.opsin_warnings && (
-        <span className="limit-reason">OPSIN warned: {row.opsin_warnings}</span>
+        <span className="limit-reason">
+          {/* tasks._check_row writes name_check.WARNINGS_UNAVAILABLE when the
+              verdict stood but OPSIN's warnings could not be read. */}
+          {row.opsin_warnings.startsWith('unavailable:')
+            ? "OPSIN's warnings could not be read"
+            : `OPSIN warned: ${row.opsin_warnings}`}
+        </span>
       )}
     </>
   )
