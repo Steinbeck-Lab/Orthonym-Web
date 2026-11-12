@@ -52,7 +52,7 @@ def main() -> int:
     from app.main import EXAMPLES
 
     # Check EVERY advertised example, not just the polycyclic cage (audit
-    # item CC1-examples). These four are what Home renders as example chips,
+    # item CC1-examples). These are what Home renders as example chips,
     # each labelled with the tier it demonstrates, and until now this script
     # proved exactly one of them -- against its own private copy of the
     # SMILES rather than against the list the site actually serves, so the

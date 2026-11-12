@@ -449,8 +449,10 @@ function Home() {
   // `.workbench--split`, since `.workbench` is a single column (Home.css) until
   // that modifier overrides it. The dead class was removed 2026-09-05; the flag
   // is real and stays.
-  const tableBelow = hasResults && !job && rows.length > 2
-  const splitLayout = (job || hasResults) && !tableBelow
+  // A batch job's table also sits below at full width (owner instruction
+  // 2026-11-12), so only 1-2 inline results share the row with the input.
+  const tableBelow = Boolean(job) || rows.length > 2
+  const splitLayout = hasResults && !tableBelow
   // Empty page with the key open: slide the card left, dock the side bar right.
   const infoAside = !hasResults && !job && infoOpen
   // Counted from the same parser the submit path uses, so the hint and the

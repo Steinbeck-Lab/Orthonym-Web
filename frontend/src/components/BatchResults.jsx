@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   JobGoneError,
   cancelJob,
@@ -44,11 +44,12 @@ import ChemName, { ChemFormula } from './Typeset'
 //   2. The results link is NEVER presented as permanent. The backend keeps a
 //      job for 24 hours and then deletes it; `expires_at` is shown in plain
 //      words next to the download (design spec section 14, risk 2).
-//   3. Structures are drawn ONE AT A TIME, on request. Batch rows deliberately
-//      carry no depiction_svg -- an SVG per row would put tens of megabytes in
-//      Redis for a 5,000-row job -- and /api/depict exists for exactly this.
-//      Drawing a whole page automatically would fire 50 requests against a
-//      budget the small deployment profile sets to 300 a minute.
+//   3. Every row on the page is drawn (owner instruction 2026-11-12). Batch
+//      rows deliberately carry no depiction_svg -- an SVG per row would put
+//      tens of megabytes in Redis for a 5,000-row job -- so each is fetched
+//      from /api/depict, once per SMILES per mount. A page is up to 50
+//      requests against a budget the small profile sets to 300 a minute, so
+//      flipping 6+ new pages a minute shows the limit's message in a cell.
 //
 // Polling: every 1.5s while the job is live, which is 40 requests a minute
 // against a poll budget of 300 -- and it STOPS on a terminal status. It also
@@ -334,7 +335,11 @@ function BatchResults({ job, onForget, persist = true }) {
   const [gone, setGone] = useState(null)
   const [cancelRequested, setCancelRequested] = useState(false)
   const [busy, setBusy] = useState(null)
-  const [drawn, setDrawn] = useState({ key: null, svg: null, error: null, loading: false })
+  // SMILES -> { svg, error }. `asked` stops a re-render refetching a drawing
+  // still in flight; a failure is kept, so a rate-limited page does not retry
+  // itself into the same limit.
+  const [drawings, setDrawings] = useState({})
+  const asked = useRef(new Set())
   // The sort is SERVER-SIDE: it orders the whole job, then the server slices
   // the page. Sorting the 50 rows already in `rows` would only reorder the
   // page on screen, which is not what "sort through the pages" means.
@@ -552,21 +557,16 @@ function BatchResults({ job, onForget, persist = true }) {
     }
   }
 
-  const draw = async (row) => {
-    const key = rowKey(row)
-    if (!row.smiles) return
-    if (drawn.key === key) {
-      setDrawn({ key: null, svg: null, error: null, loading: false })
-      return
+  useEffect(() => {
+    for (const { smiles } of rows) {
+      if (!smiles || asked.current.has(smiles)) continue
+      asked.current.add(smiles)
+      depictMolecule(smiles)
+        .then((data) => ({ svg: data.depiction_svg ?? null, error: data.error ?? null }))
+        .catch((err) => ({ svg: null, error: err.message }))
+        .then((drawing) => setDrawings((all) => ({ ...all, [smiles]: drawing })))
     }
-    setDrawn({ key, svg: null, error: null, loading: true })
-    try {
-      const data = await depictMolecule(row.smiles)
-      setDrawn({ key, svg: data.depiction_svg ?? null, error: data.error ?? null, loading: false })
-    } catch (err) {
-      setDrawn({ key, svg: null, error: err.message, loading: false })
-    }
-  }
+  }, [rows])
 
   if (gone) {
     return (
@@ -733,18 +733,15 @@ function BatchResults({ job, onForget, persist = true }) {
                   <th scope="col">Name</th>
                   {isCheck && <th scope="col">Claimed name</th>}
                   <th scope="col">Round-trip</th>
-                  <th scope="col">
-                    <span className="sr-only">Structure</span>
-                  </th>
+                  <th scope="col">Structure</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row) => {
                   const key = rowKey(row)
-                  const isDrawn = drawn.key === key
+                  const drawing = row.smiles ? drawings[row.smiles] : null
                   return (
-                    <Fragment key={key}>
-                      <tr className="batch__row">
+                      <tr key={key} className="batch__row">
                         <td className="batch__index">{row.index + 1}</td>
                         <td className="batch__input">
                           <code title={row.input}>{row.input_id ?? row.input}</code>
@@ -769,35 +766,18 @@ function BatchResults({ job, onForget, persist = true }) {
                         <td>
                           <RoundTripCell row={row} />
                         </td>
-                        <td className="batch__draw-cell">
-                          {row.smiles && (
-                            <button
-                              type="button"
-                              className="batch__draw"
-                              onClick={() => draw(row)}
-                              aria-expanded={isDrawn}
-                            >
-                              {isDrawn ? 'Hide' : 'Draw'}
-                            </button>
+                        <td className="batch__structure">
+                          {row.smiles && !drawing && <span className="batch__note">Drawing…</span>}
+                          {drawing?.error && <span className="batch__note">{drawing.error}</span>}
+                          {drawing?.svg && (
+                            <img
+                              className="batch__drawn"
+                              src={drawing.svg}
+                              alt={`Structure of ${row.name ?? row.input}`}
+                            />
                           )}
                         </td>
                       </tr>
-                      {isDrawn && (
-                        <tr className="batch__drawn-row">
-                          <td colSpan={isCheck ? 6 : 5}>
-                            {drawn.loading && <span className="batch__note">Drawing…</span>}
-                            {drawn.error && <span className="batch__note">{drawn.error}</span>}
-                            {drawn.svg && (
-                              <img
-                                className="batch__drawn"
-                                src={drawn.svg}
-                                alt={`Structure of ${row.name ?? row.input}`}
-                              />
-                            )}
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
                   )
                 })}
               </tbody>

@@ -70,23 +70,6 @@ EXAMPLES = [
         "smiles": "C1C2C3C4C1C5C2C(C3C4CC5=O)O",
         "expected_status": "fallback",
     },
-    {
-        # This example has been replaced twice, both times because the engine
-        # got BETTER and started naming the molecule that used to abstain:
-        #   1. "CC(C)(C)C1=CC2=C(C=C1)C1(C)CCC(C)(C)C2(C)C1" -- began
-        #      escalating to a verified fallback.
-        #   2. "CC1(C)CCC(C)(C)C12c1ccccc1C1(CCCC1)C2" (spiro-fused) -- named
-        #      as 2,2,5,5-tetra(methan-1-yl)dispiro[...] after the 2026-08-31
-        #      vendor refresh.
-        # So an ORGANIC honest-abstain example is a moving target.
-        #   3. "O=[U](=O)=O" (uranium trioxide) -- engine d545a12 names it
-        #      trioxouranium (fallback).
-        # Plutonium dioxide abstains with UNSUPPORTED_ELEMENT on BOTH the
-        # primary and the escalated namer (engine d545a12, OPSIN main 7bb0cbd).
-        "label": "Plutonium dioxide — element not supported, honest abstain",
-        "smiles": "O=[Pu]=O",
-        "expected_status": "abstain",
-    },
 ]
 
 # Nothing else in this app configures logging, so without this, plain

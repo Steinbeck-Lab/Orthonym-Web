@@ -2796,12 +2796,10 @@ input.field__control {
   color: var(--muted);
 }
 
-/* The quiet mono pill two result actions share, defined once: the batch
-   table's Draw (a <button>, Home.css adds what a button needs) and "Report
-   SMILES on GitHub" (a link, ReportLink.jsx). The same quiet voice as the
+/* The quiet mono pill of "Report SMILES on GitHub" (a link, ReportLink.jsx).
+   The same quiet voice as the
    no-name text it follows, so it offers a next step without competing with
    the tier label above it. */
-.batch__draw,
 .report-link {
   padding: 4px 10px;
   border: 1px solid var(--hairline-strong);
@@ -2813,7 +2811,6 @@ input.field__control {
   color: var(--muted);
 }
 
-.batch__draw:hover,
 .report-link:hover {
   color: var(--ink);
   border-color: var(--ink);

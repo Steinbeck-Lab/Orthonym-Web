@@ -184,7 +184,7 @@ export default function ExplainView({
         </p>
       )}
       {/* A success phase can still be a molecule Orthonym would not
-          name: plutonium dioxide lands here with a drawn structure and
+          name: an unsupported element (e.g. O=[Pu]=O) lands here with a drawn structure and
           an abstain tier row, not in the error branch. */}
       {!veiled && <ReportLink row={tierRow} where="Explain" settings={TIER_SETTINGS} />}
 
