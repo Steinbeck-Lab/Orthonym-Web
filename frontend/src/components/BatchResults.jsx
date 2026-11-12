@@ -47,15 +47,24 @@ import ChemName, { ChemFormula } from './Typeset'
 //   3. Every row on the page is drawn (owner instruction 2026-11-12). Batch
 //      rows deliberately carry no depiction_svg -- an SVG per row would put
 //      tens of megabytes in Redis for a 5,000-row job -- so each is fetched
-//      from /api/depict, once per SMILES per mount. A page is up to 50
-//      requests against a budget the small profile sets to 300 a minute, so
-//      flipping 6+ new pages a minute shows the limit's message in a cell.
+//      from /api/depict, DRAW_CONCURRENCY at a time. Only successes are
+//      cached, so a failed drawing is asked for again on the next visit or
+//      on Retry. A page is up to 50 requests against a budget the small
+//      profile sets to 300 a minute: flipping 6+ new pages a minute can hit
+//      it, and those cells then say "Not drawn" with a Retry.
 //
 // Polling: every 1.5s while the job is live, which is 40 requests a minute
 // against a poll budget of 300 -- and it STOPS on a terminal status. It also
 // stops when the tab is hidden, because a backgrounded tab polling a queue is
 // pure waste.
 const POLL_MS = 1500
+
+// Four, not six: leaves the browser's other connections to this host for the
+// results fetch, the downloads and Stop.
+const DRAW_CONCURRENCY = 4
+// Successful drawings kept for pages revisited: ten pages' worth, so memory
+// stays bounded on a 10,000-row job.
+const DRAW_CACHE_MAX = 500
 
 // How long to keep asking for rows that are not there yet, after a job has
 // gone terminal.
@@ -335,11 +344,11 @@ function BatchResults({ job, onForget, persist = true }) {
   const [gone, setGone] = useState(null)
   const [cancelRequested, setCancelRequested] = useState(false)
   const [busy, setBusy] = useState(null)
-  // SMILES -> { svg, error }. `asked` stops a re-render refetching a drawing
-  // still in flight; a failure is kept, so a rate-limited page does not retry
-  // itself into the same limit.
+  // This page's SMILES -> { svg } or { error }. svgCache holds successes
+  // only, across pages; drawAttempt re-runs the drawing effect for Retry.
   const [drawings, setDrawings] = useState({})
-  const asked = useRef(new Set())
+  const svgCache = useRef(new Map())
+  const [drawAttempt, setDrawAttempt] = useState(0)
   // The sort is SERVER-SIDE: it orders the whole job, then the server slices
   // the page. Sorting the 50 rows already in `rows` would only reorder the
   // page on screen, which is not what "sort through the pages" means.
@@ -557,16 +566,38 @@ function BatchResults({ job, onForget, persist = true }) {
     }
   }
 
+  // Drawn a few at a time, not 50 at once: the browser has ~6 connections
+  // per host, and a full page of depictions queued in front of the results
+  // fetch, the downloads and Stop. Leaving the page aborts what is left, so a
+  // page the reader has gone from stops spending the depict budget.
   useEffect(() => {
-    for (const { smiles } of rows) {
-      if (!smiles || asked.current.has(smiles)) continue
-      asked.current.add(smiles)
-      depictMolecule(smiles)
-        .then((data) => ({ svg: data.depiction_svg ?? null, error: data.error ?? null }))
-        .catch((err) => ({ svg: null, error: err.message }))
-        .then((drawing) => setDrawings((all) => ({ ...all, [smiles]: drawing })))
+    const controller = new AbortController()
+    const cache = svgCache.current
+    const page = [...new Set(rows.map((row) => row.smiles).filter(Boolean))]
+    const todo = page.filter((smiles) => !cache.has(smiles))
+    setDrawings(Object.fromEntries(page.filter((smiles) => cache.has(smiles)).map((smiles) => [smiles, { svg: cache.get(smiles) }])))
+    const drawNext = async () => {
+      while (todo.length) {
+        const smiles = todo.shift()
+        let drawing
+        try {
+          const data = await depictMolecule(smiles, controller.signal)
+          drawing = data.depiction_svg ? { svg: data.depiction_svg } : { error: data.error ?? 'No drawing returned.' }
+        } catch (err) {
+          if (controller.signal.aborted) return
+          drawing = { error: err.message }
+        }
+        if (drawing.svg) {
+          cache.set(smiles, drawing.svg)
+          // Oldest first: a Map iterates in insertion order.
+          if (cache.size > DRAW_CACHE_MAX) cache.delete(cache.keys().next().value)
+        }
+        setDrawings((all) => ({ ...all, [smiles]: drawing }))
+      }
     }
-  }, [rows])
+    for (let i = 0; i < DRAW_CONCURRENCY; i++) void drawNext()
+    return () => controller.abort()
+  }, [rows, drawAttempt])
 
   if (gone) {
     return (
@@ -768,7 +799,24 @@ function BatchResults({ job, onForget, persist = true }) {
                         </td>
                         <td className="batch__structure">
                           {row.smiles && !drawing && <span className="batch__note">Drawing…</span>}
-                          {drawing?.error && <span className="batch__note">{drawing.error}</span>}
+                          {/* A short label, the server's sentence in a
+                              title: the full 429 text in caption capitals
+                              wrapped over many lines in this 180px cell. */}
+                          {drawing?.error && (
+                            <span className="batch__not-drawn">
+                              <span className="batch__note" title={drawing.error}>
+                                Not drawn
+                              </span>
+                              <button
+                                type="button"
+                                className="batch__retry"
+                                onClick={() => setDrawAttempt((n) => n + 1)}
+                                aria-label={`Retry drawing ${row.input}`}
+                              >
+                                Retry
+                              </button>
+                            </span>
+                          )}
                           {drawing?.svg && (
                             <img
                               className="batch__drawn"

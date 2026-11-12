@@ -800,7 +800,7 @@ function Home() {
         </div>
 
         {job ? (
-          <BatchResults job={job} onForget={startAnother} />
+          <BatchResults key={job.jobId} job={job} onForget={startAnother} />
         ) : isSubmitting ? (
           /* The inline request blocks up to 30s. A dedicated processing panel
              (animated bar + live clock) shows it is WORKING -- the empty pending
