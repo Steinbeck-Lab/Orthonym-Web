@@ -186,8 +186,14 @@ def root_spans(text: str, tokens: Sequence[WrittenToken], roles: Sequence[str],
     start = run[0].span[0]
     if run_start == first:
         # Letters glued to the suffix word belong to it ("propan|oic acid").
-        while start > 0 and (start - 1) not in covered and text[start - 1].isalpha():
-            start -= 1
+        glued = start
+        while glued > 0 and (glued - 1) not in covered and text[glued - 1].isalpha():
+            glued -= 1
+        # Except the parent's own final "e", kept before a consonant ("benzene|sulfonamide",
+        # "naphthalene|sulfonic acid"): OPSIN's token stops at "benzen", and the elided
+        # letter attaches left, as _extend_letters says.
+        if not (text[glued:start] == "e" and text[start] not in "aeiouy"):
+            start = glued
     words = [t for t in run if t.kind not in LOCANT_KINDS]
     label_start = start if run_start == first else words[0].span[0]
     parent_core = [t for t, r in zip(tokens[:run_start], roles[:run_start]) if r == "core"]

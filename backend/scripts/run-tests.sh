@@ -16,13 +16,16 @@
 #   backend/scripts/run-tests.sh                        # whole suite
 #   backend/scripts/run-tests.sh tests/test_inputs.py -v
 #
-# Exit: 0 all passed, 1 tests failed, 2 no summary appeared (real hang),
-# 3 no interpreter found (see the venv resolution below).
+# Exit: 0 all passed, 1 tests failed or no test ran (a mistyped path, a -k
+# that selects nothing), 2 no summary appeared (real hang), 3 no interpreter
+# found (see the venv resolution below).
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
 
-LOG=${ORTHONYM_TEST_LOG:-/tmp/orthonym-pytest.log}
+# A fixed default path is shared: concurrent runs truncate each other's log
+# and one reads the other's summary.
+LOG=${ORTHONYM_TEST_LOG:-$(mktemp "${TMPDIR:-/tmp}/orthonym-pytest.XXXXXX")}
 : > "$LOG"
 
 # .venv-mac and .venv are not interchangeable: a venv is tied to the OS
@@ -62,8 +65,14 @@ PYTEST_PID=$!
 # alternative, so the waiter below burned the full ORTHONYM_TEST_WAIT and then
 # reported a hang on a suite that had finished in milliseconds. Third bug from
 # this one regex; add any outcome word pytest can print, never a subset.
+#
+# It must match ONLY the final stats line, which always ends in " in <secs>s":
+# a looser banner pattern also matched "=== warnings summary ===", printed
+# before the outcome, and the waiter killed pytest there and read that
+# header as the summary -- exit 0 on a failing run.
 _OUTCOMES='passed|failed|error|errors|skipped|xfailed|xpassed|deselected|warning|warnings'
-SUMMARY="^(=+ .*($_OUTCOMES|no tests ran)|[0-9]+ ($_OUTCOMES)|no tests ran)"
+_COUNTS="[0-9]+ ($_OUTCOMES)(, [0-9]+ ($_OUTCOMES))*"
+SUMMARY="^(=+ )?($_COUNTS|no tests ran) in [0-9.]+s( \([0-9:]+\))?( =+)?$"
 WAIT_SECONDS=${ORTHONYM_TEST_WAIT:-600}
 
 for _ in $(seq 1 "$WAIT_SECONDS"); do
@@ -95,6 +104,14 @@ echo "$FINAL"
 # "[0-9]+ " prefix is load-bearing: a plain *failed* match would also fire
 # on "1 xfailed", failing a suite whose expected-failures all behaved.
 if printf '%s\n' "$FINAL" | grep -qE '[0-9]+ (failed|error)'; then
+    exit 1
+fi
+# A run that executed no test is not a pass: a mistyped path ("ERROR: file or
+# directory not found", then "no tests ran") or a -k that deselects everything
+# ("5 deselected in ...") must not read as green.
+if grep -q '^ERROR: file or directory not found' "$LOG" \
+    || ! printf '%s\n' "$FINAL" | grep -qE '[0-9]+ (passed|xfailed|xpassed|skipped)'; then
+    echo "No test ran. Full log: $LOG" >&2
     exit 1
 fi
 exit 0

@@ -261,6 +261,31 @@ CURATED: list[tuple[str, str]] = [
     ("substituted-groups", "4-sec-butylcyclohexan-1-ol"),
     ("stereo-words", "(1R,2S)-2-[rel-(1R)-1-hydroxyethyl]cyclohexan-1-ol"),
     ("stereo-words", "(S)-rac-butan-2-ol"),
+    # Review 2026-11: a bare E/Z over two stereo double bonds of one part
+    ("stereo-words", "(E,E)-2,5-dibenzylidenecyclopentan-1-one"),
+    ("stereo-words", "(2E,5E)-2,5-dibenzylidenecyclopentan-1-one"),
+    # Review 2026-11: the parent's final "e" before a consonant-led suffix
+    ("suffixes", "benzenesulfonamide"),
+    ("suffixes", "4-methylbenzenesulfonamide"),
+    ("suffixes", "benzenesulfonic acid"),
+    ("suffixes", "naphthalenesulfonic acid"),
+    ("suffixes", "benzenecarboxylic acid"),
+    ("suffixes", "benzenecarbonitrile"),
+    # Review 2026-11: the atom a group hangs on, nitrogens a parent counts, isotope positions
+    ("substituted-groups", "2-(1-indolyl)ethanol"),
+    ("substituted-groups", "2-(3-indolyl)ethanol"),
+    ("replacement", "7-deazapurine"),
+    ("replacement", "7-deaza-9H-purine"),
+    ("replacement", "1-deazapurin-6-amine"),
+    ("replacement", "7-deazapurin-6-amine"),
+    ("isotopes", "(2-13C)propane"),
+    ("isotopes", "(3-13C)propanoic acid"),
+    # Review 2026-11: the "-" OPSIN inserts before a substituted functional-class word
+    ("functional-class", "acetone phenylhydrazone"),
+    ("functional-class", "acetone N,N-dimethylhydrazone"),
+    ("functional-class", "acetone 2,4-dinitrophenylhydrazone"),
+    ("functional-class", "cyclohexanone O-methyloxime"),
+    ("functional-class", "benzaldehyde O-benzyloxime"),
 ]
 
 # Names OPSIN 2.9.0 itself genuinely cannot parse. Verified against

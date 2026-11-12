@@ -27,7 +27,8 @@ Outcomes, measured on the trace and the node list (a name may carry several):
   STEREO_WRONG_ATOM   a stereo mark with a locant lights an atom without that
                       locant, an atom that is not a stereocentre (R/S,
                       alpha/beta) or not on a stereo double bond (E/Z), or
-                      more than one atom
+                      more than one atom; or two marks light the same stereocentre
+                      or the same stereo double bond (see shared_stereo_marks)
   LOCANT_UNLIT        a locant node lights nothing (a sugar's alpha/beta, whose
                       anomeric carbon the structure cannot prove, and a number of a
                       fusion component's own numbering that no element / ring
@@ -64,7 +65,9 @@ Outcomes, measured on the trace and the node list (a name may carry several):
                       a group's hydrogens ("methyl" in hydroxymethyl), a hydro / indicated
                       hydrogen on an atom with none, a spiro descriptor, an anomer's group,
                       a stereo mark's meaning, a parent that is not the only core or not
-                      the benzene ring its prose names, an isotope label's positions; or a
+                      the benzene ring or the nitrogens its prose names, the atom a group is
+                      attached by, an isotope label's positions or an atom it lights that
+                      carries no isotope it names; or a
                       line using such a claim's words in a shape the check does not know
                       (see false_hover_lines)
   SMILES_PATH_LOST    a name whose parts the name path pins to atoms, but the SMILES path
@@ -415,7 +418,8 @@ _NOT_CORES = re.compile(r"^(?:(?:mono|di|tri|tetra|penta|hexa|hepta|octa|nona|de
 _QUOTED = re.compile(r'"[^"]*"')
 _VOCAB = re.compile(r"hydrogen|\bCH3\b|\bNH2\b|on its own|anomer|mirror-image|shared|share one|"
                     r"positions it names|position number|built around|cores this name|benzene ring|-carbon chain|"
-                    r"stereocentre|double bond|optical rotation|Fischer|configuration prefix")
+                    r"stereocentre|double bond|optical rotation|Fischer|configuration prefix|"
+                    r"attached by|\w+ nitrogens\b")
 # The bare group each checked label names: (element, which atoms, hydrogens per atom in
 # one copy). "end": a carbon not bonded to the group's own oxygen (acetyl's CH3 end).
 _BARE_GROUP = {
@@ -449,6 +453,8 @@ _PHRASES = [re.compile(p) for p in (
     r"two fused benzene rings", r"a benzene ring fused to", r"a benzene ring attached by one of its carbons",
     r"is a benzene ring\.", r"is a benzene ring attached", r"a benzene ring\b(?= *$)",
     r"an? \w+-carbon chain",
+    r"an indole ring system attached by (?:one of its carbons|a nitrogen)",
+    r"two fused rings holding four nitrogens",
     r"names two rings that share one atom", r"names rings that share single atoms",
     r"names rings joined at single shared atoms", r"marks one atom shared between two rings",
     r"fixes the three-dimensional arrangement at the positions it names",
@@ -825,6 +831,13 @@ def _parent_problem(mol, nodes, node) -> tuple[bool, Optional[str]]:
         said = -1 if word == "one" else _COUNT_WORDS.get(word, int(word) if word.isdigit() else -1)  # no "one of one"
         if said != cores:
             out = f"one of {m.group(1)} cores, the name has {cores}"
+    m = re.search(r"holding (\w+) nitrogens", line)
+    if m:
+        seen = True
+        said = _COUNT_WORDS.get(m.group(1), -1)
+        held = sum(1 for a in set(node["owns"]) if mol.GetAtomWithIdx(a).GetSymbol() == "N")
+        if held != said * copies:
+            out = f"{m.group(1)} nitrogens per copy, the part holds {held}"
     need = (2 if "two fused benzene rings" in line else
             1 if ("benzene —" in line or "is a benzene ring." in line or "a benzene ring fused" in line) else 0)
     if need:
@@ -852,6 +865,22 @@ def _phenyl_problem(mol, node) -> Optional[str]:
     out = [a for a in owned for n in mol.GetAtomWithIdx(a).GetNeighbors() if n.GetIdx() not in owned]
     if not out or any(mol.GetAtomWithIdx(a).GetSymbol() != "C" for a in out):
         return "not attached by a carbon"
+    return None
+
+
+def _attachment_problem(mol, node) -> Optional[str]:
+    """"attached by one of its carbons" / "attached by a nitrogen": the group's atom that
+    hangs on the rest is one of those bonded out of the part, so every such atom must be
+    of that element ("2-(1-indolyl)ethanol" is attached through N1)."""
+    m = re.search(r"attached by (?:one of its (carbon)s|a (nitrogen))", node["line"])
+    if not m:
+        return "an attachment this check does not recognise"
+    want = "C" if m.group(1) else "N"
+    owned = set(node["owns"])
+    out = {mol.GetAtomWithIdx(a).GetSymbol() for a in owned
+           for n in mol.GetAtomWithIdx(a).GetNeighbors() if n.GetAtomicNum() > 1 and n.GetIdx() not in owned}
+    if out != {want}:
+        return f"attached by {want}, the part is bonded out through {sorted(out)}"
     return None
 
 
@@ -896,10 +925,17 @@ def false_hover_lines(trace, nodes) -> list:
             known = True
             if "at the positions it names" in n["line"] and "-" not in n["label"].strip("()-"):
                 why = "an isotope label with no locant names no position"
+            named = {(int(m), s) for m, s in re.findall(r"(\d+)([A-Z][a-z]?)", n["label"])}
+            plain = [a for a in n["lights"]
+                     if (mol.GetAtomWithIdx(a).GetIsotope(), mol.GetAtomWithIdx(a).GetSymbol()) not in named]
+            if plain:
+                why = f"an isotope label lights atoms {plain} that carry no isotope it names"
         elif n["kind"] == "hydro" and "records that hydrogens were added here" in n["line"]:
             known = True
         elif n["kind"] == "substituent" and "is a benzene ring attached by one of its carbons" in n["line"]:
             known, why = True, _phenyl_problem(mol, n)
+        elif n["kind"] == "substituent" and "attached by" in n["line"]:
+            known, why = True, _attachment_problem(mol, n)
         elif n["kind"] == "suffix" and "NH2 group in place of the carbonyl oxygen" in n["line"]:
             known, why = True, _functional_nh2_problem(mol, n)
         if why is not None:
@@ -1063,6 +1099,8 @@ def classify(trace, nodes, owners) -> list[str]:
             if len(n["lights"]) != 1 or n["lights"][0] not in pool:
                 out.append("STEREO_WRONG_ATOM")
                 break
+    if "STEREO_WRONG_ATOM" not in out and shared_stereo_marks(mol, nodes):
+        out.append("STEREO_WRONG_ATOM")
     if any(n["kind"] == "locant" and not n["lights"] and n["label"].lower() not in ("alpha", "beta")
            and not _unproven_component_number(trace, nodes, n) for n in nodes):
         out.append("LOCANT_UNLIT")
@@ -1085,6 +1123,32 @@ def classify(trace, nodes, owners) -> list[str]:
     if smiles_path_lost(trace, nodes):
         out.append("SMILES_PATH_LOST")
     return out or ["CLEAN"]
+
+
+def shared_stereo_marks(mol, nodes) -> list:
+    """Labels of stereo marks that light the same stereocentre, or the same stereo double
+    bond, as another mark. Each mark names its own centre or bond; two that land on one
+    ("(E,E)-2,5-dibenzylidene..." both on one ring carbon) mean one of them guessed. A
+    per-node check cannot see this: each lights a single, valid atom."""
+    if mol is None:
+        return []
+    seen, out = {}, []
+    for n in nodes:
+        if n["kind"] != "stereo" or len(n["lights"]) != 1:
+            continue
+        a = n["lights"][0]
+        if a >= mol.GetNumAtoms():
+            continue
+        bonds = [frozenset((b.GetBeginAtomIdx(), b.GetEndAtomIdx()))
+                 for b in mol.GetAtomWithIdx(a).GetBonds() if b.GetStereo() != Chem.BondStereo.STEREONONE]
+        m = STEREO_MARK.match(n["label"])
+        desc = m.group(2).rstrip("*") if m else n["label"]
+        key = bonds[0] if desc in ("E", "Z") and len(bonds) == 1 else a
+        if key in seen:
+            out.append((seen[key], n["label"]))
+        else:
+            seen[key] = n["label"]
+    return out
 
 
 def run(names: list[str]) -> dict[str, list[str]]:
