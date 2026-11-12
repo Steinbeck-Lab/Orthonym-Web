@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ExplainView from '../components/ExplainView'
 import Switch from '../components/Switch'
@@ -48,8 +48,12 @@ function Explain() {
   const [mode, setMode] = useState(
     () => (new URLSearchParams(window.location.search).get('input') === 'draw' ? 'draw' : 'name')
   )
-  const { phase, data, apiError, fetchError, tierRow, resultMode, shareFields, run } = useExplain()
+  const { phase, data, apiError, fetchError, tierRow, tierState, resultMode, shareFields, run } =
+    useExplain()
   const [validationNote, setValidationNote] = useState(null)
+  // True only while an empty submit is the reason for the note.
+  const [invalid, setInvalid] = useState(false)
+  const fieldRef = useRef(null)
   // Classroom mode: the name revealed one part at a time. `step` is how many
   // parts are showing. The default is everything shown (ALL, clamped to the
   // part count below); "Hide all" starts a lesson. Only a shared classroom
@@ -67,24 +71,24 @@ function Explain() {
   // divergence is what /teach was: a second page around the same endpoint.
   async function handleDraw() {
     if (phase === 'loading') return
-    setValidationNote(null)
     const ketcher = getKetcher()
     if (!ketcher) {
-      setValidationNote('The drawing area is still starting up. Give it a moment and try again.')
+      say('The drawing area is still starting up. Give it a moment and try again.')
       return
     }
     let structure = ''
     try {
       structure = (await ketcher.getSmiles()) || ''
     } catch {
-      setValidationNote('Could not read your drawing. Try drawing it again.')
+      say('Could not read your drawing. Try drawing it again.')
       return
     }
     structure = structure.trim()
     if (!structure) {
-      setValidationNote('Draw a molecule first, then press Explain.')
+      say('Draw a molecule first, then press Explain.')
       return
     }
+    setValidationNote(null)
     // 'smiles', not 'draw': a drawing IS a structure once Ketcher has given
     // us its SMILES, and runExplain only distinguishes name-vs-structure.
     setSmilesInput(structure)
@@ -117,18 +121,34 @@ function Explain() {
     run(value, requestMode)
   }
 
+  // The note is one live region that is always mounted. The same sentence
+  // twice is cleared first, or a screen reader would not read it again.
+  function say(message) {
+    if (message === validationNote) {
+      setValidationNote(null)
+      requestAnimationFrame(() => setValidationNote(message))
+    } else {
+      setValidationNote(message)
+    }
+  }
+
   function handleSubmit(event) {
     event.preventDefault()
     if (phase === 'loading') return
     const trimmed = smilesInput.trim()
     if (!trimmed) {
-      setValidationNote(
+      // Marked invalid, and focus goes to the field, which reads the note as
+      // its description.
+      setInvalid(true)
+      say(
         mode === 'name'
           ? 'Enter an IUPAC name before explaining.'
           : 'Enter a SMILES string before explaining.'
       )
+      fieldRef.current?.focus()
       return
     }
+    setInvalid(false)
     setValidationNote(null)
     runExplain(trimmed)
   }
@@ -140,11 +160,27 @@ function Explain() {
     if (phase === 'loading') return
     const value = mode === 'name' ? example.name : example.smiles
     setSmilesInput(value)
+    setInvalid(false)
     setValidationNote(null)
     runExplain(value)
   }
 
   const isLoading = phase === 'loading'
+  // aria-disabled, not disabled (see stepButton below): Explain disables
+  // itself the moment it is pressed, which used to drop focus to <body>.
+  const explainOff = isLoading || (mode === 'draw' && editorState !== 'ready')
+  // The one line a screen reader hears about a run, instead of the whole
+  // result card being a live region.
+  const summary =
+    phase === 'loading'
+      ? 'Naming and decomposing…'
+      : phase === 'error'
+        ? apiError || 'Could not explain this molecule'
+        : phase === 'success'
+          ? data?.name
+            ? `Explained: ${data.name}`
+            : 'Explanation ready.'
+          : ''
   const steps = useMemo(
     () => (data?.name ? revealSteps(sliceName(data.name, data.nodes || []), data.nodes || []) : []),
     [data]
@@ -233,7 +269,7 @@ function Explain() {
                   name="explain-mode"
                   value={option.value}
                   checked={mode === option.value}
-                  onChange={() => { setMode(option.value); setValidationNote(null) }}
+                  onChange={() => { setMode(option.value); setValidationNote(null); setInvalid(false) }}
                   disabled={phase === 'loading'}
                 />
                 {option.label}
@@ -273,6 +309,9 @@ function Explain() {
               </label>
               <input
                 id="explain-smiles-input"
+                ref={fieldRef}
+                aria-invalid={invalid || undefined}
+                aria-describedby={validationNote ? 'explain-note' : undefined}
                 type="text"
                 className="field__control"
                 spellCheck={false}
@@ -280,7 +319,10 @@ function Explain() {
                 autoCapitalize="off"
                 placeholder={mode === 'name' ? 'e.g. ethanol' : 'e.g. CCO'}
                 value={smilesInput}
-                onChange={(event) => setSmilesInput(event.target.value)}
+                onChange={(event) => {
+                  setSmilesInput(event.target.value)
+                  setInvalid(false)
+                }}
               />
             </div>
           )}
@@ -289,17 +331,25 @@ function Explain() {
             <button
               type={mode === 'draw' ? 'button' : 'submit'}
               className="btn btn--accent"
-              onClick={mode === 'draw' ? handleDraw : undefined}
-              disabled={isLoading || (mode === 'draw' && editorState !== 'ready')}
+              onClick={(event) => {
+                // preventDefault also cancels the submit an Enter would make.
+                if (explainOff) event.preventDefault()
+                else if (mode === 'draw') handleDraw()
+              }}
+              aria-disabled={explainOff}
             >
               <Icon name="translate" />
               {isLoading ? 'Explaining…' : 'Explain'}
             </button>
-            {validationNote && (
-              <p className="explain-panel__note" role="status">
-                {validationNote}
-              </p>
-            )}
+            {/* Always mounted, so it is announced; .sr-only while empty, so it
+                adds no gap to the row. */}
+            <p
+              id="explain-note"
+              className={validationNote ? 'explain-panel__note' : 'sr-only'}
+              role="status"
+            >
+              {validationNote}
+            </p>
           </div>
 
           <Switch
@@ -331,7 +381,7 @@ function Explain() {
                     <button
                       type="button"
                       className="chip"
-                      disabled={isLoading}
+                      aria-disabled={isLoading}
                       onClick={() => handleExamplePick(example)}
                     >
                       {example.label}
@@ -353,13 +403,18 @@ function Explain() {
       </section>
 
       <section className="explain-results" aria-label="Explanation">
+        {/* The h2 between the page's h1 and ExplainView's h3s. */}
+        <h2 className="sr-only">Explanation</h2>
+        <p className="sr-only" role="status">
+          {summary}
+        </p>
         {fetchError && (
           <p className="notice" role="alert">
             <TransportNotice error={fetchError} />
           </p>
         )}
 
-        <div aria-live="polite">
+        <div>
           {phase === 'idle' && (
             <div className="explain-patch">
               {/* Two sentences, because the second one came DOWN from the
@@ -387,7 +442,7 @@ function Explain() {
           )}
 
           {phase === 'error' && (
-            <div className="explain-patch" role="alert">
+            <div className="explain-patch">
               {/* A failure is a sentence ("OPSIN reads this name in a reordered form ..."),
                   so it is set in sentence case; the uppercase caption style is for the
                   one-word pending label above. */}
@@ -413,6 +468,7 @@ function Explain() {
                 data={data}
                 resultMode={resultMode}
                 tierRow={tierRow}
+                tierState={tierState}
                 apiError={apiError}
                 // A classroom link carries the STRUCTURE, never the name: a
                 // name in the link would be the answer, in the address bar.

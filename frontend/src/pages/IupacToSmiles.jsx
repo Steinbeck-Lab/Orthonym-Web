@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { fetchStructureFromName } from '../lib/api'
 import { MAX_NAMES, parseNameLines, convertNames } from '../lib/nameBatch'
 import { rowsToSdf, downloadText } from '../lib/molExport'
@@ -27,6 +27,9 @@ function IupacToSmiles() {
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [fetchError, setFetchError] = useState(null)
   const [validationNote, setValidationNote] = useState(null)
+  // True only for the empty-submit refusal; the truncation note is not an error.
+  const [invalid, setInvalid] = useState(false)
+  const fieldRef = useRef(null)
 
   // Derived, not its own state: convert() below always clears `rows` and
   // sets `progress.total` to a non-zero count in the same batch before it
@@ -56,9 +59,10 @@ function IupacToSmiles() {
 
     const { names, total, truncated } = parseNameLines(text)
     if (!names.length) {
-      setValidationNote('Enter at least one IUPAC name (one per line) before converting.')
+      refuse('Enter at least one IUPAC name (one per line) before converting.')
       return
     }
+    setInvalid(false)
     // The extra lines stay visible in the textarea, so dropping them silently
     // would be a lie about what was converted.
     setValidationNote(
@@ -106,6 +110,21 @@ function IupacToSmiles() {
     setFetchError(transportError)
   }
 
+  // A refused submit marks the field invalid and puts focus in it, where the
+  // note is read as its description. The note is one live region that is
+  // always mounted; the same sentence twice is cleared first, or a screen
+  // reader would not read it again.
+  function refuse(message) {
+    setInvalid(true)
+    if (message === validationNote) {
+      setValidationNote(null)
+      requestAnimationFrame(() => setValidationNote(message))
+    } else {
+      setValidationNote(message)
+    }
+    fieldRef.current?.focus()
+  }
+
   function handleSubmit(event) {
     event.preventDefault()
     convert(nameText)
@@ -114,6 +133,19 @@ function IupacToSmiles() {
   // Derived count, so the user sees it before submitting.
   const parsed = parseNameLines(nameText)
   const countLabel = parsed.names.length === 1 ? '1 name' : `${parsed.names.length} names`
+  const busy = phase === 'converting'
+
+  // The one line a screen reader hears about a run: when it starts and when it
+  // ends, never once per name, and never the whole result table.
+  const summary = busy
+    ? `Converting ${progress.total === 1 ? 'the name' : `${progress.total} names`}`
+    : phase === 'done'
+      ? rows.length === 1
+        ? rows[0].ok
+          ? 'Parsed the name.'
+          : rows[0].error || 'Could not parse this name'
+        : `${rows.filter((r) => r.ok).length} of ${rows.length} names parsed.`
+      : ''
 
   return (
     <>
@@ -158,13 +190,19 @@ function IupacToSmiles() {
               </label>
               <textarea
                 id="iupac-names-input"
+                ref={fieldRef}
+                aria-invalid={invalid || undefined}
+                aria-describedby={validationNote ? 'iupac-names-note' : undefined}
                 className="field__control"
                 spellCheck={false}
                 autoCorrect="off"
                 autoCapitalize="off"
                 placeholder={'ethanol\nacetic acid\nbenzene'}
                 value={nameText}
-                onChange={(event) => setNameText(event.target.value)}
+                onChange={(event) => {
+                  setNameText(event.target.value)
+                  setInvalid(false)
+                }}
               />
             </div>
 
@@ -172,15 +210,24 @@ function IupacToSmiles() {
               {/* The one primary action on this surface, and therefore the
                   one filled crimson glass button. The chips below are the
                   secondary vocabulary and stay `.chip`. */}
-              <button type="submit" className="btn btn--accent" disabled={phase === 'converting'}>
+              {/* aria-disabled, not disabled: a button that disables itself
+                  under the keyboard drops focus to <body>. convert() ignores
+                  a press while busy. */}
+              <button type="submit" className="btn btn--accent" aria-disabled={busy}>
                 <Icon name="translate" />
-                {phase === 'converting' ? 'Converting…' : 'Convert'}
+                {busy ? 'Converting…' : 'Convert'}
               </button>
               <span className="from-name-panel__count">{countLabel}</span>
             </div>
-            {validationNote && (
-              <p className="from-name-panel__note" role="status">{validationNote}</p>
-            )}
+            {/* Always mounted, so it is announced; .sr-only while empty, so it
+                adds no gap to the column. */}
+            <p
+              id="iupac-names-note"
+              className={validationNote ? 'from-name-panel__note' : 'sr-only'}
+              role="status"
+            >
+              {validationNote}
+            </p>
 
             <div className="examples" role="group" aria-label="Try a curated example">
               <span className="examples__label">Try one:</span>
@@ -193,8 +240,10 @@ function IupacToSmiles() {
                     <button
                       type="button"
                       className="chip"
-                      disabled={phase === 'converting'}
+                      aria-disabled={busy}
                       onClick={() => {
+                        if (busy) return
+                        setInvalid(false)
                         setNameText(example.name)
                         setValidationNote(null)
                         convert(example.name)
@@ -218,9 +267,12 @@ function IupacToSmiles() {
               <FromNameNotice error={fetchError} />
             </p>
           )}
-          <div className="from-name-results__live" aria-live="polite">
+          <p className="sr-only" role="status">
+            {summary}
+          </p>
+          <div className="from-name-results__live">
             {phase === 'idle' && <IdleNote />}
-            {phase === 'converting' && <ConvertProgress done={progress.done} total={progress.total} />}
+            {busy && <ConvertProgress done={progress.done} total={progress.total} />}
             {phase === 'done' && rows.length === 1 && <SingleResult row={rows[0]} />}
             {phase === 'done' && rows.length > 1 && <NameResultsTable rows={rows} />}
           </div>
@@ -270,7 +322,7 @@ function IdleNote() {
 function ConvertProgress({ done, total }) {
   const percent = total ? Math.round((done / total) * 100) : 0
   return (
-    <div className="from-name-progress" role="status" aria-live="polite">
+    <div className="from-name-progress">
       <div className="from-name-progress__head">
         <span className="from-name-progress__label">
           Reading {total === 1 ? 'the name' : `${total} names`}
@@ -283,6 +335,7 @@ function ConvertProgress({ done, total }) {
       <div
         className="from-name-progress__track"
         role="progressbar"
+        aria-label="Names read"
         aria-valuenow={done}
         aria-valuemin={0}
         aria-valuemax={total}
@@ -295,8 +348,9 @@ function ConvertProgress({ done, total }) {
 
 function SingleResult({ row }) {
   if (!row.ok) {
+    // No role="alert": the page's one status line already says why.
     return (
-      <div className="from-name-patch" role="alert">
+      <div className="from-name-patch">
         <div className="from-name-patch__top">
           <span className="from-name-patch__state-label">
             {row.error || 'Could not parse this name'}

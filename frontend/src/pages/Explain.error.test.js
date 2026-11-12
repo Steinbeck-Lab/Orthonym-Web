@@ -12,7 +12,7 @@ const jsx = readFileSync(new URL('./Explain.jsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('./Explain.css', import.meta.url), 'utf8')
 
 test('the error caption carries the sentence modifier and the pending label does not', () => {
-  const error = jsx.match(/role="alert">[\s\S]*?<span className="([^"]+)">\s*\{apiError/)
+  const error = jsx.match(/phase === 'error' && \([\s\S]*?<span className="([^"]+)">\s*\{apiError/)
   assert.ok(error, 'the error branch renders apiError in a span')
   assert.match(error[1], /explain-patch__state-label--sentence/)
   const pending = jsx.match(/<span className="([^"]+)">Naming and decomposing/)

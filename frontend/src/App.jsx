@@ -53,8 +53,22 @@ function GradientGround() {
 // Shared shell for every route: the nav strip on top, the matched page's
 // own content in the middle, and the footer pinned beneath it.
 function Layout() {
+  // Focus moves by hand, not by following the #content fragment: share links
+  // live in the URL hash (lib/shareLink.js), and a fragment jump would
+  // overwrite one.
+  function skipToContent(event) {
+    event.preventDefault()
+    document.getElementById('content')?.focus()
+  }
+
   return (
     <div className="page">
+      {/* First in the tab order. It targets the content box rather than one
+          page's <main>, so it lands before each page's hero h1, which sits
+          outside <main> on every route. */}
+      <a className="skip-link" href="#content" onClick={skipToContent}>
+        Skip to content
+      </a>
       <GradientGround />
       <Navigation />
       {/* The route's content lives in its own box so the FOOTER can be
@@ -64,7 +78,7 @@ function Layout() {
           Home is compressed to fit it outright; the long reading pages
           (About, Explain) scroll inside here, with the header and footer
           staying put. */}
-      <div className="page__content">
+      <div className="page__content" id="content" tabIndex={-1}>
         <Outlet />
       </div>
       <Footer />
