@@ -41,6 +41,41 @@
   flex: 1;
 }
 
+/* The skip link's target (App.jsx). It takes focus only so the next Tab
+   starts inside the content; a ring round the whole page would say nothing. */
+.page__content:focus {
+  outline: none;
+}
+
+/* "Skip to content": the first stop in the tab order, off screen until it is
+   focused, then an onyx pill with a gold rim like the header's own labels.
+   Fixed, so it adds nothing to the page's height while hidden. */
+.skip-link {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 60; /* above the sticky header (50) */
+  padding: 10px 16px;
+  border: 1.25px solid var(--gold-bright);
+  border-radius: var(--r-pill);
+  background: var(--glaze-onyx);
+  font-family: var(--font-mono);
+  font-size: var(--t-nav);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: var(--track-nav);
+  text-transform: uppercase;
+  color: var(--on-onyx);
+  text-decoration: none;
+  transform: translateY(calc(-100% - 24px));
+}
+
+.skip-link:focus {
+  transform: none;
+  outline: 2px solid var(--gold-hi);
+  outline-offset: 3px;
+}
+
 /* Vertical rhythm inside the content box, matching what .page used to give
    its children directly. */
 .page__content > * + *:not(.site-footer, dialog) {
@@ -117,7 +152,9 @@
    first child, so `* + *` promoted the header to "second child" and pushed
    the notch 14px down off the top edge -- measured, after the gradient
    landed. A layer that has no size must not create rhythm either. */
-.page > *:not(.ground) + *:not(.site-footer, dialog) {
+/* The skip link is fixed and takes no space either, and it comes before the
+   ground, so it is excluded the same way. */
+.page > *:not(.ground, .skip-link) + *:not(.site-footer, dialog) {
   margin-top: var(--gap);
 }
 
@@ -1122,7 +1159,7 @@
   transform: translate3d(0, 0, 0);
 }
 
-.btn:hover:not(:disabled)::after {
+.btn:hover:not(:disabled, [aria-disabled='true'])::after {
   animation: btn-sheen 760ms cubic-bezier(0.25, 1, 0.5, 1);
 }
 
@@ -1132,7 +1169,7 @@
   }
 }
 
-.btn:hover:not(:disabled) {
+.btn:hover:not(:disabled, [aria-disabled='true']) {
   --cast: var(--cast-hover);
   text-decoration: none;
   transform: translateY(-1px);
@@ -1140,7 +1177,7 @@
 
 /* Press sinks it: the pill drops, the cast shadow goes, the glaze takes an
    inner shadow and the highlight dims. Same list shape as at rest. */
-.btn:active:not(:disabled) {
+.btn:active:not(:disabled, [aria-disabled='true']) {
   transform: translateY(1.5px) scale(0.985);
   box-shadow:
     inset 0 2px 5px var(--press),
@@ -1148,7 +1185,7 @@
     var(--cast-press);
 }
 
-.btn:active:not(:disabled)::before {
+.btn:active:not(:disabled, [aria-disabled='true'])::before {
   opacity: 0.45;
 }
 
@@ -1159,7 +1196,7 @@
 
 /* Disabled is FLAT, on every variant. A glazed, lifted, sheening button
    that does nothing when pressed is the worst affordance in the set. */
-.btn:disabled {
+.btn:is(:disabled, [aria-disabled='true']) {
   background: var(--card-soft);
   color: var(--muted);
   border-color: var(--hairline-strong);
@@ -1170,9 +1207,15 @@
   cursor: not-allowed;
 }
 
-.btn:disabled::before,
-.btn:disabled::after {
+.btn:is(:disabled, [aria-disabled='true'])::before,
+.btn:is(:disabled, [aria-disabled='true'])::after {
   display: none;
+}
+
+/* aria-disabled (a busy button that keeps keyboard focus) stays focusable,
+   so it keeps its ring; the transparent outline above is for :disabled. */
+.btn[aria-disabled='true']:focus-visible {
+  outline-color: var(--focus-ring);
 }
 
 /* --- the primary, in ruby glaze ------------------------------------------ */
@@ -1193,7 +1236,7 @@
   text-shadow: 0 -1px 0 rgba(90, 8, 30, 0.5);
 }
 
-.btn--accent:active:not(:disabled) {
+.btn--accent:active:not(:disabled, [aria-disabled='true']) {
   --glaze: var(--glaze-ruby-press);
 }
 
@@ -1231,7 +1274,7 @@
   --cast-press: 0 1px 1px rgba(158, 51, 45, 0.14), 0 0 0 transparent;
 }
 
-.btn--pastel:active:not(:disabled) {
+.btn--pastel:active:not(:disabled, [aria-disabled='true']) {
   --glaze: linear-gradient(180deg, var(--accent-pastel) 0%, #f2615a 52%, #d9524b 100%);
 }
 
@@ -1250,14 +1293,14 @@
     transition: none;
   }
 
-  .btn:hover:not(:disabled),
-  .btn:active:not(:disabled),
-  .chip:hover:not(:disabled),
-  .chip:active:not(:disabled) {
+  .btn:hover:not(:disabled, [aria-disabled='true']),
+  .btn:active:not(:disabled, [aria-disabled='true']),
+  .chip:hover:not(:disabled, [aria-disabled='true']),
+  .chip:active:not(:disabled, [aria-disabled='true']) {
     transform: none;
   }
 
-  .btn:hover:not(:disabled)::after {
+  .btn:hover:not(:disabled, [aria-disabled='true'])::after {
     animation: none;
   }
 }
@@ -1624,17 +1667,17 @@ input.field__control {
     border-color 0.18s ease-out;
 }
 
-.chip:hover:not(:disabled) {
+.chip:hover:not(:disabled, [aria-disabled='true']) {
   border-color: color-mix(in srgb, var(--gold) 55%, transparent);
   transform: translateY(-1px);
 }
 
-.chip:active:not(:disabled) {
+.chip:active:not(:disabled, [aria-disabled='true']) {
   transform: translateY(1px) scale(0.98);
   box-shadow: var(--shadow-pebble-press);
 }
 
-.chip:disabled {
+.chip:is(:disabled, [aria-disabled='true']) {
   color: var(--muted);
   border-color: var(--hairline);
   background: var(--card-soft);
@@ -1894,7 +1937,10 @@ input.field__control {
   inset: -1.5px;
   border-radius: 50%;
   border: 1.5px solid var(--success);
-  animation: engine-breath 2.8s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  /* ONE breath when the lamp lights, then still (`both` holds the faded
+     end): an endless pulse has no pause control (WCAG 2.2.2), and 2.8s
+     stays under that rule's 5s. */
+  animation: engine-breath 2.8s cubic-bezier(0.16, 1, 0.3, 1) 1 both;
 }
 
 @keyframes engine-breath {
@@ -2267,7 +2313,10 @@ input.field__control {
     color-mix(in srgb, var(--accent) 20%, transparent),
     transparent 60%
   );
-  animation: ground-drift-a 88s ease-in-out infinite alternate;
+  /* `2 alternate both`: one drift out and back, then it rests on the start
+     pose (the still composition reduced motion shows) instead of moving
+     forever with no way to pause it. Same on fields B and C. */
+  animation: ground-drift-a 88s ease-in-out 2 alternate both;
 }
 
 /* Right of centre, the LIGHT field -- the reference's cream, which is our
@@ -2279,7 +2328,7 @@ input.field__control {
     color-mix(in srgb, var(--accent-wash) 70%, transparent),
     transparent 62%
   );
-  animation: ground-drift-b 112s ease-in-out infinite alternate;
+  animation: ground-drift-b 112s ease-in-out 2 alternate both;
 }
 
 /* Lower-left, the DEEP field: the same crimson, further down its own ramp.
@@ -2291,7 +2340,7 @@ input.field__control {
     color-mix(in srgb, var(--accent-deep) 15%, transparent),
     transparent 62%
   );
-  animation: ground-drift-c 96s ease-in-out infinite alternate;
+  animation: ground-drift-c 96s ease-in-out 2 alternate both;
 }
 
 /* Bottom-right, the COOL counterweight, standing in for the reference's blue:
@@ -5139,4 +5188,45 @@ input.field__control {
 @keyframes roam-bye {
   30% { transform: scale(1.1); opacity: 1; }
   100% { transform: scale(0); opacity: 0; }
+}
+
+/* -------------------- forced colours (Windows High Contrast) -------------
+   Forced colours drop every background and box-shadow, so a state drawn only
+   with a fill, a glaze or a shadow vanishes. Each one below gets a mark made
+   of system colours instead. Last in the file so it beats the rules it
+   patches at equal specificity. Outlines survive forced colours, so the
+   focus rings (all outline-based in this file) need nothing here. */
+@media (forced-colors: active) {
+  /* The current page: its pill and its dot are both backgrounds. */
+  .site-nav__link--active,
+  .site-nav__mlink--active {
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 4px;
+  }
+
+  .site-nav__link--active::before,
+  .site-nav__mlink--active::before {
+    forced-color-adjust: none;
+    background: CanvasText;
+  }
+
+  /* A chosen option (ChoicePills; /explain's input tabs) wears the system's
+     selection colours, as a native selected item does. */
+  .choice-pills__opt--on,
+  .explain-mode__option:has(input:checked),
+  .explain-mode__option:has(input:checked):hover {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+  }
+
+  /* aria-disabled keeps focus, so the platform does not grey it the way it
+     greys :disabled; say it in the system's disabled colour. */
+  .btn[aria-disabled='true'],
+  .chip[aria-disabled='true'],
+  .classroom__btn[aria-disabled='true'] {
+    color: GrayText;
+    border-color: GrayText;
+  }
 }
