@@ -16,9 +16,10 @@ import {
   translateBatch,
   TranslateJobQueuedError,
 } from '../lib/api'
-import { jobEntryFromEnvelope, needsJob } from '../lib/batchJob'
+import { jobEntryFromEnvelope, latestOnly, needsJob } from '../lib/batchJob'
 import { forgetJob, readJobs, rememberJob } from '../lib/jobStore'
 import { MAX_ROWS, parseSmilesLines } from '../lib/parseSmiles'
+import { NAMED_STATUSES } from '../lib/statuses'
 import useShareLink from '../lib/useShareLink'
 import useKetcher from '../lib/useKetcher'
 import useReducedMotion from '../lib/useReducedMotion'
@@ -127,7 +128,23 @@ function Home() {
   // Opt-in: name only the largest organic fragment. Off by default; every
   // stripped row says what was removed (lib/strippedNote.js).
   const [stripSalts, setStripSalts] = useState(false)
-  const [validationNote, setValidationNote] = useState(null)
+  // The note under the button, in an always-mounted live region. `n` keys
+  // the message's node, so the same sentence twice (a second empty submit)
+  // is a new node and is read again.
+  const [note, setNote] = useState({ text: null, n: 0 })
+  const validationNote = note.text
+  const setValidationNote = (text) => setNote((prev) => ({ text, n: prev.n + 1 }))
+  // Which field a failed submit was about: 'paste' | 'file' | null. Drives
+  // aria-invalid, and the note is that field's description.
+  const [invalidField, setInvalidField] = useState(null)
+  const smilesInputRef = useRef(null)
+  // A one-line, screen-reader-only account of an inline run: "Naming 3
+  // molecules", then what came back. The results themselves are not a live
+  // region -- a name resolving letter by letter would be read out as it goes.
+  const [announcement, setAnnouncement] = useState('')
+  // What the processing bar says is in flight: the count (null when not
+  // known) and whether OPSIN verify was on for it.
+  const [inFlight, setInFlight] = useState({ count: null, verify: true })
   const [fetchError, setFetchError] = useState(null)
   const reduceMotion = useReducedMotion()
   const { flare, flareCanvasRef, wordmarkRef } = useWordmarkFlare(reduceMotion)
@@ -163,6 +180,13 @@ function Home() {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [job, setJob] = useState(null)
+  // The job whose panel has gone terminal (BatchResults' onFinished). A new
+  // inline translate replaces a finished panel; a running one stays, with the
+  // inline results under the input beside it.
+  const [finishedJobId, setFinishedJobId] = useState(null)
+  // Picking file A then B quickly must never leave A's preview (and A's
+  // molecule count, which the submit sends) beside B. Check guards the same.
+  const trackPreview = useRef(latestOnly())
 
   // A job still RUNNING in this browser is picked back up on load: its owner
   // token is in localStorage precisely so a reload does not lose the ability
@@ -219,8 +243,14 @@ function Home() {
   function runTranslate(lines) {
     clearTimers()
     setFetchError(null)
+    // The render shows a job panel before anything else, so a FINISHED job
+    // left on screen used to hide this result entirely.
+    if (job && job.jobId === finishedJobId) setJob(null)
     setRows(lines.map(emptyRow))
     setIsSubmitting(true)
+    setInvalidField(null)
+    setInFlight({ count: lines.length, verify })
+    setAnnouncement(`Naming ${lines.length === 1 ? '1 molecule' : `${lines.length} molecules`}…`)
 
     translateBatch(lines, { bestEffort, verify, stripSalts })
       .then((named) => {
@@ -229,6 +259,12 @@ function Home() {
         // flipped before the reader acts on a tile, and "Report SMILES on
         // GitHub" must state what produced the result, not what is set now.
         const results = named.map((result) => ({ ...result, settings: { bestEffort, verify, stripSalts } }))
+        const namedCount = results.filter((result) => NAMED_STATUSES.has(result.status)).length
+        setAnnouncement(
+          namedCount === results.length
+            ? `${results.length === 1 ? '1 molecule' : `${results.length} molecules`} named.`
+            : `${namedCount} of ${results.length} molecules named; ${results.length - namedCount} not named.`
+        )
 
         if (reduceMotion) {
           setRows(results.map((result) => ({ ...result, phase: 'done' })))
@@ -262,6 +298,7 @@ function Home() {
       })
       .catch((err) => {
         setIsSubmitting(false)
+        setAnnouncement('')
         if (err instanceof TranslateJobQueuedError) {
           // Not a failure: the work is running on the server, it just did not
           // finish inside the fast-path timeout. This used to say "this page
@@ -280,6 +317,7 @@ function Home() {
           }
           rememberJob(entry)
           setJob(entry)
+          setFinishedJobId(null)
           setRows([])
           setValidationNote(
             `That took longer than the fast path allows, so it is running as a job you can ` +
@@ -294,6 +332,8 @@ function Home() {
 
   async function submitJob({ text = '', chosenFile = null, count = null }) {
     setIsSubmitting(true)
+    setInFlight({ count, verify })
+    setInvalidField(null)
     setValidationNote(null)
     setFetchError(null)
     try {
@@ -303,6 +343,7 @@ function Home() {
       const entry = jobEntryFromEnvelope(envelope, count)
       rememberJob(entry)
       setJob(entry)
+      setFinishedJobId(null)
       setRows([])
     } catch (err) {
       // The server's own sentence is the useful one here: over the size cap,
@@ -350,6 +391,10 @@ function Home() {
     if (inputMode === 'file') {
       if (!file) {
         setValidationNote('Choose a .sdf, .mol, .csv or .smi file first.')
+        // The form is noValidate: the field says it is the problem, and
+        // focus goes to it.
+        setInvalidField('file')
+        document.getElementById('batch-file')?.focus()
         return
       }
       void submitJob({ chosenFile: file, count: preview?.molecule_count ?? null })
@@ -359,6 +404,8 @@ function Home() {
     const { lines, total } = parseSmilesLines(smilesText)
     if (!lines.length) {
       setValidationNote('Enter at least one SMILES string (one per line) before translating.')
+      setInvalidField('paste')
+      smilesInputRef.current?.focus()
       return
     }
 
@@ -381,9 +428,15 @@ function Home() {
     setFile(chosen)
     setPreview(null)
     setValidationNote(null)
-    if (!chosen) return
+    setInvalidField(null)
+    if (!chosen) {
+      // Retires a preview still in flight for the file just removed.
+      trackPreview.current(Promise.resolve(null))
+      return
+    }
     try {
-      setPreview(await parsePreview({ file: chosen, bestEffort, verify }))
+      const { stale, value } = await trackPreview.current(parsePreview({ file: chosen, bestEffort, verify }))
+      if (!stale) setPreview(value)
     } catch (err) {
       // A preview that fails is not a submission that fails; say so and let
       // them try anyway.
@@ -392,8 +445,7 @@ function Home() {
   }
 
   /** Remove, on the drop zone's manifest. acceptFile(null) already IS this
-   *  reset -- it is the path a cancelled picker takes -- so Remove is that
-   *  call under a name rather than a second copy of it. */
+   *  reset, so Remove is that call under a name rather than a second copy. */
   function clearFile() {
     void acceptFile(null)
   }
@@ -401,9 +453,19 @@ function Home() {
   function startAnother() {
     if (job) forgetJob(job.jobId)
     setJob(null)
+    setFinishedJobId(null)
     setFile(null)
     setPreview(null)
     setValidationNote(null)
+  }
+
+  // aria-disabled rather than disabled on the tabs while a submission runs:
+  // Enter on a focused tab submits the form, and a disabled radio would then
+  // drop the focus it holds. The refusal lives here instead.
+  function chooseMode(mode) {
+    if (isSubmitting) return
+    setInputMode(mode)
+    setInvalidField(null)
   }
 
   async function handleExamplePick(example) {
@@ -592,8 +654,8 @@ function Home() {
               name="input-mode"
               value="paste"
               checked={inputMode === 'paste'}
-              onChange={() => setInputMode('paste')}
-              disabled={isSubmitting}
+              onChange={() => chooseMode('paste')}
+              aria-disabled={isSubmitting || undefined}
             />
             Paste
           </label>
@@ -603,8 +665,8 @@ function Home() {
               name="input-mode"
               value="file"
               checked={inputMode === 'file'}
-              onChange={() => setInputMode('file')}
-              disabled={isSubmitting}
+              onChange={() => chooseMode('file')}
+              aria-disabled={isSubmitting || undefined}
             />
             Upload file
           </label>
@@ -614,8 +676,8 @@ function Home() {
               name="input-mode"
               value="draw"
               checked={inputMode === 'draw'}
-              onChange={() => setInputMode('draw')}
-              disabled={isSubmitting}
+              onChange={() => chooseMode('draw')}
+              aria-disabled={isSubmitting || undefined}
             />
             Draw
           </label>
@@ -651,6 +713,9 @@ function Home() {
                 </label>
                 <textarea
                   id="smiles-input"
+                  ref={smilesInputRef}
+                  aria-invalid={invalidField === 'paste' || undefined}
+                  aria-describedby={invalidField === 'paste' ? 'workbench-note' : undefined}
                   className="field__control"
                   /* 4, not 8: the field slot is a fixed `height: clamp(180px, 32vh,
                      320px)` (Home.css) and the textarea is `flex: 1` inside
@@ -662,7 +727,10 @@ function Home() {
                   autoCapitalize="off"
                   placeholder={'CCO\nC[C@H](O)CC\nCC(C)(C)C1=CC2=C(C=C1)...'}
                   value={smilesText}
-                  onChange={(event) => setSmilesText(event.target.value)}
+                  onChange={(event) => {
+                    setSmilesText(event.target.value)
+                    if (invalidField) setInvalidField(null)
+                  }}
                 />
                 {/* Only says anything once it MATTERS. The steady-state line
                     ("up to 10 answer here directly") cost 21px on every visit
@@ -691,6 +759,8 @@ function Home() {
                   onRemove={clearFile}
                   onReject={setValidationNote}
                   disabled={isSubmitting}
+                  invalid={invalidField === 'file'}
+                  describedBy={invalidField === 'file' ? 'workbench-note' : undefined}
                 />
               </div>
             )}
@@ -761,7 +831,14 @@ function Home() {
                 than showing a bare number, since "3" beside a Translate
                 button could be read as three of anything. */}
             <div className="workbench__actions">
-              <button type="submit" className="btn btn--accent" disabled={isSubmitting}>
+              {/* aria-disabled, not disabled: pressing it would otherwise
+                  disable the very button holding focus, and focus would fall
+                  to <body>. handleSubmit refuses while a run is in flight. */}
+              <button
+                type="submit"
+                className="btn btn--accent"
+                aria-disabled={isSubmitting || undefined}
+              >
                 <span className={isSubmitting ? 'btn__spin' : undefined}>
                   <Icon name={isSubmitting ? 'refresh' : 'translate'} />
                 </span>
@@ -774,11 +851,12 @@ function Home() {
                   New batch
                 </button>
               )}
-              {validationNote && (
-                <p className="workbench__note" role="status">
-                  {validationNote}
-                </p>
-              )}
+              {/* Always mounted: a status region that appears with its
+                  message is not reliably read. Empty, it takes no room
+                  (Home.css .workbench__note:empty). */}
+              <p className="workbench__note" id="workbench-note" role="status">
+                {validationNote && <span key={note.n}>{validationNote}</span>}
+              </p>
             </div>
 
             <ExampleChips
@@ -799,18 +877,25 @@ function Home() {
         <ConfidenceLegend openToSide={!hasResults && !job} onOpenChange={setInfoOpen} />
         </div>
 
-        {job ? (
-          <BatchResults key={job.jobId} job={job} onForget={startAnother} />
-        ) : isSubmitting ? (
+        <p className="sr-only" role="status">
+          {announcement}
+        </p>
+
+        {/* An inline run is shown FIRST, next to the input it came from; a
+            job panel still running stays below it rather than being thrown
+            away (it holds the only Stop). A finished job panel is dropped
+            by runTranslate instead. */}
+        {isSubmitting ? (
           /* The inline request blocks up to 30s. A dedicated processing panel
              (animated bar + live clock) shows it is WORKING -- the empty pending
              table underneath read as a crashed site (owner instruction). */
-          <ProcessingBar count={rows.length} />
+          <ProcessingBar count={inFlight.count} verify={inFlight.verify} />
         ) : hasResults ? (
           /* 1-2 molecules read best as cards; 3+ switch to a scannable table
              with the structures inline (owner instruction 2026-09-03). A job
-             (>10, or a timed-out fast path) is BatchResults, above. */
+             (>10, or a timed-out fast path) is BatchResults, below. */
           <div className="results-col">
+            <h2 className="sr-only">Results</h2>
             {rows.length > 2 ? (
               <ResultsTable rows={rows} />
             ) : (
@@ -824,6 +909,15 @@ function Home() {
                      appears here") cost 214px to describe the button
                      directly above it -- on a page that has to fit one
                      screen, that space belongs to the working area. */}
+
+        {job && (
+          <BatchResults
+            key={job.jobId}
+            job={job}
+            onForget={startAnother}
+            onFinished={setFinishedJobId}
+          />
+        )}
       </main>
     </>
   )
