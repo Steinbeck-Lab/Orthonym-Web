@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
-import { explainMolecule, explainName, translateBatch } from './api'
+import { explainMolecule, explainName } from './api'
+import { fetchTier, TIER_IDLE, TIER_LOADING } from './tierFetch'
 import { explainPhase } from './explainView'
 
 // The switches the tier row is fetched with -- Home's defaults, since /explain
@@ -24,7 +25,10 @@ export default function useExplain() {
   // not return one, so it comes from /api/translate alongside. Null in 'name'
   // mode on purpose: the user supplied the name, so there is no Orthonym
   // verdict on it to report.
-  const [tierRow, setTierRow] = useState(null)
+  // { status: 'idle' | 'loading' | 'ready' | 'failed', row, reason }: a failed
+  // or pending tier is said on the page, never shown as no tier at all.
+  const [tierState, setTierState] = useState(TIER_IDLE)
+  const tierRow = tierState.row
   // The mode the DISPLAYED result was fetched with, not the tab currently
   // selected: the tier disclosure must not rewrite its verdict when the tab
   // changes after a result has landed (PRODUCT.md principle 3).
@@ -48,14 +52,12 @@ export default function useExplain() {
     // confidence tier is a real verdict and PRODUCT.md principle 3 requires it
     // wherever that name appears. /api/explain carries no tier, so fetch it
     // alongside -- in parallel, never blocking the breakdown.
-    setTierRow(null)
+    setTierState(requestMode === 'name' ? TIER_IDLE : TIER_LOADING)
     setResultMode(requestMode)
     setShareFields(requestMode === 'name' ? { name: value } : { smiles: value })
     const current = ++latestRun.current
     if (requestMode !== 'name') {
-      translateBatch([value], TIER_SETTINGS)
-        .then((rows) => current === latestRun.current && setTierRow(rows?.[0] ?? null))
-        .catch(() => current === latestRun.current && setTierRow(null))
+      fetchTier(value, TIER_SETTINGS).then((state) => current === latestRun.current && setTierState(state))
     }
 
     request
@@ -82,5 +84,5 @@ export default function useExplain() {
       })
   }
 
-  return { phase, data, apiError, fetchError, tierRow, resultMode, shareFields, run }
+  return { phase, data, apiError, fetchError, tierRow, tierState, resultMode, shareFields, run }
 }

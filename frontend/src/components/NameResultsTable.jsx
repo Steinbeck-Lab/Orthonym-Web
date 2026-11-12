@@ -92,8 +92,13 @@ export default function NameResultsTable({ rows }) {
         </p>
       )}
 
-      <div className="results-table-wrap">
+      {/* The wrapper scrolls sideways on a narrow screen, so it takes focus
+          (a keyboard can then scroll it) and a name to announce. */}
+      <div className="results-table-wrap" tabIndex={0} role="region" aria-label="Converted names">
         <table className="results-table">
+          <caption className="sr-only">
+            Structures for the {rows.length} names you typed, {parsed} parsed
+          </caption>
           <thead>
             <tr>
               <th scope="col" className="results-th--num">#</th>

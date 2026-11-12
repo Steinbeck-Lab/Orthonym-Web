@@ -1,6 +1,7 @@
 import { NAMED_STATUSES, stateLabelFor } from '../lib/statuses'
 import TierLamp from './TierLamp'
 import { roundtripLine } from '../lib/explainVerdict'
+import { tierNote } from '../lib/tierFetch'
 
 /**
  * The confidence tier and its round-trip proof, for one named result.
@@ -32,7 +33,18 @@ import { roundtripLine } from '../lib/explainVerdict'
  * component is a sentence no test in the repo can reach. This one states how
  * confident the engine is, so it is worth proving.
  */
-export default function ConfidenceReport({ row }) {
+export default function ConfidenceReport({ row, state = null }) {
+  // A tier still on its way, or one that could not be had, is said in words:
+  // an engine name shown with no tier and no reason reads as an oversight.
+  const note = row ? null : tierNote(state)
+  if (note) {
+    return (
+      // Plain muted text, no rule: every line style under a name is a tier.
+      <p className="explain-tier-note" role="status">
+        {note}
+      </p>
+    )
+  }
   if (!row || !NAMED_STATUSES.has(row.status)) return null
   const line = roundtripLine(row)
 

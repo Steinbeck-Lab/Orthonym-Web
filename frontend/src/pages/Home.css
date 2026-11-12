@@ -364,6 +364,20 @@
   color: var(--ink);
 }
 
+/* The note is a live region that is always mounted (a region mounted with
+   its message is not reliably announced). Empty, it takes no room in the
+   actions row: the .sr-only geometry, so it stays in the accessibility tree
+   where display: none would take it out. */
+.workbench__note:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-width: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
 .workbench__about {
   padding-top: var(--s-lg);
   border-top: 1px solid var(--hairline);
@@ -1668,6 +1682,27 @@
   box-shadow: inset 0 0 0 2px var(--accent);
 }
 
+/* Forced colours drop box-shadow and the tint gradients, which carried both
+   the chosen tab and the focus ring above: the chosen tab takes the system
+   Highlight pair, and the ring becomes an inset outline. */
+@media (forced-colors: active) {
+  .input-tab.input-tab--on,
+  .input-tab.input-tab--on:hover {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+  }
+
+  .input-tab:has(:focus-visible) {
+    outline: 2px solid CanvasText;
+    outline-offset: -4px;
+  }
+
+  .input-tab.input-tab--on:has(:focus-visible) {
+    outline-color: HighlightText;
+  }
+}
+
 .field__hint {
   margin: var(--s-xs) 0 0;
   font-family: var(--font-body);
@@ -2068,6 +2103,23 @@
   word-break: break-all;
 }
 
+/* The SMILES under a file's own ID: visible, a step quieter than the ID. */
+.batch__input .batch__input-smiles {
+  display: block;
+  margin-top: var(--s-xxs);
+  color: var(--muted);
+}
+
+/* The tier label in words, under the rule of a named row. */
+.batch__state-label {
+  display: block;
+  margin-top: var(--s-xxs);
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.45;
+  color: var(--muted);
+}
+
 /* THE CONFIDENCE GRAMMAR, in a table. Same marks as the result tiles, at the
    same 30ch measure: double = verified PIN, dashed = verified fallback,
    dotted + muted = best effort, one faint rule = honest abstain,
@@ -2156,11 +2208,29 @@
   gap: var(--s-xs);
 }
 
-.batch__retry {
+.batch__redraw {
   /* The pill is shared with "Report SMILES on GitHub" (App.css); only what a
-     <button> needs is here. */
+     <button> needs is here. Its own class: .batch__retry is "Check again",
+     a text link inside a sentence, below. */
   background: transparent;
   cursor: pointer;
+}
+
+/* Waiting out a 429. aria-disabled, not disabled, so a focused Retry keeps
+   its focus. */
+.batch__redraw[aria-disabled='true'] {
+  border-color: var(--hairline);
+  cursor: not-allowed;
+}
+
+/* A drawing the server refused for good: its own reason, in sentence case. */
+.batch__draw-reason {
+  display: block;
+  max-width: 24ch;
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: 1.45;
+  color: var(--muted);
 }
 
 .batch__pager {

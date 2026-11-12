@@ -364,6 +364,18 @@ def _owner_key(h, el) -> Optional[Span]:
 # 1. Tags written right after parse (R1, R3)
 # --------------------------------------------------------------------------
 
+def _synthetic_hyphen(lowered: str, cursor: int, rest) -> bool:
+    """True when a "-" token cannot be the written one: the next valued token sits in
+    the text before any "-" left after the cursor (or none is left). Anything else is
+    left to the normal search, so a written hyphen is never dropped."""
+    nxt = next((v for _, v in rest if v), None)
+    if nxt is None:
+        return False
+    at = lowered.find(nxt.lower(), cursor)
+    dash = lowered.find("-", cursor)
+    return at >= 0 and (dash < 0 or at < dash)
+
+
 def _stamp_tokens(h, parse_el, text: str) -> list[WrittenToken]:
     """R1. Walk the fresh parse in document order and find each token's value
     in the text from a moving cursor, case-insensitively."""
@@ -372,9 +384,14 @@ def _stamp_tokens(h, parse_el, text: str) -> list[WrittenToken]:
     written: list[WrittenToken] = []
     valued = 0
     first_unfound: Optional[str] = None
-    for el in _tokens(h, parse_el):
-        value = _value(h, el)
+    elements = [(el, _value(h, el)) for el in _tokens(h, parse_el)]
+    for i, (el, value) in enumerate(elements):
         if not value:
+            continue
+        if value == "-" and _name(h, el) == "hyphen" and _synthetic_hyphen(lowered, cursor, elements[i + 1:]):
+            # OPSIN inserts a "-" token of its own between a substituent and a
+            # functional-class word ("acetone phenyl|hydrazone"); it was never
+            # written, so it gets no span and lights nothing.
             continue
         valued += 1
         start = lowered.find(value.lower(), cursor)

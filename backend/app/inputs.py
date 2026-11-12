@@ -105,11 +105,39 @@ def sniff(data: bytes) -> InputFormat:
 
 def _from_mol(index: int, mol, raw_input: str) -> ParsedMolecule:
     title = mol.GetProp("_Name").strip() if mol.HasProp("_Name") else ""
+    input_id = title or None
+    # The SMILES path's caps, applied to a record too. The atom count first,
+    # BEFORE MolToSmiles: that call SIGSEGVs on a large molecule (measured: a
+    # 40,000-atom chain, a 2.8 MB V3000 record, kills the process), and an SDF
+    # is parsed in the web process by /api/parse-preview. Every atom costs at
+    # least one SMILES character, so a record over MAX_MOLECULE_SMILES_LENGTH
+    # atoms could never pass the length check below anyway.
+    n_atoms = mol.GetNumAtoms()
+    if n_atoms > MAX_MOLECULE_SMILES_LENGTH:
+        return ParsedMolecule(
+            index=index,
+            raw_input=raw_input,
+            input_id=input_id,
+            smiles=None,
+            error=(
+                f"Molecule has {n_atoms} atoms; the limit is "
+                f"{MAX_MOLECULE_SMILES_LENGTH}"
+            ),
+        )
+    smiles = Chem.MolToSmiles(mol)
+    if len(smiles) > MAX_MOLECULE_SMILES_LENGTH:
+        return ParsedMolecule(
+            index=index,
+            raw_input=raw_input,
+            input_id=input_id,
+            smiles=None,
+            error=f"SMILES string exceeds {MAX_MOLECULE_SMILES_LENGTH} characters",
+        )
     return ParsedMolecule(
         index=index,
         raw_input=raw_input,
-        input_id=title or None,
-        smiles=Chem.MolToSmiles(mol),
+        input_id=input_id,
+        smiles=smiles,
         error=None,
     )
 
@@ -232,14 +260,16 @@ def _canonical_or_error(
     # (app/main.py), so a string that dies here never reaches translate_one at
     # all and a fallback added only there would be unreachable code.
     # Two consequences worth stating, since this runs in the WEB process on
-    # every /api/translate (main._canonicalize), not in a worker:
+    # every fast-path /api/translate (main._canonicalize, at most
+    # FAST_PATH_MAX_MOLECULES lines; a larger paste is parsed in a worker by
+    # jobs_api._parse_or_400):
     #  * it boots a JVM here on the first RDKit-refused molecule -- the same
     #    lazy boot GET /api/depict pays for, and the second of exactly two
     #    web-process entry points into cdk_bridge. It also makes a REJECTION
     #    cost more than an acceptance: measured, an RDKit reject is 0.045 ms
     #    and the CDK retry after it is 0.256 ms, so 10,000 unparseable lines
-    #    went from 0.47 s to 3.1 s of synchronous web-process CPU while 10,000
-    #    GOOD lines stayed at 0.28 s. That is UNBOUNDED per request -- the caps
+    #    (now in a worker) went from 0.47 s to 3.1 s of synchronous CPU while
+    #    10,000 GOOD lines stayed at 0.28 s. That is UNBOUNDED per request -- the caps
     #    here and in ratelimit.py bound molecule COUNT and request count, never
     #    per-record cost. It is left unbounded on purpose rather than by
     #    oversight: every cheap fix (cap the retries, prefilter the string)
@@ -286,8 +316,31 @@ def _parse_smiles_list(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
     return rows
 
 
+def _csv_reader(data: bytes) -> csv.DictReader:
+    """A DictReader on the delimiter the header line actually uses.
+
+    sniff() calls a header with "smiles" and a tab or ';' a CSV, so the
+    parsers must read it with that delimiter: a comma-only reader saw a
+    spreadsheet paste's "smiles\\tid" as one column and refused the input.
+    The delimiter is the one that splits the header into a field named
+    smiles; a comma when none does, as before.
+    """
+    text = _decode(data)
+    lines = text.lstrip().splitlines()
+    header = lines[0] if lines else ""
+    delimiter = next(
+        (
+            d
+            for d in _CSV_DELIMITERS
+            if "smiles" in (field.strip().strip('"').strip().lower() for field in header.split(d))
+        ),
+        ",",
+    )
+    return csv.DictReader(io.StringIO(text), delimiter=delimiter)
+
+
 def _parse_csv(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
-    reader = csv.DictReader(io.StringIO(_decode(data)))
+    reader = _csv_reader(data)
     if not reader.fieldnames:
         raise ValueError("CSV has no header row, so no smiles column to read")
 
@@ -320,7 +373,7 @@ def parse_check_csv(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
     Its own parser, not _parse_csv: there a `name` column is the ID column of
     a NAMING job, and that must not change.
     """
-    reader = csv.DictReader(io.StringIO(_decode(data)))
+    reader = _csv_reader(data)
     lowered = {name.strip().lower(): name for name in reader.fieldnames or []}
     missing = [col for col in ("smiles", "name") if col not in lowered]
     if missing:
@@ -382,7 +435,7 @@ def _count_smiles_lines(data: bytes) -> int:
 
 
 def _count_csv_rows(data: bytes) -> int:
-    reader = csv.DictReader(io.StringIO(_decode(data)))
+    reader = _csv_reader(data)
     if not reader.fieldnames:
         return 0
     lowered = {name.strip().lower(): name for name in reader.fieldnames}

@@ -33,7 +33,8 @@ _SUBSTITUENTS = {
     "methoxy": "a one-carbon group joined through an oxygen (-O-CH3 on its own)",
     "ethoxy": "a two-carbon group joined through an oxygen (-O-CH2CH3 on its own)",
     "acetyl": "a two-carbon group with a C=O (CH3-C(=O)- on its own)",
-    "indolyl": "an indole ring system attached by one of its carbons",
+    # Which atom it is attached by is measured (``_attached_by``): "1-indolyl" hangs on N1.
+    "indolyl": "an indole ring system",
     "oxy": "an -O- linkage joining two parts of the name",
 }
 
@@ -254,19 +255,28 @@ def _atoms(count: int) -> str:
 # copy: 1,2,3,4-tetrahydronaphthalene keeps one, naphthalene-1,4-dione's quinone ring
 # is not one, and 1,5,6,7-tetrahydro-4H-indol-4-one has no benzene ring at all.
 _PARENT_BENZENE_RINGS = {"benzen": 1, "benz": 1, "indol": 1, "naphthalen": 2}
+# A parent stem whose prose counts nitrogens: "7-deazapurine" is read as purine with
+# three of them, so "holding four nitrogens" is measured, not assumed from the stem.
+_PARENT_NITROGENS = {"purin": 4}
 
 
 def parent_claim_holds(label: str, mol, atoms, copies: int = 1) -> bool:
-    """True when the atoms a parent owns bear out the ring its prose names (counts are
-    checked in describe_part). With no ring claim, True; with one and no molecule to
-    check it on, False (the neutral line is always safe)."""
+    """True when the atoms a parent owns bear out the ring its prose names and the
+    nitrogens it counts (atom counts are checked in describe_part). With no such claim,
+    True; with one and no molecule to check it on, False (the neutral line is always safe)."""
     key = _parent_key(label)
     need = _PARENT_BENZENE_RINGS.get(key) if key else None
-    if not need:
+    nitrogens = _PARENT_NITROGENS.get(key) if key else None
+    if not need and nitrogens is None:
         return True
-    if mol is None:
+    if mol is None or any(a >= mol.GetNumAtoms() for a in atoms):
         return False
     owned = set(atoms)
+    if nitrogens is not None and sum(
+            1 for a in owned if mol.GetAtomWithIdx(a).GetSymbol() == "N") != nitrogens * max(copies, 1):
+        return False
+    if not need:
+        return True
     benzene = [ring for ring in mol.GetRingInfo().AtomRings()
                if len(ring) == 6 and set(ring) <= owned
                and all(mol.GetAtomWithIdx(a).GetSymbol() == "C" and mol.GetAtomWithIdx(a).GetIsAromatic()
@@ -357,6 +367,26 @@ def _hydrogen_clause(spec, mol, atoms, copies: int) -> str:
     return f" {text}."
 
 
+# Groups whose line says which atom they hang on only after measuring it.
+_ATTACHMENT_MEASURED = frozenset({"indolyl"})
+
+
+def _attached_by(mol, atoms) -> str:
+    """' attached by one of its carbons' / ' attached by a nitrogen' when every atom of
+    the group bonded out of it is that element (the attachment is one of them), else ''.
+    A group carrying its own substituents on both kinds of atom says nothing."""
+    if mol is None or any(a >= mol.GetNumAtoms() for a in atoms):
+        return ""
+    owned = set(atoms)
+    out = {mol.GetAtomWithIdx(a).GetSymbol() for a in owned
+           for n in mol.GetAtomWithIdx(a).GetNeighbors() if n.GetAtomicNum() > 1 and n.GetIdx() not in owned}
+    if out == {"C"}:
+        return " attached by one of its carbons"
+    if out == {"N"}:
+        return " attached by a nitrogen"
+    return ""
+
+
 def describe_part(kind: str, text: str, atom_count: int, copies: int = 1, *, holds: bool = True,
                   mol=None, atoms=(), cores: int = 1) -> str:
     """One line for a part. `holds` is False when the caller found that the atoms the
@@ -380,7 +410,8 @@ def describe_part(kind: str, text: str, atom_count: int, copies: int = 1, *, hol
         if key:
             spec = _HYDROGEN_SPECS.get(key)
             clause = _hydrogen_clause(spec, mol, atoms, copies) if spec else ""
-            return f'"{label}" is {_SUBSTITUENTS[key]}.{clause}{many}'
+            attached = _attached_by(mol, atoms) if key in _ATTACHMENT_MEASURED else ""
+            return f'"{label}" is {_SUBSTITUENTS[key]}{attached}.{clause}{many}'
     elif kind == "suffix":
         key = _lookup_key(_SUFFIXES, label)
         if key and holds:

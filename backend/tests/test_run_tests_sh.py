@@ -33,22 +33,23 @@ SKIPPED = (
 )
 
 
-def run(tmp_path, body, extra_args):
+def run(tmp_path, body, extra_args, target=None, log=True):
     probe = tmp_path / "test_probe.py"
     probe.write_text(body, encoding="utf-8")
+    env = {
+        "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+        "HOME": str(tmp_path),
+        "TMPDIR": str(tmp_path),
+        "ORTHONYM_TEST_WAIT": "60",
+    }
+    if log:
+        env["ORTHONYM_TEST_LOG"] = str(tmp_path / "probe.log")
     return subprocess.run(
-        [str(SCRIPT), str(probe), "-p", "no:cacheprovider", *extra_args],
+        [str(SCRIPT), str(target or probe), "-p", "no:cacheprovider", *extra_args],
         capture_output=True,
         text=True,
         timeout=120,
-        env={
-            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
-            "HOME": str(tmp_path),
-            # Isolated log: the default /tmp/orthonym-pytest.log is shared, and
-            # a concurrent run would otherwise read the other one's summary.
-            "ORTHONYM_TEST_LOG": str(tmp_path / "probe.log"),
-            "ORTHONYM_TEST_WAIT": "60",
-        },
+        env=env,
     ).returncode
 
 
@@ -95,6 +96,43 @@ def test_a_run_that_only_errors_exits_1(tmp_path, extra):
     only looks for "failed" reports a collection error as green.
     """
     assert run(tmp_path, ERRORING, extra) == 1
+
+
+@FORMS
+def test_a_k_that_selects_nothing_exits_1(tmp_path, extra):
+    """"1 deselected in 0.00s" ran no test; it is not a green run."""
+    assert run(tmp_path, PASSING, [*extra, "-k", "no_such_test"]) == 1
+
+
+@FORMS
+def test_a_mistyped_path_exits_1(tmp_path, extra):
+    """"ERROR: file or directory not found" then "no tests ran"."""
+    assert run(tmp_path, PASSING, extra, target=tmp_path / "test_nope.py") == 1
+
+
+# A warning, a failure, and a pause after "=== warnings summary ===" is on
+# disk but before the final stats line: the window the old banner regex hit.
+WARN_THEN_FAIL = "import warnings\n\n\ndef test_w():\n    warnings.warn('w')\n    assert False\n"
+SLOW_SUMMARY_CONFTEST = (
+    "import sys, time\n\n\n"
+    "def pytest_terminal_summary(terminalreporter):\n"
+    "    terminalreporter._tw.flush()\n"
+    "    sys.stdout.flush()\n"
+    "    time.sleep(3)\n"
+)
+
+
+@FORMS
+def test_the_warnings_summary_header_is_not_the_summary(tmp_path, extra):
+    (tmp_path / "conftest.py").write_text(SLOW_SUMMARY_CONFTEST, encoding="utf-8")
+    assert run(tmp_path, WARN_THEN_FAIL, extra) == 1
+
+
+def test_the_default_log_is_private_to_the_run(tmp_path):
+    """Without ORTHONYM_TEST_LOG the log is a fresh mktemp file under TMPDIR,
+    never one fixed path that concurrent runs truncate."""
+    assert run(tmp_path, PASSING, ["-q"], log=False) == 0
+    assert list(tmp_path.glob("orthonym-pytest.*"))
 
 
 def test_a_run_with_no_summary_exits_2(tmp_path):

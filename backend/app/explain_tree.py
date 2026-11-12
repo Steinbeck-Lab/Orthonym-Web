@@ -486,12 +486,13 @@ class _Builder:
                     hit, line = self.modifier(atoms, self.spiro_lookup(tokens, i, atoms, loc), loc)
                     self.add("indicated_h", self.text(sub), sub, parent=owner, lights=hit, line=line)
             elif tok.kind == "isotopeSpecification":
-                # "(2H3)", "(125I)": it lights the atoms of the isotope's element in
-                # the part, and nothing when it names no element it can read.
+                # "(2H3)", "(125I)", "(2-13C)": it lights the atoms of the part that
+                # carry that isotope (the other carbons of "(2-13C)propane" are plain
+                # 12C), and nothing when it names no isotope it can read.
                 span = self.trim(tok.span)
-                symbols = set(re.findall(r"\d+([A-Z][a-z]?)", self.text(span)))
+                isotopes = {(int(mass), sym) for mass, sym in re.findall(r"(\d+)([A-Z][a-z]?)", self.text(span))}
                 self.add("token", self.text(span), span, parent=owner,
-                         lights=[a for a in token_lights if self.by_index[a].element in symbols],
+                         lights=[a for a in token_lights if self.isotope_of(a) in isotopes],
                          line=describe_token(tok.kind, self.text(span)))
             elif tok.kind in _LINE_KINDS:
                 span = self.trim(tok.span)
@@ -516,6 +517,13 @@ class _Builder:
         return rest is not None and rest.kind == "vonBaeyer"
 
     # -- structure helpers (bonds of the traced molecule) --------------------
+    def isotope_of(self, atom: int):
+        """(mass number, element) of an atom written with an isotope, else None."""
+        if self.mol is None or atom >= self.mol.GetNumAtoms():
+            return None
+        a = self.mol.GetAtomWithIdx(atom)
+        return (a.GetIsotope(), a.GetSymbol()) if a.GetIsotope() else None
+
     def nbrs(self, atom: int) -> list[int]:
         if self.mol is None or atom >= self.mol.GetNumAtoms():
             return []
@@ -798,6 +806,21 @@ class _Builder:
         self.add(_NODE_KIND.get(tok.kind, "token"), label, span,
                  line=token_line(tok.kind, label))
 
+    def stereo_bonds(self, atoms) -> set:
+        """The stereo double bonds (as atom pairs) with an end among `atoms`. Two
+        stereo-bond atoms are one bond's ends only when they are bonded:
+        "2,5-dibenzylidenecyclopentan-1-one" has two, on two different bonds."""
+        if self.mol is None:
+            return set()
+        out = set()
+        for a in atoms:
+            if a >= self.mol.GetNumAtoms():
+                continue
+            for b in self.mol.GetAtomWithIdx(a).GetBonds():
+                if b.GetStereo() != Chem.BondStereo.STEREONONE:
+                    out.add(frozenset((b.GetBeginAtomIdx(), b.GetEndAtomIdx())))
+        return out
+
     def stereo_atom(self, locant: str, descriptor: str, scope_parts: list[_WrittenPart],
                     head: Optional[_WrittenPart]):
         """(part key, atom) of the ONE atom a mark names, or (None, None)."""
@@ -896,7 +919,10 @@ class _Builder:
                     # bond) of the scope's main part only if it has exactly one.
                     pool = self.double if label in ("E", "Z") else self.centres
                     hits = sorted(a for a in self.atoms_of(head) if a in pool)
-                    single = hits[:1] if (len(hits) == 1 or (label in ("E", "Z") and len(hits) == 2)) else []
+                    if label in ("E", "Z"):
+                        single = hits[:1] if len(self.stereo_bonds(hits)) == 1 else []
+                    else:
+                        single = hits[:1] if len(hits) == 1 else []
                     self.add("stereo", label, span, parent=self.part_node.get(head.key, (None, []))[0],
                              lights=single, line=describe_stereo(label, within))
                 elif NUMBER_LOCANT.match(label):

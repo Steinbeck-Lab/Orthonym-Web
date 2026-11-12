@@ -405,7 +405,7 @@
 
 .idlist__label {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 0.6875rem; /* 11px at the default 16px root */
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
@@ -420,7 +420,7 @@
 
 .idlist__value code {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 0.8125rem; /* 13px; rem so OS text scaling reaches it */
   /* An InChI is one unbroken token 60+ characters long. Without this it forces
      the grid column wider than the card and the page scrolls sideways. */
   overflow-wrap: anywhere;
@@ -435,7 +435,7 @@
 .from-name-panel__count,
 .from-name-progress__head {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 0.6875rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
@@ -501,7 +501,7 @@
 .name-results__count,
 .name-results__note {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 0.6875rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);

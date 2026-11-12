@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import ChoicePills from '../components/ChoicePills'
 import ExplainView from '../components/ExplainView'
 import Icon from '../components/Icon'
@@ -18,7 +18,7 @@ const EXAMPLES = [
 ]
 
 // One side's input: a name or a SMILES, its own toggle.
-function SideInput({ id, label, value, onValue, mode, onMode, disabled }) {
+function SideInput({ id, label, value, onValue, mode, onMode, invalid, noteId, inputRef }) {
   return (
     <div className="compare-input">
       <div className="compare-input__head">
@@ -32,7 +32,6 @@ function SideInput({ id, label, value, onValue, mode, onMode, disabled }) {
           ]}
           value={mode}
           onChange={onMode}
-          disabled={disabled}
         />
       </div>
       <div className="field field--framed">
@@ -41,6 +40,9 @@ function SideInput({ id, label, value, onValue, mode, onMode, disabled }) {
         </label>
         <input
           id={id}
+          ref={inputRef}
+          aria-invalid={invalid || undefined}
+          aria-describedby={invalid ? noteId : undefined}
           className="field__control"
           spellCheck={false}
           autoCorrect="off"
@@ -57,7 +59,7 @@ function SideInput({ id, label, value, onValue, mode, onMode, disabled }) {
 // One side's answer, in /explain's own states. Each side has its own
 // useExplain, so each has its own stale-reply guard.
 function SideResult({ label, explain, marks }) {
-  const { phase, data, apiError, fetchError, tierRow, resultMode } = explain
+  const { phase, data, apiError, fetchError, tierRow, tierState, resultMode } = explain
   return (
     <section className="compare-side" aria-label={`${label}: explanation`} aria-busy={phase === 'loading'}>
       <h2 className="compare-side__label">{label}</h2>
@@ -80,6 +82,7 @@ function SideResult({ label, explain, marks }) {
           data={data}
           resultMode={resultMode}
           tierRow={tierRow}
+          tierState={tierState}
           apiError={apiError}
           marks={marks}
         />
@@ -94,6 +97,10 @@ function Compare() {
   const [modeA, setModeA] = useState('name')
   const [modeB, setModeB] = useState('name')
   const [note, setNote] = useState(null)
+  // Which side an empty submit refused: { a, b } or null.
+  const [empty, setEmpty] = useState(null)
+  const refA = useRef(null)
+  const refB = useRef(null)
   const left = useExplain()
   const right = useExplain()
   const busy = left.phase === 'loading' || right.phase === 'loading'
@@ -102,9 +109,22 @@ function Compare() {
     const x = va.trim()
     const y = vb.trim()
     if (!x || !y) {
-      setNote('Enter something on both sides.')
+      const message = 'Enter something on both sides.'
+      setEmpty({ a: !x, b: !y })
+      // One live region, always mounted: the same sentence twice is cleared
+      // first, or a screen reader would not read it again.
+      if (note === message) {
+        setNote(null)
+        requestAnimationFrame(() => setNote(message))
+      } else {
+        setNote(message)
+      }
+      // Focus goes to the empty field, which reads the note as its description.
+      const firstEmpty = x ? refB : refA
+      firstEmpty.current?.focus()
       return
     }
+    setEmpty(null)
     setNote(null)
     left.run(x, ma)
     right.run(y, mb)
@@ -141,25 +161,48 @@ function Compare() {
           <form
             onSubmit={(event) => {
               event.preventDefault()
-              compare(a, b)
+              if (!busy) compare(a, b)
             }}
             noValidate
           >
             <div className="compare-panel__inputs">
-              <SideInput id="compare-a" label="A" value={a} onValue={setA} mode={modeA} onMode={setModeA} disabled={busy} />
-              <SideInput id="compare-b" label="B" value={b} onValue={setB} mode={modeB} onMode={setModeB} disabled={busy} />
+              {/* Nothing here is disabled while busy: a control that disables
+                  itself under the keyboard drops focus to <body>. A mode change
+                  mid-run is harmless, since compare() reads the modes when it
+                  starts and each result keeps the mode it was run in. */}
+              <SideInput
+                id="compare-a"
+                label="A"
+                value={a}
+                onValue={(v) => { setA(v); setEmpty((e) => e && { ...e, a: false }) }}
+                mode={modeA}
+                onMode={setModeA}
+                invalid={empty?.a}
+                noteId="compare-note"
+                inputRef={refA}
+              />
+              <SideInput
+                id="compare-b"
+                label="B"
+                value={b}
+                onValue={(v) => { setB(v); setEmpty((e) => e && { ...e, b: false }) }}
+                mode={modeB}
+                onMode={setModeB}
+                invalid={empty?.b}
+                noteId="compare-note"
+                inputRef={refB}
+              />
             </div>
             <div className="compare-panel__actions">
-              <button type="submit" className="btn btn--accent" disabled={busy}>
+              <button type="submit" className="btn btn--accent" aria-disabled={busy}>
                 <Icon name="translate" />
                 {busy ? 'Comparing…' : 'Compare'}
               </button>
               {shareFields && <ShareButton fields={shareFields} />}
-              {note && (
-                <p className="panel-note" role="status">
-                  {note}
-                </p>
-              )}
+              {/* .sr-only while empty, so it adds no gap to the row. */}
+              <p id="compare-note" className={note ? 'panel-note' : 'sr-only'} role="status">
+                {note}
+              </p>
             </div>
             <div className="examples" role="group" aria-label="Try a curated example">
               <span className="examples__label">Try one:</span>
@@ -169,8 +212,10 @@ function Compare() {
                     <button
                       type="button"
                       className="chip"
-                      disabled={busy}
+                      aria-disabled={busy}
                       onClick={() => {
+                        if (busy) return
+                        setEmpty(null)
                         setA(example.a)
                         setB(example.b)
                         setModeA('name')

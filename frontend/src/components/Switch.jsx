@@ -58,7 +58,9 @@ export default function Switch({ id, checked, onChange, disabled, label, hint, o
         </span>
         <span className="switch__lamp switch__lamp--on" aria-hidden="true" />
         <span className="switch__label">{label}</span>
-        <span className="switch__state">{checked ? onWord : offWord}</span>
+        {/* aria-hidden: aria-checked already says the state, and inside the
+            name the word would change the name on every toggle. */}
+        <span className="switch__state" aria-hidden="true">{checked ? onWord : offWord}</span>
       </button>
       {hint && (
         <p className="switch__hint" id={hintId}>

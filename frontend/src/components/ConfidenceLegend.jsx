@@ -243,7 +243,9 @@ export default function ConfidenceLegend({ openToSide = false, onOpenChange }) {
                 style={{ '--i': index }}
               >
                 <span className="rung__ordinal">{tier.ordinal}</span>
-                <h3 className="rung__name">
+                {/* h2, not h3: the legend sits straight under Home's h1, and
+                    .rung__name sets every property the tag rule would. */}
+                <h2 className="rung__name">
                   {/* The key has to teach the lamp as well as the rule, or a
                       reader meets a lit ring on a result with nothing to
                       look it up against. `status`, not `key`: TierLamp takes
@@ -251,7 +253,7 @@ export default function ConfidenceLegend({ openToSide = false, onOpenChange }) {
                       form. */}
                   <TierLamp status={tier.status} />
                   {tier.label}
-                </h3>
+                </h2>
                 <Specimen tier={tier.key} />
                 <div className="rung__body">
                   <p className="rung__line">{tier.body}</p>

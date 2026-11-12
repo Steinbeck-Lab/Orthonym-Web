@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useId, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { verdictKindFor } from '../lib/explainVerdict'
 import { isPart, partOf, sliceName, unplacedNodes } from '../lib/nameTargets'
@@ -34,6 +34,9 @@ export default function ExplainView({
   data,
   resultMode,
   tierRow,
+  // useExplain's tierState: says 'pending' or 'unavailable, because' in
+  // place of the tier. Optional so a caller that passes only the row still works.
+  tierState = null,
   apiError,
   shareFields,
   marks = null,
@@ -80,13 +83,17 @@ export default function ExplainView({
   const notes = detailNotes(nodes, activeId)
   const pieces = name ? sliceName(name, nodes) : []
   const stops = tabStops(pieces)
+  // Focusing a part makes it the active node, so the detail panel then holds
+  // its explanation: point the part at that text so a screen reader reads it.
+  const explanationId = useId()
+  const describedBy = (id) => (activeId === id && activeNode ? explanationId : undefined)
 
   return (
     <div className="explain-result">
       <div className="explain-result__name-row">
         <span className="explain-result__name-label">Name</span>
         {name && (
-          <p className="explain-result__name explain-name" aria-live="polite">
+          <p className="explain-result__name explain-name">
             {pieces.map((piece, index) => {
               const node = byId.get(piece.nodeId) ?? null
               const mark = pieceMark(piece, activeId, activePart)
@@ -116,6 +123,7 @@ export default function ExplainView({
                       role="button"
                       aria-label={marks?.has(node.id) ? `${node.label}, differs` : node.label}
                       aria-pressed={pinnedId === node.id}
+                      aria-describedby={describedBy(node.id)}
                     >
                       <Pieces pieces={applyRuns(name, nameStyle, piece.start, piece.end)} breaks={false} />
                     </span>
@@ -138,6 +146,7 @@ export default function ExplainView({
                   }`}
                   {...hoverProps(node.id)}
                   aria-pressed={pinnedId === node.id}
+                  aria-describedby={describedBy(node.id)}
                 >
                   {node.label} <span className="explain-unplaced__note">— not placed in the name</span>
                   {marks?.has(node.id) && <span className="sr-only">, differs</span>}
@@ -169,7 +178,7 @@ export default function ExplainView({
             fallback, or a best effort.
           </p>
         ) : (
-          <ConfidenceReport row={tierRow} />
+          <ConfidenceReport row={tierRow} state={tierState} />
         )}
       </div>
 
@@ -208,7 +217,7 @@ export default function ExplainView({
                   </h3>
                   {/* Classroom mode: a line that names a part still hidden
                       waits, like the part itself. */}
-                  <p className="explain-detail__explanation">
+                  <p className="explain-detail__explanation" id={explanationId}>
                     {veiled && lineGivesAway(activeNode.line, nodes.filter((n) => hidden.has(n.id)).map((n) => n.label))
                       ? 'Explained in full once the whole name is shown.'
                       : activeNode.line}

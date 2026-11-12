@@ -15,7 +15,16 @@ import { ChemFormula } from './Typeset'
  * phase: 'pending' (queued, result not yet revealed) | 'active' (currently
  *        resolving into place) | 'done' (settled, final state)
  */
-export default function Tile({ row, phase, index = 0, reduceMotion }) {
+export default function Tile({
+  row,
+  phase,
+  index = 0,
+  reduceMotion,
+  // For "Report SMILES on GitHub": the page, and the switches the row was
+  // named with. /check passes its own; Home's rows carry theirs.
+  where = 'Home',
+  settings = row.settings,
+}) {
   const { smiles, status, name, formula, error, depiction_svg, roundtrip_smiles, roundtrip_match } = row
   // The RETRANSLATED structure: what OPSIN parsed the name back to. The naming
   // result only ships the INPUT's picture, so this one is drawn on demand from
@@ -51,7 +60,7 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
         <div className={`tile__name-block tile__name-block--${STATE_CLASS[status]}`}>
           <span className="tile__name-line">
             <ResolvingName name={name} animate={animateName} />
-            <CopyButton text={name} />
+            <CopyButton text={name} label={`Copy name for result ${index + 1}`} />
             <ShareButton fields={{ smiles }} />
           </span>
         </div>
@@ -209,7 +218,7 @@ export default function Tile({ row, phase, index = 0, reduceMotion }) {
             Formula: <ChemFormula formula={formula} />
           </span>
         )}
-        {!isPending && <ReportLink row={row} where="Home" settings={row.settings} />}
+        {!isPending && <ReportLink row={row} where={where} settings={settings} />}
       </div>
       )}
     </li>

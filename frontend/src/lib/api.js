@@ -26,14 +26,14 @@
 //   GET    /api/jobs/{id}           -> { job_id, status, total, done, failed, created_at, expires_at }
 //   GET    /api/jobs/{id}/results   -> { job_id, offset, limit, total, retrievable, rows[] }
 //   GET    /api/jobs/{id}/results.csv (a plain link, fetched by the browser)
-//   POST   /api/jobs/{id}/cancel?owner_token=…
-//   DELETE /api/jobs/{id}?owner_token=…
+//   POST   /api/jobs/{id}/cancel    (X-Owner-Token header)
+//   DELETE /api/jobs/{id}           (X-Owner-Token header)
 //   GET    /api/depict?smiles=…     -> { depiction_svg, error }
 //
 // See PRODUCT.md / DIRECTION brief for exact shapes. No fields are invented
 // or hardcoded here — everything the UI shows comes from these responses.
 
-import { httpError } from './transport.js'
+import { httpError, readDetail } from './transport.js'
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
 
@@ -239,16 +239,21 @@ export class JobGoneError extends Error {
   }
 }
 
-/** Too many requests. Carries the server's own retry hint when it sent one. */
+/** Too many requests. The server's own sentence when it sent one -- it says
+ *  WHICH limit ("You already have 2 jobs running..." vs the hourly budget's
+ *  "Resets in N seconds") -- and its retry hint when it sent one. `status` is
+ *  set so lib/transport.js treats it as the backend answering 429. */
 export class RateLimitedError extends Error {
-  constructor(retryAfterSeconds) {
+  constructor(retryAfterSeconds, detail = null) {
     super(
-      retryAfterSeconds
-        ? `Rate limited. Try again in ${retryAfterSeconds} seconds.`
-        : 'Rate limited. Try again shortly.'
+      detail ||
+        (retryAfterSeconds
+          ? `Rate limited. Try again in ${retryAfterSeconds} seconds.`
+          : 'Rate limited. Try again shortly.')
     )
     this.name = 'RateLimitedError'
     this.retryAfterSeconds = retryAfterSeconds ?? null
+    this.status = 429
   }
 }
 
@@ -259,13 +264,15 @@ export class RateLimitedError extends Error {
  * job that cannot be deleted yet), and showing that sentence is the whole
  * reason it exists. A response with no readable body falls back to the status.
  */
-async function jobFailure(res, jobId) {
-  if (res.status === 404 || res.status === 410) {
+async function jobFailure(res, jobId = null) {
+  // Only a request about a job can mean "that job is gone": parse-preview,
+  // create and depict carry no id, and their 404 is just a 404.
+  if (jobId != null && (res.status === 404 || res.status === 410)) {
     return new JobGoneError(jobId, res.status)
   }
   if (res.status === 429) {
     const retry = Number.parseInt(res.headers.get('retry-after') ?? '', 10)
-    return new RateLimitedError(Number.isFinite(retry) ? retry : null)
+    return new RateLimitedError(Number.isFinite(retry) ? retry : null, await readDetail(res))
   }
   return httpError(res, 'Request')
 }
@@ -384,15 +391,21 @@ export function jobResultsSdfUrl(jobId) {
   return `/api/jobs/${encodeURIComponent(jobId)}/results.sdf`
 }
 
+// The owner token rides in a header, not the query string, so it never lands
+// in an access log, a proxy log or the browser history.
+function ownerHeaders(ownerToken) {
+  return { 'X-Owner-Token': ownerToken ?? '' }
+}
+
 /**
  * Stops a running job. Cooperative on the server: it marks the job cancelled
  * and the workers decline the next chunk, so molecules already in flight
  * still finish. Requires the owner token.
  */
 export async function cancelJob(jobId, ownerToken) {
-  const query = new URLSearchParams({ owner_token: ownerToken ?? '' })
-  const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/cancel?${query}`, {
+  const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/cancel`, {
     method: 'POST',
+    headers: ownerHeaders(ownerToken),
   })
   if (!res.ok) throw await jobFailure(res, jobId)
   return res.json()
@@ -404,9 +417,9 @@ export async function cancelJob(jobId, ownerToken) {
  * sentence is worth showing verbatim.
  */
 export async function deleteJob(jobId, ownerToken) {
-  const query = new URLSearchParams({ owner_token: ownerToken ?? '' })
-  const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}?${query}`, {
+  const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`, {
     method: 'DELETE',
+    headers: ownerHeaders(ownerToken),
   })
   if (!res.ok) throw await jobFailure(res, jobId)
   return res.json().catch(() => ({}))
@@ -420,7 +433,9 @@ export async function deleteJob(jobId, ownerToken) {
  * @returns {Promise<{depiction_svg:string|null, error:string|null}>}
  */
 export async function depictMolecule(smiles, signal) {
-  const res = await fetch(`/api/depict?smiles=${encodeURIComponent(smiles)}`, { signal })
+  // Low priority: a batch table draws many rows, and those must not queue
+  // ahead of the results fetch. Ignored where unsupported.
+  const res = await fetch(`/api/depict?smiles=${encodeURIComponent(smiles)}`, { signal, priority: 'low' })
   if (!res.ok) throw await jobFailure(res)
   return res.json()
 }

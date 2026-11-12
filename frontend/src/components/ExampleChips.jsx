@@ -31,8 +31,13 @@ export default function ExampleChips({ examples, error, disabled, onPick }) {
             <button
               type="button"
               className="chip"
-              disabled={disabled}
-              onClick={() => onPick(example)}
+              /* aria-disabled, not disabled: a chip pressed from the keyboard
+                 keeps focus while the run it started is busy (App.css styles
+                 both alike). */
+              aria-disabled={disabled || undefined}
+              onClick={() => {
+                if (!disabled) onPick(example)
+              }}
               title={`${example.label} — ${example.smiles}`}
               aria-label={example.label}
             >

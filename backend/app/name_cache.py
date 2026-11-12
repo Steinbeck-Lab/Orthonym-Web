@@ -18,7 +18,7 @@ import orthonym
 from app.core.config import get_settings
 from app.engine_info import OPSIN_VERSION
 from app.redis_store import get_redis
-from app.schemas import VERIFIED_STATUSES, ResultItem
+from app.schemas import VERIFIED_STATUSES, VERIFIED_TIERS, ResultItem
 
 # BUMP THIS whenever this app changes what a cached row means. An engine
 # update is covered by _engine_fingerprint() below; bump this too if that
@@ -152,6 +152,14 @@ def get_cached(
 
 def put_cached(item: ResultItem, best_effort: bool, verify: bool = True) -> None:
     if item.status not in _CACHEABLE:
+        return
+    if verify and item.tier in VERIFIED_TIERS and item.roundtrip_smiles is None:
+        # The guard below can no longer fire for a verify-on row: translate_one
+        # demotes such a row BEFORE it gets here, to best_effort (or to an
+        # abstain marked withheld_unchecked when best-effort is off), keeping
+        # the engine's verified tier. Without this, the outage row it describes
+        # was cached for 7 days as best_effort. A verify-off row is exempt: it
+        # never has a round trip, by request, and has its own cache key.
         return
     if item.status in VERIFIED_STATUSES and item.roundtrip_smiles is None:
         # This is the fingerprint of SELF-01 having failed open, not merely

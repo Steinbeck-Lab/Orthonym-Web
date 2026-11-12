@@ -410,6 +410,14 @@ test('the rarer stereodescriptor shapes are italic where they are descriptors', 
   assert.equal(marked('(1R*,2S*)-cyclohexane-1,2-diol'), '(1{R}*,2{S}*)-cyclohexane-1,2-diol')
 })
 
+test('axial M/P and located RS/SR keep their whole bracket italic', () => {
+  // One unmatched unit used to leave every descriptor in the bracket roman.
+  assert.equal(marked('(2R,4M)-2-methylhexa-3,4-dienoic acid'), '(2{R},4{M})-2-methylhexa-3,4-dienoic acid')
+  assert.equal(marked('(3P)-penta-2,3-diene'), '(3{P})-penta-2,3-diene')
+  assert.equal(marked('(2RS)-2-phenylpropanoic acid'), '(2{RS})-2-phenylpropanoic acid')
+  assert.equal(marked('(1RS,2SR)-2-aminocyclohexan-1-ol'), '(1{RS},2{SR})-2-aminocyclohexan-1-ol')
+})
+
 test('DL is italic whole', () => {
   assert.equal(marked('DL-alanine'), '{DL}-alanine')
 })

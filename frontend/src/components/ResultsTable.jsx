@@ -18,8 +18,14 @@ import TierLamp from './TierLamp'
  */
 export default function ResultsTable({ rows }) {
   return (
-    <div className="results-table-wrap">
+    /* Focusable and named: it scrolls sideways on a narrow screen, and a
+       keyboard can only scroll what it can reach. */
+    <div className="results-table-wrap" tabIndex={0} role="region" aria-label="Results table">
       <table className="results-table">
+        <caption className="sr-only">
+          {rows.length} results, one per SMILES, in the order given. Each name has its confidence
+          on the line below it.
+        </caption>
         <thead>
           <tr>
             <th scope="col" className="results-th--num">#</th>
@@ -43,10 +49,14 @@ function ResultRow({ row, index }) {
   const reason = limitReasonFor(row)
   const stripped = strippedNote(row)
   const named = NAMED_STATUSES.has(status)
-  const stateClass = STATE_CLASS[status] || status
+  // Not revealed yet (Home's per-row chase): no status, and certainly not an
+  // error -- the row has not failed, it has not been shown.
+  const pending = row.phase === 'pending'
+  const stateClass = pending ? 'pending' : STATE_CLASS[status] || status
+  const label = pending ? 'Resolving' : stateLabelFor(row) || 'Error'
 
   return (
-    <tbody className={`results-group results-group--${stateClass}`}>
+    <tbody className={`results-group results-group--${stateClass}`} aria-busy={pending || undefined}>
       <tr className="results-row">
         <td className="results-cell--num">{index + 1}</td>
         <td className="results-cell--smiles">
@@ -65,12 +75,16 @@ function ResultRow({ row, index }) {
               <span className="results-name__text">
                 <ChemName name={name} />
               </span>
-              <CopyButton text={name} />
+              <CopyButton text={name} label={`Copy name for row ${index + 1}`} />
               <ShareButton fields={{ smiles }} />
             </span>
           ) : (
             <span className="results-cell__none">
-              {status === 'error' ? error || 'Could not parse this SMILES string' : stateLabelFor(row)}
+              {pending
+                ? '—'
+                : status === 'error'
+                  ? error || 'Could not parse this SMILES string'
+                  : stateLabelFor(row)}
             </span>
           )}
           {reason && <span className="limit-reason">{reason}</span>}
@@ -98,7 +112,7 @@ function ResultRow({ row, index }) {
         <td className="results-conf-cell" colSpan={2}>
           <span className="results-conf">
             <TierLamp row={row} />
-            <span className="results-conf__tier">{stateLabelFor(row) || 'Error'}</span>
+            <span className="results-conf__tier">{label}</span>
             {named && roundtrip_smiles && (
               <span className="results-conf__rt">
                 {roundtrip_match ? 'round-trip ✓' : 'round-trip ✗'}

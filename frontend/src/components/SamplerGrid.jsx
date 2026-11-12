@@ -13,7 +13,9 @@ export default function SamplerGrid({ rows, reduceMotion, emptyMessage = DEFAULT
   }
 
   return (
-    <ul className="sampler" aria-live="polite">
+    /* Not a live region: a tile resolving character by character would be
+       read out piece by piece. The page announces a one-line summary. */
+    <ul className="sampler">
       {rows.map((row, index) => (
         <Tile
           key={`${row.smiles}-${index}`}
