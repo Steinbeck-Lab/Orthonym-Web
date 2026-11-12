@@ -23,11 +23,16 @@ const MULTIPLIER = /^(di|tri|tetra|penta|hexa|hepta|octa|nona|deca|bis|tris)/
 
 /** Whether a detail line names a part that is still hidden. A label is
  *  reduced to its stem ("dihydro" -> "hydro", which "hydrogen" contains);
- *  stems under four letters (locants, "di") are too common to judge. */
+ *  stems under four letters (locants, "di") are too common to judge. The whole
+ *  label is checked as well: the multiplier strip also eats the head of the
+ *  C5-C10 stems ("hexane" -> "ne"), and those names are themselves the giveaway. */
 export function lineGivesAway(line, hiddenLabels) {
   const text = (line || '').toLowerCase()
   return hiddenLabels.some((label) => {
-    const stem = label.toLowerCase().replace(/[^a-z]/g, '').replace(MULTIPLIER, '')
-    return stem.length >= 4 && text.includes(stem)
+    const whole = label.toLowerCase().replace(/[^a-z]/g, '')
+    const stem = whole.replace(MULTIPLIER, '')
+    // A bare multiplier ("tetra") is not checked whole: "tetrahedral" would hide it.
+    const parts = stem ? [whole, stem] : []
+    return parts.some((part) => part.length >= 4 && text.includes(part))
   })
 }

@@ -34,6 +34,9 @@ export default function ExplainView({
   data,
   resultMode,
   tierRow,
+  // useExplain's tierState: says 'pending' or 'unavailable, because' in
+  // place of the tier. Optional so a caller that passes only the row still works.
+  tierState = null,
   apiError,
   shareFields,
   marks = null,
@@ -169,7 +172,7 @@ export default function ExplainView({
             fallback, or a best effort.
           </p>
         ) : (
-          <ConfidenceReport row={tierRow} />
+          <ConfidenceReport row={tierRow} state={tierState} />
         )}
       </div>
 

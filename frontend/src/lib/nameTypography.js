@@ -50,8 +50,11 @@ const ITALIC_PREFIXES = [
   'abeo', 'ortho', 'meta', 'para', 'n', 'o', 'm', 'p',
 ]
 
-/** A single CIP-style descriptor unit inside a stereo bracket: "2S", "4as", "R". */
-const STEREO_UNIT = "(?:RS|SR|\\d*[a-z]?[RSEZrsez]\\*?|\\u00b1)"
+/** A single descriptor unit inside a stereo bracket: "2S", "4as", "R", the
+ *  racemate pairs "RS" / "2RS" / "1SR", and the axial "M" / "P" the engine
+ *  writes beside R and S ("(2R,4M)-"). One unit that fails to match un-italicises
+ *  the whole bracket, so every unit shape the engine emits has to be here. */
+const STEREO_UNIT = "(?:\\d*[a-z]?(?:RS|SR)|\\d*[a-z]?[RSEZMPrsez]\\*?|\\u00b1)"
 
 const TOKEN_START = '(^|[\\s\\-,([])'
 
@@ -112,7 +115,7 @@ const RULES = [
       const out = []
       for (let i = 0; i < body.length; i += 1) {
         const ch = body[i]
-        const isUpper = ch === 'R' || ch === 'S' || ch === 'E' || ch === 'Z'
+        const isUpper = ch === 'R' || ch === 'S' || ch === 'E' || ch === 'Z' || ch === 'M' || ch === 'P'
         // A lowercase descriptor is only a descriptor when it ENDS its unit;
         // otherwise it is the letter half of a composite locant ("4a").
         const next = body[i + 1]
@@ -300,7 +303,8 @@ function settle(raw, length) {
  *
  *   'italic'  set in the italic face
  *   'super'   raised
- *   'hidden'  not printed at all (the superscript caret, and only that)
+ *   'hidden'  takes no space on screen but stays in the copied text (the
+ *             superscript caret, and only that)
  */
 export function nameRuns(name) {
   if (!name) return []

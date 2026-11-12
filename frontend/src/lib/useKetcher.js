@@ -23,6 +23,18 @@ const READY_TIMEOUT_MS = 20000
  * "Translate"/"Name it" button click) -- it returns null/undefined if the
  * editor is not actually ready yet, which each page reports in its own words.
  */
+/** Whether a message is Ketcher's 'init' from OUR editor frame. Only that
+ *  same-origin frame may declare the editor ready; any other window or origin
+ *  could otherwise post 'init'. */
+export function isEditorInit(event, frameWindow, origin) {
+  return (
+    Boolean(frameWindow) &&
+    event.source === frameWindow &&
+    event.origin === origin &&
+    event.data?.eventType === 'init'
+  )
+}
+
 export function useKetcher({ enabled = true } = {}) {
   const iframeRef = useRef(null)
   const [editorState, setEditorState] = useState('loading') // 'loading' | 'ready' | 'error'
@@ -45,7 +57,7 @@ export function useKetcher({ enabled = true } = {}) {
     }
 
     function handleMessage(event) {
-      if (event.data && event.data.eventType === 'init') {
+      if (isEditorInit(event, iframeRef.current?.contentWindow, window.location.origin)) {
         setEditorState('ready')
       }
     }

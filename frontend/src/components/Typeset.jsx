@@ -12,15 +12,17 @@
 // into anything that understands HTML.
 //
 // The hidden caret: nameTypography marks the "^" of a von Baeyer superscript
-// as `hidden`, and it is dropped from the DOM here. IUPAC prints no caret --
-// the digits are simply raised. The exact engine string, caret included, is
-// still what the copy button, the CSV and the SDF write, because all three
-// read the data object and never the page.
+// as `hidden`. IUPAC prints no caret -- the digits are simply raised -- so it
+// takes no space and is not read aloud, but it STAYS in the DOM: a visitor who
+// selects the shown name and presses Ctrl+C must get the engine's exact string
+// ("0^4,9"), and a removed caret copied as "04,9", a different name. The copy
+// button, the CSV and the SDF read the data object, never the page.
 
 import { Fragment } from 'react'
 import { nameRuns, formulaRuns, applyRuns, breakSegments } from '../lib/nameTypography'
 
 const TAG = { italic: 'i', super: 'sup', sub: 'sub' }
+const HIDDEN_STYLE = { fontSize: 0 }
 
 /**
  * Renders `{ text, style }` pieces.
@@ -33,7 +35,15 @@ export function Pieces({ pieces, breaks = true }) {
   return (
     <>
       {pieces.map((piece, index) => {
-        if (piece.style === 'hidden') return null
+        if (piece.style === 'hidden') {
+          // font-size 0, not display:none or removal: zero width, but still in
+          // the text a selection copies (measured in headless Chromium).
+          return (
+            <span key={index} aria-hidden="true" style={HIDDEN_STYLE}>
+              {piece.text}
+            </span>
+          )
+        }
         const Tag = TAG[piece.style]
         // Plain text gets a <wbr> at each chemical boundary (breakSegments);
         // a styled run stays whole, so a raised locant never splits.

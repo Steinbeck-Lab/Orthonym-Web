@@ -8,17 +8,23 @@
 // 503 sentence here is that page's wording, so every surface describes the
 // same backend state the same way.
 
+/** The backend's `detail` sentence from a failed response, or null when the
+ *  body is not JSON or carries none. Reads the body, so call it once. */
+export async function readDetail(res) {
+  try {
+    const body = await res.json()
+    return typeof body?.detail === 'string' ? body.detail : null
+  } catch {
+    // Not JSON: the status still says what happened.
+    return null
+  }
+}
+
 /** A rejected fetch as an Error carrying `status`, and the backend's own
  *  `detail` as the message when the body has one (FastAPI's HTTPException
  *  shape). */
 export async function httpError(res, what) {
-  let detail = null
-  try {
-    const body = await res.json()
-    if (typeof body?.detail === 'string') detail = body.detail
-  } catch {
-    // Not JSON: the status still says what happened.
-  }
+  const detail = await readDetail(res)
   const err = new Error(detail || `${what} failed with ${res.status}`)
   err.status = res.status
   return err

@@ -42,3 +42,16 @@ test('splitLines treats a missing value as no text', () => {
     assert.deepEqual(splitLines(missing, 10), { lines: [], total: 0, truncated: false })
   }
 })
+
+test('splitLines breaks on every boundary Python str.splitlines() does', () => {
+  // The backend splits with splitlines(); a \r-joined share link counted as
+  // one line here while the backend named all of them past the inline cap.
+  const forty = Array.from({ length: 40 }, () => 'CCO').join('\r')
+  assert.equal(splitLines(forty, 10).total, 40)
+  const seps = ['\n', '\r', '\r\n', '\v', '\f', '\x1c', '\x1d', '\x1e', '\x85', '\u2028', '\u2029']
+  const { lines } = splitLines(seps.map((sep, i) => `C${i}${sep}`).join(''), 100)
+  assert.deepEqual(lines, seps.map((_, i) => `C${i}`))
+  // \r\n is one break, not two around an empty line (blank lines drop anyway,
+  // but the count of pieces must match Python's).
+  assert.deepEqual(splitLines('a\r\nb\u2028c', 10).lines, ['a', 'b', 'c'])
+})

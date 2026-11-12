@@ -44,4 +44,9 @@ test('a detail line that names a hidden part gives it away', async () => {
   // Short labels (locants, "di") are too common to judge; they never trigger.
   assert.equal(lineGivesAway('attached at position 2', ['2', 'di']), false)
   assert.equal(lineGivesAway('anything', []), false)
+  // A C5-C10 stem starts like a multiplier; stripping it left "ne" and hid nothing.
+  for (const label of ['hexane', 'pentane', 'octane', 'decane', 'hexan', 'nonan', 'butane']) {
+    assert.equal(lineGivesAway(`this ${label} is the parent chain`, [label]), true, label)
+  }
+  assert.equal(lineGivesAway('a tetrahedral carbon', ['tetra']), false)
 })

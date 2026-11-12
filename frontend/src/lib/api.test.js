@@ -4,7 +4,23 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { afterEach, test } from 'node:test'
 
-import { checkName, createJob, explainMolecule, explainName, fetchJobResults, jobResultsCsvUrl, jobResultsSdfUrl, translateBatch } from './api.js'
+import {
+  cancelJob,
+  checkName,
+  createJob,
+  deleteJob,
+  depictMolecule,
+  explainMolecule,
+  explainName,
+  fetchJobResults,
+  fetchJobStatus,
+  jobResultsCsvUrl,
+  jobResultsSdfUrl,
+  JobGoneError,
+  RateLimitedError,
+  translateBatch,
+} from './api.js'
+import { transportMessage } from './transport.js'
 
 const REAL = JSON.parse(readFileSync(new URL('./explainResponses.fixture.json', import.meta.url), 'utf8'))
 const RESPONSE_KEYS = ['atom_points', 'error', 'name', 'nodes', 'smiles', 'svg', 'total_atoms']
@@ -127,4 +143,53 @@ test('the strip switch travels on every naming request, off by default', async (
   assert.equal(seen[2].body.get('strip_salts'), 'true')
   await createJob({ text: 'CCO' })
   assert.equal(JSON.parse(seen[3].body).strip_salts, false)
+})
+
+test('a 429 keeps the server sentence and carries status 429', async () => {
+  const detail = 'You already have 2 jobs running, and the limit is 2. Wait for one to finish, or delete it.'
+  stub({ detail }, 429)
+  await assert.rejects(createJob({ text: 'CCO' }), (err) => {
+    assert.ok(err instanceof RateLimitedError)
+    assert.equal(err.message, detail)
+    assert.equal(err.status, 429)
+    assert.match(transportMessage(err), /request limit/)
+    return true
+  })
+  // No body: the generic sentence, still a 429, with the header's hint.
+  globalThis.fetch = async () => new Response('', { status: 429, headers: { 'retry-after': '30' } })
+  await assert.rejects(createJob({ text: 'CCO' }), (err) => err.retryAfterSeconds === 30 && /30 seconds/.test(err.message))
+})
+
+test('a 404 without a job id is not "No job undefined"', async () => {
+  for (const call of [() => createJob({ text: 'CCO' }), () => depictMolecule('CCO')]) {
+    stub({ detail: 'Not Found' }, 404)
+    await assert.rejects(call(), (err) => !(err instanceof JobGoneError) && err.status === 404 && !/undefined/.test(err.message))
+  }
+  stub({ detail: 'Not Found' }, 404)
+  await assert.rejects(fetchJobStatus('j1'), (err) => err instanceof JobGoneError && /j1/.test(err.message))
+})
+
+test('the owner token travels in a header, never in the URL', async () => {
+  const seen = []
+  globalThis.fetch = async (url, init) => {
+    seen.push({ url, init })
+    return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
+  }
+  await cancelJob('j1', 'secret-token')
+  await deleteJob('j1', 'secret-token')
+  for (const { url, init } of seen) {
+    assert.doesNotMatch(url, /secret-token|owner_token/)
+    assert.equal(init.headers['X-Owner-Token'], 'secret-token')
+  }
+  assert.deepEqual(seen.map((s) => [s.url, s.init.method]), [['/api/jobs/j1/cancel', 'POST'], ['/api/jobs/j1', 'DELETE']])
+})
+
+test('a structure drawing is fetched at low priority', async () => {
+  let init
+  globalThis.fetch = async (url, i) => {
+    init = i
+    return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
+  }
+  await depictMolecule('CCO')
+  assert.equal(init.priority, 'low')
 })
