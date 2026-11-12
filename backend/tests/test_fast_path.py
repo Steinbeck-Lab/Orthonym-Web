@@ -265,7 +265,7 @@ def test_translate_checks_the_job_cap_before_canonicalizing(
     redis_client, monkeypatch
 ):
     """Same ordering guarantee as above, for /api/translate's job-dispatch
-    branch -- check_job_allowed before _canonicalize, not after.
+    branch -- check_job_allowed before the parse, not after.
     """
     import app.main as main_module
     from app.core.config import get_settings
@@ -276,22 +276,24 @@ def test_translate_checks_the_job_cap_before_canonicalizing(
 
     order: list[str] = []
     real_check = main_module.check_job_allowed
-    real_canonicalize = main_module._canonicalize
+    real_parse = main_module._parse_or_400
 
     def spy_check(ip):
         order.append("check_job_allowed")
         return real_check(ip)
 
-    def spy_canonicalize(smiles_list, max_molecules):
-        order.append("_canonicalize")
-        return real_canonicalize(smiles_list, max_molecules)
+    # The job branch parses in a worker now (_parse_or_400), not with
+    # _canonicalize in this process; the cap must still come first.
+    def spy_parse(*args, **kwargs):
+        order.append("_parse_or_400")
+        return real_parse(*args, **kwargs)
 
     monkeypatch.setattr(main_module, "check_job_allowed", spy_check)
-    monkeypatch.setattr(main_module, "_canonicalize", spy_canonicalize)
+    monkeypatch.setattr(main_module, "_parse_or_400", spy_parse)
 
     response = client.post("/api/translate", json={"smiles": ["CCO", "CCC"]})
     assert response.status_code == 200, response.text
-    assert order == ["check_job_allowed", "_canonicalize"], order
+    assert order == ["check_job_allowed", "_parse_or_400"], order
 
 
 def test_importing_main_does_not_start_a_jvm():

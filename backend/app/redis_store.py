@@ -412,6 +412,27 @@ def read_rows(job_id: str, offset: int, limit: int) -> list[dict]:
     return [json.loads(r) for r in raw]
 
 
+def job_view_key(
+    job_id: str, sort: str, order: str, statuses: list[str], n_rows: int
+) -> str:
+    """One sorted/filtered view's cached row order (jobs_api._view_positions).
+    TTL'd to the job's own expiry; it holds positions only, no row data."""
+    wanted = ",".join(statuses) or "all"
+    return f"{_KEY_PREFIX}:job:{job_id}:view:{sort}:{order}:{wanted}:{n_rows}"
+
+
+def read_rows_at(job_id: str, positions: list[int]) -> list[dict]:
+    """The rows at these list positions, in the order given. One pipelined
+    round trip; a position gone (rows key evicted meanwhile) is skipped."""
+    if not positions:
+        return []
+    pipe = get_redis().pipeline(transaction=False)
+    key = job_rows_key(job_id)
+    for position in positions:
+        pipe.lindex(key, position)
+    return [json.loads(raw) for raw in pipe.execute() if raw is not None]
+
+
 def iter_all_rows(job_id: str, page: int = 500) -> Iterator[dict]:
     """Page through the whole result list, for CSV streaming. Never loads a
     10,000-row job into memory at once.

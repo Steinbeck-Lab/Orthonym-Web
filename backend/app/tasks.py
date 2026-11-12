@@ -253,9 +253,12 @@ def _check_row(item: dict, row: dict) -> None:
     row["verdict_text"] = result["verdict_text"]
     row["claimed_smiles"] = result["claimed_smiles"]
     # Batch rows hold text: OPSIN's warnings in one cell, never dropped.
-    row["opsin_warnings"] = "; ".join(
-        f"{w['type']}: {w['message']}" for w in result["warnings"]
-    ) or None
+    if result["warnings"] is None:
+        row["opsin_warnings"] = name_check.WARNINGS_UNAVAILABLE
+    else:
+        row["opsin_warnings"] = "; ".join(
+            f"{w['type']}: {w['message']}" for w in result["warnings"]
+        ) or None
 
 
 def _timed_out_rows(timeout: _ChunkTimedOut) -> tuple[list[dict], int]:
@@ -357,7 +360,13 @@ def _close_job(job_id: str, n_chunks: int) -> int:
     ip = meta.get("ip", "unknown")
     total = int(meta.get("total", 0))
     already = redis_store.rows_length(job_id)
-    if meta.get("status") == "done" and already == total:
+    # Any terminal status with rows already assembled, not only "done": a
+    # redelivered close of a failed or cancelled job would otherwise run
+    # assemble_rows again over chunk keys the first close deleted, wiping the
+    # partial rows it kept. A terminal job with NO rows still assembles -- a
+    # cancelled job's own first close is exactly that (its status was set by
+    # cancel, not by a close).
+    if meta.get("status") in ("done", "failed", "cancelled") and already > 0:
         logger.info(
             "Job %s is already closed with %s rows; redelivered close ignored.",
             job_id,
@@ -661,7 +670,7 @@ def name_to_smiles(name: str) -> dict:
     from rdkit import Chem
 
     from app.depiction import structure_svg_data_uri
-    from app.name_check import opsin_warnings
+    from app.name_check import warnings_or_none
     from app.sdf_export import molblock_2d
 
     raw = opsin_parse(name)
@@ -694,7 +703,7 @@ def name_to_smiles(name: str) -> dict:
         "inchikey": inchikey,
         "molblock": _quietly(lambda: molblock_2d(mol)),
         "depiction_svg": structure_svg_data_uri(raw, mol),
-        "warnings": opsin_warnings(name),
+        "warnings": warnings_or_none(name),
         "error": None,
     }
 
@@ -753,7 +762,9 @@ def dispatch_batch(
     return len(chunks)
 
 @celery_app.task(name="app.tasks.parse_input")
-def parse_input(data: bytes, max_molecules: int, kind: str = "name") -> dict:
+def parse_input(
+    data: bytes, max_molecules: int, kind: str = "name", fmt: str | None = None
+) -> dict:
     """Sniff and parse an uploaded body, in a WORKER rather than the web process.
 
     Spec section 13a / audit item parse-cost-aggregate. Parsing is RDKit work,
@@ -780,8 +791,13 @@ def parse_input(data: bytes, max_molecules: int, kind: str = "name") -> dict:
     """
     from app.inputs import InputFormat, TooManyMolecules, parse, parse_check_csv, sniff
 
-    # A name-check job's input is always a smiles,name CSV.
-    fmt = InputFormat.CSV if kind == "check" else sniff(data)
+    # A name-check job's input is always a smiles,name CSV. `fmt` is given
+    # when the caller already knows it: /api/translate's list of SMILES is a
+    # list, whatever its first line happens to look like.
+    if kind == "check":
+        fmt = InputFormat.CSV
+    else:
+        fmt = InputFormat(fmt) if fmt else sniff(data)
     try:
         molecules = (
             parse_check_csv(data, max_molecules) if kind == "check"
