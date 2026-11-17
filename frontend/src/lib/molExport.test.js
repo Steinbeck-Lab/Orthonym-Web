@@ -113,3 +113,22 @@ test('OPSIN warnings reach the CSV and the SDF, type kept verbatim', () => {
   assert.match(rowsToCsv([row]), /"APPEARS_AMBIGUOUS: Connection of eth to pyridin",""\r\n$/)
   assert.match(rowsToSdf([row]).text, />  <OPSIN_WARNINGS>\nAPPEARS_AMBIGUOUS: Connection of eth to pyridin\n/)
 })
+
+test('rowsToCsv neutralises a spreadsheet formula in visitor-typed text', () => {
+  // Quoting alone does not stop Excel, LibreOffice or Sheets evaluating a cell
+  // that opens with = + - @ tab or CR; `name` arrives verbatim from a share link.
+  for (const leader of ['=', '+', '-', '@', '\t', '\r']) {
+    const payload = `${leader}HYPERLINK("https://evil.example/","x")`
+    const csv = rowsToCsv([bad(0, payload, payload)])
+    const cell = `"'${payload.replace(/"/g, '""')}"`
+    assert.equal(csv.split(cell).length - 1, 2, JSON.stringify(leader)) // name and error
+  }
+})
+
+test('rowsToCsv leaves a value with an inner formula character untouched', () => {
+  // Only the first character makes a cell a formula, and IUPAC names and every
+  // InChI carry = + - @ mid-string; the exact-file test covers the identifiers.
+  const csv = rowsToCsv([ok(0, '(+)-but-2-ene', ASPIRIN)])
+  assert.ok(csv.includes('"(+)-but-2-ene"'))
+  assert.ok(csv.includes(`"${ASPIRIN.inchi}"`))
+})
