@@ -12,6 +12,7 @@ import hmac
 import io
 import json
 import logging
+import re
 import secrets
 import time
 import uuid
@@ -774,9 +775,17 @@ def job_results(
 # mitigation and survives a round trip as data.
 _FORMULA_LEADERS = ("=", "+", "-", "@", "\t", "\r")
 
+# A spreadsheet in a `;`-separator locale (German Excel) splits this comma
+# file at every `;` and quoted newline, so text AFTER one of them opens a cell
+# too. An apostrophe after the break keeps that cell data as well.
+_INNER_FORMULA = re.compile(r"([;\r\n])(?=[ \t]*[=+\-@])")
+
 
 def _csv_safe(value):
-    if isinstance(value, str) and value.startswith(_FORMULA_LEADERS):
+    if not isinstance(value, str):
+        return value
+    value = _INNER_FORMULA.sub(r"\1'", value)
+    if value.startswith(_FORMULA_LEADERS):
         return "'" + value
     return value
 

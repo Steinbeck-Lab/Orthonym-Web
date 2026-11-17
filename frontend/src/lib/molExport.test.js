@@ -125,6 +125,18 @@ test('rowsToCsv neutralises a spreadsheet formula in visitor-typed text', () => 
   }
 })
 
+test('rowsToCsv neutralises a formula after a semicolon or line break', () => {
+  // German Excel splits a comma file at `;` and line breaks.
+  for (const brk of [';', '; ', '\n', '\r\n']) {
+    const csv = rowsToCsv([bad(0, `ethanol${brk}=HYPERLINK("x")`, 'e')])
+    const sep = brk.includes(';') ? ';' : '\n'
+    assert.ok(csv.includes(`ethanol${brk.split(sep)[0]}${sep}'`), JSON.stringify(brk))
+  }
+  // The InChI column keeps its charge layer as written.
+  const charged = { ...ASPIRIN, inchi: 'InChI=1S/Na.H2O/h;1H2/q+1;-1' }
+  assert.ok(rowsToCsv([ok(0, 'x', charged)]).includes('"InChI=1S/Na.H2O/h;1H2/q+1;-1"'))
+})
+
 test('rowsToCsv leaves a value with an inner formula character untouched', () => {
   // Only the first character makes a cell a formula, and IUPAC names and every
   // InChI carry = + - @ mid-string; the exact-file test covers the identifiers.

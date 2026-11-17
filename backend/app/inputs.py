@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import csv
 import io
+import multiprocessing
 import re
 from dataclasses import dataclass
 from enum import Enum
@@ -130,7 +131,19 @@ def _from_mol(index: int, mol, raw_input: str) -> ParsedMolecule:
                 f"{MAX_MOLECULE_SMILES_LENGTH}"
             ),
         )
-    smiles = Chem.MolToSmiles(mol)
+    try:
+        smiles = Chem.MolToSmiles(mol)
+    except (ValueError, RuntimeError) as exc:
+        # A dense ring system can need more ring-closure digits than SMILES
+        # allows ("Too many rings open at once"). One such record must fail
+        # its own row, not the whole file.
+        return ParsedMolecule(
+            index=index,
+            raw_input=raw_input,
+            input_id=input_id,
+            smiles=None,
+            error=f"RDKit could not write SMILES for this molecule: {exc}",
+        )
     if len(smiles) > MAX_MOLECULE_SMILES_LENGTH:
         return ParsedMolecule(
             index=index,
@@ -586,8 +599,57 @@ def parse_preview_sample(
     `sample_size`-only parse hitting that limit just means "there were
     more than the sample," which TooManyMolecules.partial already carries.
     """
-    try:
-        sample = parse(data, fmt, sample_size)
-    except TooManyMolecules as exc:
-        sample = exc.partial[:sample_size]
+    if fmt in (InputFormat.SDF, InputFormat.MOLFILE):
+        sample = _in_child(_sample, data, fmt, sample_size)
+    else:
+        sample = _sample(data, fmt, sample_size)
     return sample, count_molecules(data, fmt)
+
+
+def _sample(data: bytes, fmt: InputFormat, sample_size: int) -> list[ParsedMolecule]:
+    try:
+        return parse(data, fmt, sample_size)
+    except TooManyMolecules as exc:
+        return exc.partial[:sample_size]
+
+
+# RDKit's molblock reader is about cubic in some ring systems, and the text
+# checks above (_over_atom_cap) block only the shapes they know. The preview
+# runs in the web process, where RDKit holds the GIL, so its molblock parse
+# runs in a child process that is killed at the deadline. A worker's parse is
+# already bounded by Celery's task_time_limit. forkserver, not fork: the web
+# process can hold a live JVM (cdk_bridge), which a fork must not copy.
+# ponytail: one child per preview, at most one per threadpool thread; add a
+# pool if previews ever become the hot path.
+PREVIEW_PARSE_TIMEOUT = 10
+_CHILDREN = multiprocessing.get_context("forkserver")
+_CHILDREN.set_forkserver_preload(["__main__", "app.inputs"])
+
+
+def _child_main(conn, fn, args) -> None:
+    try:
+        conn.send((True, fn(*args)))
+    except Exception as exc:  # ValueError and csv.Error reach the caller as before
+        conn.send((False, exc))
+
+
+def _in_child(fn, *args):
+    timeout = PREVIEW_PARSE_TIMEOUT
+    reader, writer = _CHILDREN.Pipe(duplex=False)
+    child = _CHILDREN.Process(target=_child_main, args=(writer, fn, args), daemon=True)
+    child.start()
+    writer.close()
+    try:
+        if not reader.poll(timeout):
+            raise ValueError(f"Reading these molecules took longer than {timeout} s")
+        ok, value = reader.recv()
+    except EOFError:
+        # The child died without an answer: RDKit can SIGSEGV on a record.
+        raise ValueError("RDKit stopped while reading these molecules") from None
+    finally:
+        child.kill()
+        child.join()
+        reader.close()
+    if not ok:
+        raise value
+    return value

@@ -6,6 +6,9 @@ process. The forked-worker JVM behaviour is covered separately in
 test_celery_jvm_fork.py -- that is the one thing eager mode cannot test.
 """
 
+import csv
+import io
+
 import pytest
 from fastapi import Request
 from fastapi.testclient import TestClient
@@ -1107,6 +1110,26 @@ def test_every_formula_leader_is_neutralised_in_every_user_text_column(
         f"{leader!r} reached the {column} column unescaped; a spreadsheet "
         "would evaluate it as a formula when the user opens their download"
     )
+
+
+@pytest.mark.parametrize("brk", [";", "; ", "\n", "\r\n"])
+def test_a_formula_after_a_semicolon_or_line_break_is_neutralised(
+    redis_client, job_id, brk
+):
+    """German Excel splits a comma CSV at `;` and at a quoted newline, so the
+    text after one opens its own cell."""
+    payload = f"ethanol{brk}=HYPERLINK(\"https://evil.example\")"
+    row = {"index": 0, "input": "CCO", "status": "error", "claimed_name": payload}
+
+    redis_store.create_job(job_id, total=1, fmt="smiles_list", client_ip="::1")
+    redis_store.write_chunk(job_id, 0, [row])
+    redis_store.assemble_rows(job_id, n_chunks=1)
+    redis_store.set_job_status(job_id, "done")
+
+    body = TestClient(app).get(f"/api/jobs/{job_id}/results.csv").text
+    cell = next(csv.DictReader(io.StringIO(body)))["claimed_name"]
+    sep = ";" if ";" in brk else "\n"
+    assert cell.split(sep, 1)[1].startswith("'"), repr(cell)
 
 
 def test_a_multipart_upload_with_no_file_part_is_a_400_not_a_500(redis_client):

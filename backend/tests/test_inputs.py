@@ -186,6 +186,36 @@ def test_v3000_block_without_readable_counts_is_refused(counts_line, extra):
     assert row.error == "This V3000 block has no readable COUNTS line"
 
 
+def _dense_random_graph(n: int = 1000, degree: int = 6) -> str:
+    """A V3000 block of dummy atoms joined at random: RDKit reads it, but
+    MolToSmiles raises "Too many rings open at once" on it."""
+    import random
+
+    rng = random.Random(1)
+    bonds = {(a, a + 1) for a in range(1, n)}
+    while len(bonds) < n * degree // 2:
+        a, b = rng.sample(range(1, n + 1), 2)
+        bonds.add((min(a, b), max(a, b)))
+    return "\n".join(
+        ["dense", "  probe", "", "  0  0  0     0  0            999 V3000",
+         "M  V30 BEGIN CTAB", f"M  V30 COUNTS {n} {len(bonds)} 0 0 0",
+         "M  V30 BEGIN ATOM", *(f"M  V30 {i} * 0 0 0 0" for i in range(1, n + 1)),
+         "M  V30 END ATOM", "M  V30 BEGIN BOND",
+         *(f"M  V30 {k} 1 {a} {b}" for k, (a, b) in enumerate(sorted(bonds), 1)),
+         "M  V30 END BOND", "M  V30 END CTAB", "M  END", ""]
+    )
+
+
+def test_a_record_rdkit_cannot_write_as_smiles_fails_only_its_own_row():
+    rows = parse(
+        _sdf(ETHANOL_MOLBLOCK, _dense_random_graph(), BENZENE_MOLBLOCK),
+        InputFormat.SDF,
+        100,
+    )
+    assert [r.smiles for r in rows] == ["CCO", None, "c1ccccc1"]
+    assert "Too many rings open at once" in rows[1].error
+
+
 def test_parse_sdf_keeps_titles_and_order():
     rows = parse(_sdf(ETHANOL_MOLBLOCK, BENZENE_MOLBLOCK), InputFormat.SDF, 100)
     assert [r.index for r in rows] == [0, 1]
@@ -489,3 +519,44 @@ def test_a_name_on_two_lines_is_an_error_row():
     assert row.smiles is None
     assert row.error == "A name must be one line"
     assert row.claimed_name == "ethanol\nmethanol"
+
+
+def test_a_preview_molblock_parse_runs_in_a_child_with_a_deadline(monkeypatch):
+    import app.inputs as inputs
+
+    # No child answers within 0.1 ms, so this fails only if the parse runs
+    # in this process instead.
+    monkeypatch.setattr(inputs, "PREVIEW_PARSE_TIMEOUT", 0.0001)
+    with pytest.raises(ValueError, match="took longer than"):
+        inputs.parse_preview_sample(
+            _sdf(ETHANOL_MOLBLOCK), InputFormat.SDF, 5
+        )
+
+
+def test_a_child_past_its_deadline_is_killed(monkeypatch):
+    import app.inputs as inputs
+
+    monkeypatch.setattr(inputs, "PREVIEW_PARSE_TIMEOUT", 1)
+    start = time.perf_counter()
+    with pytest.raises(ValueError, match="took longer than 1 s"):
+        inputs._in_child(time.sleep, 30)
+    assert time.perf_counter() - start < 5
+
+
+def test_a_child_that_crashes_is_a_value_error():
+    import os
+
+    import app.inputs as inputs
+
+    with pytest.raises(ValueError, match="RDKit stopped"):
+        inputs._in_child(os.abort)
+
+
+def test_a_preview_in_a_child_keeps_rows_and_parse_errors():
+    from app.inputs import parse_preview_sample
+
+    rows, total = parse_preview_sample(
+        _sdf(ETHANOL_MOLBLOCK, "not a molblock\n", BENZENE_MOLBLOCK), InputFormat.SDF, 5
+    )
+    assert [r.smiles for r in rows] == ["CCO", None, "c1ccccc1"]
+    assert total == 3

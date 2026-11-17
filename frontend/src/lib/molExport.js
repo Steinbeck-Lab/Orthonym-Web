@@ -20,8 +20,15 @@ const FORMULA_LEADERS = ['=', '+', '-', '@', '\t', '\r']
  * InChI. An unquoted writer shifts every column after the first comma, which
  * silently attaches each molecule's InChIKey to the wrong row in a spreadsheet.
  */
-function csvField(value) {
+// A `;`-separator locale (German Excel) splits this comma file at every `;`
+// and line break, so text after one opens a cell too. Same rule as the
+// backend's _INNER_FORMULA. Not for the InChI column: its charge layers carry
+// `;+1`, and that text comes from RDKit, never from a visitor.
+const INNER_FORMULA = /([;\r\n])(?=[ \t]*[=+\-@])/g
+
+function csvField(value, column) {
   let text = value == null ? '' : String(value)
+  if (column !== 'inchi') text = text.replace(INNER_FORMULA, "$1'")
   if (FORMULA_LEADERS.some((leader) => text.startsWith(leader))) text = `'${text}`
   return `"${text.replace(/"/g, '""')}"`
 }
@@ -41,7 +48,7 @@ export function rowsToCsv(rows) {
         warningsText(d.warnings),
         row.error,
       ]
-        .map(csvField)
+        .map((value, i) => csvField(value, CSV_COLUMNS[i]))
         .join(',')
     )
   }
