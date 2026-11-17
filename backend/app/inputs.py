@@ -37,7 +37,13 @@ RDLogger.DisableLog("rdApp.*")
 SNIFF_BYTES = 65536
 
 # A molfile counts line: "<natoms> <nbonds> ... V2000" or V3000.
-_COUNTS_LINE = re.compile(r"^\s*\d+\s+\d+.*\bV[23]000\s*$", re.MULTILINE)
+# Kept linear-time on purpose: sniff() runs on untrusted input in the web
+# process. The leading run is [^\S\n]*, not \s*, so a match attempt from one
+# line start cannot run on over the newlines after it (\s* made a body of bare
+# newlines quadratic), and the second count is one \d, not \d+, because .*
+# takes the rest of its digits (\d+ backtracked against .* quadratically on a
+# long run of digits). Neither change alters which inputs match.
+_COUNTS_LINE = re.compile(r"^[^\S\n]*\d+\s+\d.*\bV[23]000\s*$", re.MULTILINE)
 
 _CSV_DELIMITERS = (",", ";", "\t")
 

@@ -7,6 +7,13 @@ import { warningsText } from './opsinWarnings.js'
 
 const CSV_COLUMNS = ['#', 'name', 'smiles', 'canonical_smiles', 'inchi', 'inchikey', 'opsin_warnings', 'error']
 
+// Excel, LibreOffice and Sheets evaluate a cell opening with any of these as a
+// formula, quoted or not, and `name` is verbatim visitor text (a `#name=` share
+// link fills it). Prefixing an apostrophe keeps it data; same set as the
+// backend's results.csv (jobs_api._FORMULA_LEADERS). No SMILES, InChI or
+// InChIKey starts with one, so identifiers are written unchanged.
+const FORMULA_LEADERS = ['=', '+', '-', '@', '\t', '\r']
+
 /**
  * RFC 4180 quoting, and it is load-bearing rather than defensive: IUPAC names
  * contain commas as a matter of course (2,3-dimethylbutane) and so does every
@@ -14,7 +21,8 @@ const CSV_COLUMNS = ['#', 'name', 'smiles', 'canonical_smiles', 'inchi', 'inchik
  * silently attaches each molecule's InChIKey to the wrong row in a spreadsheet.
  */
 function csvField(value) {
-  const text = value == null ? '' : String(value)
+  let text = value == null ? '' : String(value)
+  if (FORMULA_LEADERS.some((leader) => text.startsWith(leader))) text = `'${text}`
   return `"${text.replace(/"/g, '""')}"`
 }
 

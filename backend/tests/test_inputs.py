@@ -1,6 +1,9 @@
+import time
+
 import pytest
 
 from app.inputs import (
+    SNIFF_BYTES,
     InputFormat,
     ParsedMolecule,
     TooManyMolecules,
@@ -66,6 +69,23 @@ def test_sniff_bare_smiles_header_is_still_csv():
 
 def test_sniff_plain_smiles_list():
     assert sniff(b"CCO\nc1ccccc1\n") is InputFormat.SMILES_LIST
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        b"\n" * SNIFF_BYTES,  # every position is a line start
+        b"1 1" + b"1" * (SNIFF_BYTES - 3),  # one long second count
+    ],
+    ids=["newlines", "digit-run"],
+)
+def test_sniff_counts_line_check_is_linear(data):
+    # The counts-line regex used to backtrack quadratically on both inputs,
+    # about N^2/2 steps over the sniff window, and /api/parse-preview runs
+    # sniff() on the event loop. A linear check is far inside this bound.
+    start = time.perf_counter()
+    assert sniff(data) is InputFormat.SMILES_LIST
+    assert time.perf_counter() - start < 1.0
 
 
 def test_parse_sdf_keeps_titles_and_order():
