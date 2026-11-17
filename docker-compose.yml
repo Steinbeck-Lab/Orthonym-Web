@@ -245,7 +245,9 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      # /healthz, not /: nginx.conf exempts it from a Basic Auth gate, so
+      # the gate needs no forgeable `allow 127.0.0.1` exemption.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
       timeout: 5s
       start_period: 10s
     mem_limit: ${FRONTEND_MEM_LIMIT:-256m}

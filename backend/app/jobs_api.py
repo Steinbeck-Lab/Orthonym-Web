@@ -427,9 +427,13 @@ async def parse_preview(
     """
     check_fast_allowed(client_ip(request))
     data, _ = await _read_input(request, file)
-    fmt = sniff(data)
+    # Off the event loop, as create_job does: the structural count is a
+    # pure-Python pass over up to MAX_FILE_SIZE_MB.
+    fmt = await run_in_threadpool(sniff, data)
     try:
-        sample_molecules, total = parse_preview_sample(data, fmt, PREVIEW_SAMPLE)
+        sample_molecules, total = await run_in_threadpool(
+            parse_preview_sample, data, fmt, PREVIEW_SAMPLE
+        )
     except (ValueError, csv.Error) as exc:
         # csv.Error (a field past csv's 131,072-character limit) is not a
         # ValueError; parse_input catches it too.

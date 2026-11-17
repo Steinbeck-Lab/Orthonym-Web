@@ -88,6 +88,104 @@ def test_sniff_counts_line_check_is_linear(data):
     assert time.perf_counter() - start < 1.0
 
 
+def _fused_ring_ladder(
+    rungs: int, counts_line: str = "M  V30 COUNTS {atoms} {bonds} 0 0 0"
+) -> str:
+    """A V3000 strip of fused aromatic six-rings, 2 * rungs carbons. RDKit's
+    molblock reader costs about cubic time in the atoms of such a strip:
+    10,000 atoms took 95 s before the COUNTS check. The bond count must be
+    the real one: declared as 0, RDKit skips the bonds and the parse is
+    cheap, so the test would pass without the check."""
+    n = rungs
+    atoms = [f"M  V30 {i} C 0 0 0 0" for i in range(1, 2 * n + 1)]
+    bonds = []
+    for i in range(1, n):
+        top, bottom = (2, 1) if i % 2 else (1, 2)
+        bonds += [(top, i, i + 1), (bottom, n + i, n + i + 1)]
+    bonds += [(1, i, n + i) for i in range(1, n + 1, 2)]
+    counts = counts_line.format(atoms=2 * n, bonds=len(bonds))
+    return "\n".join(
+        ["ladder", "  probe", "", "  0  0  0     0  0            999 V3000",
+         "M  V30 BEGIN CTAB", counts, "M  V30 BEGIN ATOM", *atoms,
+         "M  V30 END ATOM", "M  V30 BEGIN BOND",
+         *(f"M  V30 {k} {o} {a} {b}" for k, (o, a, b) in enumerate(bonds, 1)),
+         "M  V30 END BOND", "M  V30 END CTAB", "M  END", ""]
+    )
+
+
+@pytest.mark.parametrize(
+    "counts_line",
+    [
+        "M  V30 COUNTS {atoms} {bonds} 0 0 0",
+        # a continued line and zero padding must not hide the count
+        "M  V30 COUNTS -\nM  V30 {atoms} {bonds} 0 0 0",
+        "M  V30 COUNTS 0000000000000{atoms} {bonds} 0 0 0",
+        # RDKit reads the keyword in any case
+        "M  V30 counts {atoms} {bonds} 0 0 0",
+    ],
+    ids=["plain", "continued", "zero-padded", "lowercase"],
+)
+def test_molblock_over_atom_cap_is_refused_before_rdkit(counts_line):
+    block = _fused_ring_ladder(5000, counts_line)
+    start = time.perf_counter()
+    (molfile_row,) = parse(block.encode(), InputFormat.MOLFILE, 1)
+    sdf_rows = parse(_sdf(ETHANOL_MOLBLOCK, block, BENZENE_MOLBLOCK), InputFormat.SDF, 10)
+    assert time.perf_counter() - start < 2.0
+    assert molfile_row.error == "Molecule has 10000 atoms; the limit is 2000"
+    assert [r.smiles for r in sdf_rows] == ["CCO", None, "c1ccccc1"]
+    assert sdf_rows[1].error == molfile_row.error
+    assert sdf_rows[1].input_id == "ladder"
+
+
+def test_dash_with_trailing_spaces_does_not_hide_the_counts_line():
+    # RDKit continues a line only when "-" is its last character, so here it
+    # reads BEGIN CTAB and then the real 10,000-atom COUNTS line. A looser
+    # join merged the two and let the decoy after M END vouch for the block.
+    block = _fused_ring_ladder(5000).replace(
+        "M  V30 BEGIN CTAB", "M  V30 BEGIN CTAB -  ", 1
+    ) + "> <note>\nM  V30 COUNTS 5 5 0 0 0\n"
+    start = time.perf_counter()
+    (row,) = parse(block.encode(), InputFormat.MOLFILE, 1)
+    assert time.perf_counter() - start < 1.0
+    assert row.error == "Molecule has 10000 atoms; the limit is 2000"
+
+
+def test_molblock_over_bond_cap_is_refused_before_rdkit():
+    # 300 valence-free atoms, every pair bonded: under the atom cap, but
+    # RDKit took 2.9 s on it before the bond check.
+    n = 300
+    pairs = [(a, b) for a in range(1, n + 1) for b in range(a + 1, n + 1)]
+    block = "\n".join(
+        ["dense", "  probe", "", "  0  0  0     0  0            999 V3000",
+         "M  V30 BEGIN CTAB", f"M  V30 COUNTS {n} {len(pairs)} 0 0 0",
+         "M  V30 BEGIN ATOM", *(f"M  V30 {i} * 0 0 0 0" for i in range(1, n + 1)),
+         "M  V30 END ATOM", "M  V30 BEGIN BOND",
+         *(f"M  V30 {k} 1 {a} {b}" for k, (a, b) in enumerate(pairs, 1)),
+         "M  V30 END BOND", "M  V30 END CTAB", "M  END", ""]
+    )
+    start = time.perf_counter()
+    (row,) = parse(block.encode(), InputFormat.MOLFILE, 1)
+    assert time.perf_counter() - start < 1.0
+    assert row.error == "Molecule has 44850 bonds; the limit is 4000"
+
+
+@pytest.mark.parametrize(
+    "counts_line, extra",
+    [
+        ("M  V30 COUNTS six seven 0 0 0", ""),
+        # RDKit accepts this line; a readable decoy must not vouch for it
+        ("M  V30 COUNTS {atoms} +{bonds} 0 0 0", "> <note>\nM  V30 COUNTS 5 5 0 0 0\n"),
+        # COUNTS mentioned elsewhere on an M  V30 line: fail closed
+        ("M  V30 COUNTS {atoms} {bonds} 0 0 0", "M  V30 X COUNTS 1 1\n"),
+    ],
+    ids=["unreadable", "decoy", "stray-mention"],
+)
+def test_v3000_block_without_readable_counts_is_refused(counts_line, extra):
+    block = _fused_ring_ladder(3, counts_line) + extra
+    (row,) = parse(block.encode(), InputFormat.MOLFILE, 1)
+    assert row.error == "This V3000 block has no readable COUNTS line"
+
+
 def test_parse_sdf_keeps_titles_and_order():
     rows = parse(_sdf(ETHANOL_MOLBLOCK, BENZENE_MOLBLOCK), InputFormat.SDF, 100)
     assert [r.index for r in rows] == [0, 1]

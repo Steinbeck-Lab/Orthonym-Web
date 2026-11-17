@@ -148,6 +148,67 @@ def _from_mol(index: int, mol, raw_input: str) -> ParsedMolecule:
     )
 
 
+# _from_mol's atom cap runs AFTER RDKit has parsed the record, and the parse
+# itself is the cost. Measured on RDKit 2026.3.5: its molblock reader does
+# ring work even with sanitize=False, and it grows about cubically with the
+# atoms in fused rings -- a 0.5 MB V3000 ladder of 10,000 aromatic atoms
+# held the GIL for 95 s, a 2,000-atom one 0.9 s. RDKit reads exactly as many
+# atoms as the COUNTS line declares (a block holding more fails at once), so
+# reading that number from the text bounds the parse before RDKit sees it.
+# Bonds cost too, atoms or not: 300 valence-free atoms with 44,850 bonds took
+# 2.9 s, and a 50 MB file holds millions of bond lines. Legitimate molecules
+# under the atom cap stay well inside twice it.
+# A V2000 counts line has three-digit fields, so it cannot declare more than
+# 999 atoms or bonds; only V3000 needs this. RDKit reads the COUNTS keyword in
+# any case ("counts" works) but the "M  V30 " prefix only exactly, and a
+# trailing "-" continues a line onto the next "M  V30 " line, so those are
+# joined first, as RDKit does. EVERY COUNTS line must read as two plain
+# numbers, or the block is refused: otherwise a readable decoy line (in an SD
+# data field, say) could stand in for an unreadable real one that RDKit
+# still accepts ("COUNTS 3000 +4000" is one). The join is exactly RDKit's:
+# "-" must be the line's last character (a "-  " line is NOT continued, and a
+# looser join hid the real COUNTS line behind "BEGIN CTAB -  "). And any
+# "M  V30 " line that mentions COUNTS anywhere but as its keyword is refused,
+# so a future gap between this and RDKit's tokenizer fails closed.
+_V3000_CONTINUATION = re.compile(r"-\r?\nM  V30 ")
+_V3000_COUNTS_LINE = re.compile(r"^M  V30 COUNTS(.*)$", re.MULTILINE | re.IGNORECASE)
+_V3000_COUNTS_MENTION = re.compile(r"^M  V30 [^\n]*?COUNTS", re.MULTILINE | re.IGNORECASE)
+_V3000_COUNTS_FIELDS = re.compile(r"[ \t]+(\d+)[ \t]+(\d+)(?:[ \t][^\n]*)?\r?")
+
+
+def _declared(digits: str) -> int:
+    # lstrip + length check, not int(): a count of thousands of digits would
+    # exceed Python's int-from-string digit limit and raise.
+    digits = digits.lstrip("0") or "0"
+    return int(digits) if len(digits) <= 9 else 10**9
+
+
+def _over_atom_cap(index: int, block: str, raw_input: str) -> ParsedMolecule | None:
+    joined = _V3000_CONTINUATION.sub("", block)
+    if "M  V30 " not in joined:
+        return None
+    fields = [_V3000_COUNTS_FIELDS.fullmatch(t) for t in _V3000_COUNTS_LINE.findall(joined)]
+    counts = [m.groups() for m in fields if m is not None]
+    atoms = max((_declared(a) for a, _ in counts), default=0)
+    bonds = max((_declared(b) for _, b in counts), default=0)
+    mentions = len(_V3000_COUNTS_MENTION.findall(joined))
+    if not fields or len(counts) < len(fields) or mentions > len(fields):
+        error = "This V3000 block has no readable COUNTS line"
+    elif atoms > MAX_MOLECULE_SMILES_LENGTH:
+        error = f"Molecule has {atoms} atoms; the limit is {MAX_MOLECULE_SMILES_LENGTH}"
+    elif bonds > MAX_MOLECULE_BONDS:
+        error = f"Molecule has {bonds} bonds; the limit is {MAX_MOLECULE_BONDS}"
+    else:
+        return None
+    return ParsedMolecule(
+        index=index,
+        raw_input=raw_input,
+        input_id=block.split("\n", 1)[0].strip() or None,
+        smiles=None,
+        error=error,
+    )
+
+
 def _parse_sdf(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
     rows: list[ParsedMolecule] = []
     # Indexed access, not iteration: on RDKit 2026.3.5, iterating a
@@ -160,6 +221,12 @@ def _parse_sdf(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
     for index in range(len(supplier)):
         if index >= max_molecules:
             raise TooManyMolecules(max_molecules, partial=rows)
+        capped = _over_atom_cap(
+            index, supplier.GetItemText(index), f"SDF record {index + 1}"
+        )
+        if capped is not None:
+            rows.append(capped)
+            continue
         mol = supplier[index]
         if mol is None:
             rows.append(
@@ -180,6 +247,9 @@ def _parse_molfile(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
     if max_molecules < 1:
         raise TooManyMolecules(max_molecules, partial=[])
     text = _decode(data)
+    capped = _over_atom_cap(0, text, "molfile")
+    if capped is not None:
+        return [capped]
     mol = Chem.MolFromMolBlock(text)
     if mol is None:
         return [
@@ -216,6 +286,8 @@ def _split_smiles_line(line: str) -> tuple[str, str | None]:
 # their hourly/concurrent quota's worth of these parses, not an unlimited
 # number per minute the way check_fast_allowed alone would allow.
 MAX_MOLECULE_SMILES_LENGTH = 2000
+# The V3000 bond cap _over_atom_cap enforces (see the note above it).
+MAX_MOLECULE_BONDS = 2 * MAX_MOLECULE_SMILES_LENGTH
 
 
 def _canonical_or_error(
