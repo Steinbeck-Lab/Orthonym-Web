@@ -24,7 +24,7 @@ const FORMULA_LEADERS = ['=', '+', '-', '@', '\t', '\r']
 // and line break, so text after one opens a cell too. Same rule as the
 // backend's _INNER_FORMULA. Not for the InChI column: its charge layers carry
 // `;+1`, and that text comes from RDKit, never from a visitor.
-const INNER_FORMULA = /([;\r\n])(?=[ \t]*[=+\-@])/g
+const INNER_FORMULA = /([;\r\n])(?=[ \t"]*[=+\-@])/g
 
 function csvField(value, column) {
   let text = value == null ? '' : String(value)

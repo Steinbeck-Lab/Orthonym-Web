@@ -1112,7 +1112,7 @@ def test_every_formula_leader_is_neutralised_in_every_user_text_column(
     )
 
 
-@pytest.mark.parametrize("brk", [";", "; ", "\n", "\r\n"])
+@pytest.mark.parametrize("brk", [";", "; ", ";\"", "\n", "\r\n"])
 def test_a_formula_after_a_semicolon_or_line_break_is_neutralised(
     redis_client, job_id, brk
 ):

@@ -777,8 +777,9 @@ _FORMULA_LEADERS = ("=", "+", "-", "@", "\t", "\r")
 
 # A spreadsheet in a `;`-separator locale (German Excel) splits this comma
 # file at every `;` and quoted newline, so text AFTER one of them opens a cell
-# too. An apostrophe after the break keeps that cell data as well.
-_INNER_FORMULA = re.compile(r"([;\r\n])(?=[ \t]*[=+\-@])")
+# too. An apostrophe after the break keeps that cell data as well. Spaces
+# and quote marks before the leader do not stop a formula, so they are skipped.
+_INNER_FORMULA = re.compile(r"([;\r\n])(?=[ \t\"]*[=+\-@])")
 
 
 def _csv_safe(value):
