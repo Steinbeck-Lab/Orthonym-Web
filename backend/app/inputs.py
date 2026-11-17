@@ -148,6 +148,40 @@ def _from_mol(index: int, mol, raw_input: str) -> ParsedMolecule:
     )
 
 
+# _from_mol's atom cap runs AFTER RDKit has parsed the record, and the parse
+# itself is the cost. Measured on RDKit 2026.3.5: its molblock reader does
+# ring work even with sanitize=False, and it grows about cubically with the
+# atoms in fused rings -- a 0.5 MB V3000 ladder of 10,000 aromatic atoms
+# held the GIL for 95 s, a 2,000-atom one 0.9 s. RDKit reads exactly as many
+# atoms as the COUNTS line declares (a block holding more fails at once), so
+# reading that number from the text bounds the parse before RDKit sees it.
+# A V2000 counts field is three digits wide, so it cannot declare more than
+# 999 atoms; only V3000 needs this. A trailing "-" continues a V3000 line
+# onto the next "M  V30 " line, so those are joined first, as RDKit does.
+_V3000_CONTINUATION = re.compile(r"-[ \t]*\r?\nM  V30 ")
+_V3000_COUNTS = re.compile(r"^M  V30 COUNTS[ \t]+(\d+)", re.MULTILINE)
+
+
+def _over_atom_cap(index: int, block: str, raw_input: str) -> ParsedMolecule | None:
+    joined = _V3000_CONTINUATION.sub("", block)
+    # lstrip + length check, not int(): a count of thousands of digits would
+    # exceed Python's int-from-string digit limit and raise.
+    counts = [n.lstrip("0") or "0" for n in _V3000_COUNTS.findall(joined)]
+    declared = max((int(n) if len(n) <= 9 else 10**9 for n in counts), default=0)
+    if declared <= MAX_MOLECULE_SMILES_LENGTH:
+        return None
+    return ParsedMolecule(
+        index=index,
+        raw_input=raw_input,
+        input_id=block.split("\n", 1)[0].strip() or None,
+        smiles=None,
+        error=(
+            f"Molecule has {declared} atoms; the limit is "
+            f"{MAX_MOLECULE_SMILES_LENGTH}"
+        ),
+    )
+
+
 def _parse_sdf(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
     rows: list[ParsedMolecule] = []
     # Indexed access, not iteration: on RDKit 2026.3.5, iterating a
@@ -160,6 +194,12 @@ def _parse_sdf(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
     for index in range(len(supplier)):
         if index >= max_molecules:
             raise TooManyMolecules(max_molecules, partial=rows)
+        capped = _over_atom_cap(
+            index, supplier.GetItemText(index), f"SDF record {index + 1}"
+        )
+        if capped is not None:
+            rows.append(capped)
+            continue
         mol = supplier[index]
         if mol is None:
             rows.append(
@@ -180,6 +220,9 @@ def _parse_molfile(data: bytes, max_molecules: int) -> list[ParsedMolecule]:
     if max_molecules < 1:
         raise TooManyMolecules(max_molecules, partial=[])
     text = _decode(data)
+    capped = _over_atom_cap(0, text, "molfile")
+    if capped is not None:
+        return [capped]
     mol = Chem.MolFromMolBlock(text)
     if mol is None:
         return [

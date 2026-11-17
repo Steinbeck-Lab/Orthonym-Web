@@ -88,6 +88,53 @@ def test_sniff_counts_line_check_is_linear(data):
     assert time.perf_counter() - start < 1.0
 
 
+def _fused_ring_ladder(
+    rungs: int, counts_line: str = "M  V30 COUNTS {atoms} {bonds} 0 0 0"
+) -> str:
+    """A V3000 strip of fused aromatic six-rings, 2 * rungs carbons. RDKit's
+    molblock reader costs about cubic time in the atoms of such a strip:
+    10,000 atoms took 95 s before the COUNTS check. The bond count must be
+    the real one: declared as 0, RDKit skips the bonds and the parse is
+    cheap, so the test would pass without the check."""
+    n = rungs
+    atoms = [f"M  V30 {i} C 0 0 0 0" for i in range(1, 2 * n + 1)]
+    bonds = []
+    for i in range(1, n):
+        top, bottom = (2, 1) if i % 2 else (1, 2)
+        bonds += [(top, i, i + 1), (bottom, n + i, n + i + 1)]
+    bonds += [(1, i, n + i) for i in range(1, n + 1, 2)]
+    counts = counts_line.format(atoms=2 * n, bonds=len(bonds))
+    return "\n".join(
+        ["ladder", "  probe", "", "  0  0  0     0  0            999 V3000",
+         "M  V30 BEGIN CTAB", counts, "M  V30 BEGIN ATOM", *atoms,
+         "M  V30 END ATOM", "M  V30 BEGIN BOND",
+         *(f"M  V30 {k} {o} {a} {b}" for k, (o, a, b) in enumerate(bonds, 1)),
+         "M  V30 END BOND", "M  V30 END CTAB", "M  END", ""]
+    )
+
+
+@pytest.mark.parametrize(
+    "counts_line",
+    [
+        "M  V30 COUNTS {atoms} {bonds} 0 0 0",
+        # a continued line and zero padding must not hide the count
+        "M  V30 COUNTS -\nM  V30 {atoms} {bonds} 0 0 0",
+        "M  V30 COUNTS 0000000000000{atoms} {bonds} 0 0 0",
+    ],
+    ids=["plain", "continued", "zero-padded"],
+)
+def test_molblock_over_atom_cap_is_refused_before_rdkit(counts_line):
+    block = _fused_ring_ladder(5000, counts_line)
+    start = time.perf_counter()
+    (molfile_row,) = parse(block.encode(), InputFormat.MOLFILE, 1)
+    sdf_rows = parse(_sdf(ETHANOL_MOLBLOCK, block, BENZENE_MOLBLOCK), InputFormat.SDF, 10)
+    assert time.perf_counter() - start < 2.0
+    assert molfile_row.error == "Molecule has 10000 atoms; the limit is 2000"
+    assert [r.smiles for r in sdf_rows] == ["CCO", None, "c1ccccc1"]
+    assert sdf_rows[1].error == molfile_row.error
+    assert sdf_rows[1].input_id == "ladder"
+
+
 def test_parse_sdf_keeps_titles_and_order():
     rows = parse(_sdf(ETHANOL_MOLBLOCK, BENZENE_MOLBLOCK), InputFormat.SDF, 100)
     assert [r.index for r in rows] == [0, 1]
