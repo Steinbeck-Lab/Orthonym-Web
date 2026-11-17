@@ -201,8 +201,18 @@ Two things to check in the vhost they write:
   the app's own JSON error.
 - **Whose address reaches you.** `frontend/nginx.conf` trusts `X-Forwarded-For` only from
   RFC1918 and loopback peers. If their proxy connects from a *public* address, the header is
-  discarded and every visitor collapses into one rate-limit bucket. Verify with the Redis check
-  in step 6, and add their address to `set_real_ip_from` if needed.
+  discarded and every visitor collapses into one rate-limit bucket. And on this route the
+  default is also too broad: any host on the VM's internal network can reach port 8080 and
+  pick its own address. Trust the proxy alone, in a snippet that replaces the default list:
+
+  ```bash
+  mkdir -p ops/snippets
+  echo 'set_real_ip_from <proxy-ip>;' > ops/snippets/realip.conf
+  ```
+
+  Mount `ops/snippets` as in "Putting the site behind a password" below (the `volumes` entry
+  for `ops/snippets` alone is enough), run `docker compose up -d frontend`, and verify with the
+  Redis check in step 6.
 
 If you took this route, remove Caddy — it will contend for ports 80/443 on the next reboot:
 
@@ -268,10 +278,6 @@ printf 'orthonym:%s\n' "$(openssl passwd -apr1 'CHOOSE-A-PASSWORD')" > ops/htpas
 chmod 600 ops/htpasswd
 
 cat > ops/snippets/auth.conf <<'EOF'
-satisfy any;
-allow 127.0.0.1;
-allow ::1;
-deny all;
 auth_basic "Orthonym — preview";
 auth_basic_user_file /etc/nginx/htpasswd;
 EOF
@@ -290,19 +296,20 @@ docker compose up -d frontend
 Compose picks `docker-compose.override.yml` up automatically, and `ops/` is gitignored, so no
 credential reaches the repository.
 
-`satisfy any` with `allow 127.0.0.1` is the part that is easy to get wrong. The container's own
-healthcheck requests `http://127.0.0.1/`; a bare `auth_basic` answers it with a 401, the
-container is marked **unhealthy**, and compose then treats a perfectly working site as broken.
-The allow rule exempts that one caller and nobody else — `set_real_ip_from` has already
-rewritten `$remote_addr` to the visitor's real address by the time this is evaluated, so a
-visitor can never match it.
+The container's healthcheck requests `/healthz`, which `frontend/nginx.conf` exempts from the
+gate, so the gate needs no address exemption. **Do not add one.** An earlier version of this page
+used `satisfy any; allow 127.0.0.1;` for the healthcheck. That is bypassable: any host that
+reaches port 8080 from a private address can send `X-Forwarded-For: 127.0.0.1`, and
+`set_real_ip_from` turns that into `$remote_addr`. If your `ops/snippets/auth.conf` still has
+`satisfy any`, `allow` or `deny` lines, delete them and run `docker compose up -d --build`.
 
-Verify all four, not just the first:
+Verify all five, not just the first:
 
 ```bash
 curl -s -o /dev/null -w 'no creds:   %{http_code}\n' http://10.232.0.68:8080/          # 401
 curl -s -u orthonym:PASS -o /dev/null -w 'with creds: %{http_code}\n' http://10.232.0.68:8080/   # 200
 curl -s -o /dev/null -w 'api gated:  %{http_code}\n' http://10.232.0.68:8080/api/health # 401
+curl -s -H 'X-Forwarded-For: 127.0.0.1' -o /dev/null -w 'forged:     %{http_code}\n' http://10.232.0.68:8080/   # 401
 sleep 12; docker inspect --format 'health: {{.State.Health.Status}}' orthonym-frontend    # healthy
 ```
 
@@ -311,6 +318,9 @@ sleep 12; docker inspect --format 'health: {{.State.Health.Status}}' orthonym-fr
 ```bash
 rm -f docker-compose.override.yml && docker compose up -d frontend
 ```
+
+If the override also mounts a `realip.conf` (route 4b), delete only the gate instead:
+`rm ops/snippets/auth.conf && docker compose restart frontend`.
 
 Two limits worth knowing. Basic Auth sends the password on every request — fine over the HTTPS
 the upstream proxy terminates, useless over plain HTTP. And it is a gate, not access control:
