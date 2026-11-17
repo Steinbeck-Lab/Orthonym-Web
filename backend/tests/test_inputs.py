@@ -156,8 +156,17 @@ def test_molblock_over_bond_cap_is_refused_before_rdkit():
     assert row.error == "Molecule has 44850 bonds; the limit is 4000"
 
 
-def test_v3000_block_without_readable_counts_is_refused():
-    block = _fused_ring_ladder(3, "M  V30 COUNTS six seven 0 0 0")
+@pytest.mark.parametrize(
+    "counts_line, extra",
+    [
+        ("M  V30 COUNTS six seven 0 0 0", ""),
+        # RDKit accepts this line; a readable decoy must not vouch for it
+        ("M  V30 COUNTS {atoms} +{bonds} 0 0 0", "> <note>\nM  V30 COUNTS 5 5 0 0 0\n"),
+    ],
+    ids=["unreadable", "decoy"],
+)
+def test_v3000_block_without_readable_counts_is_refused(counts_line, extra):
+    block = _fused_ring_ladder(3, counts_line) + extra
     (row,) = parse(block.encode(), InputFormat.MOLFILE, 1)
     assert row.error == "This V3000 block has no readable COUNTS line"
 

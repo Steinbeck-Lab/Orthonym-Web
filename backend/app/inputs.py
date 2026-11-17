@@ -162,12 +162,13 @@ def _from_mol(index: int, mol, raw_input: str) -> ParsedMolecule:
 # 999 atoms or bonds; only V3000 needs this. RDKit reads the COUNTS keyword in
 # any case ("counts" works) but the "M  V30 " prefix only exactly, and a
 # trailing "-" continues a line onto the next "M  V30 " line, so those are
-# joined first, as RDKit does. A V3000 block whose COUNTS this cannot read is
-# refused rather than handed to RDKit unchecked.
+# joined first, as RDKit does. EVERY COUNTS line must read as two plain
+# numbers, or the block is refused: otherwise a readable decoy line (in an SD
+# data field, say) could stand in for an unreadable real one that RDKit
+# still accepts ("COUNTS 3000 +4000" is one).
 _V3000_CONTINUATION = re.compile(r"-[ \t]*\r?\nM  V30 ")
-_V3000_COUNTS = re.compile(
-    r"^M  V30 COUNTS[ \t]+(\d+)[ \t]+(\d+)", re.MULTILINE | re.IGNORECASE
-)
+_V3000_COUNTS_LINE = re.compile(r"^M  V30 COUNTS(.*)$", re.MULTILINE | re.IGNORECASE)
+_V3000_COUNTS_FIELDS = re.compile(r"[ \t]+(\d+)[ \t]+(\d+)(?:[ \t][^\n]*)?\r?")
 
 
 def _declared(digits: str) -> int:
@@ -179,12 +180,13 @@ def _declared(digits: str) -> int:
 
 def _over_atom_cap(index: int, block: str, raw_input: str) -> ParsedMolecule | None:
     joined = _V3000_CONTINUATION.sub("", block)
-    counts = _V3000_COUNTS.findall(joined)
-    if not counts and "M  V30 " not in joined:
+    if "M  V30 " not in joined:
         return None
+    fields = [_V3000_COUNTS_FIELDS.fullmatch(t) for t in _V3000_COUNTS_LINE.findall(joined)]
+    counts = [m.groups() for m in fields if m is not None]
     atoms = max((_declared(a) for a, _ in counts), default=0)
     bonds = max((_declared(b) for _, b in counts), default=0)
-    if not counts:
+    if not fields or len(counts) < len(fields):
         error = "This V3000 block has no readable COUNTS line"
     elif atoms > MAX_MOLECULE_SMILES_LENGTH:
         error = f"Molecule has {atoms} atoms; the limit is {MAX_MOLECULE_SMILES_LENGTH}"
