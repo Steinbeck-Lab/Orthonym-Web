@@ -137,6 +137,19 @@ def test_molblock_over_atom_cap_is_refused_before_rdkit(counts_line):
     assert sdf_rows[1].input_id == "ladder"
 
 
+def test_dash_with_trailing_spaces_does_not_hide_the_counts_line():
+    # RDKit continues a line only when "-" is its last character, so here it
+    # reads BEGIN CTAB and then the real 10,000-atom COUNTS line. A looser
+    # join merged the two and let the decoy after M END vouch for the block.
+    block = _fused_ring_ladder(5000).replace(
+        "M  V30 BEGIN CTAB", "M  V30 BEGIN CTAB -  ", 1
+    ) + "> <note>\nM  V30 COUNTS 5 5 0 0 0\n"
+    start = time.perf_counter()
+    (row,) = parse(block.encode(), InputFormat.MOLFILE, 1)
+    assert time.perf_counter() - start < 1.0
+    assert row.error == "Molecule has 10000 atoms; the limit is 2000"
+
+
 def test_molblock_over_bond_cap_is_refused_before_rdkit():
     # 300 valence-free atoms, every pair bonded: under the atom cap, but
     # RDKit took 2.9 s on it before the bond check.
@@ -162,8 +175,10 @@ def test_molblock_over_bond_cap_is_refused_before_rdkit():
         ("M  V30 COUNTS six seven 0 0 0", ""),
         # RDKit accepts this line; a readable decoy must not vouch for it
         ("M  V30 COUNTS {atoms} +{bonds} 0 0 0", "> <note>\nM  V30 COUNTS 5 5 0 0 0\n"),
+        # COUNTS mentioned elsewhere on an M  V30 line: fail closed
+        ("M  V30 COUNTS {atoms} {bonds} 0 0 0", "M  V30 X COUNTS 1 1\n"),
     ],
-    ids=["unreadable", "decoy"],
+    ids=["unreadable", "decoy", "stray-mention"],
 )
 def test_v3000_block_without_readable_counts_is_refused(counts_line, extra):
     block = _fused_ring_ladder(3, counts_line) + extra

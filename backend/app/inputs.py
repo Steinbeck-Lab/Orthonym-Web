@@ -165,9 +165,14 @@ def _from_mol(index: int, mol, raw_input: str) -> ParsedMolecule:
 # joined first, as RDKit does. EVERY COUNTS line must read as two plain
 # numbers, or the block is refused: otherwise a readable decoy line (in an SD
 # data field, say) could stand in for an unreadable real one that RDKit
-# still accepts ("COUNTS 3000 +4000" is one).
-_V3000_CONTINUATION = re.compile(r"-[ \t]*\r?\nM  V30 ")
+# still accepts ("COUNTS 3000 +4000" is one). The join is exactly RDKit's:
+# "-" must be the line's last character (a "-  " line is NOT continued, and a
+# looser join hid the real COUNTS line behind "BEGIN CTAB -  "). And any
+# "M  V30 " line that mentions COUNTS anywhere but as its keyword is refused,
+# so a future gap between this and RDKit's tokenizer fails closed.
+_V3000_CONTINUATION = re.compile(r"-\r?\nM  V30 ")
 _V3000_COUNTS_LINE = re.compile(r"^M  V30 COUNTS(.*)$", re.MULTILINE | re.IGNORECASE)
+_V3000_COUNTS_MENTION = re.compile(r"^M  V30 [^\n]*?COUNTS", re.MULTILINE | re.IGNORECASE)
 _V3000_COUNTS_FIELDS = re.compile(r"[ \t]+(\d+)[ \t]+(\d+)(?:[ \t][^\n]*)?\r?")
 
 
@@ -186,7 +191,8 @@ def _over_atom_cap(index: int, block: str, raw_input: str) -> ParsedMolecule | N
     counts = [m.groups() for m in fields if m is not None]
     atoms = max((_declared(a) for a, _ in counts), default=0)
     bonds = max((_declared(b) for _, b in counts), default=0)
-    if not fields or len(counts) < len(fields):
+    mentions = len(_V3000_COUNTS_MENTION.findall(joined))
+    if not fields or len(counts) < len(fields) or mentions > len(fields):
         error = "This V3000 block has no readable COUNTS line"
     elif atoms > MAX_MOLECULE_SMILES_LENGTH:
         error = f"Molecule has {atoms} atoms; the limit is {MAX_MOLECULE_SMILES_LENGTH}"
