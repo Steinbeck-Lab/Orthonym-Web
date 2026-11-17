@@ -120,8 +120,10 @@ def _fused_ring_ladder(
         # a continued line and zero padding must not hide the count
         "M  V30 COUNTS -\nM  V30 {atoms} {bonds} 0 0 0",
         "M  V30 COUNTS 0000000000000{atoms} {bonds} 0 0 0",
+        # RDKit reads the keyword in any case
+        "M  V30 counts {atoms} {bonds} 0 0 0",
     ],
-    ids=["plain", "continued", "zero-padded"],
+    ids=["plain", "continued", "zero-padded", "lowercase"],
 )
 def test_molblock_over_atom_cap_is_refused_before_rdkit(counts_line):
     block = _fused_ring_ladder(5000, counts_line)
@@ -133,6 +135,31 @@ def test_molblock_over_atom_cap_is_refused_before_rdkit(counts_line):
     assert [r.smiles for r in sdf_rows] == ["CCO", None, "c1ccccc1"]
     assert sdf_rows[1].error == molfile_row.error
     assert sdf_rows[1].input_id == "ladder"
+
+
+def test_molblock_over_bond_cap_is_refused_before_rdkit():
+    # 300 valence-free atoms, every pair bonded: under the atom cap, but
+    # RDKit took 2.9 s on it before the bond check.
+    n = 300
+    pairs = [(a, b) for a in range(1, n + 1) for b in range(a + 1, n + 1)]
+    block = "\n".join(
+        ["dense", "  probe", "", "  0  0  0     0  0            999 V3000",
+         "M  V30 BEGIN CTAB", f"M  V30 COUNTS {n} {len(pairs)} 0 0 0",
+         "M  V30 BEGIN ATOM", *(f"M  V30 {i} * 0 0 0 0" for i in range(1, n + 1)),
+         "M  V30 END ATOM", "M  V30 BEGIN BOND",
+         *(f"M  V30 {k} 1 {a} {b}" for k, (a, b) in enumerate(pairs, 1)),
+         "M  V30 END BOND", "M  V30 END CTAB", "M  END", ""]
+    )
+    start = time.perf_counter()
+    (row,) = parse(block.encode(), InputFormat.MOLFILE, 1)
+    assert time.perf_counter() - start < 1.0
+    assert row.error == "Molecule has 44850 bonds; the limit is 4000"
+
+
+def test_v3000_block_without_readable_counts_is_refused():
+    block = _fused_ring_ladder(3, "M  V30 COUNTS six seven 0 0 0")
+    (row,) = parse(block.encode(), InputFormat.MOLFILE, 1)
+    assert row.error == "This V3000 block has no readable COUNTS line"
 
 
 def test_parse_sdf_keeps_titles_and_order():

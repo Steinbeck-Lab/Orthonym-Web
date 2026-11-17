@@ -155,30 +155,49 @@ def _from_mol(index: int, mol, raw_input: str) -> ParsedMolecule:
 # held the GIL for 95 s, a 2,000-atom one 0.9 s. RDKit reads exactly as many
 # atoms as the COUNTS line declares (a block holding more fails at once), so
 # reading that number from the text bounds the parse before RDKit sees it.
-# A V2000 counts field is three digits wide, so it cannot declare more than
-# 999 atoms; only V3000 needs this. A trailing "-" continues a V3000 line
-# onto the next "M  V30 " line, so those are joined first, as RDKit does.
+# Bonds cost too, atoms or not: 300 valence-free atoms with 44,850 bonds took
+# 2.9 s, and a 50 MB file holds millions of bond lines. Legitimate molecules
+# under the atom cap stay well inside twice it.
+# A V2000 counts line has three-digit fields, so it cannot declare more than
+# 999 atoms or bonds; only V3000 needs this. RDKit reads the COUNTS keyword in
+# any case ("counts" works) but the "M  V30 " prefix only exactly, and a
+# trailing "-" continues a line onto the next "M  V30 " line, so those are
+# joined first, as RDKit does. A V3000 block whose COUNTS this cannot read is
+# refused rather than handed to RDKit unchecked.
 _V3000_CONTINUATION = re.compile(r"-[ \t]*\r?\nM  V30 ")
-_V3000_COUNTS = re.compile(r"^M  V30 COUNTS[ \t]+(\d+)", re.MULTILINE)
+_V3000_COUNTS = re.compile(
+    r"^M  V30 COUNTS[ \t]+(\d+)[ \t]+(\d+)", re.MULTILINE | re.IGNORECASE
+)
+
+
+def _declared(digits: str) -> int:
+    # lstrip + length check, not int(): a count of thousands of digits would
+    # exceed Python's int-from-string digit limit and raise.
+    digits = digits.lstrip("0") or "0"
+    return int(digits) if len(digits) <= 9 else 10**9
 
 
 def _over_atom_cap(index: int, block: str, raw_input: str) -> ParsedMolecule | None:
     joined = _V3000_CONTINUATION.sub("", block)
-    # lstrip + length check, not int(): a count of thousands of digits would
-    # exceed Python's int-from-string digit limit and raise.
-    counts = [n.lstrip("0") or "0" for n in _V3000_COUNTS.findall(joined)]
-    declared = max((int(n) if len(n) <= 9 else 10**9 for n in counts), default=0)
-    if declared <= MAX_MOLECULE_SMILES_LENGTH:
+    counts = _V3000_COUNTS.findall(joined)
+    if not counts and "M  V30 " not in joined:
+        return None
+    atoms = max((_declared(a) for a, _ in counts), default=0)
+    bonds = max((_declared(b) for _, b in counts), default=0)
+    if not counts:
+        error = "This V3000 block has no readable COUNTS line"
+    elif atoms > MAX_MOLECULE_SMILES_LENGTH:
+        error = f"Molecule has {atoms} atoms; the limit is {MAX_MOLECULE_SMILES_LENGTH}"
+    elif bonds > MAX_MOLECULE_BONDS:
+        error = f"Molecule has {bonds} bonds; the limit is {MAX_MOLECULE_BONDS}"
+    else:
         return None
     return ParsedMolecule(
         index=index,
         raw_input=raw_input,
         input_id=block.split("\n", 1)[0].strip() or None,
         smiles=None,
-        error=(
-            f"Molecule has {declared} atoms; the limit is "
-            f"{MAX_MOLECULE_SMILES_LENGTH}"
-        ),
+        error=error,
     )
 
 
@@ -259,6 +278,8 @@ def _split_smiles_line(line: str) -> tuple[str, str | None]:
 # their hourly/concurrent quota's worth of these parses, not an unlimited
 # number per minute the way check_fast_allowed alone would allow.
 MAX_MOLECULE_SMILES_LENGTH = 2000
+# The V3000 bond cap _over_atom_cap enforces (see the note above it).
+MAX_MOLECULE_BONDS = 2 * MAX_MOLECULE_SMILES_LENGTH
 
 
 def _canonical_or_error(
