@@ -137,6 +137,18 @@ jobs:
           uv venv --python 3.12 .venv
           uv pip install --quiet -r requirements.txt -r requirements-dev.txt
 
+      - name: Keep the OPSIN build between runs
+        # Building a pinned OPSIN commit first asks GitHub's API whether it is
+        # on OPSIN's main. Without a token that API allows 60 requests an hour
+        # per address, and a shared runner often finds them used up (HTTP 403).
+        # The engine skips the request when the checked build is already here.
+        # ponytail: keyed on the pin only; if the engine moves its base OPSIN
+        # jar, add a suffix to the key so the build is redone against it.
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/orthonym/jars
+          key: orthonym-jars-${{ env.ORTHONYM_OPSIN }}
+
       - name: Fetch the engine's jars
         # The engine downloads its pinned OPSIN and centres jars and checks
         # their SHA-256. The install-time prefetch is best effort; this step

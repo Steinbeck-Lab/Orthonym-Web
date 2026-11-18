@@ -61,6 +61,13 @@ jobs:
           uv venv --python 3.12 .venv
           uv pip install --quiet -r requirements.txt
 
+      - name: Keep the OPSIN build between runs
+        # As in ci.yml: a cached build skips the rate-limited GitHub API check.
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/orthonym/jars
+          key: orthonym-jars-${{ env.ORTHONYM_OPSIN }}
+
       - name: Fetch the engine's jars
         working-directory: backend
         run: .venv/bin/orthonym --fetch-jars
