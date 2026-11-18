@@ -93,6 +93,18 @@ def test_a_value_cannot_fake_a_record_end_or_a_tag(tmp_path):
     assert text.count("\n$$$$\n") == 2
 
 
+def test_a_cxsmiles_extension_cannot_write_lines_into_the_molblock(tmp_path):
+    # The row SMILES is as typed. RDKit writes a CXSMILES atom alias into the
+    # molblock unescaped, and `&#10;` in it is a line break.
+    forged = "x&#10;M  END&#10;> <ORTHONYM_NAME>&#10;forged&#10;&#10;$$$$"
+    text = sdf_record(_row(smiles=f"CCO |atomProp:0.molFileAlias.{forged}|"))
+    mols = _read_all(text, tmp_path)
+    assert len(mols) == 1
+    assert mols[0].GetProp("ORTHONYM_NAME") == "ethanol"
+    assert mols[0].GetNumAtoms() == 3
+    assert "forged" not in text
+
+
 def test_spaces_inside_a_value_are_kept():
     # Only line breaks are folded; the user's own spacing is data.
     record = sdf_record(_row(input="M  END", error="a\tb  c"))
