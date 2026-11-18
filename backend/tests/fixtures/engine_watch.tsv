@@ -1,4 +1,4 @@
-# engine 1.1.0 094658e0c81583e1e68942017440527c6f7d8212
+# engine 1.1.0 176c3528a404dc5eb5663b8d8554e67f135d1a72
 id	smiles	status	tier	name
 ellipticine	CC1=C2C=CN=CC2=C(C3=C1NC4=CC=CC=C43)C	pin	pin_verified	5,11-dimethyl-6H-pyrido[4,3-b]carbazole
 old-fallback-2026-10-01	COC1C2=C(C)C(=O)OC2CC2CCC(O)C(C)C21C	pin	pin_verified	6-hydroxy-4-methoxy-3,4a,5-trimethyl-4a,5,6,7,8,8a,9,9a-octahydronaphtho[2,3-b]furan-2(4H)-one
@@ -781,7 +781,7 @@ CHEMBL5428093	C#Cc1c(F)ccc2cc(O)cc(-c3ncc4c(N5C[C@H]6CC[C@@H](C5)N6)nc(OC[C@H]5C
 CHEMBL2387190	O=C1Cc2ccccc2N1C1CCN(CC2CCCCC2)CC1	pin	pin_verified	1-[1-(cyclohexylmethyl)piperidin-4-yl]-1,3-dihydro-2H-indol-2-one
 CHEMBL1482954	COC(=O)C1=C(CS(=O)(=O)c2cc(Cl)ccc2OC)NC(=O)NC1c1ccc(O)cc1	fallback	systematic_verified	methyl 6-[2-(5-chloro-2-methoxyphenyl)-2-oxo-3-oxa-2λ6-thiaprop-2-en-1-yl]-4-(4-hydroxyphenyl)-2-oxo-1,2,3,4-tetrahydropyrimidine-5-carboxylate
 CHEMBL142537	C[Si](C)(C)OC=C1CCCCC1	pin	pin_verified	(cyclohexylidenemethoxy)tri(methyl)silane
-CHEMBL167569	COCC(COP(=O)([O-])OCC[N+](C)(C)C)OC(C)=O	fallback	systematic_verified	2-(acetyloxy)-3-methoxypropyl 2-(trimethylazaniumyl)ethyl phosphate
+CHEMBL167569	COCC(COP(=O)([O-])OCC[N+](C)(C)C)OC(C)=O	pin	pin_verified	2-(acetyloxy)-3-methoxypropyl 2-(N,N-dimethylmethanaminiumyl)ethyl phosphate
 CHEMBL6029835	Cn1cc(-c2c(N)nn3ccc(N4CCC[C@@H]4c4cc(F)ccc4F)nc23)cn1	pin	pin_verified	5-[(2R)-2-(2,5-difluorophenyl)pyrrolidin-1-yl]-3-(1-methyl-1H-pyrazol-4-yl)pyrazolo[1,5-a]pyrimidin-2-amine
 CHEMBL5276590	COc1ccccc1/C=C/C1=NN(c2ccc(S(N)(=O)=O)cc2)C(=O)CC1	fallback	systematic_verified	4-{3-[(E)-2-(2-methoxyphenyl)ethenyl]-6-oxo-1,4,5,6-tetrahydropyridazin-1-yl}benzene-1-sulfonamide
 CHEMBL465025	COc1cc(/C=C/C(=O)c2ccccc2)ccc1O	pin	pin_verified	4-hydroxy-3-methoxychalcone
