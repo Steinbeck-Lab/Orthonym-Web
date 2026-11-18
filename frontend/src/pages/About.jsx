@@ -227,7 +227,11 @@ function About() {
   // jump again once the section exists.
   const { hash } = useLocation()
   useEffect(() => {
-    if (hash) document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView()
+    if (!hash) return
+    let id = hash.slice(1)
+    // A malformed escape (#%E0) throws, and an uncaught throw blanks the page.
+    try { id = decodeURIComponent(id) } catch { /* keep the raw id */ }
+    document.getElementById(id)?.scrollIntoView()
   }, [hash])
   return (
     <main className="about">

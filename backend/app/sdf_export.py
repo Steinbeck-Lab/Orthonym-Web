@@ -54,8 +54,18 @@ def molblock_2d(mol) -> str:
     return Chem.MolToMolBlock(copy)
 
 
+# The row SMILES is as typed, so it may carry a CXSMILES extension after a
+# space. RDKit writes `|atomProp:0.molFileAlias.<text>|` into the molblock
+# unescaped, and `&#10;` in that text becomes new lines: a forged record.
+# Read only the plain SMILES; the text after the space becomes _Name, which
+# _molblock overwrites.
+_PLAIN_SMILES = Chem.SmilesParserParams()
+_PLAIN_SMILES.allowCXSMILES = False
+_PLAIN_SMILES.parseName = True
+
+
 def _molblock(smiles: str | None, title: str) -> str:
-    mol = Chem.MolFromSmiles(smiles) if smiles else None
+    mol = Chem.MolFromSmiles(smiles, _PLAIN_SMILES) if smiles else None
     if mol is None:
         mol = Chem.Mol()
     mol.SetProp("_Name", title)
