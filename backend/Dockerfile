@@ -140,7 +140,7 @@ RUN useradd --create-home --uid 10001 orthonym
 #
 # ORTHONYM_NO_DOWNLOAD=1: at run time nothing is fetched or built. A jar that
 # is missing or fails its checks is an error, never a build per request.
-ARG ORTHONYM_OPSIN=main@7bb0cbdc7db891518a83d59e06ca2a6349152ff7
+ARG ORTHONYM_OPSIN=main@760d57c0f1328035aca665fac5926df3f34047be
 ENV ORTHONYM_OPSIN=${ORTHONYM_OPSIN} \
     ORTHONYM_NO_DOWNLOAD=1
 RUN case "$ORTHONYM_OPSIN" in \

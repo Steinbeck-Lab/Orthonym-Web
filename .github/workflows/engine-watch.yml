@@ -16,6 +16,7 @@ on:
       - .github/workflows/engine-watch.yml
       - backend/scripts/engine_watch.py
       - backend/tests/fixtures/engine_watch.tsv
+      - backend/Dockerfile
 
 permissions:
   contents: read
