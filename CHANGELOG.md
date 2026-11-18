@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.8.0](https://github.com/Steinbeck-Lab/Orthonym-Web/compare/v0.7.0...v0.8.0) (2026-11-18)
+
+
+### Features
+
+* **home:** morphine and artemisinin as complex PIN examples ([43da9eb](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/43da9ebe63b4819e0deae64a0eac9b15b61c20d0))
+* **home:** only working examples, batch table below with every structure drawn ([09cbd5f](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/09cbd5f3b53c7573ec6f3589e41847aa20a7509c))
+* **home:** only working examples, batch table below with every structure drawn ([ffd23cd](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/ffd23cdf1e921cc3c32e632282ded3416012b671))
+
+
+### Bug Fixes
+
+* **a11y:** a focused name part reads its explanation on /explain ([ff0eff1](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/ff0eff1ea9361c24c7966bef1247530494f10d98))
+* **a11y:** example chips keep focus while a run is busy ([d11b7e3](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/d11b7e3e2bba03a2765815e8190b614929924cb3))
+* **a11y:** keep focus on busy controls, one status line per run, skip link, forced colours ([afbce68](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/afbce686119ec06963615bc1a5502e0eeb20919e))
+* **api:** bound record parsing, cache sorted views, honest cancel and close ([212a20a](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/212a20a8a51d68a1f8ad72571e05b90b7394773c))
+* **batch:** retryable, capped, cancellable structure drawings ([59c4691](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/59c4691ffc411e093b599d908f1e07aad2dee624))
+* **batch:** retryable, capped, cancellable structure drawings ([f57e013](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/f57e01340f32a4db8f7fd639dbadda253e2ecd87))
+* codebase review — crashes, honest labels, broken flows, Explain, accessibility ([758c11d](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/758c11d25771399ba9e79c7638fa717ebea308d6))
+* **csv:** a quote mark before the formula after `;` is skipped too ([f9a323b](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/f9a323be82416038b671bbfc2eb1f6224579dfcd))
+* **deploy:** gate healthcheck via /healthz, drop forgeable allow 127.0.0.1 ([0aac9ae](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/0aac9ae8c54b0ffa113f62ec377515840ea86136))
+* **explain:** honest E/Z, isotope, indolyl and purine lines; place benzene's e; explain hydrazones ([58da324](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/58da32441ed9171c3f1351013c3712764412f78a))
+* **frontend-lib:** line splitting, tier state, 429 detail, owner-token header, typography ([09f0061](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/09f00610349b8450350e7b80cc7608af345f62b7))
+* gate healthcheck via /healthz; refuse oversized V3000 records before RDKit ([3016948](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/301694837d4d87e228153fdf47f1862e3828003d))
+* **home,batch,check:** result flows, drawing queue and live regions ([73254bc](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/73254bc0e87a8c5dc28661bc305b066dafd9ce8b))
+* **inputs:** case-insensitive COUNTS, cap V3000 bonds, refuse unreadable counts ([16d6d46](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/16d6d461e416ad678ae07b4db9f8e86af0af5dd6))
+* **inputs:** every V3000 COUNTS line must be readable ([58ec2e5](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/58ec2e5a75b78095d7a17ae24f5a4eadf50e81a3))
+* **inputs:** join V3000 continuations exactly as RDKit; refuse stray COUNTS mentions ([4fa2af5](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/4fa2af573a72af20a52c106d68046fc1db7e37fe))
+* **inputs:** refuse V3000 records over the atom cap before RDKit parses them ([f8154de](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/f8154deaa7f879d1e4c824aea9b836a4632932c2))
+* preview parse deadline, per-row SMILES write errors, CSV `;` guard ([bb43f87](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/bb43f8790d2411275cdec48f9886e7877f1bed73))
+* say when OPSIN's warnings could not be read ([e8040c1](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/e8040c1bb410d0c40633edc4fccd7efbbedce667))
+* SDF export ignores CXSMILES extensions; /about survives a malformed hash ([dbebcb7](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/dbebcb7e07348317cee4165715df79dd3197256b))
+* SDF export ignores CXSMILES extensions; /about survives a malformed hash ([c03d7f2](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/c03d7f2c88b21a65c9171037818996a298891a53))
+* **security:** linear counts-line regex in sniff(); neutralise CSV formulas in /from-name export ([dbaf171](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/dbaf171b2c7ae3e7fd39a18d0e2350a7cb96a94a))
+* **security:** linear sniff() regex; neutralise CSV formulas in /from-name export ([1c5df73](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/1c5df7381b4d622369c6e45cc13b5ab1e8c79b7b))
+* **tests:** run-tests.sh waits for the real stats line and fails a run that ran nothing ([ca5d77d](https://github.com/Steinbeck-Lab/Orthonym-Web/commit/ca5d77db6165eb43c9ef4cc83ff50670e0be2f0e))
+
 ## [0.7.0](https://github.com/Steinbeck-Lab/Orthonym-Web/compare/v0.6.0...v0.7.0) (2026-11-03)
 
 
