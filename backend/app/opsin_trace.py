@@ -88,9 +88,9 @@ from rdkit import Chem
 logger = logging.getLogger(__name__)
 
 # NameToStructure.getVersion() of every OPSIN this module's handles and the
-# Explain census were checked on (corpus and ChEMBL 10k CLEAN on both). A main
+# Explain census were checked on (corpus and ChEMBL 10k CLEAN on each). A main
 # build reports "<next release>-SNAPSHOT+<commit12>".
-TESTED_OPSIN = ("2.9.0", "3.0-SNAPSHOT+7bb0cbdc7db8")
+TESTED_OPSIN = ("2.9.0", "3.0-SNAPSHOT+7bb0cbdc7db8", "3.0-SNAPSHOT+760d57c0f132")
 TOKEN_TAG = "stitchSpan"
 PART_TAG = "stitchPart"
 _NO_SPAN = "none"

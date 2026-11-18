@@ -453,7 +453,7 @@ jars from their official releases and checks each against a SHA-256 (`orthonym/j
 install prefetches them on a best-effort basis; `orthonym --fetch-jars` fetches them and fails when
 it cannot. The Dockerfile runs it, so a missing jar fails the build.
 
-**This site's OPSIN is not 2.9.0.** The image sets `ORTHONYM_OPSIN=main@7bb0cbdc7db891518a83d59e06ca2a6349152ff7`,
+**This site's OPSIN is not 2.9.0.** The image sets `ORTHONYM_OPSIN=main@760d57c0f1328035aca665fac5926df3f34047be`,
 a pinned commit of OPSIN's main branch, for every backend process. That commit reads adduct names
 with an em dash before a locanted component (`benzene—2-aminopyridine (1/1)`,
 [dan2097/opsin#344](https://github.com/dan2097/opsin/issues/344)) and reads phane names, which
@@ -461,7 +461,7 @@ with an em dash before a locanted component (`benzene—2-aminopyridine (1/1)`,
 at build time, as the runtime user (the engine trusts a built jar only in a `opsin-main` directory
 that user owns, mode 0700), then removes the JDK. The Python package and its CLI still default to
 2.9.0, so a name here can differ from `pip install orthonym` for some molecules. Every result and
-`/api/health` carry `opsin_version` (`main 7bb0cbd` or `2.9.0`), read from the jar the engine
+`/api/health` carry `opsin_version` (`main 760d57c` or `2.9.0`), read from the jar the engine
 resolves. Roll back to the release with one build arg, which needs no JDK:
 
 ```bash
